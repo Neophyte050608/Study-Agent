@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: interview-review
+  config:
+    import: optional:file:./application-private.yml
+  ai:
+    # 1. 配置 DeepSeek 用于 Chat (对话、分析、提问)
+    openai:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+        # 禁用 OpenAI 的 Embedding，防止与智谱冲突
+        embedding:
+          enabled: false
+    
+    # 2. 配置 ZhiPu (智谱) 用于 Embedding (向量化中文笔记)
+    zhipuai:
+      api-key: ${ZHIPU_API_KEY:}
+      chat:
+        # 禁用 ZhiPu 的 Chat，防止 Spring AI 自动配置两个 ChatModel
+        enabled: false
+      embedding:
+        enabled: true
+        options:
+          model: embedding-3 # 智谱的 embedding-3 模型，维度默认是 2048
+          
+    vectorstore:
+      milvus:
+        initialize-schema: true
+        client:
+          host: localhost
+          port: 19530
+        embedding-dimension: 2048 # 必须与智谱 embedding-3 的输出维度匹配
+        collection:
+          name: interview_notes
+    retry:
+      max-attempts: 1
+  main:
+    web-application-type: servlet # 需要对外提供 REST API，必须是 servlet
+  servlet:
+    multipart:
+      max-file-size: 12MB
+      max-request-size: 12MB
+
+logging:
+  level:
+    org.springframework.ai: DEBUG
+    org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: ERROR
+
+app:
+  security:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080}
