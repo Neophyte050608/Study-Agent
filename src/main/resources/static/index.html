@@ -40,6 +40,10 @@
         .upload-box { border: 2px dashed #c9d6e2; border-radius: 8px; padding: 1rem; background: #f8fbff; text-align: center; color: #4b5f73; }
         .upload-box.dragover { border-color: #3498db; background: #edf6ff; }
         .upload-meta { margin-top: 0.5rem; color: #2c3e50; font-size: 0.95rem; }
+        .assist-box { margin-top: 0.9rem; text-align: left; background: #f7fbff; border: 1px solid #dceaf6; border-radius: 8px; padding: 0.7rem; }
+        .assist-box textarea { width: 100%; min-height: 72px; border: 1px solid #d2deea; border-radius: 6px; box-sizing: border-box; padding: 0.6rem; resize: vertical; }
+        .assist-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.5rem; }
+        .assist-row button { margin-top: 0; }
         .listening { animation: pulse 1.5s infinite; color: #e74c3c; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
@@ -60,7 +64,7 @@
     </div>
     <button onclick="ingestNotes()">同步笔记</button>
     <div class="form-group" style="margin-top: 1.5rem;">
-        <label>简历上传（PDF）</label>
+        <label>简历上传（PDF，可选）</label>
         <input type="file" id="resume-file-input" accept=".pdf" class="hidden" onchange="handleResumeInputChange(event)">
         <div id="resume-dropzone" class="upload-box">
             拖拽 PDF 到这里，或
@@ -113,6 +117,14 @@
     <div id="status">准备就绪</div>
 
     <button id="action-btn" onclick="skipTimer()">立即作答</button>
+    <div class="assist-box">
+        <label for="manual-answer-input">识别不准时可手动输入回答（不影响5分钟计时）</label>
+        <textarea id="manual-answer-input" placeholder="可粘贴或直接输入回答，点击“提交手动回答”即可。"></textarea>
+        <div class="assist-row">
+            <input type="text" id="term-hints" placeholder="可选：技术词提示，用逗号分隔，如 HashMap, 红黑树, JUC">
+            <button type="button" onclick="submitManualAnswer()">提交手动回答</button>
+        </div>
+    </div>
     <div id="final-report" class="hidden"></div>
 </div>
 
@@ -128,6 +140,9 @@
     let isStoppingByUser = false;
     let isSubmittingAnswer = false;
     let interviewFinished = false;
+    let isQuestionReady = false;
+    let isReadingQuestion = false;
+    let activeUtterance = null;
     let totalQuestions = 5;
     let selectedResumePath = "";
     let selectedNotesFiles = [];
@@ -137,8 +152,31 @@
     let currentTopic = "";
     // 作答阶段剩余秒数：识别中断恢复时沿用该值，保证倒计时连续。
     let answerLeftSeconds = 0;
+    // 暂存最新 interim 文本，便于 final 为空时兜底提交。
+    let latestInterimTranscript = "";
     const THINKING_SECONDS = 15;
     const ANSWER_SECONDS = 300;
+    // 常见技术名词误听纠正规则：覆盖中英混读与口语化发音。
+    const TECH_TERM_RULES = [
+        { pattern: /my\s*sql|麦\s*sql|买\s*sql|迈\s*sql|mysql/gi, value: "MySQL" },
+        { pattern: /re\s*dis|瑞迪斯|锐迪斯|瑞第斯|redis/gi, value: "Redis" },
+        { pattern: /mongo\s*db|忙狗\s*db|mongod b|mongodb/gi, value: "MongoDB" },
+        { pattern: /hash\s*map|哈希\s*map|哈什\s*map|黑希\s*map/gi, value: "HashMap" },
+        { pattern: /concurrent\s*hash\s*map|康康润特\s*hash\s*map|并发\s*hash\s*map/gi, value: "ConcurrentHashMap" },
+        { pattern: /j\s*v\s*m|jvm|杰微木/gi, value: "JVM" },
+        { pattern: /j\s*u\s*c|juc|jay you see/gi, value: "JUC" },
+        { pattern: /spring\s*boot|springboot|四不灵\s*boot/gi, value: "Spring Boot" },
+        { pattern: /k\s*8\s*s|k8s|kubernetes|库伯内替斯/gi, value: "Kubernetes" },
+        { pattern: /net\s*ty|netty|奈提/gi, value: "Netty" },
+        { pattern: /rocket\s*mq|rocketmq|罗克特\s*mq/gi, value: "RocketMQ" },
+        { pattern: /rabbit\s*mq|rabbitmq|瑞比特\s*mq/gi, value: "RabbitMQ" },
+        { pattern: /r\s*p\s*c|rpc|阿普西/gi, value: "RPC" },
+        { pattern: /a\s*p\s*i|api|诶皮爱/gi, value: "API" },
+        { pattern: /h\s*t\s*t\s*p|http|超文本传输协议/gi, value: "HTTP" },
+        { pattern: /t\s*c\s*p|tcp/gi, value: "TCP" },
+        { pattern: /g\s*c|gc|垃圾回收/gi, value: "GC" },
+        { pattern: /s\s*q\s*l|sql/gi, value: "SQL" }
+    ];
 
     if ('webkitSpeechRecognition' in window) {
         recognition = new webkitSpeechRecognition();
@@ -154,8 +192,7 @@
             }
             document.getElementById('status').innerText = "正在听你回答...";
             document.getElementById('status').classList.add('listening');
-            document.getElementById('action-btn').innerText = "结束作答";
-            document.getElementById('action-btn').onclick = stopRecording;
+            setActionButton("结束作答", stopRecording, false);
         };
 
         recognition.onend = function() {
@@ -178,6 +215,18 @@
                     isSubmittingAnswer = false;
                 });
             } else {
+                // final 为空时优先使用 interim 兜底，减少因发音不标准导致的“零文本提交”。
+                const interimFallback = normalizeTechTerms((latestInterimTranscript || "").trim());
+                if (interimFallback.length >= 4) {
+                    document.getElementById('recognized-preview').innerText = `识别文本：${interimFallback}`;
+                    document.getElementById('status').innerText = "采用实时识别文本提交中...";
+                    isSubmittingAnswer = true;
+                    submitAnswer(interimFallback).finally(() => {
+                        isSubmittingAnswer = false;
+                    });
+                    isStoppingByUser = false;
+                    return;
+                }
                 const fallbackAnswer = "（未识别到语音回答）";
                 document.getElementById('recognized-preview').innerText = `识别文本：${fallbackAnswer}`;
                 document.getElementById('status').innerText = "未识别到回答，按空回答提交";
@@ -202,6 +251,7 @@
             if (finalText.trim()) {
                 pendingTranscript += finalText;
             }
+            latestInterimTranscript = interimText.trim();
             const preview = normalizeTechTerms(`${pendingTranscript} ${interimText}`.trim());
             document.getElementById('recognized-preview').innerText = `识别文本：${preview}`;
         };
@@ -373,10 +423,6 @@
             alert("请输入面试主题");
             return;
         }
-        if (!resumePath) {
-            alert("请先拖拽或选择并上传 PDF 简历");
-            return;
-        }
         if (isResumeUploading) {
             alert("简历还在上传中，请稍后再开始面试");
             return;
@@ -391,6 +437,10 @@
         
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('interview-screen').classList.remove('hidden');
+        isQuestionReady = false;
+        isReadingQuestion = false;
+        setActionButton("等待题目...", null, true);
+        document.getElementById('status').innerText = "正在生成题目...";
 
         const res = await fetch('/api/start', {
             method: 'POST',
@@ -409,27 +459,59 @@
         if (interviewFinished) {
             return;
         }
+        if (!text || !String(text).trim()) {
+            isQuestionReady = false;
+            isReadingQuestion = false;
+            document.getElementById('question-text').innerText = "正在等待题目...";
+            document.getElementById('status').innerText = "题目生成中...";
+            setActionButton("等待题目...", null, true);
+            return;
+        }
+        isQuestionReady = true;
+        isReadingQuestion = true;
         document.getElementById('question-text').innerText = text;
         document.getElementById('status').innerText = "AI 正在读题...";
+        setActionButton("立即作答", skipTimer, false);
         speak(text, () => {
+            isReadingQuestion = false;
             startThinkingTimer();
         });
     }
 
     function speak(text, callback) {
+        stopSpeaking();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'zh-CN';
-        utterance.onend = callback;
+        activeUtterance = utterance;
+        utterance.onend = function() {
+            if (activeUtterance !== utterance) {
+                return;
+            }
+            activeUtterance = null;
+            if (callback) {
+                callback();
+            }
+        };
+        utterance.onerror = function() {
+            if (activeUtterance === utterance) {
+                activeUtterance = null;
+            }
+        };
         window.speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeaking() {
+        if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+            window.speechSynthesis.cancel();
+        }
+        activeUtterance = null;
     }
 
     function startThinkingTimer() {
         let timeLeft = THINKING_SECONDS;
         document.getElementById('timer').innerText = formatTime(timeLeft);
         document.getElementById('status').innerText = "思考时间...";
-        document.getElementById('action-btn').innerText = "立即作答";
-        document.getElementById('action-btn').onclick = skipTimer;
-        document.getElementById('action-btn').disabled = false;
+        setActionButton("立即作答", skipTimer, false);
 
         clearInterval(thinkingTimerInterval);
         thinkingTimerInterval = setInterval(() => {
@@ -443,7 +525,12 @@
     }
 
     function skipTimer() {
+        if (!isQuestionReady) {
+            return;
+        }
         clearInterval(thinkingTimerInterval);
+        stopSpeaking();
+        isReadingQuestion = false;
         startRecording();
     }
 
@@ -458,6 +545,7 @@
         // resetTimer=false 用于异常恢复，不清空倒计时与既有识别文本。
         if (resetTimer) {
             pendingTranscript = "";
+            latestInterimTranscript = "";
             document.getElementById('recognized-preview').innerText = "识别文本：";
         }
         isStoppingByUser = false;
@@ -466,8 +554,7 @@
             document.getElementById('timer').innerText = formatTime(answerLeftSeconds);
         }
         document.getElementById('status').innerText = "正在听你回答...";
-        document.getElementById('action-btn').innerText = "结束作答";
-        document.getElementById('action-btn').onclick = stopRecording;
+        setActionButton("结束作答", stopRecording, false);
         if (resetTimer) {
             clearInterval(answerTimerInterval);
             answerTimerInterval = setInterval(() => {
@@ -505,12 +592,10 @@
         const normalizedAnswer = normalizeTechTerms(answer);
         if (!normalizedAnswer) {
             document.getElementById('status').innerText = "未识别到有效回答";
-            document.getElementById('action-btn').disabled = false;
-            document.getElementById('action-btn').innerText = "重新作答";
-            document.getElementById('action-btn').onclick = startRecording;
+            setActionButton("重新作答", startRecording, false);
             return;
         }
-        document.getElementById('action-btn').disabled = true;
+        setActionButton("处理中...", null, true);
         document.getElementById('status').innerText = "正在分析回答...";
         try {
             const res = await fetch('/api/answer', {
@@ -522,9 +607,7 @@
             if (!res.ok) {
                 document.getElementById('status').innerText = "分析失败";
                 alert(data.message || "回答分析失败，请重试");
-                document.getElementById('action-btn').disabled = false;
-                document.getElementById('action-btn').innerText = "重新作答";
-                document.getElementById('action-btn').onclick = startRecording;
+                setActionButton("重新作答", startRecording, false);
                 return;
             }
 
@@ -546,15 +629,12 @@
             if (data.finished) {
                 await finishInterview();
             } else {
-                document.getElementById('action-btn').disabled = false;
                 handleNewQuestion(data.nextQuestion);
             }
         } catch (e) {
             document.getElementById('status').innerText = "网络异常";
             alert("请求失败，请检查网络后重试");
-            document.getElementById('action-btn').disabled = false;
-            document.getElementById('action-btn').innerText = "重新作答";
-            document.getElementById('action-btn').onclick = startRecording;
+            setActionButton("重新作答", startRecording, false);
         } finally {
             isSubmittingAnswer = false;
         }
@@ -567,9 +647,7 @@
         document.getElementById('timer').innerText = "00:00";
         document.getElementById('status').innerText = "正在生成最终总结...";
         document.getElementById('question-text').innerText = "本轮面试已完成";
-        document.getElementById('action-btn').disabled = true;
-        document.getElementById('action-btn').innerText = "面试已结束";
-        document.getElementById('action-btn').onclick = null;
+        setActionButton("面试已结束", null, true);
         window.speechSynthesis.cancel();
         try {
             const res = await fetch('/api/report', {
@@ -588,6 +666,16 @@
             document.getElementById('status').innerText = "总结生成失败";
             alert(e.message || "总结生成失败，请稍后重试");
         }
+    }
+
+    function setActionButton(text, handler, disabled) {
+        const button = document.getElementById('action-btn');
+        if (!button) {
+            return;
+        }
+        button.innerText = text;
+        button.onclick = handler;
+        button.disabled = !!disabled;
     }
 
     async function renderFinalReport(data) {
@@ -705,50 +793,111 @@
     function pickBestAlternative(result) {
         const alternatives = [];
         for (let i = 0; i < result.length; i++) {
-            alternatives.push(result[i].transcript || "");
+            alternatives.push({
+                transcript: result[i].transcript || "",
+                confidence: Number(result[i].confidence || 0)
+            });
         }
         if (alternatives.length === 0) {
             return "";
         }
-        let best = alternatives[0];
-        let bestScore = scoreTechTerms(normalizeTechTerms(best));
+        let best = alternatives[0].transcript;
+        let bestScore = calcAlternativeScore(normalizeTechTerms(best), alternatives[0].confidence);
         for (let i = 1; i < alternatives.length; i++) {
-            const normalized = normalizeTechTerms(alternatives[i]);
-            const score = scoreTechTerms(normalized);
+            const normalized = normalizeTechTerms(alternatives[i].transcript);
+            const score = calcAlternativeScore(normalized, alternatives[i].confidence);
             if (score > bestScore) {
-                best = alternatives[i];
+                best = alternatives[i].transcript;
                 bestScore = score;
             }
         }
         return best;
     }
 
+    function calcAlternativeScore(normalizedText, confidence) {
+        const keywordScore = scoreTechTerms(normalizedText);
+        const lengthScore = Math.min((normalizedText || "").length, 40) / 40;
+        const confidenceScore = Math.max(0, Number(confidence || 0)) * 1.5;
+        return keywordScore + lengthScore + confidenceScore;
+    }
+
     function scoreTechTerms(text) {
-        const keywords = ["MySQL", "Redis", "HashMap", "JVM", "Java", "Spring", "HTTP", "TCP", "GC"];
+        const keywords = [
+            "MySQL", "Redis", "MongoDB", "HashMap", "ConcurrentHashMap", "JVM", "JUC",
+            "Java", "Spring", "Spring Boot", "HTTP", "TCP", "GC", "SQL", "RPC", "Kubernetes"
+        ];
+        const userHints = getUserHintTerms();
         let score = 0;
         for (const keyword of keywords) {
             if (text.includes(keyword)) {
                 score += 1;
             }
         }
+        for (const hint of userHints) {
+            if (text.includes(hint)) {
+                score += 1.2;
+            }
+        }
         return score;
+    }
+
+    function getUserHintTerms() {
+        const input = document.getElementById('term-hints');
+        if (!input) {
+            return [];
+        }
+        return String(input.value || "")
+            .split(/[，,、;；\n]/)
+            .map(v => normalizeTechTerms(v).trim())
+            .filter(v => v.length >= 2);
     }
 
     function normalizeTechTerms(text) {
         if (!text) {
             return "";
         }
-        return text
-            .replaceAll(/my\s*sql/gi, "MySQL")
-            .replaceAll(/mysql/gi, "MySQL")
-            .replaceAll(/瑞迪斯|锐迪斯|re\s*dis/gi, "Redis")
-            .replaceAll(/redis/gi, "Redis")
-            .replaceAll(/hash\s*map/gi, "HashMap")
-            .replaceAll(/哈希\s*map/gi, "HashMap")
-            .replaceAll(/j\s*v\s*m/gi, "JVM")
-            .replaceAll(/jvm/gi, "JVM")
-            .replaceAll(/s\s*q\s*l/gi, "SQL")
-            .trim();
+        let normalized = String(text);
+        for (const rule of TECH_TERM_RULES) {
+            normalized = normalized.replaceAll(rule.pattern, rule.value);
+        }
+        // 用户可在输入框补充术语提示词，提升候选打分与后续识别命中。
+        const userHints = getUserHintTerms();
+        for (const hint of userHints) {
+            const escaped = hint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const compact = escaped.replace(/\s+/g, "\\s*");
+            const pattern = new RegExp(compact, "gi");
+            normalized = normalized.replaceAll(pattern, hint);
+        }
+        return normalized.trim();
+    }
+
+    async function submitManualAnswer() {
+        // 手动兜底入口：解决口音导致语音识别缺失的问题。
+        if (interviewFinished || isSubmittingAnswer) {
+            return;
+        }
+        const input = document.getElementById('manual-answer-input');
+        const typed = normalizeTechTerms(input ? input.value : "");
+        if (!typed) {
+            alert("请先输入手动回答内容");
+            return;
+        }
+        clearInterval(answerTimerInterval);
+        answerLeftSeconds = 0;
+        if (isListening) {
+            stopRecording();
+        }
+        document.getElementById('recognized-preview').innerText = `识别文本：${typed}`;
+        document.getElementById('status').innerText = "正在提交手动回答...";
+        isSubmittingAnswer = true;
+        try {
+            await submitAnswer(typed);
+            if (input) {
+                input.value = "";
+            }
+        } finally {
+            isSubmittingAnswer = false;
+        }
     }
 
     function openResumePicker() {

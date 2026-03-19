@@ -16,12 +16,14 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.HttpServerErrorException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -46,12 +48,14 @@ class RAGServiceTest {
     @Mock
     private RAGObservabilityService observabilityService;
 
+    @Mock
+    private AgentSkillService agentSkillService;
+
     private RAGService ragService;
 
     @BeforeEach
     void setUp() {
-        // ChatClient.builder(chatModel) will use this chatModel
-        ragService = new RAGService(chatModel, vectorStore, lexicalIndexService, webSearchTool, observabilityService);
+        ragService = new RAGService(chatModel, vectorStore, lexicalIndexService, webSearchTool, observabilityService, agentSkillService);
     }
 
     @Test
@@ -116,6 +120,24 @@ class RAGServiceTest {
     }
 
     @Test
+    void shouldInjectKnowledgeSkillIntoRewritePrompt() {
+        when(agentSkillService.resolveSkillBlock("knowledge-retrieval")).thenReturn("### Skill: knowledge-retrieval\n遵循混合检索流程");
+        ChatResponse rewriteResponse = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
+        when(rewriteResponse.getResult().getOutput().getText()).thenReturn("事务");
+        when(chatModel.call(any(Prompt.class))).thenReturn(rewriteResponse);
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(lexicalIndexService.search(anyString(), anyInt())).thenReturn(List.of());
+        when(webSearchTool.run(any())).thenReturn(List.of("fallback"));
+
+        ragService.buildKnowledgePacket("什么是事务", "用于一致性");
+
+        ArgumentCaptor<Prompt> captor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel).call(captor.capture());
+        String prompt = captor.getValue().toString();
+        assertTrue(prompt.contains("knowledge-retrieval"));
+    }
+
+    @Test
     void shouldPrioritizeInterviewExperienceInEvidenceOrder() {
         ChatResponse rewriteResponse = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
         ChatResponse evaluateResponse = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
@@ -172,5 +194,55 @@ class RAGServiceTest {
         String summary = ragService.summarizeError(exception);
         assertTrue(summary.contains("***"));
         assertTrue(!summary.contains("abcdefghijklmnopqrstuvwxyz0123456789"));
+    }
+
+    @Test
+    void shouldReturnFallbackFirstQuestionWhenChatModelTimeout() {
+        when(chatModel.call(any(Prompt.class))).thenThrow(new ResourceAccessException("timeout"));
+
+        String firstQuestion = ragService.generateFirstQuestion("", "JVM", "画像");
+
+        assertTrue(firstQuestion.contains("JVM"));
+        assertTrue(firstQuestion.contains("核心概念"));
+    }
+
+    @Test
+    void shouldReturnFallbackEvaluationWhenLayeredEvaluateTimeout() throws Exception {
+        when(chatModel.call(any(Prompt.class))).thenThrow(new ResourceAccessException("timeout"));
+
+        String result = ragService.evaluateWithKnowledge(
+                "Java",
+                "什么是JVM内存模型",
+                "我的回答",
+                "INTERMEDIATE",
+                "PROBE",
+                70.0,
+                "画像",
+                "",
+                new RAGService.KnowledgePacket("query", List.of(), "", "[]", true)
+        );
+
+        JsonNode node = new ObjectMapper().readTree(result);
+        assertEquals(0, node.path("score").asInt());
+        assertTrue(node.path("feedback").asText().contains("超时") || node.path("feedback").asText().contains("不可用"));
+    }
+
+    @Test
+    void shouldNormalizeVerboseFirstQuestionOutput() {
+        ChatResponse response = mock(ChatResponse.class, RETURNS_DEEP_STUBS);
+        when(response.getResult().getOutput().getText()).thenReturn("""
+                **第一题：请简述 Java 中 HashMap 的实现原理？**
+
+                **出题依据（策略提示）：**
+                - 难度适配
+                - 学习画像关联
+                """);
+        when(chatModel.call(any(Prompt.class))).thenReturn(response);
+
+        String question = ragService.generateFirstQuestion("", "Java", "画像");
+
+        assertTrue(question.contains("HashMap"));
+        assertFalse(question.contains("出题依据"));
+        assertFalse(question.contains("策略提示"));
     }
 }

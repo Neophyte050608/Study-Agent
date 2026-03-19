@@ -50,11 +50,18 @@ public class RAGService {
     private final LexicalIndexService lexicalIndexService;
     private final WebSearchTool webSearchTool;
     private final RAGObservabilityService observabilityService;
+    private final AgentSkillService agentSkillService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService) {
+    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService) {
+        this.agentSkillService = agentSkillService;
+        String globalSkillInstruction = safeSkillText(this.agentSkillService.globalInstruction());
+        String systemPrompt = "你是一位专业的中文技术面试官与复盘助手。";
+        if (!globalSkillInstruction.isBlank()) {
+            systemPrompt = systemPrompt + "\n\n" + globalSkillInstruction;
+        }
         this.chatClient = ChatClient.builder(chatModel)
-                .defaultSystem("你是一位专业的中文技术面试官与复盘助手。")
+                .defaultSystem(systemPrompt)
                 .build();
         this.vectorStore = vectorStore;
         this.lexicalIndexService = lexicalIndexService;
@@ -105,12 +112,38 @@ public class RAGService {
     }
 
     public String evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
-        // 统一注入策略提示与证据目录，约束模型输出可引用的证据范围。
-        String finalContext = packet == null ? "" : packet.context();
-        String finalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
+        String originalContext = packet == null ? "" : packet.context();
+        String originalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
+        String finalContext = truncate(originalContext, 1400);
+        String finalEvidence = truncate(originalEvidence, 900);
+        String safeProfileSnapshot = truncate(profileSnapshot, 480);
         String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
-        String raw = callWithRetry(() -> generateEvaluation(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
-        return validateEvidenceReferences(raw, finalEvidence);
+        logger.info(
+                "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
+                safeLogText(topic, 40),
+                safeLogText(difficultyLevel, 24),
+                safeLogText(followUpState, 24),
+                String.format("%.1f", topicMastery),
+                safeLength(question),
+                safeLength(userAnswer),
+                safeLength(normalizedStrategy),
+                safeLength(safeProfileSnapshot),
+                safeLength(profileSnapshot),
+                safeLength(finalContext),
+                safeLength(originalContext),
+                safeLength(finalEvidence),
+                safeLength(originalEvidence),
+                parseEvidenceCatalog(originalEvidence).size(),
+                packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
+                packet != null && packet.webFallbackUsed()
+        );
+        try {
+            String raw = callWithRetry(() -> generateEvaluation(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
+            return validateEvidenceReferences(raw, finalEvidence);
+        } catch (RuntimeException e) {
+            logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
+            return buildFallbackEvaluation(question, e);
+        }
     }
 
     private String validateEvidenceReferences(String rawJson, String retrievalEvidence) {
@@ -118,11 +151,26 @@ public class RAGService {
         if (allowedEvidence.isEmpty()) {
             return rawJson;
         }
-        if (rawJson == null || rawJson.isBlank() || !rawJson.trim().startsWith("{")) {
+        
+        String cleanJson = rawJson;
+        if (cleanJson != null) {
+            cleanJson = cleanJson.trim();
+            if (cleanJson.startsWith("```json")) {
+                cleanJson = cleanJson.substring(7);
+            } else if (cleanJson.startsWith("```")) {
+                cleanJson = cleanJson.substring(3);
+            }
+            if (cleanJson.endsWith("```")) {
+                cleanJson = cleanJson.substring(0, cleanJson.length() - 3);
+            }
+            cleanJson = cleanJson.trim();
+        }
+
+        if (cleanJson == null || cleanJson.isBlank() || !cleanJson.startsWith("{")) {
             return rawJson;
         }
         try {
-            JsonNode node = objectMapper.readTree(rawJson);
+            JsonNode node = objectMapper.readTree(cleanJson);
             if (!(node instanceof ObjectNode objectNode)) {
                 return rawJson;
             }
@@ -326,11 +374,14 @@ public class RAGService {
     }
 
     private String rewriteQuery(String question, String userAnswer) {
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("knowledge-retrieval"));
         return chatClient.prompt()
-                .user(u -> u.text("请从下面的面试问答中提取用于知识检索的关键词。\n" +
+                .user(u -> u.text("{skillBlock}\n" +
+                        "请从下面的面试问答中提取用于知识检索的关键词。\n" +
                         "问题：{question}\n" +
                         "回答：{answer}\n" +
                         "只返回关键词或检索短语，不要返回其他解释。")
+                        .param("skillBlock", skillBlock)
                         .param("question", question)
                         .param("answer", userAnswer))
                 .call()
@@ -338,8 +389,10 @@ public class RAGService {
     }
 
     private String generateEvaluation(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String retrievalEvidence, String strategyHint) {
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy", "interview-learning-profile"));
         String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
-        String promptTemplate = "你是一位技术面试官。\n\n" +
+        String promptTemplate = "{skillBlock}\n" +
+                "你是一位技术面试官。\n\n" +
                 "面试主题：{topic}\n" +
                 "当前难度：{difficultyGuide}\n" +
                 "追问状态：{followUpState}\n" +
@@ -365,6 +418,7 @@ public class RAGService {
 
         return chatClient.prompt()
                 .user(u -> u.text(promptTemplate)
+                        .param("skillBlock", skillBlock)
                         .param("topic", topic)
                         .param("difficultyGuide", difficultyGuide)
                         .param("followUpState", followUpState)
@@ -545,23 +599,45 @@ public class RAGService {
         }
         return text.substring(0, maxLength) + "...";
     }
+
+    private int safeLength(String text) {
+        return text == null ? 0 : text.length();
+    }
+
+    private String safeLogText(String text, int maxLength) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        return truncate(sanitizeUpstreamText(text), maxLength);
+    }
     
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot) {
-         return chatClient.prompt()
-                .user(u -> u.text("你是一位技术面试官。\n" +
-                        "简历摘要：{resume}\n" +
-                        "面试主题：{topic}\n" +
-                        "用户历史画像：{profileSnapshot}\n" +
-                        "请优先围绕用户笔记或项目经历已出现的内容出题，同时兼顾薄弱点。\n" +
-                        "请生成第一道中文面试题，问题要简洁、专业。")
-                        .param("resume", resumeContent)
-                        .param("topic", topic)
-                        .param("profileSnapshot", profileSnapshot))
-                .call()
-                .content();
+         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
+         try {
+            String rawQuestion = callWithRetry(() -> chatClient.prompt()
+                     .user(u -> u.text("{skillBlock}\n" +
+                             "你是一位技术面试官。\n" +
+                             "简历摘要：{resume}\n" +
+                             "面试主题：{topic}\n" +
+                             "用户历史画像：{profileSnapshot}\n" +
+                             "请优先围绕用户笔记或项目经历已出现的内容出题，同时兼顾薄弱点。\n" +
+                             "请生成第一道中文面试题。\n" +
+                             "只输出一道题目本身，必须单行，不要标题、不要策略说明、不要理由、不要建议、不要 markdown。")
+                             .param("skillBlock", skillBlock)
+                            .param("resume", truncate(resumeContent, 1500))
+                             .param("topic", topic)
+                            .param("profileSnapshot", truncate(profileSnapshot, 240)))
+                     .call()
+                     .content(), 2, "首题生成");
+             return normalizeFirstQuestion(rawQuestion, topic);
+         } catch (RuntimeException e) {
+             logger.warn("首题生成失败，返回降级问题。原因: {}", summarizeError(e));
+             return buildFallbackFirstQuestion(topic);
+         }
     }
 
     public String generateFinalReport(String topic, List<Question> history, String targetedSuggestion) {
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-growth-coach"));
         String qaHistory = history.stream()
                 .map(item -> "问题：" + item.getQuestionText() + "\n" +
                         "回答：" + item.getUserAnswer() + "\n" +
@@ -569,7 +645,8 @@ public class RAGService {
                         "点评：" + item.getFeedback())
                 .collect(Collectors.joining("\n\n---\n\n"));
 
-        String prompt = "你是技术面试复盘官。\n" +
+        String prompt = "{skillBlock}\n" +
+                "你是技术面试复盘官。\n" +
                 "面试主题：{topic}\n" +
                 "后续训练建议参考：\n{targetedSuggestion}\n" +
                 "以下是完整答题记录：\n{history}\n\n" +
@@ -584,6 +661,7 @@ public class RAGService {
         try {
             return callWithRetry(() -> chatClient.prompt()
                     .user(u -> u.text(prompt)
+                            .param("skillBlock", skillBlock)
                             .param("topic", topic)
                             .param("targetedSuggestion", targetedSuggestion)
                             .param("history", qaHistory))
@@ -617,6 +695,67 @@ public class RAGService {
                 "<next_focus>" + (targetedSuggestion == null || targetedSuggestion.isBlank() ? "下一轮聚焦低分题相关主题。" : targetedSuggestion) + "</next_focus>";
     }
 
+    private String buildFallbackFirstQuestion(String topic) {
+        String safeTopic = topic == null || topic.isBlank() ? "你最熟悉的后端主题" : topic.trim();
+        return "我们先从基础开始，请你结合一个实际场景，说明你对「" + safeTopic + "」的核心概念、典型实现和常见误区的理解。";
+    }
+
+    private String normalizeFirstQuestion(String raw, String topic) {
+        if (raw == null || raw.isBlank()) {
+            return buildFallbackFirstQuestion(topic);
+        }
+        String normalized = raw.replace("\r\n", "\n")
+                .replace("**", "")
+                .replace("`", "")
+                .trim();
+        String[] lines = normalized.split("\\n");
+        for (String line : lines) {
+            String candidate = line == null ? "" : line.trim();
+            if (candidate.isBlank()) {
+                continue;
+            }
+            candidate = candidate
+                    .replaceAll("^[\\-•*\\d.\\s]+", "")
+                    .replaceAll("^题目[：:]", "")
+                    .replaceAll("^第一题[：:]", "")
+                    .trim();
+            if (candidate.startsWith("出题依据") || candidate.startsWith("策略提示") || candidate.startsWith("后续建议")) {
+                continue;
+            }
+            if (candidate.contains("？") || candidate.contains("?")) {
+                return truncateToQuestion(candidate);
+            }
+        }
+        for (String line : lines) {
+            String candidate = line == null ? "" : line.trim();
+            if (candidate.isBlank()) {
+                continue;
+            }
+            candidate = candidate
+                    .replaceAll("^[\\-•*\\d.\\s]+", "")
+                    .replaceAll("^题目[：:]", "")
+                    .replaceAll("^第一题[：:]", "")
+                    .trim();
+            if (candidate.startsWith("出题依据") || candidate.startsWith("策略提示") || candidate.startsWith("后续建议")) {
+                continue;
+            }
+            if (!candidate.isBlank()) {
+                return truncate(candidate, 140);
+            }
+        }
+        return buildFallbackFirstQuestion(topic);
+    }
+
+    private String truncateToQuestion(String text) {
+        int endCn = text.lastIndexOf('？');
+        int endEn = text.lastIndexOf('?');
+        int end = Math.max(endCn, endEn);
+        if (end < 0) {
+            return truncate(text, 140);
+        }
+        return text.substring(0, end + 1).trim();
+    }
+
     private String normalizeDifficultyGuide(String difficultyLevel) {
         if (difficultyLevel == null) {
             return "基础巩固";
@@ -629,6 +768,13 @@ public class RAGService {
             return "中级进阶（原理+实战）";
         }
         return "基础巩固";
+    }
+
+    private String safeSkillText(String content) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        return content.trim();
     }
 
     private double sourceTypeBoost(Document doc) {

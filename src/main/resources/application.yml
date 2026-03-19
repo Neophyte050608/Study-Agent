@@ -43,6 +43,10 @@ spring:
     multipart:
       max-file-size: 12MB
       max-request-size: 12MB
+  http:
+    client:
+      connect-timeout: 10s
+      read-timeout: 90s
 
 logging:
   level:
@@ -50,5 +54,8 @@ logging:
     org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: ERROR
 
 app:
+  agent:
+    skills:
+      paths: ${APP_AGENT_SKILLS_PATHS:skills}
   security:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080}

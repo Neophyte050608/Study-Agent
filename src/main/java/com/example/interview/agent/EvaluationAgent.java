@@ -77,9 +77,22 @@ public class EvaluationAgent {
     }
 
     private ParsedEvaluation parseEvaluation(String raw) {
+        String cleanRaw = raw;
+        if (cleanRaw != null) {
+            cleanRaw = cleanRaw.trim();
+            if (cleanRaw.startsWith("```json")) {
+                cleanRaw = cleanRaw.substring(7);
+            } else if (cleanRaw.startsWith("```")) {
+                cleanRaw = cleanRaw.substring(3);
+            }
+            if (cleanRaw.endsWith("```")) {
+                cleanRaw = cleanRaw.substring(0, cleanRaw.length() - 3);
+            }
+            cleanRaw = cleanRaw.trim();
+        }
         try {
             // 优先解析 JSON 结构，失败时再回退到标签提取，提升兼容性。
-            JsonNode node = objectMapper.readTree(raw);
+            JsonNode node = objectMapper.readTree(cleanRaw);
             int score = node.path("score").asInt(0);
             int accuracy = node.path("accuracy").asInt(0);
             int logic = node.path("logic").asInt(0);
