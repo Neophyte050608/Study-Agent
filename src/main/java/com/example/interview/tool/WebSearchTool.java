@@ -12,6 +12,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 网络搜索工具（基于 DuckDuckGo 免费 API）。
+ * 
+ * 职责：
+ * 1. 外部召回：当本地向量库无法召回足够证据时，作为 RAG 的兜底方案。
+ * 2. 结果解析：解析 DDG 的 API 响应，提取摘要 (Abstract) 和相关话题 (RelatedTopics) 作为检索分块。
+ */
 @Component
 public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<String>> {
 

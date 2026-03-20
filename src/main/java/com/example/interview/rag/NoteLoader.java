@@ -16,16 +16,34 @@ import java.util.HashSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * 笔记加载器。
+ * 负责从本地文件系统中扫描并加载 Markdown 笔记文件。
+ */
 @Component
 public class NoteLoader {
 
     private static final Logger logger = LoggerFactory.getLogger(NoteLoader.class);
+    /** 默认忽略的目录，避免加载无关的元数据或临时文件 */
     private static final List<String> DEFAULT_IGNORED_DIRS = List.of(".obsidian", ".trash", ".git", ".claude", "node_modules");
 
+    /**
+     * 使用默认忽略配置加载笔记。
+     * 
+     * @param vaultPath 笔记库根路径
+     * @return 资源列表
+     */
     public List<Resource> loadNotes(String vaultPath) {
         return loadNotes(vaultPath, DEFAULT_IGNORED_DIRS);
     }
 
+    /**
+     * 指定忽略目录加载笔记。
+     * 
+     * @param vaultPath 笔记库根路径
+     * @param ignoredDirs 额外的忽略目录列表
+     * @return 资源列表
+     */
     public List<Resource> loadNotes(String vaultPath, List<String> ignoredDirs) {
         logger.info("Scanning for markdown files in: {}", vaultPath);
         Path root = Paths.get(vaultPath);
@@ -51,6 +69,9 @@ public class NoteLoader {
         }
     }
 
+    /**
+     * 检查路径是否在忽略名单中。
+     */
     private boolean isIgnored(Path filePath, Path root, Set<String> ignored) {
         Path relative = root.relativize(filePath);
         for (Path part : relative) {

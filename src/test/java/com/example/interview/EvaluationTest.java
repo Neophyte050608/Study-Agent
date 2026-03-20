@@ -7,7 +7,10 @@ import com.example.interview.service.RAGService;
 
 import java.lang.reflect.Method;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "rocketmq.name-server=127.0.0.1:9876",
+        "app.a2a.bus.type=inmemory"
+})
 public class EvaluationTest {
 
     @Autowired

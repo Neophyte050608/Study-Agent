@@ -6,21 +6,40 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * 面试会话实体类。
+ * 承载单场面试的所有上下文信息，包括题目历史、当前状态、自适应难度等。
+ */
 public class InterviewSession {
+    /** 会话唯一 ID */
     private String id;
+    /** 面试主题 */
     private String topic;
+    /** 简历解析内容（可选） */
     private String resumeContent;
+    /** 已提问的历史记录 */
     private List<Question> history;
+    /** 当前正在提问的问题文本 */
     private String currentQuestion;
+    /** 累计总分 */
     private int totalScore;
+    /** 已回答的题目数量 */
     private int questionCount;
+    /** 预设的总题数 */
     private int totalQuestions;
+    /** 当前会话的难度等级 */
     private DifficultyLevel difficultyLevel;
+    /** 低分连续次数，用于触发难度下调 */
     private int lowScoreStreak;
+    /** 高分连续次数，用于触发难度上调 */
     private int highScoreStreak;
+    /** 启动面试时的用户画像快照 */
     private String profileSnapshot;
+    /** 关联的用户 ID */
     private String userId;
+    /** 当前的追问策略状态 */
     private FollowUpState followUpState;
+    /** 主题掌握度映射：Key 为子主题名，Value 为 0-100 的掌握评分 */
     private Map<String, Double> topicMastery;
 
     public InterviewSession(String topic, String resumeContent, int totalQuestions) {
@@ -40,17 +59,29 @@ public class InterviewSession {
         this.topicMastery = new HashMap<>();
     }
 
+    /**
+     * 将回答后的题目对象加入历史，并更新累计得分。
+     */
     public void addHistory(Question question) {
         this.history.add(question);
         this.totalScore += question.getScore();
         this.questionCount++;
     }
 
+    /**
+     * 获取当前面试的平均分。
+     */
     public double getAverageScore() {
         if (questionCount == 0) return 0;
         return (double) totalScore / questionCount;
     }
 
+    /**
+     * 根据单题得分自适应更新难度等级。
+     * 逻辑：
+     * 1. 低于 60 分累计 1 次即下调难度。
+     * 2. 高于 85 分连续 2 次即上调难度。
+     */
     public void updateDifficultyByScore(int score) {
         if (score < 60) {
             lowScoreStreak++;
@@ -73,13 +104,22 @@ public class InterviewSession {
         highScoreStreak = 0;
     }
 
+    /**
+     * 更新自适应状态，包括难度、追问策略和主题掌握度。
+     * 
+     * @param topic 当前题目所属的子主题
+     * @param score 当前题目的得分
+     */
     public void updateAdaptiveState(String topic, int score) {
         updateDifficultyByScore(score);
         followUpState = FollowUpState.byScore(score);
         String normalizedTopic = (topic == null || topic.isBlank()) ? "默认主题" : topic.trim();
+        // 掌握度计算：70% 历史 + 30% 当前，平滑波动
         double oldMastery = topicMastery.getOrDefault(normalizedTopic, 65.0);
         double newMastery = oldMastery * 0.7 + score * 0.3;
         topicMastery.put(normalizedTopic, newMastery);
+        
+        // 基于掌握度的全局难度微调
         if (newMastery < 60) {
             difficultyLevel = DifficultyLevel.BASIC;
         } else if (newMastery < 80) {

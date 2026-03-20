@@ -13,6 +13,14 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * 检索效果评测服务 (Retrieval Evaluation Service)。
+ * 
+ * 职责：
+ * 1. 离线评测：利用预设的 EvalCase 或上传的 CSV 评测集，对现有的向量库 + 词法索引进行召回率测试。
+ * 2. 命中校验：根据预期关键词 (expectedKeywords) 自动判断检索出的分块是否包含正确答案。
+ * 3. 效果量化：输出 Hit Rate (命中率) 报告，指导向量模型调优或切分策略优化。
+ */
 @Service
 public class RetrievalEvaluationService {
 

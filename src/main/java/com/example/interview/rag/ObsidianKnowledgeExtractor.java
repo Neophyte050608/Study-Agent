@@ -13,6 +13,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Obsidian 知识提取器。
+ * 专门用于解析 Markdown 格式的笔记，提取标题、关键词、技术要点、代码块等结构化信息。
+ */
 @Component
 public class ObsidianKnowledgeExtractor {
 
@@ -22,6 +26,7 @@ public class ObsidianKnowledgeExtractor {
     private static final Pattern SUMMARY_PATTERN = Pattern.compile("(?i)^(总结|结论|TL;DR|复盘|面试总结)[:：\\s-]*(.*)$");
     private static final Pattern KEYWORD_LINE_PATTERN = Pattern.compile("(?i)^(关键词|关键字|tags?)[:：\\s-]*(.*)$");
 
+    // 各类特征词，用于识别笔记的“含金量”和类别
     private static final List<String> DIARY_HINTS = List.of("日记", "daily", "journal", "碎碎念", "随笔", "todo");
     private static final List<String> TECH_STACK_HINTS = List.of("java", "spring", "spring boot", "mysql", "redis", "kafka", "mq", "jvm", "docker", "kubernetes", "nginx", "rpc", "netty");
     private static final List<String> PROJECT_HINTS = List.of("项目", "模块", "需求", "架构", "服务", "上线", "接口", "联调", "落地");
@@ -30,6 +35,14 @@ public class ObsidianKnowledgeExtractor {
     private static final List<String> PROJECT_DIFFICULTY_HINTS = List.of("难点", "挑战", "线上", "故障", "排查", "瓶颈", "优化", "降级", "事故", "监控");
     private static final List<String> INTERVIEW_SOURCE_HINTS = List.of("面经", "interview-experience", "interview_experience", "interview", "题库", "真题");
 
+    /**
+     * 核心提取逻辑。
+     * 将原始 Markdown 文本转换为经过清洗和结构化处理的 Document 对象。
+     * 
+     * @param markdown 笔记原文
+     * @param filePath 笔记文件路径
+     * @return 提取结果 (包含 Document 列表)
+     */
     public ExtractionResult extract(String markdown, String filePath) {
         if (markdown == null || markdown.isBlank()) {
             return ExtractionResult.empty();
@@ -37,6 +50,8 @@ public class ObsidianKnowledgeExtractor {
 
         String normalizedPath = filePath == null ? "" : filePath.toLowerCase(Locale.ROOT).replace("\\", "/");
         String normalizedText = markdown.toLowerCase(Locale.ROOT);
+        
+        // 过滤：如果是纯碎碎念或非技术相关的日记，则跳过
         boolean possibleDiary = DIARY_HINTS.stream().anyMatch(normalizedPath::contains);
         int technicalSignal = countSignals(normalizedText, TECH_STACK_HINTS) + countSignals(normalizedText, PROJECT_HINTS)
                 + countSignals(normalizedText, BAGUA_HINTS) + countSignals(normalizedText, ALGORITHM_HINTS);
@@ -52,6 +67,7 @@ public class ObsidianKnowledgeExtractor {
         Set<String> knowledgeTags = detectKnowledgeTags(normalizedText);
         String sourceType = detectSourceType(normalizedPath, normalizedText, knowledgeTags);
 
+        // 重组文档内容，使其更适合向量化搜索
         StringBuilder builder = new StringBuilder();
         builder.append("标题：").append(title).append("\n");
         if (!knowledgeTags.isEmpty()) {
@@ -67,21 +83,25 @@ public class ObsidianKnowledgeExtractor {
             builder.append("技术要点：\n").append(String.join("\n", techBullets)).append("\n");
         }
         if (!codeBlocks.isEmpty()) {
+            // 仅保留前两个代码块，避免噪声过大
             builder.append("代码片段：\n").append(String.join("\n\n", codeBlocks.subList(0, Math.min(2, codeBlocks.size())))).append("\n");
         }
 
         String extracted = builder.toString().trim();
+        // 如果提取后的有效信息过少，则不入库
         if (extracted.length() < 40) {
             return ExtractionResult.empty();
         }
 
         Document document = new Document(extracted);
+        // 注入元数据，方便后续溯源和过滤
         document.getMetadata().put("file_path", filePath);
         document.getMetadata().put("source_type", sourceType);
         document.getMetadata().put("knowledge_tags", String.join(",", knowledgeTags));
         return new ExtractionResult(List.of(document));
     }
 
+    /** 提取标题：优先取第一个一级/二级标题，否则取文件名 */
     private String extractTitle(String markdown, String filePath) {
         String[] lines = markdown.split("\\R");
         for (String line : lines) {
@@ -102,6 +122,7 @@ public class ObsidianKnowledgeExtractor {
         }
     }
 
+    /** 提取关键词：支持 #标签 格式和 关键词: xxx 格式 */
     private Set<String> extractKeywords(String markdown) {
         Set<String> keywords = new LinkedHashSet<>();
         Matcher tagMatcher = TAG_PATTERN.matcher(markdown);
@@ -125,6 +146,7 @@ public class ObsidianKnowledgeExtractor {
         return keywords;
     }
 
+    /** 提取总结段落 */
     private List<String> extractSummaries(String markdown) {
         List<String> result = new ArrayList<>();
         String[] lines = markdown.split("\\R");
@@ -140,6 +162,7 @@ public class ObsidianKnowledgeExtractor {
         return result;
     }
 
+    /** 提取包含技术特征的列表项 */
     private List<String> extractTechnicalBullets(String markdown) {
         List<String> bullets = new ArrayList<>();
         String[] lines = markdown.split("\\R");
@@ -162,18 +185,21 @@ public class ObsidianKnowledgeExtractor {
         return bullets;
     }
 
+    /** 提取代码块内容 */
     private List<String> extractCodeBlocks(String markdown) {
         List<String> blocks = new ArrayList<>();
         Matcher matcher = CODE_BLOCK_PATTERN.matcher(markdown);
         while (matcher.find()) {
             String block = matcher.group(1).trim();
             if (!block.isBlank()) {
+                // 单个代码块过长时截断
                 blocks.add(block.length() > 700 ? block.substring(0, 700) : block);
             }
         }
         return blocks;
     }
 
+    /** 自动识别知识标签 */
     private Set<String> detectKnowledgeTags(String normalizedText) {
         Set<String> tags = new LinkedHashSet<>();
         if (countSignals(normalizedText, TECH_STACK_HINTS) > 0) {
@@ -194,6 +220,7 @@ public class ObsidianKnowledgeExtractor {
         return tags;
     }
 
+    /** 统计文本中出现的特征词数量 */
     private int countSignals(String text, List<String> hints) {
         int count = 0;
         for (String hint : hints) {
@@ -204,6 +231,7 @@ public class ObsidianKnowledgeExtractor {
         return count;
     }
 
+    /** 识别来源类型（如是普通笔记还是专门的面经） */
     private String detectSourceType(String normalizedPath, String normalizedText, Set<String> knowledgeTags) {
         boolean pathHint = INTERVIEW_SOURCE_HINTS.stream().anyMatch(normalizedPath::contains);
         boolean textHint = INTERVIEW_SOURCE_HINTS.stream().anyMatch(normalizedText::contains);
@@ -214,6 +242,7 @@ public class ObsidianKnowledgeExtractor {
         return "obsidian";
     }
 
+    /** 提取结果封装类 */
     public record ExtractionResult(List<Document> documents) {
         public static ExtractionResult empty() {
             return new ExtractionResult(List.of());

@@ -1,16 +1,31 @@
 package com.example.interview.core;
 
+/**
+ * 面试题目及回答实体类。
+ * 记录了单道题目的问题文本、用户回答、多维度评分以及反馈建议。
+ */
 public class Question {
+    /** 问题文本 */
     private String questionText;
+    /** 用户的回答文本 */
     private String userAnswer;
+    /** 综合得分 (0-100) */
     private int score;
+    /** 准确性评分 (0-100) */
     private int accuracy;
+    /** 逻辑性评分 (0-100) */
     private int logic;
+    /** 深度评分 (0-100) */
     private int depth;
+    /** 边界处理评分 (0-100) */
     private int boundary;
+    /** 扣分项说明 */
     private String deductions;
+    /** 引用的知识库来源 */
     private String citations;
+    /** 与知识库冲突的点 */
     private String conflicts;
+    /** 详细反馈与改进建议 */
     private String feedback;
 
     public Question(String questionText, String userAnswer, int score, String feedback) {

@@ -6,19 +6,31 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * 文档切分器。
+ * 负责将长文档切分成适合向量化和 LLM 处理的块（Chunks）。
+ */
 @Component
 public class DocumentSplitter {
 
-    // Using TokenTextSplitter for better LLM context management
+    /** 使用 TokenTextSplitter 以获得更精准的上下文管理 */
     private final TokenTextSplitter tokenTextSplitter;
 
     public DocumentSplitter() {
-        // Default: 800 tokens per chunk, 350 tokens overlap, true (keep separators), etc.
-        // Adjust these values based on the embedding model's context window (e.g., text-embedding-ada-002 is 8191)
-        // But for retrieval, smaller chunks (e.g., 500-1000) are often better.
+        // 默认配置：
+        // 1. 每块 800 个 token
+        // 2. 相邻块重叠 350 个 token (保证语义连续性)
+        // 3. 最小字符数 5，最大迭代次数 10000
+        // 4. 保留分隔符 (true)
         this.tokenTextSplitter = new TokenTextSplitter(800, 350, 5, 10000, true);
     }
 
+    /**
+     * 执行切分操作。
+     * 
+     * @param documents 原始文档列表
+     * @return 切分后的子文档列表
+     */
     public List<Document> split(List<Document> documents) {
         return this.tokenTextSplitter.apply(documents);
     }

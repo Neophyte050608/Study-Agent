@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MCP 工具台 - SaaS 数字化叙事</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Fira+Code:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1d",
+                        "background": "#f8f9fa",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "on-primary-fixed": "#100069",
+                        "tertiary": "#692400",
+                        "on-background": "#191c1d",
+                        "secondary-fixed": "#e3dfff",
+                        "secondary-container": "#c0bdff",
+                        "inverse-primary": "#c3c0ff",
+                        "surface-dim": "#d9dadb",
+                        "surface-variant": "#e1e3e4",
+                        "primary-fixed": "#e3dfff",
+                        "outline": "#777586",
+                        "surface-container": "#edeeef",
+                        "on-secondary-fixed-variant": "#42407a",
+                        "error": "#ba1a1a",
+                        "secondary": "#5a5893",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "on-tertiary-container": "#ffb393",
+                        "inverse-on-surface": "#f0f1f2",
+                        "error-container": "#ffdad6",
+                        "on-secondary-container": "#4c4a84",
+                        "surface": "#f8f9fa",
+                        "tertiary-container": "#8f3400",
+                        "primary": "#2a14b4",
+                        "surface-bright": "#f8f9fa",
+                        "on-secondary-fixed": "#16124c",
+                        "on-surface-variant": "#464554",
+                        "tertiary-fixed": "#ffdbcd",
+                        "on-primary-fixed-variant": "#372abf",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-tint": "#5148d7",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-fixed": "#360f00",
+                        "outline-variant": "#c7c4d7",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "primary-container": "#4338ca",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-fixed-dim": "#ffb597",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "on-primary-container": "#c1beff"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"],
+                        "mono": ["Fira Code", "monospace"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .tonal-layering {
+            background-color: #f3f4f5;
+        }
+        .no-line-boundary {
+            border: none !important;
+        }
+        .tonal-shift-bottom {
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface antialiased">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-slate-50 dark:bg-slate-900 font-sans text-sm tracking-tight z-50">
+<div class="flex flex-col p-4 space-y-2 h-full">
+<div class="text-lg font-bold text-indigo-700 dark:text-indigo-400 mb-6 px-2">
+                SaaS 数字化叙事
+                <div class="text-[10px] font-medium opacity-60 tracking-wider mt-1">高级管理后台</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center space-x-3 p-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="mcp.html">
+<span class="material-symbols-outlined" data-icon="exercise">exercise</span>
+<span>面试练习</span>
+</a>
+<a class="flex items-center space-x-3 p-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="knowledge.html">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+<span>知识库管理</span>
+</a>
+<a class="flex items-center space-x-3 p-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="profile.html">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span>学习画像</span>
+</a>
+<!-- Active Tab: MCP 工具台 -->
+<a class="flex items-center space-x-3 p-3 bg-white dark:bg-indigo-950 text-indigo-700 dark:text-indigo-100 font-semibold rounded-lg shadow-sm" href="mcp.html">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span>MCP 工具台</span>
+</a>
+<a class="flex items-center space-x-3 p-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="ops.html">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span>观测与运维</span>
+</a>
+</nav>
+<div class="pt-4 border-t border-slate-200 dark:border-slate-800">
+<a class="flex items-center space-x-3 p-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>设置</span>
+</a>
+<div class="mt-4 flex items-center space-x-3 px-3">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container text-xs font-bold">
+                        JD
+                    </div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-semibold truncate text-on-surface">Admin User</p>
+<p class="text-[10px] text-on-surface-variant truncate">Enterprise Pro</p>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Anchor -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 w-full z-40 no-line-boundary tonal-shift-bottom">
+<div class="flex items-center space-x-4">
+<h1 class="text-xl font-bold text-indigo-700 dark:text-indigo-400 tracking-tight">数字化叙事</h1>
+<span class="text-outline-variant">/</span>
+<span class="text-sm font-medium text-on-surface-variant">MCP 协议调试控制台</span>
+</div>
+<div class="flex items-center space-x-6">
+<button class="bg-primary text-on-primary px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm">
+                全局 Token 配置
+            </button>
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container flex items-center justify-center">
+<img alt="用户头像" class="w-full h-full object-cover" data-alt="User profile avatar illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-TtWmBZ_NinhcKZuqKsLkEFKmNI7Smv-GN5iHrYP32_3vAzCcFd_eMdjdhjtxtn1Ybmj_Qn6y4tQjq9crWFLmMeM3HXggPeeCaSC0z1tLmxi-W3C0ct8k8ehVWxAV_3xdrmwbcRpngmUnlZjtVb7WdEmTjwT-dVffAnwJLU7I83Pn4yyXUF13Mx4s7HqYOx3F1o1j-cP9z1RGr6QbZIGkxG5ROTFBdOgG85TxVhoWgVablMSeGogpfatvkWT6HqtBJTrH9MtwUeE"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-24 pb-12 px-8 min-h-screen bg-surface">
+<div class="max-w-6xl mx-auto space-y-8">
+<!-- Header Section -->
+<div class="flex flex-col space-y-2">
+<h2 class="text-3xl font-extrabold tracking-tight text-on-surface">MCP 调试工作台</h2>
+<p class="text-on-surface-variant max-w-2xl leading-relaxed">
+                    大模型上下文协议 (Model Context Protocol) 实时调试环境。在此发现已注册的工具能力，模拟调用参数，并实时观测协议响应。
+                </p>
+</div>
+<!-- Bento Grid Layout for MCP Workflow -->
+<div class="grid grid-cols-12 gap-6 items-start">
+<!-- Left Column: Config & Input -->
+<div class="col-span-12 lg:col-span-7 space-y-6">
+<!-- Step 1: Discovery -->
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-transparent hover:shadow-md transition-shadow duration-300">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="text-sm font-bold">01</span>
+</div>
+<h3 class="text-lg font-bold">能力发现 (Discovery)</h3>
+</div>
+<button id="refresh-btn" class="flex items-center space-x-2 text-primary font-semibold text-sm hover:underline">
+<span class="material-symbols-outlined text-sm" data-icon="refresh">refresh</span>
+<span>重新发现能力</span>
+</button>
+</div>
+<div class="space-y-4">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">选择已发现的能力</label>
+<div class="relative">
+<select id="capability-select" class="w-full bg-surface-container-low border-none rounded-xl py-3 pl-4 pr-10 text-sm focus:ring-2 focus:ring-primary/20 appearance-none text-on-surface">
+<option disabled="" selected="" value="">请选择工具能力...</option>
+</select>
+<div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="unfold_more">unfold_more</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 2: Params Editor -->
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-transparent">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="text-sm font-bold">02</span>
+</div>
+<h3 class="text-lg font-bold">输入参数 (Params)</h3>
+</div>
+<span class="text-[10px] font-mono bg-secondary-container/30 text-secondary px-2 py-1 rounded">application/json</span>
+</div>
+<div class="relative">
+<textarea id="params-input" class="w-full h-64 bg-slate-900 text-indigo-100 font-mono text-sm p-6 rounded-xl border-none focus:ring-2 focus:ring-primary/40 resize-none shadow-inner" spellcheck="false">{
+  "topic": "Spring Boot",
+  "content": "学习笔记内容"
+}</textarea>
+<div class="absolute top-4 right-4 opacity-50 text-slate-400">
+<span class="material-symbols-outlined" data-icon="code">code</span>
+</div>
+</div>
+<div class="mt-6 flex justify-end">
+<button id="invoke-btn" class="bg-primary-container text-on-primary-container px-8 py-3 rounded-xl font-bold flex items-center space-x-3 hover:shadow-lg active:scale-95 transition-all group">
+<span class="material-symbols-outlined group-hover:rotate-12 transition-transform" data-icon="play_arrow">play_arrow</span>
+<span>执行调用 (Invoke)</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Right Column: Results & Context -->
+<div class="col-span-12 lg:col-span-5 space-y-6">
+<!-- Step 3: Result Section -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm border border-transparent flex flex-col h-full overflow-hidden">
+<div class="p-6 border-b border-surface-container-high bg-slate-50/50">
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="text-sm font-bold">03</span>
+</div>
+<h3 class="text-lg font-bold">执行结果</h3>
+</div>
+<div class="flex items-center space-x-2">
+<span id="status-dot" class="flex h-2 w-2 rounded-full bg-slate-300"></span>
+<span id="status-badge" class="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">Waiting</span>
+</div>
+</div>
+</div>
+<!-- Result Display Area -->
+<div class="p-6 space-y-6">
+<div class="flex grid grid-cols-2 gap-4">
+<div class="p-3 bg-surface-container rounded-lg">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase mb-1">重试状态</p>
+<p id="retry-status" class="text-sm font-semibold">0 次重试</p>
+</div>
+<div class="p-3 bg-surface-container rounded-lg">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase mb-1">状态码</p>
+<p id="status-code" class="text-sm font-semibold font-mono text-slate-500">---</p>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex items-center justify-between">
+<label class="text-xs font-bold text-on-surface-variant uppercase">Response Body</label>
+<button id="copy-btn" class="text-primary text-[11px] hover:underline transition-all">复制结果</button>
+</div>
+<pre class="w-full p-4 bg-slate-50 rounded-xl overflow-x-auto border border-surface-container-high"><code id="result-block" class="text-xs font-mono text-slate-700 leading-relaxed">等待调用...</code></pre>
+</div>
+</div>
+</div>
+<!-- Side Info Card -->
+<div class="bg-indigo-900 rounded-xl p-6 text-indigo-100 shadow-xl relative overflow-hidden">
+<div class="relative z-10 space-y-4">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-indigo-300" data-icon="info">info</span>
+<h4 class="font-bold">什么是 MCP？</h4>
+</div>
+<p class="text-sm text-indigo-200/90 leading-relaxed">
+                                Model Context Protocol 是用于大语言模型与外部工具进行标准通信的协议。通过该控制台，您可以绕过前端 UI 直接测试后端工具的兼容性与逻辑正确性。
+                            </p>
+<a class="inline-flex items-center space-x-1 text-xs font-bold text-white hover:text-indigo-300 transition-colors" href="#">
+<span>阅读协议文档</span>
+<span class="material-symbols-outlined text-xs" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+<!-- Abstract Gradient Pattern -->
+<div class="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl" data-alt="Abstract indigo glowing circular gradient"></div>
+</div>
+</div>
+</div>
+<!-- Additional Contextual Stats (Horizontal Bento Card) -->
+<div class="bg-surface-container-lowest rounded-xl p-8 shadow-sm flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0">
+<div class="flex items-center space-x-6">
+<div class="space-y-1">
+<p class="text-xs font-bold text-on-surface-variant uppercase">当前协议版本</p>
+<p class="text-2xl font-black text-primary">v1.0.0</p>
+</div>
+<div class="h-10 w-px bg-surface-container-high"></div>
+<div class="space-y-1">
+<p class="text-xs font-bold text-on-surface-variant uppercase">已连接工具</p>
+<p id="connected-tools-count" class="text-2xl font-black text-secondary">0 个实例</p>
+</div>
+</div>
+<div id="connected-tools-icons" class="flex items-center -space-x-3">
+<!-- Icons will be dynamically injected here -->
+</div>
+</div>
+</div>
+</main>
+<!-- Global FAB Suppression (as per rules: suppressed on tool/settings pages) -->
+<!-- Shell Visibility Check: Navigation is rendered as it's a top-level destination (MCP 工具台) -->
+    
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const refreshBtn = document.getElementById('refresh-btn');
+        const capabilitySelect = document.getElementById('capability-select');
+        const paramsInput = document.getElementById('params-input');
+        const invokeBtn = document.getElementById('invoke-btn');
+        const resultBlock = document.getElementById('result-block');
+        const statusCodeEl = document.getElementById('status-code');
+        const statusDot = document.getElementById('status-dot');
+        const statusBadge = document.getElementById('status-badge');
+        const retryStatus = document.getElementById('retry-status');
+        const copyBtn = document.getElementById('copy-btn');
+        
+        let traceId = 'trace-' + Date.now();
+        
+        // Mock 参数映射表
+        const mockParamsMap = {
+            'obsidian.read': '{\n  "path": "learning-note.md"\n}',
+            'obsidian.write': '{\n  "topic": "Spring Boot",\n  "content": "学习笔记内容"\n}',
+            'web.search': '{\n  "query": "2024年最受欢迎的编程语言",\n  "limit": 5\n}',
+            'code.execute': '{\n  "language": "python",\n  "code": "print(\'Hello MCP!\')"\n}',
+            'sql_query': '{\n  "query": "SELECT * FROM users LIMIT 10"\n}',
+            'file_read': '{\n  "path": "/etc/hosts"\n}'
+        };
+
+        if (capabilitySelect && paramsInput) {
+            capabilitySelect.addEventListener('change', (e) => {
+                const selected = e.target.value;
+                if (mockParamsMap[selected]) {
+                    paramsInput.value = mockParamsMap[selected];
+                } else {
+                    paramsInput.value = '{\n  \n}';
+                }
+            });
+        }
+        
+        if (copyBtn && resultBlock) {
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(resultBlock.innerText);
+                    const originalText = copyBtn.innerText;
+                    copyBtn.innerText = '已复制!';
+                    copyBtn.classList.add('text-emerald-600');
+                    setTimeout(() => {
+                        copyBtn.innerText = originalText;
+                        copyBtn.classList.remove('text-emerald-600');
+                    }, 2000);
+                } catch (err) {
+                    console.error('复制失败', err);
+                    alert('复制失败，请手动复制');
+                }
+            });
+        }
+        
+        async function fetchCapabilities() {
+            if (!refreshBtn) return;
+            refreshBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/mcp/capabilities?traceId=${traceId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const caps = data.capabilities || data.tools || [];
+                    if (capabilitySelect) {
+                        capabilitySelect.innerHTML = '<option disabled selected value="">请选择工具能力...</option>';
+                        caps.forEach(c => {
+                            const opt = document.createElement('option');
+                            if (typeof c === 'string') {
+                                opt.value = c;
+                                opt.textContent = c;
+                            } else {
+                                opt.value = c.name;
+                                opt.textContent = `${c.name} - ${c.description || ''}`;
+                            }
+                            capabilitySelect.appendChild(opt);
+                        });
+                    }
+                    
+                    // Update connected tools stats
+                    const toolsCountEl = document.getElementById('connected-tools-count');
+                    const toolsIconsEl = document.getElementById('connected-tools-icons');
+                    
+                    if (toolsCountEl) {
+                        toolsCountEl.innerText = `${caps.length} 个实例`;
+                    }
+                    
+                    if (toolsIconsEl) {
+                        toolsIconsEl.innerHTML = ''; // Clear fake data
+                        
+                        // Just generate some generic letter icons based on capability names
+                        const maxIcons = Math.min(3, caps.length);
+                        for (let i = 0; i < maxIcons; i++) {
+                            const capName = typeof caps[i] === 'string' ? caps[i] : caps[i].name;
+                            const firstLetter = capName.charAt(0).toUpperCase();
+                            const iconHtml = `
+                                <div class="w-10 h-10 rounded-full border-4 border-white bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700 z-${30-i*10}">
+                                    ${firstLetter}
+                                </div>
+                            `;
+                            toolsIconsEl.insertAdjacentHTML('beforeend', iconHtml);
+                        }
+                        
+                        if (caps.length > 3) {
+                            const remaining = caps.length - 3;
+                            const overflowHtml = `
+                                <div class="w-10 h-10 rounded-full border-4 border-white bg-surface-container-high flex items-center justify-center text-[10px] font-bold text-on-surface-variant z-0">
+                                    +${remaining}
+                                </div>
+                            `;
+                            toolsIconsEl.insertAdjacentHTML('beforeend', overflowHtml);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.error('Failed to load capabilities', e);
+            } finally {
+                refreshBtn.disabled = false;
+            }
+        }
+        
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', fetchCapabilities);
+        }
+        
+        if (invokeBtn) {
+            invokeBtn.addEventListener('click', async () => {
+                const capability = capabilitySelect ? capabilitySelect.value : '';
+                if (!capability) {
+                    alert('请先选择能力');
+                    return;
+                }
+                
+                let params = {};
+                try {
+                    params = JSON.parse(paramsInput.value || '{}');
+                } catch(e) {
+                    alert('参数必须是合法的 JSON 格式');
+                    return;
+                }
+                
+                invokeBtn.disabled = true;
+                if (resultBlock) resultBlock.innerText = 'Loading...';
+                if (statusCodeEl) {
+                    statusCodeEl.innerText = 'Pending';
+                    statusCodeEl.className = 'text-sm font-semibold font-mono text-slate-500';
+                }
+                if (statusDot) statusDot.className = 'flex h-2 w-2 rounded-full bg-slate-300 animate-pulse';
+                if (statusBadge) {
+                    statusBadge.innerText = 'Invoking';
+                    statusBadge.className = 'text-[11px] font-bold text-slate-500 uppercase tracking-tighter';
+                }
+                
+                try {
+                    const res = await fetch('/api/mcp/invoke', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-Trace-Id': traceId},
+                        body: JSON.stringify({
+                            capability: capability,
+                            method: capability,
+                            params: params,
+                            traceId: traceId
+                        })
+                    });
+                    const data = await res.json();
+                    
+                    if (statusCodeEl) {
+                        statusCodeEl.innerText = res.ok ? '200 OK' : `${res.status} Error`;
+                        statusCodeEl.className = res.ok ? 'text-sm font-semibold font-mono text-emerald-600' : 'text-sm font-semibold font-mono text-error';
+                    }
+                    if (statusDot) statusDot.className = res.ok ? 'flex h-2 w-2 rounded-full bg-emerald-500' : 'flex h-2 w-2 rounded-full bg-error';
+                    if (statusBadge) {
+                        statusBadge.innerText = res.ok ? 'Success' : 'Failed';
+                        statusBadge.className = res.ok ? 'text-[11px] font-bold text-emerald-600 uppercase tracking-tighter' : 'text-[11px] font-bold text-error uppercase tracking-tighter';
+                    }
+                    if (retryStatus) {
+                        retryStatus.innerText = data.attempt ? `${data.attempt - 1} 次重试` : '0 次重试';
+                    }
+                    
+                    if (resultBlock) {
+                        resultBlock.innerText = JSON.stringify(data, null, 2);
+                    }
+                } catch(e) {
+                    if (resultBlock) resultBlock.innerText = String(e);
+                    if (statusCodeEl) {
+                        statusCodeEl.innerText = 'Network Error';
+                        statusCodeEl.className = 'text-sm font-semibold font-mono text-error';
+                    }
+                    if (statusDot) statusDot.className = 'flex h-2 w-2 rounded-full bg-error';
+                    if (statusBadge) {
+                        statusBadge.innerText = 'Error';
+                        statusBadge.className = 'text-[11px] font-bold text-error uppercase tracking-tighter';
+                    }
+                } finally {
+                    invokeBtn.disabled = false;
+                    traceId = 'trace-' + Date.now(); // rotate traceId
+                }
+            });
+        }
+        
+        // Auto load capabilities on init
+        fetchCapabilities();
+    });
+    </script>
+
+    <script src="app.js"></script>
+</body></html>

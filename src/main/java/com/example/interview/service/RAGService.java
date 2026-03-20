@@ -34,6 +34,13 @@ import java.util.stream.Collectors;
 /**
  * RAG 核心服务。
  * 负责检索查询改写、混合召回、证据整理、回答评估与可观测追踪。
+ *
+ * <p>关键约定：</p>
+ * <ul>
+ *   <li>证据索引：buildRetrievalEvidence/buildWebEvidence 会生成带编号的证据目录，评估输出的 citations/conflicts 只能引用这些编号。</li>
+ *   <li>安全日志：日志输出会尽量使用长度与脱敏后的内容，避免把 API Key、Bearer token 等敏感信息写入日志。</li>
+ *   <li>降级路径：模型/检索不可用时返回可读的 fallback JSON，保证前端流程可继续。</li>
+ * </ul>
  */
 @Service
 public class RAGService {
@@ -41,6 +48,7 @@ public class RAGService {
     private static final Logger logger = LoggerFactory.getLogger(RAGService.class);
     private static final Pattern EVIDENCE_LINE_PATTERN = Pattern.compile("^(\\d+)\\.\\s+(.*)$");
     private static final Pattern INDEX_PATTERN = Pattern.compile("(\\d+)");
+    // 用于日志脱敏：尽量在调试时保留“字段存在”信息，但不暴露实际密钥/令牌。
     private static final Pattern RAW_API_KEY_PATTERN = Pattern.compile("(?i)(\"?api[-_ ]?key\"?\\s*[:=]\\s*\"?)([^\",\\s]+)");
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*bearer\\s+)([A-Za-z0-9._-]{8,})");
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
@@ -95,6 +103,7 @@ public class RAGService {
         } catch (RuntimeException e) {
             logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
         }
+        // 注意：retrievalQuery 可能包含用户原话，日志里只用于排障；必要时可将该日志级别改为 DEBUG。
         logger.info("Rewritten Query: {}", retrievalQuery);
         List<Document> retrievedDocs = retrieveHybridDocuments(retrievalQuery);
         String context = retrievedDocs.stream()
@@ -434,6 +443,8 @@ public class RAGService {
     }
 
     private String callWithRetry(Supplier<String> action, int maxAttempts, String stage) {
+        // 统一重试包装：用于模型调用/改写等“外部依赖”步骤，降低偶发超时/抖动对整体流程的影响。
+        // 退避策略：线性 sleep（400ms * attempt），避免短时间内连续打满下游。
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -470,6 +481,8 @@ public class RAGService {
         if (docs == null || docs.isEmpty()) {
             return "[]";
         }
+        // 证据目录格式："{index}. [source_type:file_path] tags=... | snippet"
+        // 该格式会被 parseEvidenceCatalog 与 validateEvidenceReferences 使用，以约束 citations/conflicts 的可引用范围。
         List<String> lines = new ArrayList<>();
         for (int i = 0; i < docs.size(); i++) {
             Document doc = docs.get(i);
@@ -490,6 +503,7 @@ public class RAGService {
         if (webContext == null || webContext.isEmpty()) {
             return "[]";
         }
+        // Web 证据没有稳定的 file_path/source_type，统一标记为 [web] 并做摘要截断。
         List<String> lines = new ArrayList<>();
         for (int i = 0; i < webContext.size(); i++) {
             String text = webContext.get(i);
@@ -620,13 +634,12 @@ public class RAGService {
                              "简历摘要：{resume}\n" +
                              "面试主题：{topic}\n" +
                              "用户历史画像：{profileSnapshot}\n" +
-                             "请优先围绕用户笔记或项目经历已出现的内容出题，同时兼顾薄弱点。\n" +
-                             "请生成第一道中文面试题。\n" +
+                             "请根据用户的历史画像，**专门针对其薄弱点（Weaknesses）或得分较低的技能**生成第一道中文面试题。如果画像中没有薄弱点，则优先围绕其项目经历出题。\n" +
                              "只输出一道题目本身，必须单行，不要标题、不要策略说明、不要理由、不要建议、不要 markdown。")
                              .param("skillBlock", skillBlock)
                             .param("resume", truncate(resumeContent, 1500))
                              .param("topic", topic)
-                            .param("profileSnapshot", truncate(profileSnapshot, 240)))
+                            .param("profileSnapshot", truncate(profileSnapshot, 500)))
                      .call()
                      .content(), 2, "首题生成");
              return normalizeFirstQuestion(rawQuestion, topic);
@@ -673,6 +686,145 @@ public class RAGService {
         }
     }
 
+    public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot) {
+        String normalizedTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic.trim();
+        String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
+        String prompt = "{skillBlock}\n" +
+                "你是一位算法训练教练，请生成一道中文算法题。\n" +
+                "主题：{topic}\n" +
+                "难度：{difficulty}\n" +
+                "用户画像：{profileSnapshot}\n" +
+                "输出要求：\n" +
+                "1. 只输出题目正文与输入输出约束，禁止输出答案。\n" +
+                "2. 单段文本，不要 markdown，不要标题。\n";
+        try {
+            String raw = callWithRetry(() -> chatClient.prompt()
+                    .user(u -> u.text(prompt)
+                            .param("skillBlock", skillBlock)
+                            .param("topic", normalizedTopic)
+                            .param("difficulty", normalizedDifficulty)
+                            .param("profileSnapshot", truncate(profileSnapshot, 240)))
+                    .call()
+                    .content(), 2, "刷题题目生成");
+            if (raw == null || raw.isBlank()) {
+                return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty);
+            }
+            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 280);
+        } catch (RuntimeException e) {
+            logger.warn("刷题题目生成失败，返回降级题目。原因: {}", summarizeError(e));
+            return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty);
+        }
+    }
+
+    public CodingAssessment evaluateCodingAnswer(String topic, String difficulty, String question, String answer) {
+        String normalizedTopic = topic == null || topic.isBlank() ? "算法" : topic.trim();
+        String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
+        String safeQuestion = question == null ? "" : question.trim();
+        String safeAnswer = answer == null ? "" : answer.trim();
+        if (safeAnswer.isBlank()) {
+            return new CodingAssessment(20, "未提供有效答案。", "先补充完整思路，再给出复杂度分析。", fallbackNextCodingQuestion(normalizedTopic, 20));
+        }
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator"));
+        String prompt = "{skillBlock}\n" +
+                "你是一位算法面试评估官，请评估候选人的题解文本。\n" +
+                "主题：{topic}\n" +
+                "难度：{difficulty}\n" +
+                "题目：{question}\n" +
+                "回答：{answer}\n" +
+                "请输出严格 JSON：score,feedback,nextHint,nextQuestion。\n" +
+                "score 范围 0-100。";
+        try {
+            String raw = callWithRetry(() -> chatClient.prompt()
+                    .user(u -> u.text(prompt)
+                            .param("skillBlock", skillBlock)
+                            .param("topic", normalizedTopic)
+                            .param("difficulty", normalizedDifficulty)
+                            .param("question", truncate(safeQuestion, 280))
+                            .param("answer", truncate(safeAnswer, 800)))
+                    .call()
+                    .content(), 2, "刷题答案评估");
+            String clean = normalizeJsonContent(raw);
+            JsonNode node = objectMapper.readTree(clean);
+            int score = node.path("score").asInt(0);
+            String feedback = node.path("feedback").asText("建议补充完整思路并说明复杂度。");
+            String nextHint = node.path("nextHint").asText("请优先补充边界条件与复杂度分析。");
+            String nextQuestion = node.path("nextQuestion").asText("");
+            if (nextQuestion == null || nextQuestion.isBlank()) {
+                nextQuestion = generateNextCodingQuestion(normalizedTopic, normalizedDifficulty, safeQuestion, safeAnswer, score);
+            }
+            return new CodingAssessment(Math.max(0, Math.min(score, 100)), feedback, nextHint, truncate(nextQuestion, 220));
+        } catch (Exception e) {
+            logger.warn("刷题答案评估失败，返回降级评分。原因: {}", summarizeError(e));
+            return fallbackCodingAssessment(safeAnswer);
+        }
+    }
+
+    public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy"));
+        String prompt = "{skillBlock}\n" +
+                "你是一位算法训练教练，请根据当前答题质量生成下一道追问题。\n" +
+                "主题：{topic}\n" +
+                "难度：{difficulty}\n" +
+                "当前题目：{question}\n" +
+                "用户回答：{answer}\n" +
+                "当前得分：{score}\n" +
+                "要求：\n" +
+                "1. 只输出下一题题干；\n" +
+                "2. 若当前分数较低，下一题降一级难度并聚焦基础；\n" +
+                "3. 若当前分数较高，下一题同主题进阶追问。";
+        try {
+            String raw = callWithRetry(() -> chatClient.prompt()
+                    .user(u -> u.text(prompt)
+                            .param("skillBlock", skillBlock)
+                            .param("topic", topic == null ? "算法" : topic)
+                            .param("difficulty", difficulty == null ? "medium" : difficulty)
+                            .param("question", truncate(question, 240))
+                            .param("answer", truncate(answer, 500))
+                            .param("score", String.valueOf(score)))
+                    .call()
+                    .content(), 2, "刷题下一题生成");
+            if (raw == null || raw.isBlank()) {
+                return fallbackNextCodingQuestion(topic, score);
+            }
+            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 220);
+        } catch (RuntimeException e) {
+            logger.warn("刷题下一题生成失败，返回降级问题。原因: {}", summarizeError(e));
+            return fallbackNextCodingQuestion(topic, score);
+        }
+    }
+
+    public String generateLearningPlan(String topic, String weakPoint, String recentPerformance) {
+        String normalizedTopic = topic == null || topic.isBlank() ? "后端基础" : topic.trim();
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-learning-profile", "interview-growth-coach"));
+        String prompt = "{skillBlock}\n" +
+                "你是一位学习教练，请基于用户状态生成 7 天学习计划。\n" +
+                "主题：{topic}\n" +
+                "薄弱点：{weakPoint}\n" +
+                "近期表现：{recentPerformance}\n" +
+                "输出要求：\n" +
+                "1. 使用纯文本，每天一行；\n" +
+                "2. 每行包含：目标 + 练习动作 + 复盘动作；\n" +
+                "3. 不要 markdown 标题。";
+        try {
+            String raw = callWithRetry(() -> chatClient.prompt()
+                    .user(u -> u.text(prompt)
+                            .param("skillBlock", skillBlock)
+                            .param("topic", normalizedTopic)
+                            .param("weakPoint", truncate(weakPoint, 180))
+                            .param("recentPerformance", truncate(recentPerformance, 200)))
+                    .call()
+                    .content(), 2, "学习计划生成");
+            if (raw == null || raw.isBlank()) {
+                return fallbackLearningPlan(normalizedTopic, weakPoint);
+            }
+            return raw.trim();
+        } catch (RuntimeException e) {
+            logger.warn("学习计划生成失败，返回降级计划。原因: {}", summarizeError(e));
+            return fallbackLearningPlan(normalizedTopic, weakPoint);
+        }
+    }
+
     private String buildFallbackReport(List<Question> history, String targetedSuggestion) {
         String incomplete = history.stream()
                 .filter(q -> q.getScore() >= 60 && q.getScore() < 80)
@@ -698,6 +850,71 @@ public class RAGService {
     private String buildFallbackFirstQuestion(String topic) {
         String safeTopic = topic == null || topic.isBlank() ? "你最熟悉的后端主题" : topic.trim();
         return "我们先从基础开始，请你结合一个实际场景，说明你对「" + safeTopic + "」的核心概念、典型实现和常见误区的理解。";
+    }
+
+    private String buildFallbackCodingQuestion(String topic, String difficulty) {
+        return "请完成一道" + difficulty + "难度的「" + topic + "」算法题：给定整数数组与目标值，返回两数之和等于目标值的下标，并说明时间复杂度与空间复杂度。";
+    }
+
+    private String fallbackNextCodingQuestion(String topic, int score) {
+        String safeTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic;
+        if (score < 60) {
+            return "请给出一道「" + safeTopic + "」基础题的完整暴力解，并说明如何优化到更低时间复杂度。";
+        }
+        if (score < 80) {
+            return "请继续完成一道「" + safeTopic + "」中等题，并重点说明边界条件和复杂度推导。";
+        }
+        return "请完成一道「" + safeTopic + "」进阶题，并比较两种不同解法的 trade-off。";
+    }
+
+    private String fallbackLearningPlan(String topic, String weakPoint) {
+        String weak = weakPoint == null || weakPoint.isBlank() ? "复杂度分析与边界处理" : weakPoint;
+        return "Day1: 梳理 " + topic + " 核心概念，完成 2 道基础题，记录错误清单。\n" +
+                "Day2: 复习 " + weak + "，完成 1 道中等题，复盘复杂度。\n" +
+                "Day3: 总结高频模板，完成 2 道同主题题，提炼可复用步骤。\n" +
+                "Day4: 针对薄弱点做专项训练，完成 1 道限时题，复盘超时原因。\n" +
+                "Day5: 进行模拟讲解，口述解题过程，补齐表达短板。\n" +
+                "Day6: 完成 1 道进阶题，对比两种解法并总结取舍。\n" +
+                "Day7: 做一次 30 分钟小测，整理错题并形成下周目标。";
+    }
+
+    private CodingAssessment fallbackCodingAssessment(String answer) {
+        String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
+        int score = 35;
+        if (lower.contains("o(")) {
+            score += 20;
+        }
+        if (lower.contains("for") || lower.contains("while")) {
+            score += 15;
+        }
+        if (lower.contains("hashmap") || lower.contains("map")) {
+            score += 15;
+        }
+        if (lower.contains("边界") || lower.contains("null") || lower.contains("空")) {
+            score += 10;
+        }
+        score = Math.min(score, 90);
+        String feedback = score < 60 ? "题解描述不完整，建议补充步骤与边界场景。"
+                : "题解基本可用，建议进一步优化复杂度论证。";
+        String nextHint = score < 60 ? "先给出可运行解法，再补充复杂度。"
+                : "尝试提供另一种实现并比较 trade-off。";
+        return new CodingAssessment(score, feedback, nextHint, fallbackNextCodingQuestion("算法", score));
+    }
+
+    private String normalizeJsonContent(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String clean = raw.trim();
+        if (clean.startsWith("```json")) {
+            clean = clean.substring(7);
+        } else if (clean.startsWith("```")) {
+            clean = clean.substring(3);
+        }
+        if (clean.endsWith("```")) {
+            clean = clean.substring(0, clean.length() - 3);
+        }
+        return clean.trim();
     }
 
     private String normalizeFirstQuestion(String raw, String topic) {
@@ -797,6 +1014,14 @@ public class RAGService {
             String context,
             String retrievalEvidence,
             boolean webFallbackUsed
+    ) {
+    }
+
+    public record CodingAssessment(
+            int score,
+            String feedback,
+            String nextHint,
+            String nextQuestion
     ) {
     }
 }

@@ -5,7 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.ai.chat.client.ChatClient;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "rocketmq.name-server=127.0.0.1:9876",
+        "app.a2a.bus.type=inmemory"
+})
 public class DeepSeekTest {
 
     @Autowired

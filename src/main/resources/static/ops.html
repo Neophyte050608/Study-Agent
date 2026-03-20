@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1d",
+                        "background": "#f8f9fa",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "on-primary-fixed": "#100069",
+                        "tertiary": "#692400",
+                        "on-background": "#191c1d",
+                        "secondary-fixed": "#e3dfff",
+                        "secondary-container": "#c0bdff",
+                        "inverse-primary": "#c3c0ff",
+                        "surface-dim": "#d9dadb",
+                        "surface-variant": "#e1e3e4",
+                        "primary-fixed": "#e3dfff",
+                        "outline": "#777586",
+                        "surface-container": "#edeeef",
+                        "on-secondary-fixed-variant": "#42407a",
+                        "error": "#ba1a1a",
+                        "secondary": "#5a5893",
+                        "secondary-fixed-dim": "#c3c0ff",
+                        "on-tertiary-container": "#ffb393",
+                        "inverse-on-surface": "#f0f1f2",
+                        "error-container": "#ffdad6",
+                        "on-secondary-container": "#4c4a84",
+                        "surface": "#f8f9fa",
+                        "tertiary-container": "#8f3400",
+                        "primary": "#2a14b4",
+                        "surface-bright": "#f8f9fa",
+                        "on-secondary-fixed": "#16124c",
+                        "on-surface-variant": "#464554",
+                        "tertiary-fixed": "#ffdbcd",
+                        "on-primary-fixed-variant": "#372abf",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-tint": "#5148d7",
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-fixed": "#360f00",
+                        "outline-variant": "#c7c4d7",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "primary-container": "#4338ca",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-fixed-dim": "#ffb597",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "on-primary-container": "#c1beff"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .tonal-layering { background-color: #f3f4f5; }
+        .no-line-boundary { border: none !important; }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased overflow-x-hidden">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-slate-50 dark:bg-slate-900 tonal-layering p-4 space-y-2 z-50">
+<div class="flex flex-col p-4 space-y-2 h-full">
+<div class="text-lg font-bold text-indigo-700 dark:text-indigo-400 mb-6 px-2">
+            SaaS 数字化叙事
+            <div class="text-[10px] font-medium opacity-60 tracking-wider">高级管理后台</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="interview.html">
+<span class="material-symbols-outlined" data-icon="exercise">exercise</span>
+<span class="text-sm font-medium">面试练习</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="knowledge.html">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+<span class="text-sm font-medium">知识库管理</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="profile.html">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="text-sm font-medium">学习画像</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="mcp.html">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span class="text-sm font-medium">MCP 工具台</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-indigo-950 text-indigo-700 dark:text-indigo-100 font-semibold rounded-lg shadow-sm scale-95 transition-transform" href="ops.html">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span class="text-sm font-medium">观测与运维</span>
+</a>
+</nav>
+<div class="pt-4 mt-4 border-t border-slate-200/30">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-sm font-medium">设置</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar Anchor -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 w-full z-40 shadow-sm dark:shadow-none no-line-boundary">
+<div class="flex items-center gap-4">
+<h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">数字叙事 <span class="text-on-surface-variant font-medium">/ 观测与运维</span></h1>
+</div>
+<div class="flex items-center gap-6">
+<button class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-80 active:scale-95 transition-all shadow-md shadow-primary/20">
+<span class="material-symbols-outlined text-sm" data-icon="token">token</span>
+                全局 Token 配置
+            </button>
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="用户头像" class="w-full h-full object-cover" data-alt="Professional user profile avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBctVkb05anLJZh3R4qcdbsAdVpITcVhdVn4cDNWuUtnJ9EEU419nqZQkgNkAcy-ZBxmQBQKT5IS4FtKH3q2eFicbNc8M31gehjKjnDZCPk3L0TQXyxYkhJVrz-Yg3swyMINaHTxBXhnLwcytYoteYsnk6PaiPp8ImQ4oc1I2t6CyNnudaMwwFVrcxAcezRRAYqySlLgMOYHG4FK1qcfu57D1NN5Xb8vWwKUHXKWUoUnlsNMOXUM_637BDXE4KeyhXWdalVY2BvBCI"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-24 px-8 pb-12 min-h-screen">
+<!-- Header & Tabs -->
+<div class="mb-8">
+<div class="flex items-end justify-between">
+<div>
+<h2 class="text-3xl font-extrabold tracking-tight text-on-surface mb-2">系统全链路观测</h2>
+<p class="text-on-surface-variant max-w-2xl leading-relaxed">监控 RAG 检索链路性能、A2A 通信状态及核心运维审计日志，确保数字化叙事引擎的高可用运行。</p>
+</div>
+<div class="flex bg-surface-container-low p-1 rounded-xl" id="ops-tabs">
+<button data-target="section-rag" class="px-6 py-2 rounded-lg text-sm font-bold bg-white text-indigo-700 shadow-sm transition-all">RAG 追踪</button>
+<button data-target="section-a2a" class="px-6 py-2 rounded-lg text-sm font-medium text-on-surface-variant hover:text-indigo-600 transition-all">A2A 幂等</button>
+<button data-target="section-audit" class="px-6 py-2 rounded-lg text-sm font-medium text-on-surface-variant hover:text-indigo-600 transition-all">运维审计</button>
+</div>
+</div>
+</div>
+<!-- Content Grid: Bento Style -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Key Metrics Summary -->
+<div class="col-span-12 grid grid-cols-4 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="speed">speed</span>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">平均检索耗时</span>
+</div>
+<div class="text-2xl font-black text-on-surface">184<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
+<div class="mt-2 flex items-center gap-1 text-xs text-error font-medium">
+<span class="material-symbols-outlined text-xs" data-icon="trending_up">trending_up</span> 12.4% vs 昨天
+                    </div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="find_in_page">find_in_page</span>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">平均召回文档</span>
+</div>
+<div class="text-2xl font-black text-on-surface">8.2<span class="text-sm font-medium ml-1 opacity-60">docs</span></div>
+<div class="mt-2 flex items-center gap-1 text-xs text-secondary font-medium">
+<span class="material-symbols-outlined text-xs" data-icon="stable">video_stable</span> 稳定运行中
+                    </div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="memory">memory</span>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">内存缓存命中</span>
+</div>
+<div class="text-2xl font-black text-on-surface">94.8<span class="text-sm font-medium ml-1 opacity-60">%</span></div>
+<div class="mt-2 flex items-center gap-1 text-xs text-primary font-medium">
+<span class="material-symbols-outlined text-xs" data-icon="keyboard_double_arrow_up">keyboard_double_arrow_up</span> 优于行业基准
+                    </div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="database">database</span>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Redis 负载状态</span>
+</div>
+<div class="text-2xl font-black text-on-surface">22<span class="text-sm font-medium ml-1 opacity-60">%</span></div>
+<div class="mt-2 flex items-center gap-1 text-xs text-secondary font-medium">
+<span class="material-symbols-outlined text-xs" data-icon="cloud_done">cloud_done</span> 负载极低
+                    </div>
+</div>
+</div>
+<!-- RAG Trace Table -->
+<div id="section-rag" class="col-span-8 bg-surface-container-lowest rounded-xl p-8 shadow-sm">
+<div class="flex items-center justify-between mb-8">
+<h3 class="text-xl font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-indigo-700" data-icon="route">route</span>
+                        RAG 链路实时追踪
+                    </h3>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-xs text-on-surface-variant font-medium">实时监听中...</span>
+</div>
+</div>
+<div class="overflow-hidden">
+<table class="w-full text-left">
+<thead>
+<tr class="text-on-surface-variant text-xs uppercase tracking-widest font-bold">
+<th class="pb-4 font-bold">Trace ID</th>
+<th class="pb-4 font-bold">耗时 (Latency)</th>
+<th class="pb-4 font-bold">召回数量</th>
+<th class="pb-4 font-bold">相似度均值</th>
+<th class="pb-4 text-right font-bold">状态</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+<tr class="group hover:bg-slate-50/80 transition-all">
+<td class="py-4 text-sm font-mono text-indigo-600">tr-892x-90k1-v12</td>
+<td class="py-4 text-sm font-semibold">142 ms</td>
+<td class="py-4 text-sm">12</td>
+<td class="py-4 text-sm">0.89</td>
+<td class="py-4 text-right">
+<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-[10px] font-bold">SUCCESS</span>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/80 transition-all">
+<td class="py-4 text-sm font-mono text-indigo-600">tr-711a-33c9-f54</td>
+<td class="py-4 text-sm font-semibold">456 ms</td>
+<td class="py-4 text-sm">4</td>
+<td class="py-4 text-sm">0.72</td>
+<td class="py-4 text-right">
+<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-[10px] font-bold">SUCCESS</span>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/80 transition-all text-error">
+<td class="py-4 text-sm font-mono font-bold">tr-440p-12s5-r88</td>
+<td class="py-4 text-sm font-semibold">2109 ms</td>
+<td class="py-4 text-sm">0</td>
+<td class="py-4 text-sm">-</td>
+<td class="py-4 text-right">
+<span class="px-2 py-1 rounded bg-error-container text-on-error-container text-[10px] font-bold uppercase tracking-tighter">Timeout</span>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/80 transition-all">
+<td class="py-4 text-sm font-mono text-indigo-600">tr-332q-66t7-x21</td>
+<td class="py-4 text-sm font-semibold">89 ms</td>
+<td class="py-4 text-sm">24</td>
+<td class="py-4 text-sm">0.94</td>
+<td class="py-4 text-right">
+<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-[10px] font-bold">SUCCESS</span>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/80 transition-all">
+<td class="py-4 text-sm font-mono text-indigo-600">tr-221n-44m0-l10</td>
+<td class="py-4 text-sm font-semibold">168 ms</td>
+<td class="py-4 text-sm">8</td>
+<td class="py-4 text-sm">0.81</td>
+<td class="py-4 text-right">
+<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-[10px] font-bold">SUCCESS</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- A2A Idempotency Status -->
+<div id="section-a2a" class="col-span-4 space-y-6">
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+<h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-indigo-700 text-lg" data-icon="rebase_edit">rebase_edit</span>
+                        A2A 幂等缓存状态
+                    </h3>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="text-xs font-bold text-on-surface">L1 Memory Cache</span>
+<span class="text-xs text-indigo-600 font-mono">1.42 GB / 2.0 GB</span>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-indigo-500 rounded-full" style="width: 71%;"></div>
+</div>
+<p class="text-[10px] mt-2 text-on-surface-variant">清理策略：LRU (Least Recently Used)</p>
+</div>
+<div>
+<div class="flex justify-between items-end mb-2">
+<span class="text-xs font-bold text-on-surface">L2 Redis Dist. Cache</span>
+<span class="text-xs text-indigo-600 font-mono">12.8 GB / 64.0 GB</span>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-indigo-400 rounded-full" style="width: 20%;"></div>
+</div>
+<p class="text-[10px] mt-2 text-on-surface-variant">持久化：AOF + RDB Enabled</p>
+</div>
+<div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+<div class="text-center">
+<div class="text-xl font-black text-on-surface">1.2M</div>
+<div class="text-[10px] font-bold text-on-surface-variant uppercase">活跃 Key</div>
+</div>
+<div class="text-center">
+<div class="text-xl font-black text-on-surface">4.8ms</div>
+<div class="text-[10px] font-bold text-on-surface-variant uppercase">P99 延迟</div>
+</div>
+<div class="text-center">
+<div class="text-xl font-black text-on-surface">0.02%</div>
+<div class="text-[10px] font-bold text-on-surface-variant uppercase">驱逐率</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Danger Zone -->
+<div class="rounded-xl border-2 border-dashed border-error/30 p-6 bg-error/5 group hover:border-error transition-all">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-error" data-icon="dangerous">dangerous</span>
+<h3 class="text-sm font-bold text-error uppercase tracking-widest">危险操作区 (Danger Zone)</h3>
+</div>
+<p class="text-xs text-on-error-container opacity-80 mb-6 leading-relaxed">
+                        执行以下操作可能会导致部分正在进行的业务中断或数据不一致，请在确保备份的情况下谨慎操作。
+                    </p>
+<div class="grid grid-cols-1 gap-3">
+<button class="w-full flex items-center justify-center gap-2 py-3 bg-white text-error border border-error/20 rounded-lg text-xs font-bold hover:bg-error hover:text-on-error transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="delete_sweep">delete_sweep</span>
+                            清理幂等缓存 (Force Purge)
+                        </button>
+<button class="w-full flex items-center justify-center gap-2 py-3 bg-white text-on-surface border border-outline/20 rounded-lg text-xs font-bold hover:bg-surface-container transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="replay">replay</span>
+                            死信队列重放 (DLQ Replay)
+                        </button>
+</div>
+</div>
+</div>
+<!-- Recent Audit Log (Asymmetric Section) -->
+<div id="section-audit" class="col-span-12 bg-surface-container-low rounded-xl p-8 border border-white">
+<div class="flex items-center justify-between mb-6">
+<div>
+<h3 class="text-lg font-bold">最近运维审计</h3>
+<p class="text-xs text-on-surface-variant">记录所有特权用户的写操作指令</p>
+</div>
+<button class="text-indigo-600 text-xs font-bold flex items-center gap-1 hover:underline">
+                        查看完整日志 <span class="material-symbols-outlined text-xs" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between bg-white px-4 py-3 rounded-lg border-l-4 border-indigo-500">
+<div class="flex items-center gap-4">
+<span class="text-xs font-mono text-on-surface-variant">2023-11-24 14:20:11</span>
+<span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full uppercase">Update</span>
+<span class="text-sm font-medium">管理员 <span class="font-bold">admin_root</span> 修改了 RAG 检索模型权重阈值 [0.75 -&gt; 0.85]</span>
+</div>
+<span class="text-xs text-on-surface-variant opacity-50">IP: 192.168.1.104</span>
+</div>
+<div class="flex items-center justify-between bg-white px-4 py-3 rounded-lg border-l-4 border-error">
+<div class="flex items-center gap-4">
+<span class="text-xs font-mono text-on-surface-variant">2023-11-24 13:05:42</span>
+<span class="px-2 py-0.5 bg-error-container text-on-error-container text-[10px] font-black rounded-full uppercase">Delete</span>
+<span class="text-sm font-medium">用户 <span class="font-bold">dev_ops_01</span> 手动清空了 A2A Redis 临时槽位缓存</span>
+</div>
+<span class="text-xs text-on-surface-variant opacity-50">IP: 10.0.4.22</span>
+</div>
+<div class="flex items-center justify-between bg-white px-4 py-3 rounded-lg border-l-4 border-indigo-500">
+<div class="flex items-center gap-4">
+<span class="text-xs font-mono text-on-surface-variant">2023-11-24 10:11:59</span>
+<span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full uppercase">Create</span>
+<span class="text-sm font-medium">系统自动触发了生产环境数据库的全量快照备份任务</span>
+</div>
+<span class="text-xs text-on-surface-variant opacity-50">System Triggered</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+    
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const purgeBtn = document.querySelector('button:has(span.material-symbols-outlined[data-icon="delete_sweep"])');
+        const replayBtn = document.querySelector('button:has(span.material-symbols-outlined[data-icon="replay"])');
+        const auditContainer = document.querySelector('.col-span-12.bg-surface-container-low .space-y-4');
+        
+        // Purge Idempotency
+        if (purgeBtn) {
+            purgeBtn.addEventListener('click', async () => {
+                if (!confirm('确定要强制清理 A2A 幂等缓存吗？此操作具有高风险。')) return;
+                
+                purgeBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/observability/a2a/idempotency/clear', { method: 'POST' });
+                    if (!res.ok) throw new Error('清理失败，可能权限不足 (需要 ROLE_OPS_ADMIN)');
+                    alert('幂等缓存已清理');
+                } catch(e) {
+                    alert(e.message);
+                } finally {
+                    purgeBtn.disabled = false;
+                }
+            });
+        }
+        
+        // Replay DLQ
+        if (replayBtn) {
+            replayBtn.addEventListener('click', async () => {
+                if (!confirm('确定要重放死信队列吗？')) return;
+                
+                replayBtn.disabled = true;
+                try {
+                    const res = await fetch('/api/observability/a2a/dlq/replay', { method: 'POST' });
+                    if (!res.ok) throw new Error('重放失败，可能权限不足 (需要 ROLE_OPS_ADMIN)');
+                    const data = await res.json();
+                    alert('重放指令已发送，成功触发：' + (data.replayedCount || 0) + ' 条');
+                } catch(e) {
+                    alert(e.message);
+                } finally {
+                    replayBtn.disabled = false;
+                }
+            });
+        }
+        
+        // Fetch Overview Stats
+        try {
+            const res = await fetch('/api/observability/rag/overview');
+            if (res.ok) {
+                const data = await res.json();
+                
+                // 更新平均检索耗时
+                const latencyEl = document.querySelector('.grid.grid-cols-4 > div:nth-child(1) .text-2xl');
+                if (latencyEl) latencyEl.innerHTML = `${data.avgLatencyMs}<span class="text-sm font-medium ml-1 opacity-60">ms</span>`;
+                
+                // 更新平均召回文档
+                const docsEl = document.querySelector('.grid.grid-cols-4 > div:nth-child(2) .text-2xl');
+                if (docsEl) docsEl.innerHTML = `${data.avgRetrievedDocs}<span class="text-sm font-medium ml-1 opacity-60">docs</span>`;
+                
+                // 更新缓存命中率
+                const cacheEl = document.querySelector('.grid.grid-cols-4 > div:nth-child(3) .text-2xl');
+                if (cacheEl) cacheEl.innerHTML = `${data.cacheHitRate.replace('%', '')}<span class="text-sm font-medium ml-1 opacity-60">%</span>`;
+            }
+        } catch(e) {
+            console.error('Failed to load overview stats', e);
+        }
+
+        // Fetch RAG Traces
+        try {
+            const res = await fetch('/api/observability/rag-traces');
+            if (res.ok) {
+                const traces = await res.json();
+                const tbody = document.querySelector('.col-span-8 tbody');
+                if (tbody && Array.isArray(traces) && traces.length > 0) {
+                    tbody.innerHTML = '';
+                    traces.slice(0, 5).forEach(trace => {
+                        const isTimeout = trace.latencyMs > 2000;
+                        const statusClass = isTimeout ? 'text-error' : '';
+                        const tagHtml = isTimeout 
+                            ? `<span class="px-2 py-1 rounded bg-error-container text-on-error-container text-[10px] font-bold uppercase tracking-tighter">Timeout</span>`
+                            : `<span class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container text-[10px] font-bold">SUCCESS</span>`;
+                            
+                        const html = `
+                        <tr class="group hover:bg-slate-50/80 transition-all ${statusClass}">
+                            <td class="py-4 text-sm font-mono ${isTimeout ? 'font-bold' : 'text-indigo-600'}">${trace.traceId || 'unknown'}</td>
+                            <td class="py-4 text-sm font-semibold">${trace.latencyMs} ms</td>
+                            <td class="py-4 text-sm">${trace.retrievedCount}</td>
+                            <td class="py-4 text-sm">${trace.score ? trace.score.toFixed(2) : '-'}</td>
+                            <td class="py-4 text-right">${tagHtml}</td>
+                        </tr>
+                        `;
+                        tbody.insertAdjacentHTML('beforeend', html);
+                    });
+                }
+            }
+        } catch(e) {
+            console.error('Failed to load RAG traces', e);
+        }
+
+        // Fetch Idempotency Stats
+        try {
+            const res = await fetch('/api/observability/a2a/idempotency');
+            if (res.ok) {
+                const data = await res.json();
+                const maxSize = data.maxSize || 20000;
+                
+                // Update L1 Cache progress
+                const l1Progress = document.querySelector('.bg-indigo-500.rounded-full');
+                const l1Text = document.querySelector('.text-xs.text-indigo-600.font-mono');
+                if (l1Progress && l1Text) {
+                    const l1Size = data.inMemorySize || 0;
+                    l1Text.innerText = `${l1Size} / ${maxSize} Keys`;
+                    l1Progress.style.width = Math.min(100, (l1Size / maxSize) * 100) + '%';
+                }
+                
+                // Update L2 Redis state
+                const l2Progress = document.querySelector('.bg-indigo-400.rounded-full');
+                const l2Text = document.querySelectorAll('.text-xs.text-indigo-600.font-mono')[1];
+                if (l2Text) {
+                    if (data.redisAvailable) {
+                        const rSize = data.redisSize || 0;
+                        l2Text.innerText = `${rSize} Keys (Available)`;
+                        if(l2Progress) l2Progress.style.width = Math.min(100, (rSize / 100000) * 100) + '%'; // arbitrary max
+                    } else {
+                        l2Text.innerText = 'Unavailable (未连接)';
+                        if(l2Progress) l2Progress.style.width = '0%';
+                    }
+                }
+                
+                // Update Bottom Stats
+                const totalKeysEl = document.querySelector('.text-xl.font-black.text-on-surface');
+                if (totalKeysEl) {
+                    const total = (data.inMemorySize || 0) + (data.redisAvailable ? (data.redisSize || 0) : 0);
+                    totalKeysEl.innerText = total;
+                }
+            }
+        } catch(e) {
+            console.error('Failed to load idempotency stats', e);
+        }
+
+        // Fetch Audit Logs
+        try {
+            const res = await fetch('/api/observability/audit/ops?limit=5');
+            if (res.ok) {
+                const logs = await res.json();
+                if (auditContainer && Array.isArray(logs) && logs.length > 0) {
+                    auditContainer.innerHTML = '';
+                    logs.forEach(log => {
+                        const date = new Date(log.timestamp || Date.now());
+                        
+                        // Extract needed properties with defaults
+                        const dateStr = date.toLocaleString();
+                        const actionLabel = log.action || 'OP';
+                        const operator = log.operator || 'system';
+                        const msg = log.message || log.action || '';
+                        const isSuccess = log.success !== false; // assume true if undefined
+                        
+                        // Define dynamic styling based on action/status
+                        let statusColor = isSuccess ? 'border-indigo-500' : 'border-error';
+                        let badgeBg = isSuccess ? 'bg-indigo-50' : 'bg-error-container';
+                        let badgeText = isSuccess ? 'text-indigo-700' : 'text-on-error-container';
+                        
+                        if (actionLabel.toLowerCase().includes('delete') || actionLabel.toLowerCase().includes('clear')) {
+                             statusColor = 'border-error';
+                             badgeBg = 'bg-error-container';
+                             badgeText = 'text-on-error-container';
+                        }
+                        
+                        // Set IP dynamically or use a fallback
+                        const ipAddr = log.ipAddress || 'System / Auto';
+                        
+                        const html = `
+                        <div class="flex items-center justify-between bg-white px-4 py-3 rounded-lg border-l-4 ${statusColor}">
+                            <div class="flex items-center gap-4">
+                                <span class="text-xs font-mono text-on-surface-variant">${dateStr}</span>
+                                <span class="px-2 py-0.5 ${badgeBg} ${badgeText} text-[10px] font-black rounded-full uppercase">${actionLabel}</span>
+                                <span class="text-sm font-medium">用户 <span class="font-bold">${operator}</span> ${msg}</span>
+                            </div>
+                            <span class="text-xs text-on-surface-variant opacity-50">IP: ${ipAddr}</span>
+                        </div>
+                        `;
+                        auditContainer.insertAdjacentHTML('beforeend', html);
+                    });
+                } else if (auditContainer) {
+                     auditContainer.innerHTML = '<div class="text-center text-sm text-on-surface-variant py-4">暂无真实审计日志</div>';
+                }
+            }
+        } catch(e) {
+            console.error('Failed to load audit logs', e);
+        }
+
+        // Setup Tabs/Anchor Links
+        const tabContainer = document.getElementById('ops-tabs');
+        if (tabContainer) {
+            const tabs = tabContainer.querySelectorAll('button');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Update active styles
+                    tabs.forEach(t => {
+                        t.className = 'px-6 py-2 rounded-lg text-sm font-medium text-on-surface-variant hover:text-indigo-600 transition-all';
+                    });
+                    tab.className = 'px-6 py-2 rounded-lg text-sm font-bold bg-white text-indigo-700 shadow-sm transition-all';
+
+                    // Smooth scroll to target section
+                    const targetId = tab.getAttribute('data-target');
+                    const targetEl = document.getElementById(targetId);
+                    if (targetEl) {
+                        const yOffset = -80; // Account for fixed top header
+                        const y = targetEl.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                        window.scrollTo({ top: y, behavior: 'smooth' });
+                    }
+                });
+            });
+        }
+    });
+</script>
+
+    <script src="app.js"></script>
+</body></html>

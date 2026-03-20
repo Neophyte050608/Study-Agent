@@ -13,3 +13,5 @@ application-private.yml
 sync_index.json
 lexical_index.json
 learning_profiles.json
+learning_profiles_v2.json
+learning_profiles_v2.json.tmp

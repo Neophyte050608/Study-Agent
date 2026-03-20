@@ -21,6 +21,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * 词法索引服务 (Lexical Index Service)。
+ * 
+ * 职责：
+ * 1. 全文索引：基于内存提供轻量级的关键词/全文索引能力，弥补向量检索在“精确匹配”上的不足。
+ * 2. 混合检索支持：为 RAGService 提供 TF-IDF/BM25 风格的检索结果，用于 RRF (Reciprocal Rank Fusion) 融合。
+ * 3. 实时更新：支持知识入库时的增量索引与删除。
+ */
 @Service
 public class LexicalIndexService {
 

@@ -7,6 +7,13 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * 向量检索工具。
+ * 
+ * 职责：
+ * 1. 封装 VectorStore：提供统一的 Query 接口，支持 topK 参数。
+ * 2. 语义搜索：执行基于向量相似度的知识召回。
+ */
 @Component
 public class VectorSearchTool implements ToolGateway<VectorSearchTool.Query, List<Document>> {
 

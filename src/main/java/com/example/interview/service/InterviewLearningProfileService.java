@@ -24,16 +24,31 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * 面试学习画像服务。
+ * 
+ * 该服务负责持久化管理用户的学习画像（Learning Profile），
+ * 它是 AI 面试官实现“因材施教”的核心依据。
+ * 
+ * 核心功能：
+ * 1. 记录会话：每次面试结束后，提取报告中的薄弱点、盲区并记录。
+ * 2. 统计分析：跟踪不同主题的掌握度曲线（Topic Capability Curve）。
+ * 3. 实时快照：生成用于提示词（Prompt）的画像摘要，让 AI 了解用户当前的弱项。
+ * 4. 针对性建议：根据历史低分主题和薄弱点，生成下轮面试的出题建议。
+ * 5. 持久化：将所有画像数据保存到 learning_profiles.json。
+ */
 @Service
 public class InterviewLearningProfileService {
 
     private static final Logger logger = LoggerFactory.getLogger(InterviewLearningProfileService.class);
     private static final String DEFAULT_USER = "local-user";
+    /** 画像持久化文件名 */
     private static final String PROFILE_FILE = "learning_profiles.json";
     private static final int PROFILE_VERSION = 1;
     private final Object ioLock = new Object();
 
     private final ObjectMapper objectMapper;
+    /** 内存中的画像缓存，Key 为 userId */
     private final Map<String, LearningProfile> profiles = new ConcurrentHashMap<>();
 
     public InterviewLearningProfileService(ObjectMapper objectMapper) {
@@ -45,6 +60,7 @@ public class InterviewLearningProfileService {
         loadProfiles();
     }
 
+    /** 归一化用户 ID */
     public String normalizeUserId(String userId) {
         if (userId == null || userId.isBlank()) {
             return DEFAULT_USER;
@@ -53,6 +69,10 @@ public class InterviewLearningProfileService {
         return normalized.isBlank() ? DEFAULT_USER : normalized;
     }
 
+    /**
+     * 生成用于 Prompt 的画像快照摘要。
+     * 包含历史表现、平均分、薄弱点、盲区及当前最弱主题。
+     */
     public String snapshotForPrompt(String userId, String topic) {
         LearningProfile profile = profiles.getOrDefault(normalizeUserId(userId), new LearningProfile());
         if (profile.totalSessions == 0) {
@@ -80,23 +100,39 @@ public class InterviewLearningProfileService {
                 "\n当前最弱主题：" + (weakTopic.isBlank() ? "暂无" : weakTopic);
     }
 
+    /**
+     * 记录面试会话结果并更新画像。
+     * 
+     * @param userId 用户 ID
+     * @param topic 面试主题（如：Java 集合、Redis 缓存）
+     * @param history 题目历史列表
+     * @param reportContent 最终报告内容实体，包含 AI 提取的薄弱点、错误点等
+     * @param averageScore 该场面试的平均分
+     */
     public void recordSession(String userId, String topic, List<Question> history, EvaluationAgent.FinalReportContent reportContent, double averageScore) {
         LearningProfile profile = profiles.computeIfAbsent(normalizeUserId(userId), key -> new LearningProfile());
         profile.totalSessions++;
         profile.totalScore += averageScore;
         profile.topics.add(topic == null ? "未命名主题" : topic);
+        
+        // 增量提取薄弱点和盲区
         profile.weakPoints.addAll(splitLines(reportContent.weak()));
         profile.weakPoints.addAll(splitLines(reportContent.incomplete()));
         profile.blindSpots.addAll(splitLines(reportContent.wrong()));
+        
+        // 去重并限制数量，保持画像精简
         profile.weakPoints = deduplicate(profile.weakPoints, 12);
         profile.blindSpots = deduplicate(profile.blindSpots, 12);
 
+        // 记录低分主题（单题得分 < 70）
         for (Question item : history) {
             if (item.getScore() < 70) {
                 String key = summarizeTopic(item.getQuestionText());
                 profile.lowScoreTopics.merge(key, 1, Integer::sum);
             }
         }
+        
+        // 更新主题掌握度统计
         String normalizedTopic = (topic == null || topic.isBlank()) ? "未命名主题" : topic.trim();
         TopicCapability capability = profile.topicStats.computeIfAbsent(normalizedTopic, key -> new TopicCapability());
         capability.attempts++;
@@ -104,16 +140,22 @@ public class InterviewLearningProfileService {
         capability.lastScore = averageScore;
         capability.recentScores.add(averageScore);
         capability.recentTimestamps.add(Instant.now().toString());
+        
+        // 限制最近成绩记录数量 (最近 12 次)
         if (capability.recentScores.size() > 12) {
             capability.recentScores = new ArrayList<>(capability.recentScores.subList(capability.recentScores.size() - 12, capability.recentScores.size()));
             capability.recentTimestamps = new ArrayList<>(capability.recentTimestamps.subList(capability.recentTimestamps.size() - 12, capability.recentTimestamps.size()));
         }
+        
         profile.profileVersion = PROFILE_VERSION;
         profile.lastUpdatedAt = Instant.now().toString();
         profile.reliabilityScore = computeReliability(profile);
         saveProfiles();
     }
 
+    /**
+     * 生成针对性出题方向建议。
+     */
     public String buildTargetedSuggestion(String userId) {
         LearningProfile profile = profiles.get(normalizeUserId(userId));
         if (profile == null || profile.totalSessions == 0) {
@@ -138,6 +180,9 @@ public class InterviewLearningProfileService {
                 "- 当前最弱主题：" + (weakTopic.isBlank() ? "暂无" : weakTopic);
     }
 
+    /**
+     * 获取指定主题的能力掌握曲线数据。
+     */
     public TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
         LearningProfile profile = profiles.get(normalizeUserId(userId));
         if (profile == null) {
@@ -151,6 +196,7 @@ public class InterviewLearningProfileService {
         return new TopicCapabilityCurve(normalizedTopic, capability.recentTimestamps, capability.recentScores, capability.averageScore());
     }
 
+    /** 从本地加载画像数据 */
     private void loadProfiles() {
         synchronized (ioLock) {
             File file = new File(PROFILE_FILE);
@@ -170,6 +216,7 @@ public class InterviewLearningProfileService {
         }
     }
 
+    /** 持久化画像数据 */
     private void saveProfiles() {
         synchronized (ioLock) {
             try {
@@ -183,6 +230,7 @@ public class InterviewLearningProfileService {
         }
     }
 
+    /** 数据清洗与容错 */
     private LearningProfile sanitizeProfile(LearningProfile profile) {
         LearningProfile target = profile == null ? new LearningProfile() : profile;
         if (target.topics == null) {
@@ -209,6 +257,7 @@ public class InterviewLearningProfileService {
         return target;
     }
 
+    /** 计算画像可靠性分数（基于样本量和覆盖面） */
     private double computeReliability(LearningProfile profile) {
         double sessionsFactor = Math.min(1.0, profile.totalSessions / 8.0);
         double coverageFactor = Math.min(1.0, profile.topicStats.size() / 5.0);
@@ -236,6 +285,7 @@ public class InterviewLearningProfileService {
         return seen.stream().limit(maxSize).collect(Collectors.toCollection(ArrayList::new));
     }
 
+    /** 题目文本精简，用于主题分类 */
     private String summarizeTopic(String questionText) {
         if (questionText == null || questionText.isBlank()) {
             return "其他";
@@ -247,16 +297,26 @@ public class InterviewLearningProfileService {
         return normalized.substring(0, 16);
     }
 
+    /** 学习画像实体 */
     public static class LearningProfile {
         public int profileVersion = PROFILE_VERSION;
+        /** 总面试场次 */
         public int totalSessions;
+        /** 总平均分之和 */
         public double totalScore;
+        /** 曾面试过的主题集合 */
         public Set<String> topics = new LinkedHashSet<>();
+        /** 低分高频子主题统计 */
         public Map<String, Integer> lowScoreTopics = new ConcurrentHashMap<>();
+        /** 累计薄弱点 */
         public List<String> weakPoints = new ArrayList<>();
+        /** 累计盲区 */
         public List<String> blindSpots = new ArrayList<>();
+        /** 主题能力统计明细 */
         public Map<String, TopicCapability> topicStats = new ConcurrentHashMap<>();
+        /** 画像可靠性分数 (0.05 - 1.0) */
         public double reliabilityScore = 0.1;
+        /** 最后更新时间 */
         public String lastUpdatedAt = "";
 
         private double averageScore() {
@@ -264,11 +324,17 @@ public class InterviewLearningProfileService {
         }
     }
 
+    /** 主题能力统计实体 */
     public static class TopicCapability {
+        /** 尝试次数 */
         public int attempts;
+        /** 累计总分 */
         public double totalScore;
+        /** 最近一次得分 */
         public double lastScore;
+        /** 最近成绩序列 (最近 12 次) */
         public List<Double> recentScores = new ArrayList<>();
+        /** 最近成绩时间戳序列 */
         public List<String> recentTimestamps = new ArrayList<>();
 
         public double averageScore() {
@@ -276,6 +342,7 @@ public class InterviewLearningProfileService {
         }
     }
 
+    /** 对外暴露的能力曲线记录 */
     public record TopicCapabilityCurve(
             String topic,
             List<String> timestamps,
