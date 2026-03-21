@@ -38,6 +38,8 @@ public class IngestionService {
 
     // Map<FilePath, FileMetadata>
     private Map<String, FileMetadata> index = new ConcurrentHashMap<>();
+    private volatile SyncSummary lastSummary = new SyncSummary(0, 0, 0, 0, 0, 0, 0);
+    private volatile long lastSyncTime = 0L;
 
     public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, ObjectMapper objectMapper) {
         this.noteLoader = noteLoader;
@@ -123,6 +125,8 @@ public class IngestionService {
                 failedFileCount,
                 skippedEmptyFileCount
         );
+        lastSummary = summary;
+        lastSyncTime = System.currentTimeMillis();
         logger.info("Sync complete. {}", summary.toLogMessage());
         return summary;
     }
@@ -202,7 +206,7 @@ public class IngestionService {
         }
 
         saveIndex();
-        return new SyncSummary(
+        SyncSummary summary = new SyncSummary(
                 currentFiles.size(),
                 newFileCount,
                 modifiedFileCount,
@@ -211,6 +215,24 @@ public class IngestionService {
                 failedFileCount,
                 skippedEmptyFileCount
         );
+        lastSummary = summary;
+        lastSyncTime = System.currentTimeMillis();
+        return summary;
+    }
+
+    public Map<String, Object> getStats() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalScanned", lastSummary.totalScanned);
+        result.put("totalIndexed", index.size());
+        result.put("failedFiles", lastSummary.failedFiles);
+        int denominator = Math.max(1, lastSummary.totalScanned);
+        int success = Math.max(0, lastSummary.totalScanned - lastSummary.failedFiles);
+        int successRate = Math.max(0, Math.min(100, (success * 100) / denominator));
+        result.put("successRate", successRate + "%");
+        result.put("lastSyncTime", lastSyncTime == 0L ? null : lastSyncTime);
+        result.put("storagePercent", Math.min(100, index.size()));
+        result.put("recentReports", List.of());
+        return result;
     }
 
     private String sanitizeFolderKey(String folderName) {

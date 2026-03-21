@@ -2,7 +2,11 @@
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. 获取当前页面的文件名，用于高亮 Active 菜单
     const currentPath = window.location.pathname;
-    const currentFile = currentPath.substring(currentPath.lastIndexOf('/') + 1) || 'interview.html';
+    // 修复：移除可能存在的查询参数，并处理路径
+    let currentFile = currentPath.substring(currentPath.lastIndexOf('/') + 1) || 'interview.html';
+    if (currentFile.includes('?')) {
+        currentFile = currentFile.substring(0, currentFile.indexOf('?'));
+    }
 
     // 2. 获取菜单配置
     let menus = [];

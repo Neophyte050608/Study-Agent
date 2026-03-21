@@ -153,7 +153,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
 
         String resolvedProfileSnapshot = learningProfileAgent.snapshotForPrompt(session.userId(), session.topic());
-        String question = ragService.generateCodingQuestionEx(session.topic(), session.difficulty(), session.type(), resolvedProfileSnapshot);
+        String question = ragService.generateCodingQuestion(buildTopicWithType(session.topic(), session.type()), session.difficulty(), resolvedProfileSnapshot);
         if (question == null || question.isBlank()) {
             question = buildQuestion(session.topic(), session.difficulty()) + " (" + session.type() + ")";
         }
@@ -174,8 +174,8 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     }
 
     private Map<String, Object> evaluateChatAnswer(CodingSession session, String answer) {
-        RAGService.CodingAssessment assessment = ragService.evaluateCodingAnswerEx(
-                session.topic(), session.difficulty(), session.type(), session.currentQuestion(), answer
+        RAGService.CodingAssessment assessment = ragService.evaluateCodingAnswer(
+                buildTopicWithType(session.topic(), session.type()), session.difficulty(), session.currentQuestion(), answer
         );
         if (assessment == null) {
             assessment = fallbackAssessment(answer, session.topic());
@@ -446,6 +446,18 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
      */
     private String buildQuestion(String topic, String difficulty) {
         return "请实现一道" + difficulty + "难度的「" + topic + "」算法题，要求说明思路、复杂度与边界条件。";
+    }
+
+    private String buildTopicWithType(String topic, String type) {
+        String normalizedTopic = topic == null ? "" : topic.trim();
+        String normalizedType = type == null ? "" : type.trim();
+        if (normalizedType.isBlank()) {
+            return normalizedTopic;
+        }
+        if (normalizedTopic.isBlank()) {
+            return normalizedType;
+        }
+        return normalizedTopic + "（" + normalizedType + "）";
     }
 
     /**
