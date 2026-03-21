@@ -1,0 +1,116 @@
+### 统一设置环境变量（可根据实际情况修改）
+@baseUrl = http://localhost:9596
+# 这是一个预生成的永不过期（到2100年）的测试 Token，角色包含 USER 和 OPS_ADMIN
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJyb2xlcyI6WyJVU0VSIiwiT1BTX0FETUlOIl0sImV4cCI6NDEwMjQ0NDgwMH0.X3ARYZepL7gyf4BUlYCgbqBbZ79m53bdNkGdTugxNCo
+
+
+### ----------------------------------------------------
+### 1. 任务分发 (Task Dispatch) 与 A2A 消息总线测试
+### ----------------------------------------------------
+
+# 发起学习计划任务（将触发 A2A 消息路由到 NoteMakingAgent）
+POST {{baseUrl}}/api/task/dispatch
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "taskType": "LEARNING_PLAN",
+  "payload": {
+    "topic": "Java并发"
+  },
+  "context": {
+    "source": "api-test"
+  }
+}
+
+
+### ----------------------------------------------------
+### 2. MCP 网关测试 (Model Context Protocol)
+### ----------------------------------------------------
+
+# 查询 MCP 支持的能力列表
+GET {{baseUrl}}/api/mcp/capabilities?traceId=test-trace-001
+Authorization: Bearer {{token}}
+
+###
+
+# 调用 MCP 能力 (这里以 stub 的 obsidian.write 为例)
+POST {{baseUrl}}/api/mcp/invoke
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "capability": "obsidian.write",
+  "params": {
+    "topic": "Java并发",
+    "content": "测试笔记内容"
+  },
+  "context": {
+    "traceId": "test-trace-001"
+  }
+}
+
+###
+
+# 查询 MCP 调用审计日志（根据 traceId 和 errorCode 过滤）
+GET {{baseUrl}}/api/observability/mcp/logs?traceId=test-trace-001&limit=10
+Authorization: Bearer {{token}}
+
+
+### ----------------------------------------------------
+### 3. Agent 评估闭环测试 (Agent Evaluation)
+### ----------------------------------------------------
+
+# 获取所有可用的 Scorer（评分器）
+GET {{baseUrl}}/api/observability/agent-eval/scorers
+Authorization: Bearer {{token}}
+
+###
+
+# 创建一轮 Agent 评估试跑 (Trial) - 模拟模式
+POST {{baseUrl}}/api/observability/agent-eval/trials
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "agent": "NoteMakingAgent",
+  "task": "根据输入生成学习计划",
+  "expected": "包含 Java 并发的核心知识点",
+  "input": {"topic": "Java并发", "level": "mid"},
+  "candidateOutput": "这里是生成的 Java 并发学习计划...",
+  "scorerType": "rule",
+  "executionMode": "simulate"
+}
+
+###
+
+# 获取评估历史记录
+GET {{baseUrl}}/api/observability/agent-eval/trials?limit=5
+Authorization: Bearer {{token}}
+
+
+### ----------------------------------------------------
+### 4. 运维与死信队列测试 (Observability & Ops)
+### ----------------------------------------------------
+
+# 获取 A2A 幂等存储快照
+GET {{baseUrl}}/api/observability/a2a/idempotency
+Authorization: Bearer {{token}}
+
+###
+
+# 清理内存中的幂等 Key
+POST {{baseUrl}}/api/observability/a2a/idempotency/clear
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scope": "memory",
+  "keyContains": "task"
+}
+
+###
+
+# 查询系统运维审计日志
+GET {{baseUrl}}/api/observability/audit/ops?limit=10
+Authorization: Bearer {{token}}

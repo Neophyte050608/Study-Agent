@@ -157,30 +157,12 @@ public class LearningProfileAgent {
                 .toList();
     }
 
-    // 计算并返回整体能力平均分，作为额外数据补充到概览中
     public Map<String, Object> overview(String userId) {
         TrainingProfileSnapshot snapshot = snapshot(userId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("snapshot", snapshot);
         data.put("recommendInterview", recommend(userId, "interview"));
         data.put("recommendCoding", recommend(userId, "coding"));
-        
-        // 动态计算整体平均分 (Overall Score)
-        UserProfileState profile = profiles.get(normalizeUserId(userId));
-        double overallScore = 0.0;
-        if (profile != null && !profile.topicMetrics.isEmpty()) {
-            double totalWeightedScore = 0.0;
-            double totalWeight = 0.0;
-            for (TopicMetricState metric : profile.topicMetrics.values()) {
-                totalWeightedScore += metric.weightedScoreSum;
-                totalWeight += metric.weightSum;
-            }
-            if (totalWeight > 0) {
-                overallScore = totalWeightedScore / totalWeight;
-            }
-        }
-        data.put("overallScore", overallScore);
-        
         return data;
     }
 

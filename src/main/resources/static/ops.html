@@ -80,45 +80,10 @@
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-surface text-on-surface antialiased overflow-x-hidden">
-<!-- SideNavBar Anchor -->
-<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-slate-50 dark:bg-slate-900 tonal-layering p-4 space-y-2 z-50">
-<div class="flex flex-col p-4 space-y-2 h-full">
-<div class="text-lg font-bold text-indigo-700 dark:text-indigo-400 mb-6 px-2">
-            SaaS 数字化叙事
-            <div class="text-[10px] font-medium opacity-60 tracking-wider">高级管理后台</div>
-</div>
-<nav class="flex-1 space-y-1">
-<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="interview.html">
-<span class="material-symbols-outlined" data-icon="exercise">exercise</span>
-<span class="text-sm font-medium">面试练习</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="knowledge.html">
-<span class="material-symbols-outlined" data-icon="database">database</span>
-<span class="text-sm font-medium">知识库管理</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="profile.html">
-<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
-<span class="text-sm font-medium">学习画像</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-lg" href="mcp.html">
-<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
-<span class="text-sm font-medium">MCP 工具台</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-indigo-950 text-indigo-700 dark:text-indigo-100 font-semibold rounded-lg shadow-sm scale-95 transition-transform" href="ops.html">
-<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
-<span class="text-sm font-medium">观测与运维</span>
-</a>
-</nav>
-<div class="pt-4 mt-4 border-t border-slate-200/30">
-<a class="flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors duration-200 rounded-lg" href="#">
-<span class="material-symbols-outlined" data-icon="settings">settings</span>
-<span class="text-sm font-medium">设置</span>
-</a>
-</div>
-</aside>
-<!-- TopNavBar Anchor -->
-<header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 w-full z-40 shadow-sm dark:shadow-none no-line-boundary">
+<body class="bg-surface text-on-surface antialiased">
+<script src="layout.js"></script>
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
 <div class="flex items-center gap-4">
 <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">数字叙事 <span class="text-on-surface-variant font-medium">/ 观测与运维</span></h1>
 </div>

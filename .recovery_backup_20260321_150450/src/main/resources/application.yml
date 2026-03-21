@@ -1,0 +1,112 @@
+server:
+  port: 9596
+
+spring:
+  application:
+    name: interview-review
+  config:
+    import: optional:file:./application-private.yml
+  ai:
+    # 1. 配置 DeepSeek 用于 Chat (对话、分析、提问)
+    openai:
+      api-key: sk-6f31406e28c74f04b51466c4ed1595c7
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+        # 禁用 OpenAI 的 Embedding，防止与智谱冲突
+        embedding:
+          enabled: false
+    
+    # 2. 配置 ZhiPu (智谱) 用于 Embedding (向量化中文笔记)
+    zhipuai:
+      api-key: 36657d64fd024f7ebaf4f6eeea0ed18a.mwV7P7eMfE2T2iCb
+      chat:
+        # 禁用 ZhiPu 的 Chat，防止 Spring AI 自动配置两个 ChatModel
+        enabled: false
+      embedding:
+        enabled: true
+        options:
+          model: embedding-3 # 智谱的 embedding-3 模型，维度默认是 2048
+          
+    vectorstore:
+      milvus:
+        initialize-schema: true
+        client:
+          host: localhost
+          port: 19530
+        embedding-dimension: 2048 # 必须与智谱 embedding-3 的输出维度匹配
+        collection:
+          name: interview_notes
+    retry:
+      max-attempts: 1
+  main:
+    web-application-type: servlet # 需要对外提供 REST API，必须是 servlet
+  servlet:
+    multipart:
+      max-file-size: 12MB
+      max-request-size: 12MB
+  http:
+    client:
+      connect-timeout: 10s
+      read-timeout: 90s
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+logging:
+  level:
+    org.springframework.ai: DEBUG
+    org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: ERROR
+
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: ${ROCKETMQ_PRODUCER_GROUP:interview-review-a2a-producer}
+
+app:
+  a2a:
+    bus:
+      type: ${APP_A2A_BUS_TYPE:inmemory}
+    idempotency:
+      ttl-seconds: ${APP_A2A_IDEMPOTENCY_TTL_SECONDS:300}
+      max-size: ${APP_A2A_IDEMPOTENCY_MAX_SIZE:20000}
+      backend: ${APP_A2A_IDEMPOTENCY_BACKEND:auto}
+      redis-key-prefix: ${APP_A2A_IDEMPOTENCY_REDIS_KEY_PREFIX:a2a:idempotency:}
+    rocketmq:
+      topic: ${APP_A2A_ROCKETMQ_TOPIC:a2a-events}
+      consumer-group: ${APP_A2A_ROCKETMQ_CONSUMER_GROUP:interview-review-a2a-consumer}
+      dlq-topic: ${APP_A2A_ROCKETMQ_DLQ_TOPIC:a2a-events-dlq}
+      publish-retries: ${APP_A2A_ROCKETMQ_PUBLISH_RETRIES:2}
+      retry-backoff-ms: ${APP_A2A_ROCKETMQ_RETRY_BACKOFF_MS:120}
+  learning:
+    notes:
+      dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
+  mcp:
+    timeout-millis: ${APP_MCP_TIMEOUT_MILLIS:1500}
+    retries: ${APP_MCP_RETRIES:2}
+    mode: ${APP_MCP_MODE:stub}
+    fallback-to-stub: ${APP_MCP_FALLBACK_TO_STUB:true}
+    bridge:
+      enabled: ${APP_MCP_BRIDGE_ENABLED:false}
+      base-url: ${APP_MCP_BRIDGE_BASE_URL:http://localhost:38080}
+      capabilities-path: ${APP_MCP_BRIDGE_CAPABILITIES_PATH:/capabilities}
+      invoke-path: ${APP_MCP_BRIDGE_INVOKE_PATH:/invoke}
+    sse:
+      enabled: ${APP_MCP_SSE_ENABLED:false}
+      base-url: ${APP_MCP_SSE_BASE_URL:http://localhost:38180}
+      endpoint-path: ${APP_MCP_SSE_ENDPOINT_PATH:/mcp}
+    stdio:
+      enabled: ${APP_MCP_STDIO_ENABLED:false}
+      command: ${APP_MCP_STDIO_COMMAND:}
+      args: ${APP_MCP_STDIO_ARGS:}
+      timeout-millis: ${APP_MCP_STDIO_TIMEOUT_MILLIS:3000}
+  agent:
+    skills:
+      paths: ${APP_AGENT_SKILLS_PATHS:skills}
+  security:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:9596}
+    jwt-secret: ${APP_SECURITY_JWT_SECRET:interview-review-dev-secret-interview-review-dev-secret}

@@ -1,0 +1,1 @@
+{"DecisionLayerAgent":{"enabled":true,"provider":"ZHIPUAI","modelName":"glm-4","apiKey":"","temperature":0.3},"EvaluationAgent":{"enabled":true,"provider":"OPENAI","modelName":"gpt-4o","apiKey":"","temperature":0.7},"LearningProfileAgent":{"enabled":true,"provider":"OLLAMA","modelName":"llama3","apiKey":"","temperature":0.9}}

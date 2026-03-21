@@ -1,9 +1,14 @@
 package com.example.interview.agent;
 
+import com.example.interview.service.DynamicModelFactory;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
 import com.example.interview.service.RAGService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -25,24 +30,31 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     private final RAGService ragService;
     /** 学习画像智能体，用于获取用户背景和记录练习结果 */
     private final LearningProfileAgent learningProfileAgent;
+    /** 动态模型工厂 */
+    private final DynamicModelFactory dynamicModelFactory;
+    /** JSON 处理 */
+    private final ObjectMapper objectMapper = new ObjectMapper();
     /** 内存中的编程练习会话缓存 */
     private final Map<String, CodingSession> sessions = new ConcurrentHashMap<>();
 
-    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent) {
+    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory) {
         this.ragService = ragService;
         this.learningProfileAgent = learningProfileAgent;
+        this.dynamicModelFactory = dynamicModelFactory;
     }
 
-    /**
-     * 执行编程练习相关的操作。
-     * 支持的 action 包括：start (开始练习), submit (提交代码), state (查询状态)。
-     * 
-     * @param input 包含 action 和相关参数的 Map
-     * @return 操作结果响应
-     */
+    private ChatClient getChatClient() {
+        return ChatClient.builder(dynamicModelFactory.getForAgent("CodingPracticeAgent"))
+                .defaultSystem("你是一个意图识别助手。请从用户的输入中提取刷题意图。")
+                .build();
+    }
+
     @Override
     public Map<String, Object> execute(Map<String, Object> input) {
         String action = text(input, "action").toLowerCase();
+        if ("chat".equals(action)) {
+            return handleChat(input);
+        }
         if (action.isBlank() || "start".equals(action)) {
             return startPractice(input);
         }
@@ -56,6 +68,151 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 "agent", "CodingPracticeAgent",
                 "status", "bad_request",
                 "message", "不支持的 action: " + action
+        );
+    }
+
+    /**
+     * 处理沉浸式对话流：解析意图、出题或评估。
+     */
+    private Map<String, Object> handleChat(Map<String, Object> input) {
+        String sessionId = text(input, "sessionId");
+        String message = text(input, "message");
+        String userId = learningProfileAgent.normalizeUserId(text(input, "userId"));
+
+        // 1. 如果没有 sessionId，说明是新的一轮对话，进行意图识别并开启刷题
+        if (sessionId.isBlank()) {
+            return startNewChatSession(userId, message);
+        }
+
+        // 2. 如果有 sessionId，检查当前状态
+        CodingSession session = sessions.get(sessionId);
+        if (session == null) {
+            return Map.of("agent", "CodingPracticeAgent", "status", "not_found", "message", "Session已失效");
+        }
+
+        // 3. 如果已有题目等待回答，则作为答案提交评估
+        if (session.currentQuestion() != null && !session.currentQuestion().isBlank()) {
+            return evaluateChatAnswer(session, message);
+        }
+
+        // 4. 其他状态，继续出题（比如刚刚评估完，接着出下一题）
+        return generateNextChatQuestion(session);
+    }
+
+    private Map<String, Object> startNewChatSession(String userId, String message) {
+        // 意图识别
+        String prompt = "请分析以下用户的刷题需求，并提取关键信息，输出为JSON格式：\n" +
+                "包含字段：topic(技术栈或主题，如Java, Redis，没有则为空), type(题型：算法/场景/选择/填空，默认算法), count(题数，默认1), difficulty(难度：easy/medium/hard，默认medium)。\n" +
+                "用户输入：" + message + "\n" +
+                "只需输出JSON，不要其他废话。";
+        String jsonStr = getChatClient().prompt(prompt).call().content();
+        
+        String topic = "";
+        String type = "算法";
+        int count = 1;
+        String difficulty = "medium";
+        try {
+            // 清理可能包含 markdown 标记的 JSON 字符串
+            if (jsonStr != null) {
+                jsonStr = jsonStr.replaceAll("```json", "").replaceAll("```", "").trim();
+                JsonNode node = objectMapper.readTree(jsonStr);
+                if (node.has("topic") && !node.get("topic").asText().isBlank() && !"null".equals(node.get("topic").asText())) {
+                    topic = node.get("topic").asText();
+                }
+                if (node.has("type") && !node.get("type").asText().isBlank()) type = node.get("type").asText();
+                if (node.has("count") && node.get("count").asInt() > 0) count = node.get("count").asInt();
+                if (node.has("difficulty") && !node.get("difficulty").asText().isBlank()) difficulty = node.get("difficulty").asText();
+            }
+        } catch (JsonProcessingException e) {
+            // 解析失败使用默认值
+        }
+
+        if (topic.isBlank()) {
+            List<String> recommended = learningProfileAgent.snapshot(userId).recommendedNextCodingTopics();
+            if (!recommended.isEmpty()) {
+                topic = recommended.getFirst();
+            } else {
+                topic = "基础算法";
+            }
+        }
+
+        String sessionId = UUID.randomUUID().toString();
+        CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", 0, 0, Instant.now());
+        
+        return generateNextChatQuestion(session);
+    }
+
+    private Map<String, Object> generateNextChatQuestion(CodingSession session) {
+        if (session.currentQuestionIndex() >= session.totalQuestions()) {
+            return Map.of(
+                "agent", "CodingPracticeAgent",
+                "status", "completed",
+                "message", "本次刷题已全部完成！",
+                "sessionId", session.sessionId()
+            );
+        }
+
+        String resolvedProfileSnapshot = learningProfileAgent.snapshotForPrompt(session.userId(), session.topic());
+        String question = ragService.generateCodingQuestionEx(session.topic(), session.difficulty(), session.type(), resolvedProfileSnapshot);
+        if (question == null || question.isBlank()) {
+            question = buildQuestion(session.topic(), session.difficulty()) + " (" + session.type() + ")";
+        }
+
+        CodingSession updatedSession = new CodingSession(
+            session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
+            session.totalQuestions(), session.currentQuestionIndex() + 1, question, session.attempts(), session.bestScore(), session.createdAt()
+        );
+        sessions.put(session.sessionId(), updatedSession);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("agent", "CodingPracticeAgent");
+        result.put("status", "question_generated");
+        result.put("sessionId", updatedSession.sessionId());
+        result.put("question", question);
+        result.put("progress", updatedSession.currentQuestionIndex() + "/" + updatedSession.totalQuestions());
+        return result;
+    }
+
+    private Map<String, Object> evaluateChatAnswer(CodingSession session, String answer) {
+        RAGService.CodingAssessment assessment = ragService.evaluateCodingAnswerEx(
+                session.topic(), session.difficulty(), session.type(), session.currentQuestion(), answer
+        );
+        if (assessment == null) {
+            assessment = fallbackAssessment(answer, session.topic());
+        }
+
+        int score = assessment.score();
+        int attempts = session.attempts() + 1;
+        int bestScore = Math.max(session.bestScore(), score);
+
+        // 写入画像
+        learningProfileAgent.upsertEvent(new LearningEvent(
+                "coding-" + session.sessionId() + "-" + attempts,
+                session.userId(),
+                LearningSource.CODING,
+                session.topic(),
+                score,
+                weakPointsByScore(score, assessment.feedback(), assessment.nextHint()),
+                familiarPointsByScore(score, assessment.feedback()),
+                assessment.feedback(),
+                Instant.now()
+        ));
+
+        // 清空当前题目，等待下一次请求生成新题目
+        CodingSession updatedSession = new CodingSession(
+            session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
+            session.totalQuestions(), session.currentQuestionIndex(), "", attempts, bestScore, session.createdAt()
+        );
+        sessions.put(session.sessionId(), updatedSession);
+
+        return Map.of(
+                "agent", "CodingPracticeAgent",
+                "status", "evaluated",
+                "sessionId", session.sessionId(),
+                "score", score,
+                "feedback", assessment.feedback(),
+                "progress", session.currentQuestionIndex() + "/" + session.totalQuestions(),
+                "isLast", session.currentQuestionIndex() >= session.totalQuestions()
         );
     }
 
@@ -93,7 +250,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
         
         // 保存会话并返回结果
-        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, question, 0, 0, Instant.now()));
+        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, "算法", 1, 1, question, 0, 0, Instant.now()));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("agent", "CodingPracticeAgent");
         result.put("status", "started");
@@ -134,7 +291,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         RAGService.CodingAssessment assessment = ragService.evaluateCodingAnswer(
                 session.topic(),
                 session.difficulty(),
-                session.question(),
+                session.currentQuestion(),
                 answer
         );
         if (assessment == null) {
@@ -151,7 +308,10 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 session.userId(),
                 session.topic(),
                 session.difficulty(),
-                session.question(),
+                session.type(),
+                session.totalQuestions(),
+                session.currentQuestionIndex(),
+                session.currentQuestion(),
                 attempts,
                 bestScore,
                 session.createdAt()
@@ -211,7 +371,8 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         data.put("userId", session.userId());
         data.put("topic", session.topic());
         data.put("difficulty", session.difficulty());
-        data.put("question", session.question());
+        data.put("type", session.type());
+        data.put("question", session.currentQuestion());
         data.put("attempts", session.attempts());
         data.put("bestScore", session.bestScore());
         data.put("createdAt", session.createdAt().toString());
@@ -342,7 +503,10 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             String userId,
             String topic,
             String difficulty,
-            String question,
+            String type,
+            int totalQuestions,
+            int currentQuestionIndex,
+            String currentQuestion,
             int attempts,
             int bestScore,
             Instant createdAt

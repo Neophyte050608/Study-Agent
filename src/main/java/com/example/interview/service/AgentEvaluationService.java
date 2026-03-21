@@ -43,14 +43,17 @@ public class AgentEvaluationService {
     private final List<String> trialOrder = new CopyOnWriteArrayList<>();
     private final ChatModel evaluatorChatModel;
     private final ObjectProvider<InterviewService> interviewServiceProvider;
+    private final AgentSkillService agentSkillService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AgentEvaluationService(
             ObjectProvider<ChatModel> evaluatorChatModelProvider,
-            ObjectProvider<InterviewService> interviewServiceProvider
+            ObjectProvider<InterviewService> interviewServiceProvider,
+            AgentSkillService agentSkillService
     ) {
         this.evaluatorChatModel = evaluatorChatModelProvider.getIfAvailable();
         this.interviewServiceProvider = interviewServiceProvider;
+        this.agentSkillService = agentSkillService;
     }
 
     /**

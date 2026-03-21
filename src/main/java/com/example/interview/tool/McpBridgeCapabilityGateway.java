@@ -15,13 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * MCP Bridge 网关实现。
- * 
- * 职责：
- * 1. HTTP 桥接：通过标准 HTTP POST 协议与远端 MCP Bridge 服务通信。
- * 2. 协议兼容：支持 JSON-RPC 2.0 风格的调用，并自动处理 HTTP 状态码到 McpGatewayException 的映射。
- */
 @Component
 @ConditionalOnProperty(prefix = "app.mcp.bridge", name = "enabled", havingValue = "true")
 public class McpBridgeCapabilityGateway implements McpCapabilityGateway {

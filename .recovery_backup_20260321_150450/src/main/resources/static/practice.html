@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html class="light" lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>智能刷题 - InterviewReview V2</title>
+    <script src="/js/tailwindcss.js"></script>
+    <link href="/css/inter.css" rel="stylesheet"/>
+    <link href="/css/material-symbols.css" rel="stylesheet"/>
+    <link href="/css/prism-tomorrow.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+        }
+        .glass-effect {
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+        .chat-scroll::-webkit-scrollbar { width: 5px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        
+        pre {
+            background: #1e1e2e !important;
+            color: #cdd6f4;
+            padding: 1.25rem !important;
+            border-radius: 0.75rem !important;
+            overflow-x: auto;
+            font-size: 0.875rem;
+            margin: 1rem 0 !important;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 避免 Markdown 渲染时 p 标签间距过大 */
+        .markdown-content p {
+            margin-bottom: 0.5rem;
+        }
+        .markdown-content p:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4338CA",
+                        "surface": "#f8f9fa",
+                        "on-surface": "#191c1d",
+                        "surface-container-low": "#f3f4f5",
+                        "primary-container": "#4338ca",
+                        "secondary-container": "#c0bdff",
+                        "on-secondary-container": "#4c4a84",
+                        "error": "#ba1a1a",
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface flex h-screen overflow-hidden">
+
+<!-- Main Content Canvas (由于引入了统一侧边栏，保留左侧边距并在右侧渲染主内容) -->
+<main class="flex-1 ml-64 relative flex flex-col bg-slate-50 overflow-hidden w-full">
+    <!-- Header -->
+    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-xl shadow-sm flex justify-between items-center px-8 py-4 w-full">
+        <div class="flex items-center gap-4">
+            <h2 class="text-xl font-bold text-indigo-900 font-headline">智能对话式刷题</h2>
+            <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
+            <div class="flex items-center gap-2 text-indigo-600 font-bold px-1 py-1 text-sm border-b-2 border-indigo-600">
+                <span class="material-symbols-outlined text-sm" data-icon="record_voice_over">record_voice_over</span>
+                <span>进行中的会话</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="hidden md:flex items-center bg-slate-100 rounded-full px-4 py-1.5 gap-2 border border-slate-200/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                <span class="material-symbols-outlined text-slate-400 text-lg" data-icon="search">search</span>
+                <input class="bg-transparent border-none text-sm focus:ring-0 p-0 w-48 text-slate-600 placeholder:text-slate-400 outline-none" placeholder="搜索知识库..." type="text"/>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="p-2 text-slate-500 hover:bg-indigo-50 transition-colors rounded-full relative">
+                    <span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+                    <span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
+                </button>
+                <button class="p-2 text-slate-500 hover:bg-indigo-50 transition-colors rounded-full">
+                    <span class="material-symbols-outlined" data-icon="help">help</span>
+                </button>
+                <img alt="User avatar" class="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMICSr1N9bgJucInX6VxD2A-lwRa6Z7R2xbjKjANpVYVxQF2IANyo8Ti3OdQj5pwwmBWpNZt48lTHaliKWVp7HaluMiR6NZexRBMDuz0uwV06BbW3HKHSAL58Nnrdj6JGYat1tojPuUp-QD0woZ_FSzEqa0ptMKoA968YLDEjDYjoy5iVDM_pO0FJ49ZByQugi5oaAkxD1c_EpLtb6zkI3k2ZpBzgLGNvHLDXls_ejnWm8kzl4xjagCZH7LgSQEWx3l5Z0TuPQj0k"/>
+            </div>
+        </div>
+    </header>
+
+    <!-- Status Drawer (Floating Bento-style Card) -->
+    <div id="statusDrawer" class="absolute top-24 right-8 z-30" style="display: none;">
+        <div class="glass-effect p-5 rounded-2xl shadow-xl border border-white/50 w-72">
+            <div class="flex justify-between items-center mb-5">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">刷题状态</span>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-bold text-emerald-500 uppercase">LIVE</span>
+                    <span class="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-5">
+                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50">
+                    <p class="text-[10px] text-indigo-400 font-bold uppercase mb-1">当前进度</p>
+                    <p class="text-xl font-black text-indigo-900" id="statusProgress">-</p>
+                </div>
+                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50">
+                    <p class="text-[10px] text-indigo-400 font-bold uppercase mb-1">最后得分</p>
+                    <p class="text-xl font-black text-indigo-900" id="statusScore">-</p>
+                </div>
+            </div>
+            <button id="btnEndSession" class="w-full py-3 bg-error text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-red-200">
+                <span class="material-symbols-outlined text-lg" data-icon="logout">logout</span>
+                <span>结束本次刷题</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chat Container -->
+    <section class="flex-1 overflow-y-auto chat-scroll px-8 py-12 pb-56 flex flex-col gap-10" id="chat-container">
+        <!-- AI Initial Message -->
+        <div class="flex gap-4 max-w-3xl">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
+                <span class="material-symbols-outlined text-white text-xl" data-icon="smart_toy">smart_toy</span>
+            </div>
+            <div class="space-y-2">
+                <div class="bg-white/80 backdrop-blur-sm p-6 rounded-2xl rounded-tl-none shadow-sm border border-slate-200/50 markdown-content">
+                    <p class="text-slate-700 leading-relaxed">
+                        你好！我是你的 AI 面试教练。我可以为你生成各种题型（算法、场景、选择、填空）的题目。
+                        <br><br>
+                        你可以直接告诉我你的需求，例如：<br>
+                        - "我要刷3道Spring Boot的场景题"<br>
+                        - "来一道中等难度的Redis选择题"<br>
+                        - "直接开始刷题"（我会根据你的历史画像为你出题）
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Bottom Input Area -->
+    <section class="absolute bottom-0 left-0 w-full px-8 pb-10 pt-4 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent z-40">
+        <div class="max-w-4xl mx-auto relative">
+            <!-- Quick Action Pills -->
+            <div id="quickActions" class="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
+                <button class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center gap-2" onclick="handleQuickAction('我要刷3道Spring Boot的场景题')">
+                    <span class="material-symbols-outlined text-sm" data-icon="rocket_launch">rocket_launch</span>
+                    3道 Spring Boot 场景题
+                </button>
+                <button class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center gap-2" onclick="handleQuickAction('来一道简单的Redis选择题')">
+                    <span class="material-symbols-outlined text-sm" data-icon="database">database</span>
+                    Redis 选择题
+                </button>
+                <button class="whitespace-nowrap px-4 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-full hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-100" onclick="handleQuickAction('直接开始刷题')">
+                    <span class="material-symbols-outlined text-sm" data-icon="play_arrow">play_arrow</span>
+                    直接开始刷题
+                </button>
+            </div>
+            
+            <!-- Input Shell -->
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-200/60 p-2 flex items-end gap-2 focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-500/30 transition-all group">
+                <div class="flex-1 min-h-[48px] px-4 py-3">
+                    <textarea id="message-input" class="w-full bg-transparent border-none focus:ring-0 outline-none p-0 text-slate-700 leading-relaxed resize-none h-[24px] max-h-48 scrollbar-hide" placeholder="请输入你的回答... (Shift+Enter 换行)" rows="1"></textarea>
+                </div>
+                <div class="flex items-center gap-1 pr-2 pb-1.5">
+                    <button class="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all rounded-xl">
+                        <span class="material-symbols-outlined" data-icon="mic">mic</span>
+                    </button>
+                    <button id="btnSend" class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200" onclick="sendMessage()">
+                        <span class="material-symbols-outlined text-xl" data-icon="send">send</span>
+                    </button>
+                </div>
+            </div>
+            <p class="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4">
+                面试练习工作区 v2.4 • 企业级 LLM 核心驱动
+            </p>
+        </div>
+    </section>
+</main>
+
+<script src="/js/marked.min.js"></script>
+<script src="/js/prism.min.js"></script>
+<script src="/js/prism-java.min.js"></script>
+<script src="layout.js"></script>
+
+<script>
+    let currentSessionId = "";
+    
+    const chatContainer = document.getElementById('chat-container');
+    const textarea = document.getElementById('message-input');
+    const btnSend = document.getElementById('btnSend');
+    const statusDrawer = document.getElementById('statusDrawer');
+    const quickActions = document.getElementById('quickActions');
+
+    // Auto-growing textarea
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 192) + 'px'; // Max 48px * 4 lines approx
+    });
+
+    // Handle Shift+Enter logic
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    const handleQuickAction = (text) => {
+        textarea.value = text;
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+    };
+
+    function getCurrentTime() {
+        const now = new Date();
+        return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function appendUserMessage(content) {
+        const time = getCurrentTime();
+        const html = `
+        <div class="flex flex-row-reverse gap-4 max-w-3xl ml-auto">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center">
+                <span class="material-symbols-outlined text-slate-500 text-xl" data-icon="person">person</span>
+            </div>
+            <div class="space-y-2 flex flex-col items-end">
+                <div class="bg-indigo-600 text-white p-6 rounded-2xl rounded-tr-none shadow-xl shadow-indigo-100">
+                    <p class="leading-relaxed font-medium whitespace-pre-wrap">${content}</p>
+                </div>
+                <div class="flex items-center gap-2 px-1">
+                    <span class="text-[10px] text-slate-400 font-medium">${time}</span>
+                    <span class="text-[10px] text-slate-300">•</span>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">你</span>
+                </div>
+            </div>
+        </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', html);
+        scrollToBottom();
+    }
+
+    function appendAiMessage(content) {
+        const time = getCurrentTime();
+        const parsedContent = marked.parse(content);
+        
+        const div = document.createElement('div');
+        div.className = "flex gap-4 max-w-3xl";
+        div.innerHTML = `
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
+                <span class="material-symbols-outlined text-white text-xl" data-icon="smart_toy">smart_toy</span>
+            </div>
+            <div class="space-y-2 max-w-[calc(100%-3rem)]">
+                <div class="bg-white/80 backdrop-blur-sm p-6 rounded-2xl rounded-tl-none shadow-sm border border-slate-200/50 markdown-content overflow-hidden">
+                    ${parsedContent}
+                </div>
+                <div class="flex items-center gap-2 px-1">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">AI 教练</span>
+                    <span class="text-[10px] text-slate-300">•</span>
+                    <span class="text-[10px] text-slate-400 font-medium">${time}</span>
+                </div>
+            </div>
+        `;
+        chatContainer.appendChild(div);
+        
+        // Apply syntax highlighting
+        Prism.highlightAllUnder(div);
+        scrollToBottom();
+    }
+
+    function showThinking() {
+        const id = 'thinking-' + Date.now();
+        const html = `
+        <div id="${id}" class="flex gap-4 max-w-3xl">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600/40 flex items-center justify-center">
+                <span class="material-symbols-outlined text-white text-xl" data-icon="smart_toy">smart_toy</span>
+            </div>
+            <div class="bg-white/80 backdrop-blur-sm px-5 py-3 rounded-2xl shadow-sm border border-slate-200/50 flex items-center gap-3">
+                <div class="flex gap-1">
+                    <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+                    <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                </div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">AI 正在思考中...</span>
+            </div>
+        </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', html);
+        scrollToBottom();
+        return id;
+    }
+
+    function removeThinking(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
+
+    function scrollToBottom() {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    async function sendMessage() {
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        appendUserMessage(text);
+        textarea.value = '';
+        textarea.style.height = '24px';
+        btnSend.disabled = true;
+        quickActions.style.display = 'none';
+
+        const thinkingId = showThinking();
+
+        try {
+            const response = await fetch('/api/task/dispatch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    taskType: 'CODING_PRACTICE',
+                    payload: {
+                        action: 'chat',
+                        sessionId: currentSessionId,
+                        message: text
+                    }
+                })
+            });
+
+            const resData = await response.json();
+            console.log("Response data:", resData);
+            removeThinking(thinkingId);
+            
+            if (resData.success) {
+                const data = resData.data;
+                currentSessionId = data.sessionId || currentSessionId;
+                
+                statusDrawer.style.display = 'block';
+                
+                if (data.status === 'question_generated') {
+                    appendAiMessage(data.question);
+                    document.getElementById('statusProgress').innerText = data.progress || '-';
+                } else if (data.status === 'evaluated') {
+                    let evalMsg = `**得分: ${data.score}/100**\n\n**评语:** ${data.feedback}`;
+                    appendAiMessage(evalMsg);
+                    document.getElementById('statusScore').innerText = data.score;
+                    
+                    if (data.isLast) {
+                        appendAiMessage("本次刷题已全部完成！辛苦了！你可以随时输入新需求开启下一轮。");
+                        currentSessionId = "";
+                        statusDrawer.style.display = 'none';
+                        quickActions.style.display = 'flex';
+                    } else {
+                        // 自动请求下一题
+                        setTimeout(() => {
+                           requestNextQuestion();
+                        }, 1500);
+                    }
+                } else if (data.status === 'completed') {
+                    appendAiMessage(data.message);
+                    currentSessionId = "";
+                    statusDrawer.style.display = 'none';
+                    quickActions.style.display = 'flex';
+                } else {
+                    appendAiMessage(data.message || "未知状态");
+                }
+            } else {
+                appendAiMessage(`请求失败: ${resData.message}`);
+            }
+        } catch (e) {
+            removeThinking(thinkingId);
+            appendAiMessage(`发生错误: ${e.message}`);
+        } finally {
+            btnSend.disabled = false;
+            textarea.focus();
+        }
+    }
+    
+    async function requestNextQuestion() {
+        const thinkingId = showThinking();
+        try {
+            const response = await fetch('/api/task/dispatch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    taskType: 'CODING_PRACTICE',
+                    payload: {
+                        action: 'chat',
+                        sessionId: currentSessionId,
+                        message: "下一题"
+                    }
+                })
+            });
+            const resData = await response.json();
+            console.log("Response data (next question):", resData);
+            removeThinking(thinkingId);
+            
+            if (resData.success) {
+                const data = resData.data;
+                if (data.status === 'question_generated') {
+                    appendAiMessage(data.question);
+                    document.getElementById('statusProgress').innerText = data.progress || '-';
+                }
+            }
+        } catch (e) {
+            removeThinking(thinkingId);
+        }
+    }
+
+    document.getElementById('btnEndSession').addEventListener('click', () => {
+        currentSessionId = "";
+        statusDrawer.style.display = 'none';
+        quickActions.style.display = 'flex';
+        appendAiMessage("已结束本次刷题会话。你可以随时输入新需求开启下一轮。");
+    });
+
+</script>
+</body>
+</html>

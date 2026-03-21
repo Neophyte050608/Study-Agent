@@ -7,13 +7,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
-/**
- * MCP 桩 (Stub) 实现。
- * 
- * 职责：
- * 1. 本地开发支持：在没有真实 MCP 服务器时提供模拟的能力发现和调用。
- * 2. 兜底降级：当 SSE/Stdio 网关不可用时，McpGatewayService 会回退到此桩实现，保证流程不中断。
- */
 @Component
 public class StubMcpCapabilityGateway implements McpCapabilityGateway {
     @Override
