@@ -33,7 +33,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     /** 动态模型工厂 */
     private final DynamicModelFactory dynamicModelFactory;
     /** Prompt 模板服务 */
-    private final com.example.interview.service.PromptTemplateService promptTemplateService;
+    private final com.example.interview.service.PromptManager promptManager;
     /** JSON 处理 */
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** 内存中的编程练习会话缓存 */
@@ -41,11 +41,11 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     /** 自定义画像异步更新线程池 */
     private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, com.example.interview.service.PromptTemplateService promptTemplateService, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
+    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, com.example.interview.service.PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.ragService = ragService;
         this.learningProfileAgent = learningProfileAgent;
         this.dynamicModelFactory = dynamicModelFactory;
-        this.promptTemplateService = promptTemplateService;
+        this.promptManager = promptManager;
         this.profileUpdateExecutor = profileUpdateExecutor;
     }
 
@@ -107,19 +107,18 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
 
     private Map<String, Object> startNewChatSession(String userId, String message) {
         // 意图识别
-        List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/intent_cases.json");
-        String template = "请分析以下用户的刷题需求，并提取关键信息，输出为JSON格式：\n" +
-                "包含字段：topic(技术栈或主题，如Java, Redis，没有则为空), type(题型：算法/场景/选择/填空，默认算法), count(题数，默认1), difficulty(难度：easy/medium/hard，默认medium)。\n" +
-                "{% if cases %}\n" +
-                "参考以下示例：\n" +
-                "{% for case in cases %}\n" +
-                "用户输入：{{ case.user_query }}\n" +
-                "输出：{{ case.ai_response }}\n" +
-                "{% endfor %}\n" +
-                "{% endif %}\n" +
-                "用户输入：{{ message }}\n" +
-                "只需输出JSON，不要其他废话。";
-        String prompt = promptTemplateService.render(template, Map.of("message", message, "cases", cases));
+        // 注意：这里仍然可以用 promptTemplateService.loadFewShotCases 也可以把它挪走，但我们保留它因为只是加载JSON
+        List<Map<String, Object>> cases = new java.util.ArrayList<>();
+        try {
+            org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource("prompts/intent_cases.json");
+            if (resource.exists()) {
+                cases = objectMapper.readValue(resource.getInputStream(), new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load intent_cases.json: " + e.getMessage());
+        }
+
+        String prompt = promptManager.render("coding-intent", Map.of("message", message, "cases", cases));
         System.out.println("====== [CodingPracticeAgent - Intent] Prompt ======");
         System.out.println(prompt);
         String jsonStr = getChatClient().prompt(prompt).call().content();
@@ -252,6 +251,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String userId = learningProfileAgent.normalizeUserId(text(input, "userId"));
         String topic = text(input, "topic");
         String difficulty = text(input, "difficulty");
+        String type = text(input, "type");
         String profileSnapshot = text(input, "profileSnapshot");
         String recommendedTopic = "";
         
@@ -263,22 +263,25 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             }
         }
         
-        // 归一化主题、难度和画像快照
+        // 归一化主题、难度、类型和画像快照
         String normalizedTopic = topic.isBlank() ? (recommendedTopic.isBlank() ? "数组与字符串" : recommendedTopic) : topic;
         String normalizedDifficulty = difficulty.isBlank() ? "medium" : difficulty.toLowerCase();
+        String normalizedType = type.isBlank() ? "算法题" : type;
+        
         String resolvedProfileSnapshot = profileSnapshot.isBlank()
                 ? learningProfileAgent.snapshotForPrompt(userId, normalizedTopic)
                 : profileSnapshot;
         
         String sessionId = UUID.randomUUID().toString();
-        // 调用 RAG 生成题目
-        String question = ragService.generateCodingQuestion(normalizedTopic, normalizedDifficulty, resolvedProfileSnapshot);
+        // 调用 RAG 生成题目，将类型融入主题描述中以获得更准确的题目生成
+        String ragTopic = buildTopicWithType(normalizedTopic, normalizedType);
+        String question = ragService.generateCodingQuestion(ragTopic, normalizedDifficulty, resolvedProfileSnapshot);
         if (question == null || question.isBlank()) {
-            question = buildQuestion(normalizedTopic, normalizedDifficulty);
+            question = buildQuestion(normalizedTopic, normalizedDifficulty) + " (" + normalizedType + ")";
         }
         
         // 保存会话并返回结果
-        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, "算法", 1, 1, question, 0, 0, Instant.now()));
+        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, 1, 1, question, 0, 0, Instant.now()));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("agent", "CodingPracticeAgent");
         result.put("status", "started");
@@ -286,6 +289,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         result.put("userId", userId);
         result.put("topic", normalizedTopic);
         result.put("difficulty", normalizedDifficulty);
+        result.put("type", normalizedType);
         result.put("question", question);
         result.put("profileSnapshotApplied", !resolvedProfileSnapshot.isBlank());
         result.put("topicFromProfile", topic.isBlank() && !recommendedTopic.isBlank());

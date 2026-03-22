@@ -128,7 +128,7 @@ public class LearningProfileAgent {
         // 根据模式输出差异化建议：面试偏弱项深挖，刷题偏弱项+熟项穿插。
         TrainingProfileSnapshot snapshot = snapshot(userId);
         if (snapshot.totalEvents() == 0) {
-            return "暂无历史记录，建议先完成一轮面试或刷题。";
+            return "你是新用户或暂无历史记录。建议从基础面试（如 Java 核心、Spring 框架）开始，系统将逐步建立你的学习画像。";
         }
         String normalizedMode = mode == null ? "interview" : mode.trim().toLowerCase();
         List<String> topics = "coding".equals(normalizedMode)

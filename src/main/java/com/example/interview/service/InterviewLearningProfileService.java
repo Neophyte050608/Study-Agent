@@ -159,7 +159,7 @@ public class InterviewLearningProfileService {
     public String buildTargetedSuggestion(String userId) {
         LearningProfile profile = profiles.get(normalizeUserId(userId));
         if (profile == null || profile.totalSessions == 0) {
-            return "暂无历史记录，建议先完成一轮面试后再生成针对性题单。";
+            return "你是新用户或暂无历史记录。建议先完成一轮面试，AI 将根据你的表现生成针对性建议。";
         }
         String weak = profile.weakPoints.stream().limit(3).collect(Collectors.joining("；"));
         String blind = profile.blindSpots.stream().limit(3).collect(Collectors.joining("；"));

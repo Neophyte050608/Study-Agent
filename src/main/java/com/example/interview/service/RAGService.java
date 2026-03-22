@@ -60,15 +60,17 @@ public class RAGService {
     private final RAGObservabilityService observabilityService;
     private final AgentSkillService agentSkillService;
     private final PromptTemplateService promptTemplateService;
+    private final PromptManager promptManager;
     private final ObjectMapper objectMapper = new ObjectMapper();
     // 注入自定义检索线程池
     private final java.util.concurrent.Executor ragRetrieveExecutor;
     // 注入图谱持久化组件
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
-    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository) {
+    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
+        this.promptManager = promptManager;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.techConceptRepository = techConceptRepository;
         String globalSkillInstruction = safeSkillText(this.agentSkillService.globalInstruction());
@@ -458,40 +460,7 @@ public class RAGService {
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
         String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
         List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
-        String template = "{{skillBlock}}\n" +
-                "你是一位技术面试官。\n\n" +
-                "面试主题：{{topic}}\n" +
-                "当前难度：{{difficultyGuide}}\n" +
-                "追问状态：{{followUpState}}\n" +
-                "当前主题能力值：{{topicMastery}}\n" +
-                "本轮出题与追问策略：{{strategyHint}}\n" +
-                "历史画像：\n{{profileSnapshot}}\n\n" +
-                "知识库上下文：\n" +
-                "{{context}}\n\n" +
-                "证据索引：\n" +
-                "{{retrievalEvidence}}\n\n" +
-                "{% if cases %}\n" +
-                "以下是优质的评估示例供参考：\n" +
-                "{% for case in cases %}\n" +
-                "示例{{ loop.index }}：\n" +
-                "{{ case.user_query }}\n" +
-                "期望输出：{{ case.ai_response }}\n" +
-                "{% endfor %}\n" +
-                "{% endif %}\n" +
-                "当前问题：{{question}}\n" +
-                "用户回答：{{userAnswer}}\n\n" +
-                "任务：\n" +
-                "1. 从知识点准确性、表达逻辑、深度、边界考虑四个维度分别评分（0-100）。\n" +
-                "2. 给出总分，并明确扣分原因。\n" +
-                "3. 如果知识库中出现该题相关笔记但回答不全/不对，要在反馈中显式标注【笔记已覆盖但回答缺失】。\n" +
-                "4. 如果处于同一阶段，下一题尽量基于用户当前回答继续深挖；如果策略提示已进入新阶段，请按新阶段的要求生成全新的题目。\n" +
-                "5. 难度自适应：低分时回到基础概念；稳定高分时转场景题、原理题、手写思路题。\n\n" +
-                "6. citations 仅能填写证据索引中出现的编号和摘要，不允许捏造。\n" +
-                "7. conflicts 仅在回答与证据或常识冲突时填写，格式为“冲突点｜参考证据编号”。\n" +
-                "8. nextQuestion 是必填字段，必须基于当前回答生成一道追问题。\n\n" +
-                "输出必须是严格 JSON，不要包含 markdown 代码块，不要输出任何额外文字。\n" +
-                "JSON 字段：score,accuracy,logic,depth,boundary,deductions(array),citations(array),conflicts(array),feedback,nextQuestion。";
-
+        
         Map<String, Object> contextMap = new HashMap<>();
         contextMap.put("skillBlock", skillBlock);
         contextMap.put("topic", topic);
@@ -506,7 +475,7 @@ public class RAGService {
         contextMap.put("question", question);
         contextMap.put("userAnswer", userAnswer);
 
-        String prompt = promptTemplateService.render(template, contextMap);
+        String prompt = promptManager.render("evaluation", contextMap);
 
         System.out.println("====== [RAGService - generateEvaluation] Prompt ======");
         System.out.println(prompt);
@@ -702,21 +671,34 @@ public class RAGService {
         return truncate(sanitizeUpstreamText(text), maxLength);
     }
     
-    public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot) {
+    public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro) {
          String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
          try {
-            System.out.println("====== [RAGService - generateFirstQuestion] Params: topic=" + topic + " ======");
+            System.out.println("====== [RAGService - generateFirstQuestion] Params: topic=" + topic + " skipIntro=" + skipIntro + " ======");
+            
+            String promptText = skipIntro 
+                ? "{skillBlock}\n" +
+                  "你是一位技术面试官。\n" +
+                  "简历摘要：{resume}\n" +
+                  "用户画像：{profileSnapshot}\n" +
+                  "面试主题：{topic}\n" +
+                  "当前环节：【项目经历与难点挖掘】\n" +
+                  "用户要求跳过自我介绍，直接开始提问。请结合用户的简历内容和用户画像，直接抛出第一道关于 {topic} 或简历项目的深度技术问题。\n" +
+                  "只输出问题本身，必须单行，不要标题、不要策略说明、不要 markdown。"
+                : "{skillBlock}\n" +
+                  "你是一位技术面试官。\n" +
+                  "简历摘要：{resume}\n" +
+                  "面试主题：{topic}\n" +
+                  "当前环节：【自我介绍】\n" +
+                  "请结合用户的简历内容，生成一段破冰的开场白和第一道面试题。第一题必须是让候选人做自我介绍。\n" +
+                  "例如：“你好！看了你的简历，发现你在微服务领域有不少经验。今天我们将进行 {topic} 相关的面试。在正式开始前，能先简单做个自我介绍吗？”\n" +
+                  "只输出开场白本身，必须单行，不要标题、不要策略说明、不要 markdown。";
+
             String rawQuestion = callWithRetry(() -> chatClient.prompt()
-                     .user(u -> u.text("{skillBlock}\n" +
-                             "你是一位技术面试官。\n" +
-                             "简历摘要：{resume}\n" +
-                             "面试主题：{topic}\n" +
-                             "当前环节：【自我介绍】\n" +
-                             "请结合用户的简历内容，生成一段破冰的开场白和第一道面试题。第一题必须是让候选人做自我介绍。\n" +
-                             "例如：“你好！看了你的简历，发现你在微服务领域有不少经验。今天我们将进行 {topic} 相关的面试。在正式开始前，能先简单做个自我介绍吗？”\n" +
-                             "只输出开场白本身，必须单行，不要标题、不要策略说明、不要 markdown。")
+                     .user(u -> u.text(promptText)
                              .param("skillBlock", skillBlock)
                             .param("resume", truncate(resumeContent, 1500))
+                            .param("profileSnapshot", truncate(profileSnapshot, 500))
                              .param("topic", topic))
                      .call()
                      .content(), 2, "首题生成");
@@ -754,29 +736,19 @@ public class RAGService {
                 })
                 .collect(Collectors.joining("\n\n---\n\n"));
 
-        String prompt = "{skillBlock}\n" +
-                "你是技术面试复盘官。\n" +
-                "面试主题：{topic}\n" +
-                "后续训练建议参考：\n{targetedSuggestion}\n" +
-                baseContext +
-                "以下是近期完整答题记录：\n{history}\n\n" +
-                "请输出最终复盘报告，必须严格使用以下标签：\n" +
-                "<summary>整体总结（3-5句）</summary>\n" +
-                "<incomplete>回答不全的点（按要点分行）</incomplete>\n" +
-                "<weak>回答不好的点（按要点分行）</weak>\n" +
-                "<wrong>回答错误的点（按要点分行）</wrong>\n" +
-                "<obsidian_updates>可直接补充进 Obsidian 的内容建议（分点）</obsidian_updates>\n" +
-                "<next_focus>下一轮针对性出题方向（分点）</next_focus>\n" +
-                "要求：中文、具体、可执行，不要输出其他标签。";
+        Map<String, Object> params = new HashMap<>();
+        params.put("skillBlock", skillBlock);
+        params.put("topic", topic);
+        params.put("targetedSuggestion", targetedSuggestion);
+        params.put("baseContext", baseContext);
+        params.put("history", qaHistory);
+        String prompt = promptManager.render("final-report", params);
+
         try {
             System.out.println("====== [RAGService - generateFinalReport] Prompt Template ======");
             System.out.println(prompt);
             String response = callWithRetry(() -> chatClient.prompt()
-                    .user(u -> u.text(prompt)
-                            .param("skillBlock", skillBlock)
-                            .param("topic", topic)
-                            .param("targetedSuggestion", targetedSuggestion)
-                            .param("history", qaHistory))
+                    .user(prompt)
                     .call()
                     .content(), 2, "最终复盘");
             System.out.println("====== [RAGService - generateFinalReport] Response ======");
@@ -791,26 +763,21 @@ public class RAGService {
     public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot) {
         String normalizedTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic.trim();
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
-        // 移除单次出题时对 interview-learning-profile 技能的全量加载，仅使用已传入的 profileSnapshot 即可
-        // 使用新抽离的 coding-interview-coach 技能来专注生成算法题
+        // 使用新抽离的 coding-interview-coach 技能来专注生成题目
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
-        String prompt = "{skillBlock}\n" +
-                "你是一位算法训练教练，请生成一道中文算法题。\n" +
-                "主题：{topic}\n" +
-                "难度：{difficulty}\n" +
-                "用户画像：{profileSnapshot}\n" +
-                "输出要求：\n" +
-                "1. 只输出题目正文与输入输出约束，禁止输出答案。\n" +
-                "2. 单段文本，不要 markdown，不要标题。\n";
+        
+        Map<String, Object> params = new HashMap<>();
+        params.put("skillBlock", skillBlock);
+        params.put("topic", normalizedTopic);
+        params.put("difficulty", normalizedDifficulty);
+        params.put("profileSnapshot", truncate(profileSnapshot, 240));
+        String prompt = promptManager.render("coding-question", params);
+
         try {
             System.out.println("====== [RAGService - generateCodingQuestion] Prompt Template ======");
             System.out.println(prompt);
             String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(u -> u.text(prompt)
-                            .param("skillBlock", skillBlock)
-                            .param("topic", normalizedTopic)
-                            .param("difficulty", normalizedDifficulty)
-                            .param("profileSnapshot", truncate(profileSnapshot, 240)))
+                    .user(prompt)
                     .call()
                     .content(), 2, "刷题题目生成");
             System.out.println("====== [RAGService - generateCodingQuestion] Response ======");
@@ -835,24 +802,20 @@ public class RAGService {
         }
         // 使用新抽离的 coding-interview-coach 技能来进行多维度代码审查
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
-        String prompt = "{skillBlock}\n" +
-                "你是一位算法面试评估官，请评估候选人的题解文本。\n" +
-                "主题：{topic}\n" +
-                "难度：{difficulty}\n" +
-                "题目：{question}\n" +
-                "回答：{answer}\n" +
-                "请输出严格 JSON：score,feedback,nextHint,nextQuestion。\n" +
-                "score 范围 0-100。";
+        
+        Map<String, Object> params = new HashMap<>();
+        params.put("skillBlock", skillBlock);
+        params.put("topic", normalizedTopic);
+        params.put("difficulty", normalizedDifficulty);
+        params.put("question", truncate(safeQuestion, 280));
+        params.put("answer", truncate(safeAnswer, 800));
+        String prompt = promptManager.render("coding-evaluation", params);
+
         try {
             System.out.println("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
             System.out.println(prompt);
             String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(u -> u.text(prompt)
-                            .param("skillBlock", skillBlock)
-                            .param("topic", normalizedTopic)
-                            .param("difficulty", normalizedDifficulty)
-                            .param("question", truncate(safeQuestion, 280))
-                            .param("answer", truncate(safeAnswer, 800)))
+                    .user(prompt)
                     .call()
                     .content(), 2, "刷题答案评估");
             System.out.println("====== [RAGService - evaluateCodingAnswer] Response ======");
@@ -876,26 +839,19 @@ public class RAGService {
     public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
         // 使用新抽离的 coding-interview-coach 技能来生成进阶追问
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
-        String prompt = "{skillBlock}\n" +
-                "你是一位算法训练教练，请根据当前答题质量生成下一道追问题。\n" +
-                "主题：{topic}\n" +
-                "难度：{difficulty}\n" +
-                "当前题目：{question}\n" +
-                "用户回答：{answer}\n" +
-                "当前得分：{score}\n" +
-                "要求：\n" +
-                "1. 只输出下一题题干；\n" +
-                "2. 若当前分数较低，下一题降一级难度并聚焦基础；\n" +
-                "3. 若当前分数较高，下一题同主题进阶追问。";
+        
+        Map<String, Object> params = new HashMap<>();
+        params.put("skillBlock", skillBlock);
+        params.put("topic", topic == null ? "算法" : topic);
+        params.put("difficulty", difficulty == null ? "medium" : difficulty);
+        params.put("question", truncate(question, 240));
+        params.put("answer", truncate(answer, 500));
+        params.put("score", String.valueOf(score));
+        String prompt = promptManager.render("coding-next-question", params);
+
         try {
             String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(u -> u.text(prompt)
-                            .param("skillBlock", skillBlock)
-                            .param("topic", topic == null ? "算法" : topic)
-                            .param("difficulty", difficulty == null ? "medium" : difficulty)
-                            .param("question", truncate(question, 240))
-                            .param("answer", truncate(answer, 500))
-                            .param("score", String.valueOf(score)))
+                    .user(prompt)
                     .call()
                     .content(), 2, "刷题下一题生成");
             if (raw == null || raw.isBlank()) {
@@ -912,22 +868,17 @@ public class RAGService {
         String normalizedTopic = topic == null || topic.isBlank() ? "后端基础" : topic.trim();
         // 使用新抽离的 personalized-learning-planner 技能
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("personalized-learning-planner", "interview-learning-profile", "interview-growth-coach"));
-        String prompt = "{skillBlock}\n" +
-                "你是一位学习教练，请基于用户状态生成 7 天学习计划。\n" +
-                "主题：{topic}\n" +
-                "薄弱点：{weakPoint}\n" +
-                "近期表现：{recentPerformance}\n" +
-                "输出要求：\n" +
-                "1. 使用纯文本，每天一行；\n" +
-                "2. 每行包含：目标 + 练习动作 + 复盘动作；\n" +
-                "3. 不要 markdown 标题。";
+        
+        Map<String, Object> params = new HashMap<>();
+        params.put("skillBlock", skillBlock);
+        params.put("topic", normalizedTopic);
+        params.put("weakPoint", truncate(weakPoint, 200));
+        params.put("recentPerformance", truncate(recentPerformance, 300));
+        String prompt = promptManager.render("learning-plan", params);
+
         try {
             String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(u -> u.text(prompt)
-                            .param("skillBlock", skillBlock)
-                            .param("topic", normalizedTopic)
-                            .param("weakPoint", truncate(weakPoint, 180))
-                            .param("recentPerformance", truncate(recentPerformance, 200)))
+                    .user(prompt)
                     .call()
                     .content(), 2, "学习计划生成");
             if (raw == null || raw.isBlank()) {

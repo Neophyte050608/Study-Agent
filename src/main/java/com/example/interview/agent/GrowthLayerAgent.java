@@ -22,16 +22,8 @@ public class GrowthLayerAgent {
      * @return 包含评估、策略说明和知识来源的综合反馈文本
      */
     public String composeRoundFeedback(String feedback, DecisionLayerAgent.DecisionPlan decisionPlan, EvaluationAgent.LayerTrace trace) {
-        String safeFeedback = feedback == null ? "" : feedback.trim();
-        String strategy = decisionPlan == null ? "" : decisionPlan.strategyHint();
-        String focus = decisionPlan == null ? "" : decisionPlan.focusHint();
-        String source = trace != null && trace.webFallbackUsed() ? "网络补充" : "本地知识优先";
-        String retrieval = trace == null ? "0" : String.valueOf(trace.retrievedCount());
-        
-        return safeFeedback +
-                "\n本轮策略：" + strategy +
-                "\n本轮聚焦：" + focus +
-                "\n知识来源：" + source + "（命中文档数：" + retrieval + "）";
+        // 遵循隐私保护规则，不再在返回给用户的文本中包含内部策略和检索信息
+        return feedback == null ? "" : feedback.trim();
     }
 
     /**

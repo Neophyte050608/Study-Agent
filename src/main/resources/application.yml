@@ -115,3 +115,10 @@ app:
   security:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:9596}
     jwt-secret: ${APP_SECURITY_JWT_SECRET:interview-review-dev-secret-interview-review-dev-secret}
+im:
+  feishu:
+    app-id: "cli_a935c6573b38dccb"       # 替换为你的 App ID
+    app-secret: "VVgeN2QQVC9Nc0v6cQVOWg5lQUcYD4jG"       # 替换为你的 App Secret
+    encrypt-key: "2EIWaeAxtALBWcZ8sOpLafBFrXSRW4bJ"      # 替换为你的 Encrypt Key
+    bot-name: "知学"   # 必须和你在飞书里起的名字一模一样（用于群聊@的判断）
+    use-ws: true  # 开启长连接模式，设为 true 后将忽略 Webhook 配置
