@@ -14,6 +14,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import com.example.interview.graph.TechConceptRepository;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.ResourceAccessException;
@@ -21,6 +22,7 @@ import org.springframework.web.client.HttpServerErrorException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,11 +53,23 @@ class RAGServiceTest {
     @Mock
     private AgentSkillService agentSkillService;
 
+    @Mock
+    private PromptTemplateService promptTemplateService;
+
+    @Mock
+    private PromptManager promptManager;
+
+    @Mock
+    private Executor ragRetrieveExecutor;
+
+    @Mock
+    private TechConceptRepository techConceptRepository;
+
     private RAGService ragService;
 
     @BeforeEach
     void setUp() {
-        ragService = new RAGService(chatModel, vectorStore, lexicalIndexService, webSearchTool, observabilityService, agentSkillService);
+        ragService = new RAGService(chatModel, vectorStore, lexicalIndexService, webSearchTool, observabilityService, agentSkillService, promptTemplateService, promptManager, ragRetrieveExecutor, techConceptRepository);
     }
 
     @Test
@@ -200,7 +214,7 @@ class RAGServiceTest {
     void shouldReturnFallbackFirstQuestionWhenChatModelTimeout() {
         when(chatModel.call(any(Prompt.class))).thenThrow(new ResourceAccessException("timeout"));
 
-        String firstQuestion = ragService.generateFirstQuestion("", "JVM", "画像");
+        String firstQuestion = ragService.generateFirstQuestion("", "JVM", "画像", false);
 
         assertTrue(firstQuestion.contains("JVM"));
         assertTrue(firstQuestion.contains("核心概念"));
@@ -239,7 +253,7 @@ class RAGServiceTest {
                 """);
         when(chatModel.call(any(Prompt.class))).thenReturn(response);
 
-        String question = ragService.generateFirstQuestion("", "Java", "画像");
+        String question = ragService.generateFirstQuestion("", "Java", "画像", false);
 
         assertTrue(question.contains("HashMap"));
         assertFalse(question.contains("出题依据"));

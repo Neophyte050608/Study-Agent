@@ -17,6 +17,7 @@
         <java.version>21</java.version>
         <spring-ai.version>1.0.0-SNAPSHOT</spring-ai.version>
         <rocketmq-spring.version>2.3.5</rocketmq-spring.version>
+        <fastmcp4j.version>0.4.0-beta</fastmcp4j.version>
     </properties>
     <dependencies>
         <dependency>
@@ -112,6 +113,11 @@
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
             <version>3.25.3</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.terseprompts.fastmcp</groupId>
+            <artifactId>fastmcp-java</artifactId>
+            <version>${fastmcp4j.version}</version>
         </dependency>
     </dependencies>
     <dependencyManagement>

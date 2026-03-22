@@ -1,0 +1,12 @@
+app:
+  mcp:
+    # 仅在 dev profile 生效的 FileScopeMCP 配置模板
+    filescope:
+      # 是否启用 FileScopeMCP（默认关闭，避免影响本地默认启动）
+      enabled: ${APP_MCP_FILESCOPE_ENABLED:false}
+      # FileScopeMCP 服务地址（按本机实际地址修改）
+      base-url: ${APP_MCP_FILESCOPE_BASE_URL:http://localhost:38200}
+      # 依赖分析能力名（用于开发态影响面分析）
+      capability-dependency-graph: ${APP_MCP_FILESCOPE_CAP_DEP_GRAPH:filescope.dependency.graph}
+      # 符号检索能力名（用于开发态快速定位调用关系）
+      capability-symbol-search: ${APP_MCP_FILESCOPE_CAP_SYMBOL_SEARCH:filescope.symbol.search}

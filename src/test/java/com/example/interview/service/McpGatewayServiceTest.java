@@ -1,6 +1,8 @@
 package com.example.interview.service;
 
 import com.example.interview.tool.McpCapabilityGateway;
+import com.example.interview.tool.DatabaseMcpAdapter;
+import com.example.interview.tool.DatabaseMcpAdapterRouter;
 import com.example.interview.tool.McpGatewayException;
 import org.junit.jupiter.api.Test;
 
@@ -232,6 +234,52 @@ class McpGatewayServiceTest {
     }
 
     @Test
+    void shouldUseFastMcpGatewayWhenModeIsFastMcp() {
+        McpCapabilityGateway stub = gatewayFrom("stub");
+        McpCapabilityGateway fastMcp = gatewayFrom("fastmcp");
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                null,
+                null,
+                null,
+                fastMcp,
+                new OpsAuditService(),
+                1000,
+                0,
+                "fastmcp",
+                true
+        );
+
+        Map<String, Object> result = service.invoke("tester", "obsidian.write", Map.of(), Map.of());
+
+        assertEquals("ok", result.get("status"));
+        assertEquals("fastmcp", ((Map<?, ?>) result.get("result")).get("from"));
+    }
+
+    @Test
+    void shouldPreferFastMcpInAutoModeWhenAvailable() {
+        McpCapabilityGateway stub = gatewayFrom("stub");
+        McpCapabilityGateway fastMcp = gatewayFrom("fastmcp");
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                gatewayFrom("bridge"),
+                gatewayFrom("sse"),
+                gatewayFrom("stdio"),
+                fastMcp,
+                new OpsAuditService(),
+                1000,
+                0,
+                "auto",
+                true
+        );
+
+        Map<String, Object> result = service.invoke("tester", "obsidian.write", Map.of(), Map.of());
+
+        assertEquals("ok", result.get("status"));
+        assertEquals("fastmcp", ((Map<?, ?>) result.get("result")).get("from"));
+    }
+
+    @Test
     void shouldFallbackToStubWhenStdioNotConfiguredInStdioMode() {
         McpCapabilityGateway stub = gatewayFrom("stub");
         McpGatewayService service = new McpGatewayService(
@@ -339,6 +387,203 @@ class McpGatewayServiceTest {
         assertEquals("fallback_stub", result.get("status"));
         assertEquals("MCP_TIMEOUT", result.get("errorCode"));
         assertTrue((Boolean) result.get("retryable"));
+    }
+
+    @Test
+    void shouldNormalizeReadRangeParamsForObsidianRead() {
+        McpCapabilityGateway stub = new McpCapabilityGateway() {
+            @Override
+            public List<String> listCapabilities() {
+                return List.of("obsidian.read");
+            }
+
+            @Override
+            public Object invokeCapability(String name, Map<String, Object> params) {
+                return Map.of("status", "ok", "from", "stub", "params", params == null ? Map.of() : params);
+            }
+        };
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                null,
+                null,
+                null,
+                new OpsAuditService(),
+                1000,
+                0,
+                "stub",
+                true
+        );
+
+        Map<String, Object> result = service.invoke(
+                "tester",
+                "obsidian.read",
+                Map.of("lineStart", 5, "lineEnd", 8),
+                Map.of()
+        );
+
+        assertEquals("ok", result.get("status"));
+        Object rawResult = result.get("result");
+        assertTrue(rawResult instanceof Map);
+        Object rawParams = ((Map<?, ?>) rawResult).get("params");
+        assertTrue(rawParams instanceof Map);
+        assertEquals(5, ((Map<?, ?>) rawParams).get("offset"));
+        assertEquals(4, ((Map<?, ?>) rawParams).get("limit"));
+    }
+
+    @Test
+    void shouldRejectInvalidReadLimitBeforeGatewayInvoke() {
+        McpCapabilityGateway stub = gatewayFrom("stub");
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                null,
+                null,
+                null,
+                new OpsAuditService(),
+                1000,
+                0,
+                "stub",
+                true
+        );
+
+        Map<String, Object> result = service.invoke(
+                "tester",
+                "obsidian.read",
+                Map.of("offset", 1, "limit", 0),
+                Map.of()
+        );
+
+        assertEquals("fallback", result.get("status"));
+        assertEquals("MCP_INVALID_PARAMS", result.get("errorCode"));
+        assertFalse((Boolean) result.get("retryable"));
+    }
+
+    @Test
+    void shouldRouteDatabaseCapabilityToAdapterRouter() {
+        McpCapabilityGateway stub = gatewayFrom("stub");
+        DatabaseMcpAdapter adapter = new DatabaseMcpAdapter() {
+            @Override
+            public String namespace() {
+                return "neo4j";
+            }
+
+            @Override
+            public List<String> capabilities() {
+                return List.of("neo4j.query");
+            }
+
+            @Override
+            public Object invoke(String capability, Map<String, Object> params, Map<String, Object> context) {
+                return Map.of("status", "ok", "from", "neo4j-adapter", "capability", capability);
+            }
+        };
+        DatabaseMcpAdapterRouter router = new DatabaseMcpAdapterRouter(List.of(adapter));
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                gatewayFrom("bridge"),
+                gatewayFrom("sse"),
+                gatewayFrom("stdio"),
+                gatewayFrom("fastmcp"),
+                router,
+                new OpsAuditService(),
+                1000,
+                0,
+                "auto",
+                true
+        );
+
+        Map<String, Object> result = service.invoke("tester", "neo4j.query", Map.of("query", "MATCH (n) RETURN n"), Map.of());
+
+        assertEquals("ok", result.get("status"));
+        assertTrue(result.get("result") instanceof Map);
+        assertEquals("neo4j-adapter", ((Map<?, ?>) result.get("result")).get("from"));
+    }
+
+    @Test
+    void shouldAppendDatabaseCapabilitiesToDiscoverResult() {
+        McpCapabilityGateway stub = gatewayFrom("stub");
+        DatabaseMcpAdapter adapter = new DatabaseMcpAdapter() {
+            @Override
+            public String namespace() {
+                return "milvus";
+            }
+
+            @Override
+            public List<String> capabilities() {
+                return List.of("milvus.search", "milvus.collection.list");
+            }
+
+            @Override
+            public Object invoke(String capability, Map<String, Object> params, Map<String, Object> context) {
+                return Map.of();
+            }
+        };
+        DatabaseMcpAdapterRouter router = new DatabaseMcpAdapterRouter(List.of(adapter));
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                null,
+                null,
+                null,
+                null,
+                router,
+                new OpsAuditService(),
+                1000,
+                0,
+                "stub",
+                true
+        );
+
+        List<String> capabilities = service.discoverCapabilities("tester", "trace-db-cap");
+
+        assertTrue(capabilities.contains("obsidian.write"));
+        assertTrue(capabilities.contains("milvus.search"));
+        assertTrue(capabilities.contains("milvus.collection.list"));
+    }
+
+    @Test
+    void shouldFallbackToStubWhenDatabaseAdapterFailsAndKeepAuditRecord() {
+        McpCapabilityGateway stub = gatewayFrom("stub");
+        DatabaseMcpAdapter adapter = new DatabaseMcpAdapter() {
+            @Override
+            public String namespace() {
+                return "neo4j";
+            }
+
+            @Override
+            public List<String> capabilities() {
+                return List.of("neo4j.query");
+            }
+
+            @Override
+            public Object invoke(String capability, Map<String, Object> params, Map<String, Object> context) {
+                throw new McpGatewayException("MCP_TIMEOUT", true, "neo4j timeout");
+            }
+        };
+        DatabaseMcpAdapterRouter router = new DatabaseMcpAdapterRouter(List.of(adapter));
+        OpsAuditService opsAuditService = new OpsAuditService();
+        McpGatewayService service = new McpGatewayService(
+                stub,
+                null,
+                null,
+                null,
+                null,
+                router,
+                opsAuditService,
+                1000,
+                0,
+                "auto",
+                true
+        );
+
+        Map<String, Object> result = service.invoke("tester", "neo4j.query", Map.of("query", "MATCH (n) RETURN n"), Map.of("traceId", "trace-db-fallback"));
+
+        assertEquals("fallback_stub", result.get("status"));
+        assertEquals("MCP_TIMEOUT", result.get("errorCode"));
+        assertTrue((Boolean) result.get("retryable"));
+        assertEquals("stub", ((Map<?, ?>) result.get("result")).get("from"));
+        List<OpsAuditService.OpsAuditRecord> recentRecords = opsAuditService.listRecent(1);
+        assertFalse(recentRecords.isEmpty());
+        assertEquals("MCP_INVOKE", recentRecords.get(0).action());
+        assertEquals("trace-db-fallback", recentRecords.get(0).traceId());
     }
 
     private McpCapabilityGateway gatewayFrom(String source) {

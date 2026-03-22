@@ -95,6 +95,16 @@ app:
     retries: ${APP_MCP_RETRIES:2}
     mode: ${APP_MCP_MODE:stub}
     fallback-to-stub: ${APP_MCP_FALLBACK_TO_STUB:true}
+    fastmcp:
+      enabled: ${APP_MCP_FASTMCP_ENABLED:false}
+      base-url: ${APP_MCP_FASTMCP_BASE_URL:http://localhost:38190}
+      endpoint-path: ${APP_MCP_FASTMCP_ENDPOINT_PATH:/mcp}
+      transport: ${APP_MCP_FASTMCP_TRANSPORT:streamable}
+    database:
+      neo4j:
+        enabled: ${APP_MCP_DB_NEO4J_ENABLED:false}
+      milvus:
+        enabled: ${APP_MCP_DB_MILVUS_ENABLED:false}
     bridge:
       enabled: ${APP_MCP_BRIDGE_ENABLED:false}
       base-url: ${APP_MCP_BRIDGE_BASE_URL:http://localhost:38080}

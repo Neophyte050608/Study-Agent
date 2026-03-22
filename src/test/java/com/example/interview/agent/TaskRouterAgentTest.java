@@ -7,12 +7,14 @@ import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.service.LearningProfileAgent;
+import com.example.interview.service.PromptManager;
 import com.example.interview.service.TrainingProfileSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.List;
 import java.util.Map;
@@ -43,11 +45,17 @@ class TaskRouterAgentTest {
     @Mock
     private LearningProfileAgent learningProfileAgent;
 
+    @Mock
+    private PromptManager promptManager;
+
+    @Mock
+    private ChatModel chatModel;
+
     @Test
     void shouldRouteInterviewStart() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, a2aBus);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
         InterviewSession session = new InterviewSession("Java", "", 3);
-        when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3)).thenReturn(session);
+        when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3, false)).thenReturn(session);
         doNothing().when(a2aBus).publish(any());
 
         TaskResponse response = routerAgent.dispatch(new TaskRequest(
@@ -67,9 +75,9 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldKeepTraceAndCorrelationAcrossPublish() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, a2aBus);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
         InterviewSession session = new InterviewSession("Java", "", 3);
-        when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3)).thenReturn(session);
+        when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3, false)).thenReturn(session);
         doNothing().when(a2aBus).publish(any());
 
         routerAgent.dispatch(new TaskRequest(
@@ -98,7 +106,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldPublishReturnResultWhenReplyToProvided() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, a2aBus);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
         when(learningProfileAgent.normalizeUserId(any())).thenReturn("local-user");
         when(codingPracticeAgent.execute(any())).thenReturn(Map.of("status", "started"));
         doNothing().when(a2aBus).publish(any());
@@ -123,7 +131,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteLearningPlanToNoteAgent() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, a2aBus);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
         doNothing().when(a2aBus).publish(any());
         when(noteMakingAgent.execute(any())).thenReturn(Map.of("status", "not_implemented"));
 
@@ -139,7 +147,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteCodingPracticeToCodingAgent() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, a2aBus);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
         when(learningProfileAgent.normalizeUserId(any())).thenReturn("u1");
         doNothing().when(a2aBus).publish(any());
         when(codingPracticeAgent.execute(any())).thenReturn(Map.of("status", "started"));
@@ -156,7 +164,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteProfileSnapshotQuery() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, a2aBus);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
         doNothing().when(a2aBus).publish(any());
         when(learningProfileAgent.normalizeUserId("u1")).thenReturn("u1");
         when(learningProfileAgent.snapshot("u1")).thenReturn(new TrainingProfileSnapshot(

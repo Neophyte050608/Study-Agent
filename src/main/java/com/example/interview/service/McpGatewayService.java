@@ -2,6 +2,8 @@ package com.example.interview.service;
 
 import com.example.interview.tool.McpCapabilityGateway;
 import com.example.interview.tool.McpBridgeCapabilityGateway;
+import com.example.interview.tool.FastMcpCapabilityGateway;
+import com.example.interview.tool.DatabaseMcpAdapterRouter;
 import com.example.interview.tool.McpGatewayException;
 import com.example.interview.tool.McpSseCapabilityGateway;
 import com.example.interview.tool.McpStdioCapabilityGateway;
@@ -14,6 +16,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -37,11 +40,20 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class McpGatewayService {
+    private static final int MAX_READ_LIMIT = 2000;
+    private static final Set<String> FILE_READ_CAPABILITIES = Set.of(
+            "obsidian.read",
+            "file.read",
+            "filesystem.read",
+            "mcp.file.read"
+    );
 
     private final McpCapabilityGateway stubGateway;
     private final McpCapabilityGateway bridgeGateway;
     private final McpCapabilityGateway sseGateway;
     private final McpCapabilityGateway stdioGateway;
+    private final McpCapabilityGateway fastMcpGateway;
+    private final DatabaseMcpAdapterRouter databaseMcpAdapterRouter;
     private final OpsAuditService opsAuditService;
     private final int timeoutMillis;
     private final int retries;
@@ -54,6 +66,8 @@ public class McpGatewayService {
             @Autowired(required = false) McpBridgeCapabilityGateway bridgeGateway,
             @Autowired(required = false) McpSseCapabilityGateway sseGateway,
             @Autowired(required = false) McpStdioCapabilityGateway stdioGateway,
+            @Autowired(required = false) FastMcpCapabilityGateway fastMcpGateway,
+            @Autowired(required = false) DatabaseMcpAdapterRouter databaseMcpAdapterRouter,
             OpsAuditService opsAuditService,
             @Value("${app.mcp.timeout-millis:1500}") int timeoutMillis,
             @Value("${app.mcp.retries:2}") int retries,
@@ -65,6 +79,8 @@ public class McpGatewayService {
                 (McpCapabilityGateway) bridgeGateway,
                 (McpCapabilityGateway) sseGateway,
                 (McpCapabilityGateway) stdioGateway,
+                (McpCapabilityGateway) fastMcpGateway,
+                databaseMcpAdapterRouter,
                 opsAuditService,
                 timeoutMillis,
                 retries,
@@ -78,6 +94,8 @@ public class McpGatewayService {
             McpCapabilityGateway bridgeGateway,
             McpCapabilityGateway sseGateway,
             McpCapabilityGateway stdioGateway,
+            McpCapabilityGateway fastMcpGateway,
+            DatabaseMcpAdapterRouter databaseMcpAdapterRouter,
             OpsAuditService opsAuditService,
             int timeoutMillis,
             int retries,
@@ -88,11 +106,42 @@ public class McpGatewayService {
         this.bridgeGateway = bridgeGateway;
         this.sseGateway = sseGateway;
         this.stdioGateway = stdioGateway;
+        this.fastMcpGateway = fastMcpGateway;
+        this.databaseMcpAdapterRouter = databaseMcpAdapterRouter;
         this.opsAuditService = opsAuditService;
         this.timeoutMillis = Math.max(200, timeoutMillis);
         this.retries = Math.max(0, retries);
         this.mode = mode == null ? "stub" : mode.trim().toLowerCase();
         this.fallbackToStub = fallbackToStub;
+    }
+
+    McpGatewayService(
+            McpCapabilityGateway stubGateway,
+            McpCapabilityGateway bridgeGateway,
+            McpCapabilityGateway sseGateway,
+            McpCapabilityGateway stdioGateway,
+            McpCapabilityGateway fastMcpGateway,
+            OpsAuditService opsAuditService,
+            int timeoutMillis,
+            int retries,
+            String mode,
+            boolean fallbackToStub
+    ) {
+        this(stubGateway, bridgeGateway, sseGateway, stdioGateway, fastMcpGateway, null, opsAuditService, timeoutMillis, retries, mode, fallbackToStub);
+    }
+
+    McpGatewayService(
+            McpCapabilityGateway stubGateway,
+            McpCapabilityGateway bridgeGateway,
+            McpCapabilityGateway sseGateway,
+            McpCapabilityGateway stdioGateway,
+            OpsAuditService opsAuditService,
+            int timeoutMillis,
+            int retries,
+            String mode,
+            boolean fallbackToStub
+    ) {
+        this(stubGateway, bridgeGateway, sseGateway, stdioGateway, null, null, opsAuditService, timeoutMillis, retries, mode, fallbackToStub);
     }
 
     McpGatewayService(
@@ -104,7 +153,7 @@ public class McpGatewayService {
             String mode,
             boolean fallbackToStub
     ) {
-        this(stubGateway, bridgeGateway, null, null, opsAuditService, timeoutMillis, retries, mode, fallbackToStub);
+        this(stubGateway, bridgeGateway, null, null, null, null, opsAuditService, timeoutMillis, retries, mode, fallbackToStub);
     }
 
     public List<String> discoverCapabilities(String operator) {
@@ -118,7 +167,7 @@ public class McpGatewayService {
         } catch (RuntimeException ex) {
             if (fallbackToStub) {
                 // 主网关不可用时允许回退到 stub（通常用于本地开发或中间件未配置场景）。
-                List<String> capabilities = stubGateway.listCapabilities();
+                List<String> capabilities = mergeCapabilities(stubGateway.listCapabilities(), databaseCapabilities());
                 opsAuditService.record(
                         operator,
                         "MCP_DISCOVER_CAPABILITIES",
@@ -148,11 +197,11 @@ public class McpGatewayService {
         boolean success = true;
         String message = "ok";
         try {
-            capabilities = gateway.listCapabilities();
+            capabilities = mergeCapabilities(gateway.listCapabilities(), databaseCapabilities());
         } catch (RuntimeException ex) {
             if (shouldFallback(gateway)) {
                 // 主网关运行期失败：若允许降级则仍返回 stub 能力列表，但记录审计为非成功。
-                capabilities = stubGateway.listCapabilities();
+                capabilities = mergeCapabilities(stubGateway.listCapabilities(), databaseCapabilities());
                 success = false;
                 message = "fallback to stub";
             } else {
@@ -185,11 +234,46 @@ public class McpGatewayService {
 
     public Map<String, Object> invoke(String operator, String capability, Map<String, Object> params, Map<String, Object> context) {
         String normalizedCapability = capability == null ? "" : capability.trim();
-        Map<String, Object> normalizedParams = params == null ? Map.of() : params;
         Map<String, Object> normalizedContext = context == null ? Map.of() : context;
+        Map<String, Object> normalizedParams;
+        try {
+            normalizedParams = normalizeInvokeParams(normalizedCapability, params);
+        } catch (RuntimeException ex) {
+            String reason = errorMessageOf(ex);
+            Map<String, Object> fallback = new LinkedHashMap<>();
+            fallback.put("status", "fallback");
+            fallback.put("capability", normalizedCapability);
+            fallback.put("attempt", 1);
+            fallback.put("message", reason);
+            fallback.put("errorCode", errorCodeOf(ex));
+            fallback.put("retryable", retryableOf(ex));
+            fallback.put("result", Map.of(
+                    "capability", normalizedCapability,
+                    "params", params == null ? Map.of() : params,
+                    "context", normalizedContext
+            ));
+            opsAuditService.record(
+                    operator,
+                    "MCP_INVOKE",
+                    auditPayload(
+                            Map.of(
+                                    "capability", normalizedCapability,
+                                    "attempt", 1,
+                                    "contextSize", normalizedContext.size()
+                            ),
+                            "fallback",
+                            errorCodeOf(ex),
+                            retryableOf(ex)
+                    ),
+                    false,
+                    reason,
+                    traceIdOf(normalizedContext)
+            );
+            return fallback;
+        }
         McpCapabilityGateway gateway;
         try {
-            gateway = primaryGateway();
+            gateway = invokeGateway(normalizedCapability);
         } catch (RuntimeException ex) {
             if (fallbackToStub) {
                 // 选择主网关阶段失败：直接走 stub，避免前端“不可用”。
@@ -367,6 +451,15 @@ public class McpGatewayService {
         if ("stdio".equals(mode)) {
             throw new McpGatewayException("MCP_STDIO_NOT_CONFIGURED", false, "mcp stdio is not configured");
         }
+        if ("fastmcp".equals(mode) && fastMcpGateway != null) {
+            return fastMcpGateway;
+        }
+        if ("fastmcp".equals(mode)) {
+            throw new McpGatewayException("MCP_FASTMCP_NOT_CONFIGURED", false, "mcp fastmcp is not configured");
+        }
+        if ("auto".equals(mode) && fastMcpGateway != null) {
+            return fastMcpGateway;
+        }
         if ("auto".equals(mode) && sseGateway != null) {
             return sseGateway;
         }
@@ -473,5 +566,114 @@ public class McpGatewayService {
         }
         Object trace = context.get("traceId");
         return trace == null ? "" : String.valueOf(trace).trim();
+    }
+
+    private McpCapabilityGateway invokeGateway(String capability) {
+        if (databaseMcpAdapterRouter != null && databaseMcpAdapterRouter.supports(capability)) {
+            return databaseMcpAdapterRouter;
+        }
+        return primaryGateway();
+    }
+
+    private List<String> databaseCapabilities() {
+        if (databaseMcpAdapterRouter == null) {
+            return List.of();
+        }
+        return databaseMcpAdapterRouter.listCapabilities();
+    }
+
+    private List<String> mergeCapabilities(List<String> primaryCapabilities, List<String> extraCapabilities) {
+        LinkedHashMap<String, Boolean> merged = new LinkedHashMap<>();
+        if (primaryCapabilities != null) {
+            for (String item : primaryCapabilities) {
+                if (item == null || item.isBlank()) {
+                    continue;
+                }
+                merged.put(item.trim(), true);
+            }
+        }
+        if (extraCapabilities != null) {
+            for (String item : extraCapabilities) {
+                if (item == null || item.isBlank()) {
+                    continue;
+                }
+                merged.put(item.trim(), true);
+            }
+        }
+        return merged.keySet().stream().toList();
+    }
+
+    private Map<String, Object> normalizeInvokeParams(String capability, Map<String, Object> params) {
+        Map<String, Object> normalizedParams = params == null ? Map.of() : params;
+        if (!isFileReadCapability(capability)) {
+            return normalizedParams;
+        }
+        LinkedHashMap<String, Object> adjusted = new LinkedHashMap<>(normalizedParams);
+        Integer offset = positiveInteger(adjusted.get("offset"), "offset");
+        Integer limit = positiveInteger(adjusted.get("limit"), "limit");
+        Integer lineStart = positiveInteger(firstNonNull(adjusted, "lineStart", "fromLine"), "lineStart");
+        Integer lineEnd = positiveInteger(firstNonNull(adjusted, "lineEnd", "toLine"), "lineEnd");
+        if (lineStart != null && lineEnd != null && lineEnd < lineStart) {
+            throw new McpGatewayException("MCP_INVALID_PARAMS", false, "lineEnd 不能小于 lineStart");
+        }
+        if (offset == null && lineStart != null) {
+            offset = lineStart;
+        }
+        if (limit == null && lineStart != null && lineEnd != null) {
+            limit = lineEnd - lineStart + 1;
+        }
+        if (offset != null) {
+            adjusted.put("offset", offset);
+        }
+        if (limit != null) {
+            if (limit > MAX_READ_LIMIT) {
+                throw new McpGatewayException("MCP_INVALID_PARAMS", false, "limit 超过最大允许值 " + MAX_READ_LIMIT);
+            }
+            adjusted.put("limit", limit);
+        }
+        return adjusted;
+    }
+
+    private boolean isFileReadCapability(String capability) {
+        if (capability == null) {
+            return false;
+        }
+        String normalized = capability.trim().toLowerCase();
+        return FILE_READ_CAPABILITIES.contains(normalized);
+    }
+
+    private Object firstNonNull(Map<String, Object> map, String firstKey, String secondKey) {
+        if (map == null) {
+            return null;
+        }
+        Object first = map.get(firstKey);
+        if (first != null) {
+            return first;
+        }
+        return map.get(secondKey);
+    }
+
+    private Integer positiveInteger(Object rawValue, String field) {
+        if (rawValue == null) {
+            return null;
+        }
+        int parsed;
+        if (rawValue instanceof Number number) {
+            parsed = number.intValue();
+        } else {
+            String text = String.valueOf(rawValue).trim();
+            if (text.isBlank()) {
+                return null;
+            }
+            try {
+                parsed = Integer.parseInt(text);
+            } catch (NumberFormatException ex) {
+                throw new McpGatewayException("MCP_INVALID_PARAMS", false, field + " 必须为正整数");
+            }
+        }
+        if (parsed <= 0) {
+            throw new McpGatewayException("MCP_INVALID_PARAMS", false, field + " 必须大于 0");
+        }
+        return parsed;
     }
 }

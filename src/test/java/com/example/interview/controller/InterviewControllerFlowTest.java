@@ -13,15 +13,19 @@ import com.example.interview.agent.a2a.InMemoryA2ABus;
 import com.example.interview.agent.a2a.A2AIdempotencyStore;
 import com.example.interview.config.A2ABusConfig;
 import com.example.interview.config.SecurityConfig;
+import com.example.interview.core.statemachine.InterviewStateMachineConfig;
 import com.example.interview.rag.ResumeLoader;
 import com.example.interview.service.IngestionService;
 import com.example.interview.service.AgentEvaluationService;
+import com.example.interview.service.AgentSkillService;
+import com.example.interview.service.DynamicModelFactory;
 import com.example.interview.service.InterviewLearningProfileService;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.McpGatewayService;
 import com.example.interview.service.InterviewService;
 import com.example.interview.service.LexicalIndexService;
 import com.example.interview.service.OpsAuditService;
+import com.example.interview.service.PromptManager;
 import com.example.interview.service.RAGObservabilityService;
 import com.example.interview.service.RAGService;
 import com.example.interview.service.RetrievalEvaluationService;
@@ -39,11 +43,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
 
+import java.util.concurrent.Executor;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -54,7 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(value = InterviewController.class, properties = {"app.a2a.bus.type=inmemory"})
-@Import({InterviewService.class, TaskRouterAgent.class, InterviewOrchestratorAgent.class, CodingPracticeAgent.class, NoteMakingAgent.class, EvaluationAgent.class, KnowledgeLayerAgent.class, DecisionLayerAgent.class, EvaluationLayerAgent.class, GrowthLayerAgent.class, InMemorySessionRepository.class, InterviewLearningProfileService.class, LearningProfileAgent.class, McpGatewayService.class, OpsAuditService.class, UserIdentityResolver.class, RAGObservabilityService.class, RetrievalEvaluationService.class, AgentEvaluationService.class, A2AIdempotencyStore.class, InMemoryA2ABus.class, A2ABusConfig.class, SecurityConfig.class, StubMcpCapabilityGateway.class})
+@Import({InterviewService.class, TaskRouterAgent.class, InterviewOrchestratorAgent.class, CodingPracticeAgent.class, NoteMakingAgent.class, EvaluationAgent.class, KnowledgeLayerAgent.class, DecisionLayerAgent.class, EvaluationLayerAgent.class, GrowthLayerAgent.class, InMemorySessionRepository.class, InterviewLearningProfileService.class, LearningProfileAgent.class, McpGatewayService.class, OpsAuditService.class, UserIdentityResolver.class, RAGObservabilityService.class, RetrievalEvaluationService.class, AgentEvaluationService.class, A2AIdempotencyStore.class, InMemoryA2ABus.class, A2ABusConfig.class, SecurityConfig.class, StubMcpCapabilityGateway.class, InterviewStateMachineConfig.class})
 class InterviewControllerFlowTest {
 
     @Autowired
@@ -81,16 +88,31 @@ class InterviewControllerFlowTest {
     @MockBean
     private LexicalIndexService lexicalIndexService;
 
+    @MockBean
+    private DynamicModelFactory dynamicModelFactory;
+
+    @MockBean
+    private AgentSkillService agentSkillService;
+
+    @MockBean
+    private PromptManager promptManager;
+
+    @MockBean(name = "openAiChatModel")
+    private ChatModel openAiChatModel;
+
+    @MockBean(name = "profileUpdateExecutor")
+    private Executor profileUpdateExecutor;
+
     @Test
     void shouldCompleteInterviewFlow() throws Exception {
-        when(ragService.generateFirstQuestion(anyString(), anyString(), anyString())).thenReturn("什么是线程安全？");
+        when(ragService.generateFirstQuestion(anyString(), anyString(), anyString(), anyBoolean())).thenReturn("什么是线程安全？");
         when(ragService.buildKnowledgePacket(anyString(), anyString())).thenReturn(new RAGService.KnowledgePacket("线程安全", java.util.List.of(), "上下文", "1. [note.md] tags=技术栈 | 线程安全定义", false));
         when(ragService.evaluateWithKnowledge(anyString(), anyString(), anyString(), anyString(), anyString(), anyDouble(), anyString(), anyString(), any())).thenReturn("""
                 {"score":88,"accuracy":86,"logic":85,"depth":84,"boundary":83,
                 "deductions":["边界条件不完整"],"citations":["1. [note.md]"],"conflicts":["可见性描述不完整｜1"],
                 "feedback":"结构清晰，覆盖了关键点。","nextQuestion":"请说明 synchronized 与 Lock 的区别。"}
                 """);
-        when(ragService.generateFinalReport(anyString(), any(), anyString())).thenReturn("""
+        when(ragService.generateFinalReport(anyString(), any(), anyString(), anyString())).thenReturn("""
                 <summary>整体表现良好。</summary>
                 <incomplete>暂无明显不完整回答。</incomplete>
                 <weak>暂无明显薄弱点。</weak>
