@@ -4,8 +4,6 @@ import com.example.interview.im.config.FeishuProperties;
 import com.example.interview.im.model.UnifiedMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -18,13 +16,21 @@ import java.security.NoSuchAlgorithmException;
  * 核心职责：将飞书开放平台推送到 Webhook 或长连接的消息 JSON 格式化为内部统一的 UnifiedMessage 模型。
  * 包含对消息内容的清洗（如去除 @ 机器人占位符）、群聊过滤逻辑以及签名安全校验。
  */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class FeishuEventParser {
+
+    private static final Logger log = LoggerFactory.getLogger(FeishuEventParser.class);
 
     private final FeishuProperties feishuProperties;
     private final ObjectMapper objectMapper;
+
+    public FeishuEventParser(FeishuProperties feishuProperties, ObjectMapper objectMapper) {
+        this.feishuProperties = feishuProperties;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 将标准的 im.message.receive_v1 事件 JSON 解析为 UnifiedMessage 模型。

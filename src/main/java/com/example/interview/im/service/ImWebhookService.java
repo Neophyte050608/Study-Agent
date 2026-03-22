@@ -8,8 +8,6 @@ import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.im.model.UnifiedMessage;
 import com.example.interview.im.model.UnifiedReply;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,15 +22,25 @@ import java.util.concurrent.TimeUnit;
  * IM 消息统一处理服务 (ImWebhookService)
  * 负责接收解析后的 IM 消息，维护会话上下文，并异步分发给任务路由中心 (TaskRouterAgent)。
  */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class ImWebhookService {
+
+    private static final Logger log = LoggerFactory.getLogger(ImWebhookService.class);
 
     private final StringRedisTemplate redisTemplate;
     private final ImConversationStore conversationStore;
     private final TaskRouterAgent taskRouterAgent;
     private final FeishuReplyAdapter feishuReplyAdapter;
+
+    public ImWebhookService(StringRedisTemplate redisTemplate, ImConversationStore conversationStore, TaskRouterAgent taskRouterAgent, FeishuReplyAdapter feishuReplyAdapter) {
+        this.redisTemplate = redisTemplate;
+        this.conversationStore = conversationStore;
+        this.taskRouterAgent = taskRouterAgent;
+        this.feishuReplyAdapter = feishuReplyAdapter;
+    }
     
     /** 事件幂等性缓存前缀 */
     private static final String EVENT_IDEMPOTENCY_PREFIX = "im:event:idempotency:";

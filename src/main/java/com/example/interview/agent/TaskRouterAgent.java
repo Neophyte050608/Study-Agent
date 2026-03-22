@@ -140,6 +140,7 @@ public class TaskRouterAgent {
                 if (reactDecisionStr.contains("INTERVIEW_START")) decidedTaskType = "INTERVIEW_START";
                 else if (reactDecisionStr.contains("CODING_PRACTICE")) decidedTaskType = "CODING_PRACTICE";
                 else if (reactDecisionStr.contains("PROFILE_TRAINING_PLAN_QUERY")) decidedTaskType = "PROFILE_TRAINING_PLAN_QUERY";
+                else if (reactDecisionStr.contains("UNKNOWN")) decidedTaskType = "UNKNOWN";
 
                 java.util.regex.Matcher mTopic = java.util.regex.Pattern.compile("\"topic\"\\s*:\\s*\"([^\"]+)\"").matcher(reactDecisionStr);
                 if (mTopic.find()) topic = mTopic.group(1);
@@ -148,6 +149,17 @@ public class TaskRouterAgent {
                 if (mType.find()) questionType = mType.group(1);
 
                 if (!decidedTaskType.isBlank()) {
+                    // 处理兜底策略
+                    if ("UNKNOWN".equals(decidedTaskType)) {
+                        String fallbackMessage = "抱歉，我没有理解你的意图。我是你的 AI 面试官助理，你可以尝试以下功能：\n" +
+                                "1. 模拟面试：例如“开启一场 Spring Boot 面试”\n" +
+                                "2. 题目练习：例如“来一道 Java 选择题”或“刷一道算法题”\n" +
+                                "3. 学习画像：例如“查询我的学习计划”\n" +
+                                "请告诉我你想进行哪项操作。";
+                        // 返回通用 Map 结构，ImWebhookService 会提取并展示内容
+                        return TaskResponse.ok(Map.of("question", fallbackMessage));
+                    }
+
                     Map<String, Object> newPayload = new LinkedHashMap<>(safePayload(request.payload()));
                     if (!topic.isBlank()) newPayload.put("topic", topic);
                     if (!questionType.isBlank()) {

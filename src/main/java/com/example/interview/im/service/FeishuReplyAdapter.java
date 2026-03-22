@@ -8,8 +8,6 @@ import com.lark.oapi.service.im.v1.model.ReplyMessageReq;
 import com.lark.oapi.service.im.v1.model.ReplyMessageReqBody;
 import com.lark.oapi.service.im.v1.model.ReplyMessageResp;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -19,14 +17,22 @@ import java.util.Map;
  * 飞书消息回复适配器 (FeishuReplyAdapter)
  * 负责将统一的消息回复模型转换为飞书特定的 API 调用。
  */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class FeishuReplyAdapter {
+
+    private static final Logger log = LoggerFactory.getLogger(FeishuReplyAdapter.class);
 
     private final FeishuProperties feishuProperties;
     private final ObjectMapper objectMapper;
     private Client client;
+
+    public FeishuReplyAdapter(FeishuProperties feishuProperties, ObjectMapper objectMapper) {
+        this.feishuProperties = feishuProperties;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 初始化飞书客户端

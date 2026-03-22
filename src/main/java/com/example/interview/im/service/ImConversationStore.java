@@ -1,6 +1,5 @@
 package com.example.interview.im.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -9,10 +8,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class ImConversationStore {
 
     private final StringRedisTemplate redisTemplate;
+
+    public ImConversationStore(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
     private static final String HISTORY_PREFIX = "im:session:history:";
     private static final String ACTIVE_SESSION_PREFIX = "im:session:active:";
     private static final int MAX_HISTORY = 10; // keep last 5 rounds (10 messages: 5 user + 5 ai)

@@ -6,8 +6,8 @@ import com.example.interview.im.service.FeishuEventParser;
 import com.example.interview.im.service.ImWebhookService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,14 +16,21 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/webhook/im/feishu")
-@RequiredArgsConstructor
-@Slf4j
 public class FeishuWebhookController {
+
+    private static final Logger log = LoggerFactory.getLogger(FeishuWebhookController.class);
 
     private final FeishuProperties feishuProperties;
     private final FeishuEventParser feishuEventParser;
     private final ImWebhookService imWebhookService;
     private final ObjectMapper objectMapper;
+
+    public FeishuWebhookController(FeishuProperties feishuProperties, FeishuEventParser feishuEventParser, ImWebhookService imWebhookService, ObjectMapper objectMapper) {
+        this.feishuProperties = feishuProperties;
+        this.feishuEventParser = feishuEventParser;
+        this.imWebhookService = imWebhookService;
+        this.objectMapper = objectMapper;
+    }
 
     @PostMapping("/{appId}")
     public ResponseEntity<Map<String, Object>> receive(
