@@ -1,7 +1,12 @@
 package com.example.interview.agent;
 
+import com.alibaba.cola.statemachine.StateMachine;
+import com.alibaba.cola.statemachine.StateMachineFactory;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.core.Question;
+import com.example.interview.core.statemachine.InterviewContext;
+import com.example.interview.core.statemachine.InterviewEvent;
+import com.example.interview.core.statemachine.InterviewStateMachineConfig;
 import com.example.interview.rag.ResumeLoader;
 import com.example.interview.service.InterviewLearningProfileService;
 import com.example.interview.service.LearningEvent;
@@ -16,6 +21,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -46,8 +52,12 @@ public class InterviewOrchestratorAgent {
     private final SessionRepository sessionRepository;
     private final InterviewLearningProfileService learningProfileService;
     private final LearningProfileAgent learningProfileAgent;
+    /** Agent-to-Agent 消息总线，用于跨 Agent 异步发送滚动总结任务 */
+    private final com.example.interview.agent.a2a.A2ABus a2aBus;
+    /** 自定义画像异步更新线程池 */
+    private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, InterviewLearningProfileService learningProfileService, LearningProfileAgent learningProfileAgent) {
+    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, InterviewLearningProfileService learningProfileService, LearningProfileAgent learningProfileAgent, com.example.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.evaluationAgent = evaluationAgent;
         this.knowledgeLayerAgent = knowledgeLayerAgent;
         this.decisionLayerAgent = decisionLayerAgent;
@@ -57,6 +67,8 @@ public class InterviewOrchestratorAgent {
         this.sessionRepository = sessionRepository;
         this.learningProfileService = learningProfileService;
         this.learningProfileAgent = learningProfileAgent;
+        this.a2aBus = a2aBus;
+        this.profileUpdateExecutor = profileUpdateExecutor;
     }
 
     /**
@@ -84,8 +96,12 @@ public class InterviewOrchestratorAgent {
         session.setUserId(normalizedUserId);
         String profileSnapshot = learningProfileAgent.snapshotForPrompt(normalizedUserId, topic);
         session.setProfileSnapshot(profileSnapshot);
+        
+        // SOP 状态机增强：初始化状态并生成对应环节的首题
+        session.setCurrentStage(com.example.interview.core.InterviewStage.INTRODUCTION);
 
         // 3) 生成首题：输入包含简历与画像，使问题更贴近个人经历与当前薄弱点
+        // 这里在后续可以根据 currentStage 进行定制化生成，目前暂且复用原有首题生成
         String firstQuestion = evaluationAgent.generateFirstQuestion(resumeContent, topic, profileSnapshot);
         session.setCurrentQuestion(firstQuestion);
         
@@ -108,14 +124,32 @@ public class InterviewOrchestratorAgent {
 
         String currentQ = session.getCurrentQuestion();
         
-        // 1. 决策层：确定本轮出题/评估策略
+        // 1. 预判下一题的阶段 (因为当前轮结束也就是 history.size() + 1)
+        com.example.interview.core.InterviewStage currentStage = session.getCurrentStage();
+        com.example.interview.core.InterviewStage expectedNextStage = currentStage;
+        int nextHistorySize = session.getHistory().size() + 1;
+        int totalQ = session.getTotalQuestions();
+        
+        if (currentStage == com.example.interview.core.InterviewStage.INTRODUCTION && InterviewStateMachineConfig.isReadyForResumeDive(nextHistorySize, totalQ)) {
+            expectedNextStage = com.example.interview.core.InterviewStage.RESUME_DEEP_DIVE;
+        } else if (currentStage == com.example.interview.core.InterviewStage.RESUME_DEEP_DIVE && InterviewStateMachineConfig.isReadyForCoreKnowledge(nextHistorySize, totalQ)) {
+            expectedNextStage = com.example.interview.core.InterviewStage.CORE_KNOWLEDGE;
+        } else if (currentStage == com.example.interview.core.InterviewStage.CORE_KNOWLEDGE && InterviewStateMachineConfig.isReadyForCoding(nextHistorySize, totalQ)) {
+            expectedNextStage = com.example.interview.core.InterviewStage.SCENARIO_OR_CODING;
+        } else if (currentStage == com.example.interview.core.InterviewStage.SCENARIO_OR_CODING && InterviewStateMachineConfig.isReadyForClosing(nextHistorySize, totalQ)) {
+            expectedNextStage = com.example.interview.core.InterviewStage.CLOSING;
+        }
+
+        // 1.1 决策层：确定本轮出题/评估策略
         DecisionLayerAgent.DecisionPlan decisionPlan = decisionLayerAgent.plan(
                 session.getTopic(),
                 session.getDifficultyLevel().name(),
                 session.getFollowUpState().name(),
                 session.getTopicMastery(session.getTopic()),
                 session.getProfileSnapshot(),
-                session.getHistory().size()
+                session.getHistory().size(),
+                currentStage,
+                expectedNextStage
         );
 
         // 2. 知识层：针对问答进行检索增强
@@ -152,6 +186,66 @@ public class InterviewOrchestratorAgent {
                 String.join("\n", evaluation.conflicts()),
                 growthFeedback
         ));
+        
+        // 5.1 引入 COLA 状态机进行严格的 SOP 流程控场
+        StateMachine<com.example.interview.core.InterviewStage, InterviewEvent, InterviewContext> stateMachine = 
+                StateMachineFactory.get(InterviewStateMachineConfig.MACHINE_ID);
+        
+        InterviewContext context = new InterviewContext(session, userAnswer, evaluation.score());
+        com.example.interview.core.InterviewStage previousStage = session.getCurrentStage();
+        
+        // 尝试触发多个阶段流转事件（COLA 状态机会根据 Condition 自动决定是否流转）
+        // 因为在一个回合中，可能刚好满足进入下一个阶段的条件
+        com.example.interview.core.InterviewStage nextStage;
+        if (previousStage == com.example.interview.core.InterviewStage.INTRODUCTION) {
+            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.FINISH_INTRO, context);
+            if (nextStage != null) session.setCurrentStage(nextStage);
+        } else if (previousStage == com.example.interview.core.InterviewStage.RESUME_DEEP_DIVE) {
+            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_RESUME_DIVE, context);
+            if (nextStage != null) session.setCurrentStage(nextStage);
+        } else if (previousStage == com.example.interview.core.InterviewStage.CORE_KNOWLEDGE) {
+            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_CORE_KNOWLEDGE, context);
+            if (nextStage != null) session.setCurrentStage(nextStage);
+        } else if (previousStage == com.example.interview.core.InterviewStage.SCENARIO_OR_CODING) {
+            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_CODING, context);
+            if (nextStage != null) session.setCurrentStage(nextStage);
+        }
+
+        // [长对话滚动式总结优化]：当对话轮数达到阈值（如5轮）时，触发 RocketMQ 异步总结任务
+        int dialogueCount = session.getHistory().size();
+        if (dialogueCount > 0 && dialogueCount % 5 == 0) {
+            System.out.println("====== [InterviewOrchestratorAgent] 触发异步滚动总结 (当前轮数: " + dialogueCount + ") ======");
+            // 获取最近5轮的对话数据
+            List<Question> recentQuestions = session.getHistory().subList(dialogueCount - 5, dialogueCount);
+            List<Map<String, Object>> recentHistory = recentQuestions.stream().map(q -> Map.of(
+                    "question", (Object) q.getQuestionText(),
+                    "answer", (Object) q.getUserAnswer(),
+                    "feedback", (Object) q.getFeedback()
+            )).toList();
+
+            // 发送异步 MQ 消息，交给 RollingSummaryAgent 处理
+            com.example.interview.agent.a2a.A2AMessage summaryMsg = new com.example.interview.agent.a2a.A2AMessage(
+                    "1.0",
+                    java.util.UUID.randomUUID().toString(),
+                    java.util.UUID.randomUUID().toString(),
+                    "InterviewOrchestratorAgent",
+                    "RollingSummaryAgent",
+                    "",
+                    com.example.interview.agent.a2a.A2AIntent.ROLLING_SUMMARY,
+                    Map.of(
+                            "sessionId", session.getId(),
+                            "targetCount", dialogueCount,
+                            "recentHistory", recentHistory
+                    ),
+                    Map.of(),
+                    com.example.interview.agent.a2a.A2AStatus.PENDING,
+                    null,
+                    new com.example.interview.agent.a2a.A2AMetadata("rolling-summary", "InterviewOrchestratorAgent", Map.of()),
+                    new com.example.interview.agent.a2a.A2ATrace(java.util.UUID.randomUUID().toString(), null),
+                    java.time.Instant.now()
+            );
+            a2aBus.publish(summaryMsg);
+        }
 
         // 6. 自适应状态机更新：回写掌握度、难度和追问阶段
         session.updateAdaptiveState(session.getTopic(), evaluation.score());
@@ -214,23 +308,32 @@ public class InterviewOrchestratorAgent {
         
         // 生成总结与画像更新
         String targetedSuggestion = learningProfileService.buildTargetedSuggestion(profileUserId);
-        EvaluationAgent.FinalReportContent report = evaluationAgent.summarize(session.getTopic(), session.getHistory(), targetedSuggestion);
+        EvaluationAgent.FinalReportContent report = evaluationAgent.summarize(session.getTopic(), session.getHistory(), targetedSuggestion, session.getRollingSummary());
         
         // 1. 记录到传统统计表
         learningProfileService.recordSession(profileUserId, session.getTopic(), session.getHistory(), report, session.getAverageScore());
         
-        // 2. 沉淀为画像事件（LearningEvent），触发雷达图更新
-        learningProfileAgent.upsertEvent(new LearningEvent(
-                "interview-" + session.getId() + "-" + UUID.randomUUID(),
-                profileUserId,
-                LearningSource.INTERVIEW,
-                session.getTopic(),
-                Math.max(0, Math.min(100, (int) Math.round(session.getAverageScore()))),
-                mergePoints(report.weak(), report.incomplete(), report.wrong()),
-                deriveFamiliarPoints(session.getHistory()),
-                report.summary(),
-                Instant.now()
-        ));
+        // 2. 异步沉淀为画像事件（LearningEvent），避免阻塞最终报告的返回，使用自定义线程池 profileUpdateExecutor
+        final String finalProfileUserId = profileUserId;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                System.out.println("====== [InterviewOrchestratorAgent] 异步更新学习画像开始 ======");
+                learningProfileAgent.upsertEvent(new LearningEvent(
+                        "interview-" + session.getId() + "-" + UUID.randomUUID(),
+                        finalProfileUserId,
+                        LearningSource.INTERVIEW,
+                        session.getTopic(),
+                        Math.max(0, Math.min(100, (int) Math.round(session.getAverageScore()))),
+                        mergePoints(report.weak(), report.incomplete(), report.wrong()),
+                        deriveFamiliarPoints(session.getHistory()),
+                        report.summary(),
+                        Instant.now()
+                ));
+                System.out.println("====== [InterviewOrchestratorAgent] 异步更新学习画像完成 ======");
+            } catch (Exception e) {
+                System.err.println("====== [InterviewOrchestratorAgent] 异步更新学习画像失败: " + e.getMessage() + " ======");
+            }
+        }, profileUpdateExecutor);
         
         // 填充默认值与精炼成长建议
         String summary = report.summary().isBlank() ? "本次面试已完成。建议重点复习评分较低题目的核心知识点。" : report.summary();

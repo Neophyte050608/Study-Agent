@@ -25,6 +25,8 @@ public class ObsidianKnowledgeExtractor {
     private static final Pattern HEADING_PATTERN = Pattern.compile("^#{1,3}\\s+(.*)$");
     private static final Pattern SUMMARY_PATTERN = Pattern.compile("(?i)^(总结|结论|TL;DR|复盘|面试总结)[:：\\s-]*(.*)$");
     private static final Pattern KEYWORD_LINE_PATTERN = Pattern.compile("(?i)^(关键词|关键字|tags?)[:：\\s-]*(.*)$");
+    // 新增：识别 Obsidian 中的双向链接 [[技术名词]]
+    private static final Pattern WIKILINK_PATTERN = Pattern.compile("\\[\\[([^\\]|]+)(?:\\|.*?)?\\]\\]");
 
     // 各类特征词，用于识别笔记的“含金量”和类别
     private static final List<String> DIARY_HINTS = List.of("日记", "daily", "journal", "碎碎念", "随笔", "todo");
@@ -66,6 +68,7 @@ public class ObsidianKnowledgeExtractor {
         List<String> codeBlocks = extractCodeBlocks(markdown);
         Set<String> knowledgeTags = detectKnowledgeTags(normalizedText);
         String sourceType = detectSourceType(normalizedPath, normalizedText, knowledgeTags);
+        Set<String> wikiLinks = extractWikiLinks(markdown); // 新增：提取双向链接
 
         // 重组文档内容，使其更适合向量化搜索
         StringBuilder builder = new StringBuilder();
@@ -98,6 +101,7 @@ public class ObsidianKnowledgeExtractor {
         document.getMetadata().put("file_path", filePath);
         document.getMetadata().put("source_type", sourceType);
         document.getMetadata().put("knowledge_tags", String.join(",", knowledgeTags));
+        document.getMetadata().put("wiki_links", String.join(",", wikiLinks)); // 将双向链接也存入元数据，供后续 GraphRAG 消费
         return new ExtractionResult(List.of(document));
     }
 
@@ -160,6 +164,19 @@ public class ObsidianKnowledgeExtractor {
             }
         }
         return result;
+    }
+
+    /** 提取 Obsidian 中的双向链接 [[xxx]] */
+    private Set<String> extractWikiLinks(String markdown) {
+        Set<String> links = new LinkedHashSet<>();
+        Matcher matcher = WIKILINK_PATTERN.matcher(markdown);
+        while (matcher.find()) {
+            String link = matcher.group(1).trim();
+            if (!link.isBlank()) {
+                links.add(link);
+            }
+        }
+        return links;
     }
 
     /** 提取包含技术特征的列表项 */

@@ -32,15 +32,21 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     private final LearningProfileAgent learningProfileAgent;
     /** 动态模型工厂 */
     private final DynamicModelFactory dynamicModelFactory;
+    /** Prompt 模板服务 */
+    private final com.example.interview.service.PromptTemplateService promptTemplateService;
     /** JSON 处理 */
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** 内存中的编程练习会话缓存 */
     private final Map<String, CodingSession> sessions = new ConcurrentHashMap<>();
+    /** 自定义画像异步更新线程池 */
+    private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory) {
+    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, com.example.interview.service.PromptTemplateService promptTemplateService, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.ragService = ragService;
         this.learningProfileAgent = learningProfileAgent;
         this.dynamicModelFactory = dynamicModelFactory;
+        this.promptTemplateService = promptTemplateService;
+        this.profileUpdateExecutor = profileUpdateExecutor;
     }
 
     private ChatClient getChatClient() {
@@ -101,11 +107,24 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
 
     private Map<String, Object> startNewChatSession(String userId, String message) {
         // 意图识别
-        String prompt = "请分析以下用户的刷题需求，并提取关键信息，输出为JSON格式：\n" +
+        List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/intent_cases.json");
+        String template = "请分析以下用户的刷题需求，并提取关键信息，输出为JSON格式：\n" +
                 "包含字段：topic(技术栈或主题，如Java, Redis，没有则为空), type(题型：算法/场景/选择/填空，默认算法), count(题数，默认1), difficulty(难度：easy/medium/hard，默认medium)。\n" +
-                "用户输入：" + message + "\n" +
+                "{% if cases %}\n" +
+                "参考以下示例：\n" +
+                "{% for case in cases %}\n" +
+                "用户输入：{{ case.user_query }}\n" +
+                "输出：{{ case.ai_response }}\n" +
+                "{% endfor %}\n" +
+                "{% endif %}\n" +
+                "用户输入：{{ message }}\n" +
                 "只需输出JSON，不要其他废话。";
+        String prompt = promptTemplateService.render(template, Map.of("message", message, "cases", cases));
+        System.out.println("====== [CodingPracticeAgent - Intent] Prompt ======");
+        System.out.println(prompt);
         String jsonStr = getChatClient().prompt(prompt).call().content();
+        System.out.println("====== [CodingPracticeAgent - Intent] Response ======");
+        System.out.println(jsonStr);
         
         String topic = "";
         String type = "算法";
@@ -180,23 +199,32 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if (assessment == null) {
             assessment = fallbackAssessment(answer, session.topic());
         }
+        final RAGService.CodingAssessment finalAssessment = assessment;
 
         int score = assessment.score();
         int attempts = session.attempts() + 1;
         int bestScore = Math.max(session.bestScore(), score);
 
-        // 写入画像
-        learningProfileAgent.upsertEvent(new LearningEvent(
-                "coding-" + session.sessionId() + "-" + attempts,
-                session.userId(),
-                LearningSource.CODING,
-                session.topic(),
-                score,
-                weakPointsByScore(score, assessment.feedback(), assessment.nextHint()),
-                familiarPointsByScore(score, assessment.feedback()),
-                assessment.feedback(),
-                Instant.now()
-        ));
+        // 异步写入画像，使用自定义线程池 profileUpdateExecutor，避免阻塞评估结果返回和占用默认池
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像开始 ======");
+                learningProfileAgent.upsertEvent(new LearningEvent(
+                        "coding-" + session.sessionId() + "-" + attempts,
+                        session.userId(),
+                        LearningSource.CODING,
+                        session.topic(),
+                        score,
+                        weakPointsByScore(score, finalAssessment.feedback(), finalAssessment.nextHint()),
+                        familiarPointsByScore(score, finalAssessment.feedback()),
+                        finalAssessment.feedback(),
+                        Instant.now()
+                ));
+                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像完成 ======");
+            } catch (Exception e) {
+                System.err.println("====== [CodingPracticeAgent] 异步更新学习画像失败: " + e.getMessage() + " ======");
+            }
+        }, profileUpdateExecutor);
 
         // 清空当前题目，等待下一次请求生成新题目
         CodingSession updatedSession = new CodingSession(
@@ -297,6 +325,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if (assessment == null) {
             assessment = fallbackAssessment(answer, session.topic());
         }
+        final RAGService.CodingAssessment finalAssessment = assessment;
         
         int score = assessment.score();
         int attempts = session.attempts() + 1;
@@ -317,18 +346,26 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 session.createdAt()
         ));
         
-        // 将练习结果作为学习事件写入画像
-        learningProfileAgent.upsertEvent(new LearningEvent(
-                "coding-" + sessionId + "-" + attempts,
-                session.userId(),
-                LearningSource.CODING,
-                session.topic(),
-                score,
-                weakPointsByScore(score, assessment.feedback(), assessment.nextHint()),
-                familiarPointsByScore(score, assessment.feedback()),
-                assessment.feedback(),
-                Instant.now()
-        ));
+        // 将练习结果异步沉淀为学习事件写入画像，使用自定义线程池 profileUpdateExecutor
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像开始 ======");
+                learningProfileAgent.upsertEvent(new LearningEvent(
+                        "coding-" + sessionId + "-" + attempts,
+                        session.userId(),
+                        LearningSource.CODING,
+                        session.topic(),
+                        score,
+                        weakPointsByScore(score, finalAssessment.feedback(), finalAssessment.nextHint()),
+                        familiarPointsByScore(score, finalAssessment.feedback()),
+                        finalAssessment.feedback(),
+                        Instant.now()
+                ));
+                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像完成 ======");
+            } catch (Exception e) {
+                System.err.println("====== [CodingPracticeAgent] 异步更新学习画像失败: " + e.getMessage() + " ======");
+            }
+        }, profileUpdateExecutor);
         
         return Map.of(
                 "agent", "CodingPracticeAgent",

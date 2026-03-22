@@ -2,6 +2,8 @@ package com.example.interview.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huaban.analysis.jieba.JiebaSegmenter;
+import com.huaban.analysis.jieba.SegToken;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +39,9 @@ public class LexicalIndexService {
 
     private final ObjectMapper objectMapper;
     private final Map<String, LexicalRecord> records = new ConcurrentHashMap<>();
+    
+    // 引入 Jieba 中文分词器
+    private final JiebaSegmenter segmenter = new JiebaSegmenter();
 
     public LexicalIndexService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -132,14 +137,14 @@ public class LexicalIndexService {
         if (text == null || text.isBlank()) {
             return List.of();
         }
-        return text.toLowerCase(Locale.ROOT)
-                .replaceAll("[^\\p{L}\\p{N}\\s_#-]", " ")
-                .replaceAll("\\s+", " ")
-                .trim()
-                .lines()
-                .flatMap(line -> List.of(line.split(" ")).stream())
-                .map(String::trim)
-                .filter(token -> token.length() >= 2)
+        // 使用 Jieba 分词器进行中文分词，提高对“微服务”、“分库分表”等专有名词的识别率
+        // 采用 SEARCH 模式（或 INDEX 模式），适合用于搜索引擎构建倒排索引
+        List<SegToken> tokens = segmenter.process(text, JiebaSegmenter.SegMode.SEARCH);
+        
+        return tokens.stream()
+                .map(token -> token.word.toLowerCase(Locale.ROOT).trim())
+                // 过滤掉过短的无意义字符以及标点符号
+                .filter(word -> word.length() >= 2 && !word.matches("^[\\p{Punct}\\s]+$"))
                 .collect(Collectors.toList());
     }
 

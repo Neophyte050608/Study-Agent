@@ -42,6 +42,11 @@ spring:
       max-attempts: 1
   main:
     web-application-type: servlet # 需要对外提供 REST API，必须是 servlet
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: interview123
   servlet:
     multipart:
       max-file-size: 12MB

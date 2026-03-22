@@ -59,10 +59,18 @@ public class RAGService {
     private final WebSearchTool webSearchTool;
     private final RAGObservabilityService observabilityService;
     private final AgentSkillService agentSkillService;
+    private final PromptTemplateService promptTemplateService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    // 注入自定义检索线程池
+    private final java.util.concurrent.Executor ragRetrieveExecutor;
+    // 注入图谱持久化组件
+    private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
-    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService) {
+    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.agentSkillService = agentSkillService;
+        this.promptTemplateService = promptTemplateService;
+        this.ragRetrieveExecutor = ragRetrieveExecutor;
+        this.techConceptRepository = techConceptRepository;
         String globalSkillInstruction = safeSkillText(this.agentSkillService.globalInstruction());
         String systemPrompt = "你是一位专业的中文技术面试官与复盘助手。";
         if (!globalSkillInstruction.isBlank()) {
@@ -164,6 +172,7 @@ public class RAGService {
         String cleanJson = rawJson;
         if (cleanJson != null) {
             cleanJson = cleanJson.trim();
+            // 兼容可能存在的 markdown 标记，无论是否标明了 json 语言
             if (cleanJson.startsWith("```json")) {
                 cleanJson = cleanJson.substring(7);
             } else if (cleanJson.startsWith("```")) {
@@ -203,6 +212,12 @@ public class RAGService {
             objectNode.set("citations", toArrayNode(validCitations));
             objectNode.set("conflicts", toArrayNode(validConflicts));
             objectNode.set("deductions", toArrayNode(deductions));
+
+            // 修复大模型偶尔遗漏 nextQuestion 字段的问题，提供兜底保护
+            if (!objectNode.has("nextQuestion") || objectNode.get("nextQuestion").asText().isBlank()) {
+                objectNode.put("nextQuestion", "能否进一步结合实际项目场景，谈谈你在使用这项技术时遇到的最大挑战及解决方案？");
+            }
+
             return objectMapper.writeValueAsString(objectNode);
         } catch (Exception e) {
             logger.warn("引用校验失败，返回原始评估结果。原因: {}", summarizeError(e));
@@ -211,16 +226,52 @@ public class RAGService {
     }
 
     private List<Document> retrieveHybridDocuments(String retrievalQuery) {
-        List<Document> vectorDocs = List.of();
-        try {
-            vectorDocs = vectorStore.similaritySearch(
-                    SearchRequest.builder().query(retrievalQuery).topK(8).build()
-            );
-        } catch (RuntimeException e) {
-            logger.warn("向量检索失败，继续使用关键词检索。原因: {}", summarizeError(e));
-        }
-        List<Document> lexicalDocs = lexicalIndexService.search(retrievalQuery, 8);
+        // 使用自定义的 ragRetrieveExecutor 线程池并行执行向量检索、词法检索和图谱检索，降低整体检索耗时，避免阻塞默认池
+        java.util.concurrent.CompletableFuture<List<Document>> vectorFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return vectorStore.similaritySearch(
+                        SearchRequest.builder().query(retrievalQuery).topK(8).build()
+                );
+            } catch (RuntimeException e) {
+                logger.warn("向量检索失败，返回空列表。原因: {}", summarizeError(e));
+                return List.<Document>of();
+            }
+        }, ragRetrieveExecutor);
+
+        java.util.concurrent.CompletableFuture<List<Document>> lexicalFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> 
+            lexicalIndexService.search(retrievalQuery, 8)
+        , ragRetrieveExecutor);
+
+        // 新增：GraphRAG 检索分支
+        java.util.concurrent.CompletableFuture<List<Document>> graphFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Document> graphDocs = new ArrayList<>();
+                // 提取查询中的关键词
+                List<String> queryTokens = tokenize(retrievalQuery);
+                for (String token : queryTokens) {
+                    // 查询图谱中的 1度到2度 邻居节点
+                    List<String> relatedConcepts = techConceptRepository.findRelatedConceptsWithinTwoHops(token);
+                    if (relatedConcepts != null && !relatedConcepts.isEmpty()) {
+                        String graphContext = "知识图谱关联提示：与【" + token + "】存在深度技术关联的概念包括 -> " + String.join(", ", relatedConcepts);
+                        Document doc = new Document(graphContext);
+                        doc.getMetadata().put("source_type", "graph_rag");
+                        graphDocs.add(doc);
+                    }
+                }
+                return graphDocs;
+            } catch (Exception e) {
+                logger.warn("图谱检索失败，返回空列表。原因: {}", summarizeError(e));
+                return List.<Document>of();
+            }
+        }, ragRetrieveExecutor);
+
+        List<Document> vectorDocs = vectorFuture.join();
+        List<Document> lexicalDocs = lexicalFuture.join();
+        List<Document> graphDocs = graphFuture.join();
+
+        // 融合三路结果
         List<Document> fused = reciprocalRankFuse(vectorDocs, lexicalDocs);
+        fused.addAll(graphDocs); // 图谱关联直接作为补充上下文
         return rerankByQueryOverlap(retrievalQuery, fused, 5);
     }
 
@@ -254,6 +305,7 @@ public class RAGService {
         if (docs == null || docs.isEmpty()) {
             return List.of();
         }
+        // 为了和词法检索统一分词标准，这里借用了更优的分词逻辑（见下方 tokenize 的优化）
         List<String> queryTokens = tokenize(query);
         if (queryTokens.isEmpty()) {
             return docs.stream().limit(topK).collect(Collectors.toList());
@@ -277,6 +329,8 @@ public class RAGService {
         if (text == null || text.isBlank()) {
             return List.of();
         }
+        // 为了和 LexicalIndexService 保持一致，同样引入分词逻辑（或者直接复用），这里简单优化为更好的正则分词
+        // 因为这段代码仅用于 Query Overlap 的简单计算，不需要像全文索引那样精准，但之前的逻辑也偏弱
         return List.of(text.toLowerCase(Locale.ROOT)
                         .replaceAll("[^\\p{L}\\p{N}\\s_#-]", " ")
                         .replaceAll("\\s+", " ")
@@ -383,10 +437,12 @@ public class RAGService {
     }
 
     private String rewriteQuery(String question, String userAnswer) {
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("knowledge-retrieval"));
+        // 使用新抽离的 query-optimizer 技能来优化检索关键词
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("query-optimizer"));
         return chatClient.prompt()
                 .user(u -> u.text("{skillBlock}\n" +
                         "请从下面的面试问答中提取用于知识检索的关键词。\n" +
+                        "如果回答过短，请运用 HyDE（假设性文档嵌入）策略，推测并补充几项理想答案中该有的技术专有名词。\n" +
                         "问题：{question}\n" +
                         "回答：{answer}\n" +
                         "只返回关键词或检索短语，不要返回其他解释。")
@@ -398,48 +454,69 @@ public class RAGService {
     }
 
     private String generateEvaluation(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String retrievalEvidence, String strategyHint) {
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy", "interview-learning-profile"));
+        // 移除单次答题评估时对 interview-learning-profile 技能的加载，因为我们只需要用到开始时获取的 profileSnapshot 即可，避免 Prompt 过于臃肿
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
         String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
-        String promptTemplate = "{skillBlock}\n" +
+        List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
+        String template = "{{skillBlock}}\n" +
                 "你是一位技术面试官。\n\n" +
-                "面试主题：{topic}\n" +
-                "当前难度：{difficultyGuide}\n" +
-                "追问状态：{followUpState}\n" +
-                "当前主题能力值：{topicMastery}\n" +
-                "本轮出题与追问策略：{strategyHint}\n" +
-                "历史画像：\n{profileSnapshot}\n\n" +
+                "面试主题：{{topic}}\n" +
+                "当前难度：{{difficultyGuide}}\n" +
+                "追问状态：{{followUpState}}\n" +
+                "当前主题能力值：{{topicMastery}}\n" +
+                "本轮出题与追问策略：{{strategyHint}}\n" +
+                "历史画像：\n{{profileSnapshot}}\n\n" +
                 "知识库上下文：\n" +
-                "{context}\n\n" +
+                "{{context}}\n\n" +
                 "证据索引：\n" +
-                "{retrievalEvidence}\n\n" +
-                "当前问题：{question}\n" +
-                "用户回答：{userAnswer}\n\n" +
+                "{{retrievalEvidence}}\n\n" +
+                "{% if cases %}\n" +
+                "以下是优质的评估示例供参考：\n" +
+                "{% for case in cases %}\n" +
+                "示例{{ loop.index }}：\n" +
+                "{{ case.user_query }}\n" +
+                "期望输出：{{ case.ai_response }}\n" +
+                "{% endfor %}\n" +
+                "{% endif %}\n" +
+                "当前问题：{{question}}\n" +
+                "用户回答：{{userAnswer}}\n\n" +
                 "任务：\n" +
                 "1. 从知识点准确性、表达逻辑、深度、边界考虑四个维度分别评分（0-100）。\n" +
                 "2. 给出总分，并明确扣分原因。\n" +
                 "3. 如果知识库中出现该题相关笔记但回答不全/不对，要在反馈中显式标注【笔记已覆盖但回答缺失】。\n" +
-                "4. 追问必须基于用户当前回答继续深挖，不要跳题库。\n" +
+                "4. 如果处于同一阶段，下一题尽量基于用户当前回答继续深挖；如果策略提示已进入新阶段，请按新阶段的要求生成全新的题目。\n" +
                 "5. 难度自适应：低分时回到基础概念；稳定高分时转场景题、原理题、手写思路题。\n\n" +
                 "6. citations 仅能填写证据索引中出现的编号和摘要，不允许捏造。\n" +
-                "7. conflicts 仅在回答与证据或常识冲突时填写，格式为“冲突点｜参考证据编号”。\n\n" +
+                "7. conflicts 仅在回答与证据或常识冲突时填写，格式为“冲突点｜参考证据编号”。\n" +
+                "8. nextQuestion 是必填字段，必须基于当前回答生成一道追问题。\n\n" +
                 "输出必须是严格 JSON，不要包含 markdown 代码块，不要输出任何额外文字。\n" +
                 "JSON 字段：score,accuracy,logic,depth,boundary,deductions(array),citations(array),conflicts(array),feedback,nextQuestion。";
 
-        return chatClient.prompt()
-                .user(u -> u.text(promptTemplate)
-                        .param("skillBlock", skillBlock)
-                        .param("topic", topic)
-                        .param("difficultyGuide", difficultyGuide)
-                        .param("followUpState", followUpState)
-                        .param("topicMastery", String.format("%.1f", topicMastery))
-                        .param("strategyHint", strategyHint)
-                        .param("profileSnapshot", profileSnapshot)
-                        .param("context", context)
-                        .param("retrievalEvidence", retrievalEvidence)
-                        .param("question", question)
-                        .param("userAnswer", userAnswer))
+        Map<String, Object> contextMap = new HashMap<>();
+        contextMap.put("skillBlock", skillBlock);
+        contextMap.put("topic", topic);
+        contextMap.put("difficultyGuide", difficultyGuide);
+        contextMap.put("followUpState", followUpState);
+        contextMap.put("topicMastery", String.format("%.1f", topicMastery));
+        contextMap.put("strategyHint", strategyHint);
+        contextMap.put("profileSnapshot", profileSnapshot);
+        contextMap.put("context", context);
+        contextMap.put("retrievalEvidence", retrievalEvidence);
+        contextMap.put("cases", cases);
+        contextMap.put("question", question);
+        contextMap.put("userAnswer", userAnswer);
+
+        String prompt = promptTemplateService.render(template, contextMap);
+
+        System.out.println("====== [RAGService - generateEvaluation] Prompt ======");
+        System.out.println(prompt);
+        String response = chatClient.prompt()
+                .user(prompt)
                 .call()
                 .content();
+        System.out.println("====== [RAGService - generateEvaluation] Response ======");
+        System.out.println(response);
+        return response;
     }
 
     private String callWithRetry(Supplier<String> action, int maxAttempts, String stage) {
@@ -628,20 +705,23 @@ public class RAGService {
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot) {
          String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
          try {
+            System.out.println("====== [RAGService - generateFirstQuestion] Params: topic=" + topic + " ======");
             String rawQuestion = callWithRetry(() -> chatClient.prompt()
                      .user(u -> u.text("{skillBlock}\n" +
                              "你是一位技术面试官。\n" +
                              "简历摘要：{resume}\n" +
                              "面试主题：{topic}\n" +
-                             "用户历史画像：{profileSnapshot}\n" +
-                             "请根据用户的历史画像，**专门针对其薄弱点（Weaknesses）或得分较低的技能**生成第一道中文面试题。如果画像中没有薄弱点，则优先围绕其项目经历出题。\n" +
-                             "只输出一道题目本身，必须单行，不要标题、不要策略说明、不要理由、不要建议、不要 markdown。")
+                             "当前环节：【自我介绍】\n" +
+                             "请结合用户的简历内容，生成一段破冰的开场白和第一道面试题。第一题必须是让候选人做自我介绍。\n" +
+                             "例如：“你好！看了你的简历，发现你在微服务领域有不少经验。今天我们将进行 {topic} 相关的面试。在正式开始前，能先简单做个自我介绍吗？”\n" +
+                             "只输出开场白本身，必须单行，不要标题、不要策略说明、不要 markdown。")
                              .param("skillBlock", skillBlock)
                             .param("resume", truncate(resumeContent, 1500))
-                             .param("topic", topic)
-                            .param("profileSnapshot", truncate(profileSnapshot, 500)))
+                             .param("topic", topic))
                      .call()
                      .content(), 2, "首题生成");
+            System.out.println("====== [RAGService - generateFirstQuestion] Response ======");
+            System.out.println(rawQuestion);
              return normalizeFirstQuestion(rawQuestion, topic);
          } catch (RuntimeException e) {
              logger.warn("首题生成失败，返回降级问题。原因: {}", summarizeError(e));
@@ -649,20 +729,37 @@ public class RAGService {
          }
     }
 
-    public String generateFinalReport(String topic, List<Question> history, String targetedSuggestion) {
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-growth-coach"));
-        String qaHistory = history.stream()
-                .map(item -> "问题：" + item.getQuestionText() + "\n" +
-                        "回答：" + item.getUserAnswer() + "\n" +
-                        "得分：" + item.getScore() + "\n" +
-                        "点评：" + item.getFeedback())
+    public String generateFinalReport(String topic, List<Question> history, String targetedSuggestion, String rollingSummary) {
+        // 使用新抽离的 interview-report-generator 和 interview-growth-coach 技能
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-report-generator", "interview-growth-coach"));
+        
+        // 结合 Rolling Summary 机制，如果存在滚动总结，则将其作为极高权重的历史基线传入
+        String baseContext = rollingSummary == null || rollingSummary.isBlank() ? "" : "【前期面试表现滚动总结】\n" + rollingSummary + "\n\n";
+
+        // Contextual Compression: 针对长达几十轮的面试历史，采用摘要式压缩
+        // 因为已经有了 rollingSummary 覆盖了前面的对话，这里我们只需要保留最近 5 轮的详细记录即可，防止 Prompt 过长
+        int historySize = history.size();
+        int recentCount = Math.min(historySize, 5);
+        List<Question> recentHistoryList = history.subList(historySize - recentCount, historySize);
+
+        String qaHistory = recentHistoryList.stream()
+                .map(item -> {
+                    // 对于最近 5 轮，我们仍然保留 150 个字符的截断作为双保险，避免个别回答异常冗长
+                    String shortAnswer = item.getUserAnswer() != null && item.getUserAnswer().length() > 150 
+                            ? item.getUserAnswer().substring(0, 150) + "..." 
+                            : item.getUserAnswer();
+                    return "Q: " + item.getQuestionText() + "\n" +
+                           "A(简): " + shortAnswer + "\n" +
+                           "Score: " + item.getScore() + " | FB: " + item.getFeedback();
+                })
                 .collect(Collectors.joining("\n\n---\n\n"));
 
         String prompt = "{skillBlock}\n" +
                 "你是技术面试复盘官。\n" +
                 "面试主题：{topic}\n" +
                 "后续训练建议参考：\n{targetedSuggestion}\n" +
-                "以下是完整答题记录：\n{history}\n\n" +
+                baseContext +
+                "以下是近期完整答题记录：\n{history}\n\n" +
                 "请输出最终复盘报告，必须严格使用以下标签：\n" +
                 "<summary>整体总结（3-5句）</summary>\n" +
                 "<incomplete>回答不全的点（按要点分行）</incomplete>\n" +
@@ -672,7 +769,9 @@ public class RAGService {
                 "<next_focus>下一轮针对性出题方向（分点）</next_focus>\n" +
                 "要求：中文、具体、可执行，不要输出其他标签。";
         try {
-            return callWithRetry(() -> chatClient.prompt()
+            System.out.println("====== [RAGService - generateFinalReport] Prompt Template ======");
+            System.out.println(prompt);
+            String response = callWithRetry(() -> chatClient.prompt()
                     .user(u -> u.text(prompt)
                             .param("skillBlock", skillBlock)
                             .param("topic", topic)
@@ -680,6 +779,9 @@ public class RAGService {
                             .param("history", qaHistory))
                     .call()
                     .content(), 2, "最终复盘");
+            System.out.println("====== [RAGService - generateFinalReport] Response ======");
+            System.out.println(response);
+            return response;
         } catch (RuntimeException e) {
             logger.warn("最终复盘生成失败，返回降级报告。原因: {}", summarizeError(e));
             return buildFallbackReport(history, targetedSuggestion);
@@ -689,7 +791,9 @@ public class RAGService {
     public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot) {
         String normalizedTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic.trim();
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
+        // 移除单次出题时对 interview-learning-profile 技能的全量加载，仅使用已传入的 profileSnapshot 即可
+        // 使用新抽离的 coding-interview-coach 技能来专注生成算法题
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
         String prompt = "{skillBlock}\n" +
                 "你是一位算法训练教练，请生成一道中文算法题。\n" +
                 "主题：{topic}\n" +
@@ -699,6 +803,8 @@ public class RAGService {
                 "1. 只输出题目正文与输入输出约束，禁止输出答案。\n" +
                 "2. 单段文本，不要 markdown，不要标题。\n";
         try {
+            System.out.println("====== [RAGService - generateCodingQuestion] Prompt Template ======");
+            System.out.println(prompt);
             String raw = callWithRetry(() -> chatClient.prompt()
                     .user(u -> u.text(prompt)
                             .param("skillBlock", skillBlock)
@@ -707,6 +813,8 @@ public class RAGService {
                             .param("profileSnapshot", truncate(profileSnapshot, 240)))
                     .call()
                     .content(), 2, "刷题题目生成");
+            System.out.println("====== [RAGService - generateCodingQuestion] Response ======");
+            System.out.println(raw);
             if (raw == null || raw.isBlank()) {
                 return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty);
             }
@@ -725,7 +833,8 @@ public class RAGService {
         if (safeAnswer.isBlank()) {
             return new CodingAssessment(20, "未提供有效答案。", "先补充完整思路，再给出复杂度分析。", fallbackNextCodingQuestion(normalizedTopic, 20));
         }
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator"));
+        // 使用新抽离的 coding-interview-coach 技能来进行多维度代码审查
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
         String prompt = "{skillBlock}\n" +
                 "你是一位算法面试评估官，请评估候选人的题解文本。\n" +
                 "主题：{topic}\n" +
@@ -735,6 +844,8 @@ public class RAGService {
                 "请输出严格 JSON：score,feedback,nextHint,nextQuestion。\n" +
                 "score 范围 0-100。";
         try {
+            System.out.println("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
+            System.out.println(prompt);
             String raw = callWithRetry(() -> chatClient.prompt()
                     .user(u -> u.text(prompt)
                             .param("skillBlock", skillBlock)
@@ -744,6 +855,8 @@ public class RAGService {
                             .param("answer", truncate(safeAnswer, 800)))
                     .call()
                     .content(), 2, "刷题答案评估");
+            System.out.println("====== [RAGService - evaluateCodingAnswer] Response ======");
+            System.out.println(raw);
             String clean = normalizeJsonContent(raw);
             JsonNode node = objectMapper.readTree(clean);
             int score = node.path("score").asInt(0);
@@ -761,7 +874,8 @@ public class RAGService {
     }
 
     public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy"));
+        // 使用新抽离的 coding-interview-coach 技能来生成进阶追问
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
         String prompt = "{skillBlock}\n" +
                 "你是一位算法训练教练，请根据当前答题质量生成下一道追问题。\n" +
                 "主题：{topic}\n" +
@@ -796,7 +910,8 @@ public class RAGService {
 
     public String generateLearningPlan(String topic, String weakPoint, String recentPerformance) {
         String normalizedTopic = topic == null || topic.isBlank() ? "后端基础" : topic.trim();
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-learning-profile", "interview-growth-coach"));
+        // 使用新抽离的 personalized-learning-planner 技能
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("personalized-learning-planner", "interview-learning-profile", "interview-growth-coach"));
         String prompt = "{skillBlock}\n" +
                 "你是一位学习教练，请基于用户状态生成 7 天学习计划。\n" +
                 "主题：{topic}\n" +
@@ -848,8 +963,8 @@ public class RAGService {
     }
 
     private String buildFallbackFirstQuestion(String topic) {
-        String safeTopic = topic == null || topic.isBlank() ? "你最熟悉的后端主题" : topic.trim();
-        return "我们先从基础开始，请你结合一个实际场景，说明你对「" + safeTopic + "」的核心概念、典型实现和常见误区的理解。";
+        String safeTopic = topic == null || topic.isBlank() ? "后端开发" : topic.trim();
+        return "你好！欢迎参加今天的「" + safeTopic + "」模拟面试。在正式开始技术交流之前，能请你先花 1-2 分钟做一个简单的自我介绍吗？";
     }
 
     private String buildFallbackCodingQuestion(String topic, String difficulty) {

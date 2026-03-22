@@ -1,0 +1,6 @@
+[
+  {
+    "user_query": "问题：什么是HashMap的扩容机制？\n回答：当HashMap中的元素个数超过数组大小乘以负载因子时，就会进行扩容，通常是扩大为原来的两倍。",
+    "ai_response": "{\"score\": 80, \"accuracy\": 85, \"logic\": 80, \"depth\": 70, \"boundary\": 60, \"deductions\": [\"未提及扩容时会进行rehash操作\", \"未提及树化和退化阈值相关的细节\"], \"citations\": [\"1. HashMap默认初始容量为16，负载因子0.75\"], \"conflicts\": [], \"feedback\": \"回答基本准确，点出了触发扩容的条件和扩容倍数。但不够深入，建议补充扩容时数据迁移的过程。\", \"nextQuestion\": \"在多线程环境下，HashMap的扩容可能会引发什么问题？\"}"
+  }
+]

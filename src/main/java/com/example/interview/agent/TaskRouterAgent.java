@@ -42,19 +42,23 @@ public class TaskRouterAgent {
     private final LearningProfileAgent learningProfileAgent;
     /** Agent-to-Agent 消息总线，用于跨 Agent 通信和状态发布 */
     private final A2ABus a2aBus;
+    /** Spring AI ChatClient 用于 ReAct 推理 */
+    private final org.springframework.ai.chat.client.ChatClient chatClient;
 
     public TaskRouterAgent(
             InterviewOrchestratorAgent interviewOrchestratorAgent,
             CodingPracticeAgent codingPracticeAgent,
             NoteMakingAgent noteMakingAgent,
             LearningProfileAgent learningProfileAgent,
-            A2ABus a2aBus
+            A2ABus a2aBus,
+            @org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel
     ) {
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
         this.codingPracticeAgent = codingPracticeAgent;
         this.noteMakingAgent = noteMakingAgent;
         this.learningProfileAgent = learningProfileAgent;
         this.a2aBus = a2aBus;
+        this.chatClient = org.springframework.ai.chat.client.ChatClient.builder(chatModel).build();
     }
 
     /**
@@ -64,8 +68,13 @@ public class TaskRouterAgent {
      * @return 业务 Agent 执行后的即时响应
      */
     public TaskResponse dispatch(TaskRequest request) {
-        if (request == null || request.taskType() == null) {
-            return TaskResponse.fail("任务类型不能为空");
+        if (request == null) {
+            return TaskResponse.fail("请求不能为空");
+        }
+
+        // 0. ReAct 模式增强：如果未指定 taskType，使用大模型自主推理和行动（路由）
+        if (request.taskType() == null) {
+            return reactDispatch(request);
         }
         
         // 1. 解析上下文中的追踪标识
@@ -105,6 +114,68 @@ public class TaskRouterAgent {
             publish(request, receiverOf(request.taskType()), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             publishReply(TaskResponse.fail(e.getMessage()), request.taskType(), replyTo, correlationId, traceId);
             throw e;
+        }
+    }
+
+    /**
+     * ReAct 模式（Reasoning + Acting）任务分发。
+     * 当外部输入一个自然语言意图而非严格的 TaskType 时，TaskRouterAgent 会使用大模型进行思考，
+     * 观察用户的意图，并自主决定调用哪个具体的任务处理方法。
+     */
+    private TaskResponse reactDispatch(TaskRequest request) {
+        String naturalLanguageQuery = readText(request.payload(), "query");
+        if (naturalLanguageQuery.isBlank()) {
+            return TaskResponse.fail("未指定 taskType 且 query 为空，无法进行 ReAct 推理");
+        }
+
+        System.out.println("====== [TaskRouterAgent - ReAct] 开始思考意图 ======");
+        System.out.println("Observation (用户输入): " + naturalLanguageQuery);
+
+        // 模拟 Thought 过程：要求大模型根据支持的 TaskType 输出对应的分类和提取的参数
+        String prompt = "你是一个智能任务路由网关（TaskRouterAgent）。\n" +
+                "你支持以下任务类型（TaskType）：\n" +
+                "1. INTERVIEW_START：开启一场模拟面试，需要提取 topic(面试主题)。\n" +
+                "2. CODING_PRACTICE：进行算法刷题训练，需要提取 topic(题目类型)。\n" +
+                "3. PROFILE_TRAINING_PLAN_QUERY：查询学习计划，不需要额外参数。\n" +
+                "请分析用户的自然语言输入，并决定你应该执行哪个任务。\n" +
+                "用户输入：" + naturalLanguageQuery + "\n" +
+                "请严格以JSON格式输出，包含字段：taskType, topic, reason (你的思考过程)。";
+
+        try {
+            String reactDecisionStr = chatClient.prompt().user(prompt).call().content();
+            System.out.println("====== [TaskRouterAgent - ReAct] 思考与行动决策 ======");
+            System.out.println(reactDecisionStr);
+
+            // 简单解析大模型的 JSON 响应（实际项目中应使用 ObjectMapper 解析）
+            String decidedTaskType = "";
+            String topic = "";
+            if (reactDecisionStr != null) {
+                if (reactDecisionStr.contains("INTERVIEW_START")) decidedTaskType = "INTERVIEW_START";
+                else if (reactDecisionStr.contains("CODING_PRACTICE")) decidedTaskType = "CODING_PRACTICE";
+                else if (reactDecisionStr.contains("PROFILE_TRAINING_PLAN_QUERY")) decidedTaskType = "PROFILE_TRAINING_PLAN_QUERY";
+                
+                // 简单的正则提取 topic
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"topic\"\\s*:\\s*\"([^\"]+)\"").matcher(reactDecisionStr);
+                if (m.find()) {
+                    topic = m.group(1);
+                }
+            }
+
+            // Action 阶段：根据思考结果重新组装 Request 并分发
+            if (!decidedTaskType.isBlank()) {
+                System.out.println("====== [TaskRouterAgent - ReAct] 采取行动: 路由至 " + decidedTaskType + " ======");
+                Map<String, Object> newPayload = new LinkedHashMap<>(safePayload(request.payload()));
+                if (!topic.isBlank()) newPayload.put("topic", topic);
+                
+                TaskRequest newRequest = new TaskRequest(TaskType.valueOf(decidedTaskType), newPayload, request.context());
+                // 递归调用原本的精确调度逻辑
+                return dispatch(newRequest);
+            } else {
+                return TaskResponse.fail("ReAct 思考失败，无法识别意图");
+            }
+        } catch (Exception e) {
+            System.err.println("====== [TaskRouterAgent - ReAct] 推理异常: " + e.getMessage() + " ======");
+            return TaskResponse.fail("ReAct 推理执行失败");
         }
     }
 

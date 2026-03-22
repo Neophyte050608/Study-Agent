@@ -35,12 +35,16 @@ public class InterviewSession {
     private int highScoreStreak;
     /** 启动面试时的用户画像快照 */
     private String profileSnapshot;
+    /** 用户对话的滚动式总结（Rolling Summary），用于缓解超长会话的 Token 压力 */
+    private String rollingSummary;
     /** 关联的用户 ID */
     private String userId;
     /** 当前的追问策略状态 */
     private FollowUpState followUpState;
     /** 主题掌握度映射：Key 为子主题名，Value 为 0-100 的掌握评分 */
     private Map<String, Double> topicMastery;
+    /** 当前所处的 SOP 面试环节 */
+    private InterviewStage currentStage;
 
     public InterviewSession(String topic, String resumeContent, int totalQuestions) {
         this.id = UUID.randomUUID().toString();
@@ -54,9 +58,11 @@ public class InterviewSession {
         this.lowScoreStreak = 0;
         this.highScoreStreak = 0;
         this.profileSnapshot = "";
+        this.rollingSummary = "";
         this.userId = "local-user";
         this.followUpState = FollowUpState.PROBE;
         this.topicMastery = new HashMap<>();
+        this.currentStage = InterviewStage.INTRODUCTION; // 默认从自我介绍开始
     }
 
     /**
@@ -142,11 +148,18 @@ public class InterviewSession {
     public int getHighScoreStreak() { return highScoreStreak; }
     public String getProfileSnapshot() { return profileSnapshot; }
     public void setProfileSnapshot(String profileSnapshot) { this.profileSnapshot = profileSnapshot == null ? "" : profileSnapshot; }
+    public String getRollingSummary() { return rollingSummary == null ? "" : rollingSummary; }
+    public void setRollingSummary(String rollingSummary) { this.rollingSummary = rollingSummary; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId == null || userId.isBlank() ? "local-user" : userId; }
     public FollowUpState getFollowUpState() { return followUpState; }
+    public void setFollowUpState(FollowUpState followUpState) { this.followUpState = followUpState; }
     public double getTopicMastery(String topic) {
         String normalizedTopic = (topic == null || topic.isBlank()) ? "默认主题" : topic.trim();
         return topicMastery.getOrDefault(normalizedTopic, 65.0);
     }
+    public Map<String, Double> getTopicMastery() { return topicMastery; }
+    public void setTopicMastery(Map<String, Double> topicMastery) { this.topicMastery = topicMastery; }
+    public InterviewStage getCurrentStage() { return currentStage; }
+    public void setCurrentStage(InterviewStage currentStage) { this.currentStage = currentStage; }
 }

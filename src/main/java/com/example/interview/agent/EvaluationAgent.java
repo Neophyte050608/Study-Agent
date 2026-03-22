@@ -56,8 +56,8 @@ public class EvaluationAgent {
         return new LayeredEvaluation(result, trace);
     }
 
-    public FinalReportContent summarize(String topic, List<Question> history, String targetedSuggestion) {
-        String raw = ragService.generateFinalReport(topic, history, targetedSuggestion);
+    public FinalReportContent summarize(String topic, List<Question> history, String targetedSuggestion, String rollingSummary) {
+        String raw = ragService.generateFinalReport(topic, history, targetedSuggestion, rollingSummary);
         String summary = extractTag(raw, "summary");
         String incomplete = extractTag(raw, "incomplete");
         String weak = extractTag(raw, "weak");

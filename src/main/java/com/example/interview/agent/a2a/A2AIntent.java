@@ -6,9 +6,11 @@ package com.example.interview.agent.a2a;
  * <p>DELEGATE_TASK：委派任务（通常由编排/路由侧发出）。</p>
  * <p>EXECUTE_TASK：执行任务（保留扩展点，表示“直接执行”的语义）。</p>
  * <p>RETURN_RESULT：返回结果（用于 requestReply 或 replyTo 回包）。</p>
+ * <p>ROLLING_SUMMARY：触发滚动式总结任务（用于长对话的上下文压缩）。</p>
  */
 public enum A2AIntent {
     DELEGATE_TASK,
     EXECUTE_TASK,
-    RETURN_RESULT
+    RETURN_RESULT,
+    ROLLING_SUMMARY
 }

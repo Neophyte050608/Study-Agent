@@ -35,19 +35,22 @@ public class IngestionService {
     private final LexicalIndexService lexicalIndexService;
     private final VectorStore vectorStore;
     private final ObjectMapper objectMapper;
+    // 注入图谱持久化组件
+    private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
     // Map<FilePath, FileMetadata>
     private Map<String, FileMetadata> index = new ConcurrentHashMap<>();
     private volatile SyncSummary lastSummary = new SyncSummary(0, 0, 0, 0, 0, 0, 0);
     private volatile long lastSyncTime = 0L;
 
-    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, ObjectMapper objectMapper) {
+    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, ObjectMapper objectMapper, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.noteLoader = noteLoader;
         this.documentSplitter = documentSplitter;
         this.knowledgeExtractor = knowledgeExtractor;
         this.lexicalIndexService = lexicalIndexService;
         this.vectorStore = vectorStore;
         this.objectMapper = objectMapper;
+        this.techConceptRepository = techConceptRepository;
         loadIndex();
     }
 
@@ -269,6 +272,9 @@ public class IngestionService {
             vectorStore.add(documents);
             lexicalIndexService.upsertDocuments(documents);
             
+            // GraphRAG: 提取双向链接并写入 Neo4j
+            processGraphRelationships(documents);
+            
             List<String> docIds = documents.stream().map(Document::getId).collect(Collectors.toList());
             index.put(filePath, new FileMetadata(hash, docIds));
             return AddStatus.ADDED;
@@ -295,6 +301,10 @@ public class IngestionService {
             }
             vectorStore.add(documents);
             lexicalIndexService.upsertDocuments(documents);
+            
+            // GraphRAG: 提取双向链接并写入 Neo4j
+            processGraphRelationships(documents);
+            
             List<String> docIds = documents.stream().map(Document::getId).collect(Collectors.toList());
             index.put(filePath, new FileMetadata(hash, docIds));
             return AddStatus.ADDED;
@@ -324,8 +334,65 @@ public class IngestionService {
                     if (knowledgeTags == null || knowledgeTags.toString().isBlank()) {
                         doc.getMetadata().put("knowledge_tags", "");
                     }
+                    // 保留 wiki_links 元数据
+                    Object wikiLinks = doc.getMetadata().get("wiki_links");
+                    if (wikiLinks == null) {
+                        doc.getMetadata().put("wiki_links", "");
+                    }
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 解析文档中的元数据（尤其是 wiki_links），并将其作为节点和关系存入 Neo4j 图数据库。
+     */
+    private void processGraphRelationships(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return;
+        }
+        try {
+            for (Document doc : documents) {
+                String filePath = (String) doc.getMetadata().get("file_path");
+                if (filePath == null) continue;
+
+                // 提取文件名作为当前节点（主节点）
+                String fileName = new File(filePath).getName();
+                int dotIndex = fileName.lastIndexOf('.');
+                String mainConceptName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
+
+                // 获取或创建主节点
+                com.example.interview.graph.TechConcept mainConcept = techConceptRepository.findById(mainConceptName)
+                        .orElse(new com.example.interview.graph.TechConcept(mainConceptName));
+                
+                // 将部分正文作为描述存入节点
+                if (mainConcept.getDescription() == null) {
+                    mainConcept.setDescription(doc.getText().length() > 200 ? doc.getText().substring(0, 200) + "..." : doc.getText());
+                }
+
+                // 提取关联的 wiki_links（例如 [[Redis]] -> Redis）
+                Object wikiLinksObj = doc.getMetadata().get("wiki_links");
+                if (wikiLinksObj != null && !wikiLinksObj.toString().isBlank()) {
+                    String[] links = wikiLinksObj.toString().split(",");
+                    for (String link : links) {
+                        String relatedName = link.trim();
+                        if (!relatedName.isBlank() && !relatedName.equals(mainConceptName)) {
+                            // 获取或创建关联节点
+                            com.example.interview.graph.TechConcept relatedConcept = techConceptRepository.findById(relatedName)
+                                    .orElse(new com.example.interview.graph.TechConcept(relatedName));
+                            // 在 Neo4j 中建立关系：(mainConcept) -[:RELATED_TO]-> (relatedConcept)
+                            mainConcept.addRelatedConcept(relatedConcept);
+                            // 保存关联节点以防其不存在
+                            techConceptRepository.save(relatedConcept);
+                        }
+                    }
+                }
+                // 保存主节点及其关系
+                techConceptRepository.save(mainConcept);
+            }
+            logger.info("GraphRAG: 成功处理并同步了文档的图谱关系至 Neo4j");
+        } catch (Exception e) {
+            logger.error("GraphRAG: 同步图谱关系失败", e);
+        }
     }
 
     private void removeFile(String filePath) {
