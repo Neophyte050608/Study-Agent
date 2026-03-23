@@ -34,12 +34,14 @@ public class ImWebhookService {
     private final ImConversationStore conversationStore;
     private final TaskRouterAgent taskRouterAgent;
     private final FeishuReplyAdapter feishuReplyAdapter;
+    private final QqReplyAdapter qqReplyAdapter;
 
-    public ImWebhookService(StringRedisTemplate redisTemplate, ImConversationStore conversationStore, TaskRouterAgent taskRouterAgent, FeishuReplyAdapter feishuReplyAdapter) {
+    public ImWebhookService(StringRedisTemplate redisTemplate, ImConversationStore conversationStore, TaskRouterAgent taskRouterAgent, FeishuReplyAdapter feishuReplyAdapter, QqReplyAdapter qqReplyAdapter) {
         this.redisTemplate = redisTemplate;
         this.conversationStore = conversationStore;
         this.taskRouterAgent = taskRouterAgent;
         this.feishuReplyAdapter = feishuReplyAdapter;
+        this.qqReplyAdapter = qqReplyAdapter;
     }
     
     /** 事件幂等性缓存前缀 */
@@ -157,6 +159,8 @@ public class ImWebhookService {
         
         if ("feishu".equals(message.getPlatform())) {
             feishuReplyAdapter.sendReply(reply);
+        } else if ("qq".equals(message.getPlatform())) {
+            qqReplyAdapter.sendReply(reply);
         }
     }
 
