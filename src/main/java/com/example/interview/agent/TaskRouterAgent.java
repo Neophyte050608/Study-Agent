@@ -10,16 +10,15 @@ import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
+import com.example.interview.modelrouting.ModelRouteType;
+import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
-import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.TrainingProfileSnapshot;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -49,7 +48,7 @@ public class TaskRouterAgent {
     private final PromptManager promptManager;
     private final IntentTreeRoutingService intentTreeRoutingService;
     private final A2ABus a2aBus;
-    private final ChatClient chatClient;
+    private final RoutingChatService routingChatService;
 
     @Autowired
     public TaskRouterAgent(
@@ -60,7 +59,7 @@ public class TaskRouterAgent {
             PromptManager promptManager,
             IntentTreeRoutingService intentTreeRoutingService,
             A2ABus a2aBus,
-            @Qualifier("openAiChatModel") ChatModel chatModel
+            RoutingChatService routingChatService
     ) {
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
         this.codingPracticeAgent = codingPracticeAgent;
@@ -69,7 +68,7 @@ public class TaskRouterAgent {
         this.promptManager = promptManager;
         this.intentTreeRoutingService = intentTreeRoutingService;
         this.a2aBus = a2aBus;
-        this.chatClient = org.springframework.ai.chat.client.ChatClient.builder(chatModel).build();
+        this.routingChatService = routingChatService;
     }
 
     /**
@@ -202,7 +201,12 @@ public class TaskRouterAgent {
         String prompt = promptManager.render("task-router", vars);
 
         try {
-            String reactDecisionStr = chatClient.prompt().user(prompt).call().content();
+            String reactDecisionStr = routingChatService.callWithFirstPacketProbeSupplier(
+                () -> "{\"taskType\":\"UNKNOWN\"}",
+                prompt, 
+                ModelRouteType.THINKING, 
+                "任务路由ReAct"
+            );
 
             // 简单解析决策结果
             String decidedTaskType = "";

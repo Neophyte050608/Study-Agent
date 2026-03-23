@@ -120,6 +120,34 @@ app:
     notes:
       dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
 
+  model-routing:
+    enabled: ${APP_MODEL_ROUTING_ENABLED:true}
+    default-model: ${APP_MODEL_ROUTING_DEFAULT_MODEL:deepseek-chat}
+    deep-thinking-model: ${APP_MODEL_ROUTING_DEEP_THINKING_MODEL:deepseek-reasoner}
+    candidates:
+      - name: deepseek-chat
+        provider: openai
+        model: deepseek-chat
+        bean-name: openAiChatModel
+        enabled: true
+        priority: 10
+        supports-thinking: false
+      - name: deepseek-reasoner
+        provider: openai
+        model: deepseek-reasoner
+        bean-name: openAiChatModel
+        enabled: true
+        priority: 20
+        supports-thinking: true
+    circuit-breaker:
+      failure-threshold: ${APP_MODEL_ROUTING_FAILURE_THRESHOLD:3}
+      open-duration-ms: ${APP_MODEL_ROUTING_OPEN_DURATION_MS:30000}
+      half-open-max-trials: ${APP_MODEL_ROUTING_HALF_OPEN_MAX_TRIALS:1}
+    stream:
+      first-packet-timeout-ms: ${APP_MODEL_ROUTING_FIRST_PACKET_TIMEOUT_MS:6000}
+      first-packet-min-chars: ${APP_MODEL_ROUTING_FIRST_PACKET_MIN_CHARS:1}
+      buffer-chunk-size: ${APP_MODEL_ROUTING_BUFFER_CHUNK_SIZE:32}
+
   intent-tree:
     enabled: ${APP_INTENT_TREE_ENABLED:true}
     confidence-threshold: ${APP_INTENT_TREE_CONFIDENCE_THRESHOLD:0.60}

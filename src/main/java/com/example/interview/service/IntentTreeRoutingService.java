@@ -4,11 +4,10 @@ import com.example.interview.config.IntentTreeProperties;
 import com.example.interview.intent.IntentCandidate;
 import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.intent.IntentTreeNode;
+import com.example.interview.modelrouting.ModelRouteType;
+import com.example.interview.modelrouting.RoutingChatService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -23,19 +22,19 @@ public class IntentTreeRoutingService {
     private final PromptManager promptManager;
     private final IntentTreeProperties properties;
     private final IntentTreeService intentTreeService;
-    private final ChatClient chatClient;
+    private final RoutingChatService routingChatService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public IntentTreeRoutingService(
             PromptManager promptManager,
             IntentTreeProperties properties,
             IntentTreeService intentTreeService,
-            @Qualifier("openAiChatModel") ChatModel chatModel
+            RoutingChatService routingChatService
     ) {
         this.promptManager = promptManager;
         this.properties = properties;
         this.intentTreeService = intentTreeService;
-        this.chatClient = ChatClient.builder(chatModel).build();
+        this.routingChatService = routingChatService;
     }
 
     public boolean enabled() {
@@ -63,7 +62,7 @@ public class IntentTreeRoutingService {
             vars.put("minGap", properties.getMinGap());
             vars.put("ambiguityRatio", properties.getAmbiguityRatio());
             String prompt = promptManager.render("intent-tree-classifier", vars);
-            String response = chatClient.prompt().user(prompt).call().content();
+            String response = routingChatService.call(prompt, ModelRouteType.THINKING, "意图树分类");
             return normalizeDecision(response, query, history);
         } catch (Exception ex) {
             if (properties.isFallbackToLegacyTaskRouter()) {
@@ -87,7 +86,7 @@ public class IntentTreeRoutingService {
             vars.put("history", history == null ? "" : history);
             vars.put("cases", loadSlotRefineCases(taskType));
             String prompt = promptManager.render("intent-slot-refine", vars);
-            String response = chatClient.prompt().user(prompt).call().content();
+            String response = routingChatService.call(prompt, ModelRouteType.THINKING, "意图槽位精炼");
             if (response == null || response.isBlank()) {
                 return Map.of();
             }
@@ -232,7 +231,7 @@ public class IntentTreeRoutingService {
             vars.put("history", history == null ? "" : history);
             vars.put("candidates", candidates.stream().limit(Math.max(1, properties.getMaxCandidates())).toList());
             String prompt = promptManager.render("intent-clarification", vars);
-            String response = chatClient.prompt().user(prompt).call().content();
+            String response = routingChatService.call(prompt, ModelRouteType.GENERAL, "意图澄清");
             if (response != null && !response.isBlank()) {
                 return response.trim();
             }

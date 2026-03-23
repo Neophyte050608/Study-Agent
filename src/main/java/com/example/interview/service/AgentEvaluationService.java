@@ -300,7 +300,6 @@ public class AgentEvaluationService {
             return heuristicRefine(expected, output);
         }
         try {
-            ChatClient client = ChatClient.builder(evaluatorChatModel).build();
             String prompt = "你是一个评估优化器。请根据任务、期望结果、当前输出和评分信息，给出改进后的最终输出。\n"
                     + "只输出改进后的内容，不要解释。\n\n"
                     + "agent:\n" + agent + "\n\n"
@@ -309,7 +308,7 @@ public class AgentEvaluationService {
                     + "input:\n" + input + "\n\n"
                     + "currentOutput:\n" + output + "\n\n"
                     + "scoreRationale:\n" + score.rationale();
-            String refined = client.prompt().user(prompt).call().content();
+            String refined = ChatClient.builder(evaluatorChatModel).build().prompt().user(prompt).call().chatResponse().getResult().getOutput().getText();
             return stringOf(refined, output);
         } catch (RuntimeException ex) {
             return heuristicRefine(expected, output);

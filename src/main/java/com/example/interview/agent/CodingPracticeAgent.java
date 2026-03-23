@@ -5,10 +5,11 @@ import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
 import com.example.interview.service.RAGService;
+import com.example.interview.modelrouting.ModelRouteType;
+import com.example.interview.modelrouting.RoutingChatService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -40,19 +41,16 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     private final Map<String, CodingSession> sessions = new ConcurrentHashMap<>();
     /** 自定义画像异步更新线程池 */
     private final java.util.concurrent.Executor profileUpdateExecutor;
+    /** 路由服务 */
+    private final RoutingChatService routingChatService;
 
-    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, com.example.interview.service.PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
+    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, com.example.interview.service.PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor, RoutingChatService routingChatService) {
         this.ragService = ragService;
         this.learningProfileAgent = learningProfileAgent;
         this.dynamicModelFactory = dynamicModelFactory;
         this.promptManager = promptManager;
         this.profileUpdateExecutor = profileUpdateExecutor;
-    }
-
-    private ChatClient getChatClient() {
-        return ChatClient.builder(dynamicModelFactory.getForAgent("CodingPracticeAgent"))
-                .defaultSystem("你是一个意图识别助手。请从用户的输入中提取刷题意图。")
-                .build();
+        this.routingChatService = routingChatService;
     }
 
     @Override
@@ -121,7 +119,12 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String prompt = promptManager.render("coding-intent", Map.of("message", message, "cases", cases));
         System.out.println("====== [CodingPracticeAgent - Intent] Prompt ======");
         System.out.println(prompt);
-        String jsonStr = getChatClient().prompt(prompt).call().content();
+        // 使用路由服务进行意图识别
+        String jsonStr = routingChatService.call(
+            "你是一个意图识别助手。请从用户的输入中提取刷题意图。\n" + prompt, 
+            ModelRouteType.GENERAL, 
+            "刷题意图识别"
+        );
         System.out.println("====== [CodingPracticeAgent - Intent] Response ======");
         System.out.println(jsonStr);
         

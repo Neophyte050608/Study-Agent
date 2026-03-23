@@ -72,7 +72,9 @@ public class RAGObservabilityService {
             int conflictsCount,
             int score,
             boolean fallbackUsed,
-            long latencyMs
+            long latencyMs,
+            int inputTokens,
+            int outputTokens
     ) {
     }
 }

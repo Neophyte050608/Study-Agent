@@ -47,15 +47,17 @@ public class EvaluationAgent {
 
     public LayeredEvaluation evaluateAnswerWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, RAGService.KnowledgePacket packet) {
         // 四层链路下的核心评估入口：将策略提示与知识包一并下发。
-        String raw = ragService.evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, strategyHint, packet);
-        ParsedEvaluation parsed = parseEvaluation(raw);
+        RAGService.EvaluationResult evalResult = ragService.evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, strategyHint, packet);
+        ParsedEvaluation parsed = parseEvaluation(evalResult.json());
         String feedback = enrichFeedback(parsed.feedback(), parsed.accuracy(), parsed.logic(), parsed.depth(), parsed.boundary(), parsed.deductions());
         EvaluationResult result = new EvaluationResult(parsed.score(), parsed.accuracy(), parsed.logic(), parsed.depth(), parsed.boundary(), parsed.deductions(), parsed.citations(), parsed.conflicts(), feedback, parsed.nextQuestion());
         LayerTrace trace = new LayerTrace(
                 packet == null ? "" : packet.retrievalQuery(),
                 packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
                 packet != null && packet.webFallbackUsed(),
-                strategyHint == null ? "" : strategyHint
+                strategyHint == null ? "" : strategyHint,
+                evalResult.inputTokens(),
+                evalResult.outputTokens()
         );
         return new LayeredEvaluation(result, trace);
     }
@@ -185,7 +187,9 @@ public class EvaluationAgent {
             String retrievalQuery,
             int retrievedCount,
             boolean webFallbackUsed,
-            String strategyHint
+            String strategyHint,
+            int inputTokens,
+            int outputTokens
     ) {
     }
 

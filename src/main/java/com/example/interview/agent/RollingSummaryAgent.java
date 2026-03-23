@@ -8,8 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
+import com.example.interview.modelrouting.ModelRouteType;
+import com.example.interview.modelrouting.RoutingChatService;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -30,14 +30,14 @@ public class RollingSummaryAgent {
 
     private final A2ABus a2aBus;
     private final SessionRepository sessionRepository;
-    private final ChatClient chatClient;
+    private final RoutingChatService routingChatService;
     private final ObjectMapper objectMapper;
 
     public RollingSummaryAgent(A2ABus a2aBus, SessionRepository sessionRepository, 
-                               @org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") ChatModel chatModel) {
+                               RoutingChatService routingChatService) {
         this.a2aBus = a2aBus;
         this.sessionRepository = sessionRepository;
-        this.chatClient = ChatClient.builder(chatModel).build();
+        this.routingChatService = routingChatService;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -85,7 +85,7 @@ public class RollingSummaryAgent {
                     "3. 总结长度尽量控制在 200 字以内，必须是纯文本。";
 
             System.out.println("====== [RollingSummaryAgent] 开始异步压缩上下文 ======");
-            String newSummary = chatClient.prompt().user(prompt).call().content();
+            String newSummary = routingChatService.call(prompt, ModelRouteType.THINKING, "滚动总结");
             System.out.println("====== [RollingSummaryAgent] 新的滚动总结 ======\n" + newSummary);
 
             // 3. 更新会话状态并持久化

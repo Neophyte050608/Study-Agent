@@ -8,6 +8,7 @@ import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.intent.IntentCandidate;
 import com.example.interview.intent.IntentRoutingDecision;
+import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.PromptManager;
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.List;
 import java.util.Map;
@@ -53,14 +53,14 @@ class TaskRouterAgentTest {
     private PromptManager promptManager;
 
     @Mock
-    private ChatModel chatModel;
+    private RoutingChatService routingChatService;
 
     @Mock
     private IntentTreeRoutingService intentTreeRoutingService;
 
     @Test
     void shouldRouteInterviewStart() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         InterviewSession session = new InterviewSession("Java", "", 3);
         when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3, false)).thenReturn(session);
         doNothing().when(a2aBus).publish(any());
@@ -82,7 +82,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldKeepTraceAndCorrelationAcrossPublish() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         InterviewSession session = new InterviewSession("Java", "", 3);
         when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3, false)).thenReturn(session);
         doNothing().when(a2aBus).publish(any());
@@ -113,7 +113,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldPublishReturnResultWhenReplyToProvided() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         when(learningProfileAgent.normalizeUserId(any())).thenReturn("local-user");
         when(codingPracticeAgent.execute(any())).thenReturn(Map.of("status", "started"));
         doNothing().when(a2aBus).publish(any());
@@ -138,7 +138,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteLearningPlanToNoteAgent() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         doNothing().when(a2aBus).publish(any());
         when(noteMakingAgent.execute(any())).thenReturn(Map.of("status", "not_implemented"));
 
@@ -154,7 +154,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteCodingPracticeToCodingAgent() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         when(learningProfileAgent.normalizeUserId(any())).thenReturn("u1");
         doNothing().when(a2aBus).publish(any());
         when(codingPracticeAgent.execute(any())).thenReturn(Map.of("status", "started"));
@@ -171,7 +171,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteProfileSnapshotQuery() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         doNothing().when(a2aBus).publish(any());
         when(learningProfileAgent.normalizeUserId("u1")).thenReturn("u1");
         when(learningProfileAgent.snapshot("u1")).thenReturn(new TrainingProfileSnapshot(
@@ -196,7 +196,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldReturnClarificationWhenTreeDecisionRequestsClarify() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, routingChatService);
         when(intentTreeRoutingService.enabled()).thenReturn(true);
         when(intentTreeRoutingService.route("我想练习一下", "")).thenReturn(new IntentRoutingDecision(
                 false,

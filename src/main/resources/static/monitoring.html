@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TDI_SYSTEM_V2.0 | Model Routing &amp; Health</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#059669",
+                        "primary-dim": "#047857",
+                        "secondary": "#dc2626",
+                        "secondary-dim": "#b91c1c",
+                        "tertiary": "#d97706",
+                        "background": "#f9fafb",
+                        "surface": "#ffffff",
+                        "surface-container": "#f3f4f6",
+                        "surface-container-low": "#ffffff",
+                        "surface-container-high": "#e5e7eb",
+                        "on-background": "#111827",
+                        "on-surface": "#111827",
+                        "on-surface-variant": "#4b5563",
+                        "outline-variant": "#e5e7eb",
+                        "primary-container": "#ecfdf5",
+                        "on-primary-container": "#065f46",
+                        "secondary-container": "#fef2f2",
+                        "on-secondary-container": "#991b1b",
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"]
+                    },
+                    borderRadius: {"DEFAULT": "4px", "lg": "8px", "xl": "12px", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glow-primary { box-shadow: 0 4px 20px -2px rgba(5, 150, 105, 0.1); }
+        .glow-secondary { box-shadow: 0 4px 20px -2px rgba(220, 38, 38, 0.1); }
+        .bg-noise {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Cfilter id='noiseFilter'%3%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3%3C/filter%3%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3%3C/svg%32");
+            opacity: 0.015;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-emerald-100 selection:text-emerald-900 min-h-screen overflow-x-hidden">
+<div class="bg-noise fixed inset-0 pointer-events-none"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-surface border-b border-outline-variant shadow-sm">
+<div class="flex items-center gap-8">
+<div class="text-xl font-bold text-emerald-600 tracking-tighter font-headline">TDI_SYSTEM_V2.0</div>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="font-['Space_Grotesk'] uppercase tracking-widest text-sm text-emerald-600 border-b-2 border-emerald-600 pb-1" href="#">控制面板</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-widest text-sm text-on-surface-variant hover:text-on-surface transition-colors" href="#">路由日志</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-widest text-sm text-on-surface-variant hover:text-on-surface transition-colors" href="#">节点健康</a>
+<a class="font-['Space_Grotesk'] uppercase tracking-widest text-sm text-on-surface-variant hover:text-on-surface transition-colors" href="#">系统设置</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+<span class="font-label text-[10px] tracking-widest text-emerald-700 font-bold uppercase">SYSTEM_ENABLED</span>
+</div>
+<div class="hidden sm:block font-label text-[10px] tracking-widest text-on-surface-variant uppercase">GPT-4_DEFAULT</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col pt-20 pb-6 bg-surface w-64 border-r border-outline-variant z-40 hidden md:flex">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 mb-2 p-3 bg-surface-container rounded-lg">
+<div class="w-10 h-10 bg-white border border-outline-variant flex items-center justify-center rounded">
+<span class="material-symbols-outlined text-emerald-600 text-xl">terminal</span>
+</div>
+<div>
+<div class="text-on-surface font-bold text-sm">OPERATOR_01</div>
+<div class="font-['Inter'] text-[10px] font-medium tracking-tight text-on-surface-variant">LEVEL_4_AUTH</div>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-4 px-6 py-3 bg-emerald-50 text-emerald-700 border-l-4 border-emerald-600 transition-all font-['Inter'] text-xs font-semibold tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="dashboard">dashboard</span>
+<span>主视图</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-on-surface-variant hover:bg-surface-container hover:text-on-surface hover:translate-x-1 transition-all font-['Inter'] text-xs font-medium tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="Route">route</span>
+<span>模型路由</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-on-surface-variant hover:bg-surface-container hover:text-on-surface hover:translate-x-1 transition-all font-['Inter'] text-xs font-medium tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="bolt">bolt</span>
+<span>故障注入</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-on-surface-variant hover:bg-surface-container hover:text-on-surface hover:translate-x-1 transition-all font-['Inter'] text-xs font-medium tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="shield">shield</span>
+<span>安全审计</span>
+</a>
+<a class="flex items-center gap-4 px-6 py-3 text-on-surface-variant hover:bg-surface-container hover:text-on-surface hover:translate-x-1 transition-all font-['Inter'] text-xs font-medium tracking-tight" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="terminal">terminal</span>
+<span>终端</span>
+</a>
+</nav>
+<div class="mt-auto px-6 pt-6 border-t border-outline-variant">
+<button class="w-full bg-emerald-600 text-white py-3 rounded font-label text-[10px] font-bold tracking-[0.2em] hover:bg-emerald-700 shadow-md shadow-emerald-100 transition-all active:scale-95 duration-100 mb-4 uppercase">
+                Manual_Reset
+            </button>
+<div class="grid grid-cols-2 gap-2">
+<div class="flex flex-col items-center p-2 bg-surface-container rounded">
+<span class="material-symbols-outlined text-sm text-on-surface-variant mb-1" data-icon="sensors">sensors</span>
+<span class="text-[9px] font-bold text-on-surface-variant uppercase">系统状态</span>
+</div>
+<div class="flex flex-col items-center p-2 bg-surface-container rounded">
+<span class="material-symbols-outlined text-sm text-on-surface-variant mb-1" data-icon="sync">sync</span>
+<span class="text-[9px] font-bold text-on-surface-variant uppercase">刷新频率</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 pt-24 px-6 pb-12">
+<!-- Dashboard Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
+<div>
+<h1 class="font-headline text-4xl font-bold tracking-tighter text-on-surface mb-2">模型路由与健康分析</h1>
+<p class="text-on-surface-variant text-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="update">update</span>
+                    数据刷新于: <span class="text-emerald-600 font-mono font-bold">14:20:05</span> | 下次更新 <span class="text-emerald-600 font-mono underline decoration-dotted underline-offset-4">08s</span>
+</p>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
+<div class="bg-surface p-4 border border-outline-variant shadow-sm rounded-lg border-l-4 border-l-emerald-500">
+<div class="text-[10px] font-label text-on-surface-variant uppercase mb-1 font-bold">Total Throughput</div>
+<div class="text-xl font-headline font-bold text-on-surface">1,240 <span class="text-xs text-on-surface-variant font-normal">REQ/M</span></div>
+</div>
+<div class="bg-surface p-4 border border-outline-variant shadow-sm rounded-lg border-l-4 border-l-amber-500">
+<div class="text-[10px] font-label text-on-surface-variant uppercase mb-1 font-bold">Avg Latency</div>
+<div class="text-xl font-headline font-bold text-on-surface">420 <span class="text-xs text-on-surface-variant font-normal">MS</span></div>
+</div>
+<div class="bg-surface p-4 border border-outline-variant shadow-sm rounded-lg border-l-4 border-l-red-500">
+<div class="text-[10px] font-label text-on-surface-variant uppercase mb-1 font-bold">Error Rate</div>
+<div class="text-xl font-headline font-bold text-red-600">2.4 <span class="text-xs text-on-surface-variant font-normal">%</span></div>
+</div>
+<div class="bg-surface p-4 border border-outline-variant shadow-sm rounded-lg border-l-4 border-l-emerald-500">
+<div class="text-[10px] font-label text-on-surface-variant uppercase mb-1 font-bold">Circuit Status</div>
+<div class="text-xl font-headline font-bold text-emerald-600">OPTIMAL</div>
+</div>
+</div>
+</div>
+<!-- Model Routing Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Card 1: DeepSeek-67B -->
+<div class="bg-surface border border-outline-variant p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg glow-primary">
+<div class="flex justify-between items-start mb-8">
+<div class="flex items-center gap-4">
+<div class="relative">
+<div class="w-3 h-3 bg-emerald-600"></div>
+<div class="absolute -inset-1 border border-emerald-600 opacity-20 scale-150"></div>
+</div>
+<div>
+<h3 class="font-headline text-lg font-bold tracking-tight text-on-surface">DeepSeek-67B</h3>
+<div class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">PROVIDER: INTERNAL_CLUSTER</div>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="text-emerald-700 font-mono text-xs font-bold px-2 py-0.5 border border-emerald-200 bg-emerald-50 uppercase rounded">Status: Closed</div>
+<div class="text-[10px] text-on-surface-variant mt-1 font-mono uppercase font-medium">Circuit ID: #RT-0922</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4 mb-8">
+<div>
+<div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Success</div>
+<div class="text-xl font-headline font-bold text-on-surface">150</div>
+</div>
+<div>
+<div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Failures</div>
+<div class="text-xl font-headline font-bold text-on-surface">2</div>
+</div>
+<div>
+<div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Reliability</div>
+<div class="text-xl font-headline font-bold text-emerald-600">98.7%</div>
+</div>
+</div>
+<!-- Progress Bar -->
+<div class="space-y-2 mb-6">
+<div class="flex justify-between text-[10px] font-mono text-on-surface-variant uppercase font-bold">
+<span>Traffic Flow</span>
+<span>Capacity 65%</span>
+</div>
+<div class="h-2 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-emerald-500 rounded-full" style="width: 65%"></div>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="text-[9px] font-mono text-on-surface-variant font-bold">_MODEL_STABLE</span>
+<button class="text-[10px] font-label font-bold text-on-surface uppercase hover:text-emerald-600 transition-colors flex items-center gap-1 group/btn">
+<span>_ DETAILS</span>
+<span class="material-symbols-outlined text-xs group-hover/btn:translate-x-1 transition-transform" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Card 2: GPT-4-Turbo (Failure State) -->
+<div class="bg-surface border border-red-100 p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg glow-secondary">
+<div class="flex justify-between items-start mb-8">
+<div class="flex items-center gap-4">
+<div class="relative">
+<div class="w-3 h-3 bg-red-600 animate-pulse"></div>
+<div class="absolute -inset-1 border border-red-600 opacity-20 scale-150"></div>
+</div>
+<div>
+<h3 class="font-headline text-lg font-bold tracking-tight text-on-surface">GPT-4-Turbo</h3>
+<div class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">PROVIDER: OPENAI_API</div>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="text-red-700 font-mono text-xs font-bold px-2 py-0.5 border border-red-200 bg-red-50 uppercase rounded">Status: Open</div>
+<div class="text-[10px] text-on-surface-variant mt-1 font-mono uppercase font-medium">Circuit ID: #RT-1144</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4 mb-8">
+<div>
+<div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Success</div>
+<div class="text-xl font-headline font-bold text-on-surface-variant">5</div>
+</div>
+<div>
+<div class="text-[9px] font-label text-red-600 uppercase mb-1 font-bold">Failures</div>
+<div class="text-xl font-headline font-bold text-red-600">50</div>
+</div>
+<div>
+<div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Reliability</div>
+<div class="text-xl font-headline font-bold text-red-600">9.1%</div>
+</div>
+</div>
+<!-- Last Error Block -->
+<div class="bg-red-50 p-4 mb-6 border-l-4 border-red-600 rounded">
+<div class="text-[9px] font-label text-red-700 uppercase mb-1 tracking-widest font-bold">Critical Alert: Last Error Message</div>
+<div class="text-xs font-mono text-red-800 font-medium">Rate limit exceeded: 429 - System backoff initiated for 300s.</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="text-[9px] font-mono text-red-600 uppercase animate-pulse tracking-tighter font-bold">// CIRCUIT_BREAKER_TRIPPED</span>
+<button class="text-[10px] font-label font-bold text-red-600 uppercase border border-red-200 px-3 py-1 rounded bg-white hover:bg-red-600 hover:text-white transition-all active:scale-95 shadow-sm">
+                        _ FORCE_RESET
+                    </button>
+</div>
+</div>
+<!-- Bento Card: Traffic Distribution Map -->
+<div class="lg:col-span-2 bg-surface border border-outline-variant p-6 rounded-xl flex flex-col md:flex-row gap-8 shadow-sm">
+<div class="flex-1">
+<h4 class="font-headline text-sm font-bold tracking-tight text-on-surface mb-6 uppercase">实时流量路由拓扑</h4>
+<div class="relative aspect-video bg-gray-50 border border-outline-variant rounded-lg flex items-center justify-center overflow-hidden">
+<img class="absolute inset-0 w-full h-full object-cover opacity-5 grayscale" data-alt="Technical circuit background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3XZAfKOSqa_iRlzaQkfeVWMm1ChoeidnmF2SgmUQ-UWgaHNt2ZERlbCVctKX5U2i3WDNCc9_snAl4jGSSrb4zWhFFZBsilhj3exD8mNTWURtPG0eM6qKlE2w36NXEAO_bAqFpcGlvf87ETlJ4httolgcHFzIGO0YL3ygEPiC_kHIm22kJRE3rNpzP4WZx_CAv06KCXuVNmGGka9htocU4zfe9-jA57LvvqClkng6k25DykaxEkx-kNpgCWbvnR8WeUlEWN35IEmxr"/>
+<div class="relative z-10 w-full h-full p-8 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div class="bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 uppercase tracking-widest rounded shadow-sm">Source: Edge_Shanghai_01</div>
+<div class="bg-white border border-outline-variant text-on-surface-variant text-[10px] px-2 py-1 font-mono font-bold rounded">LAT: 31.2304 / LON: 121.4737</div>
+</div>
+<div class="flex justify-center items-center h-full">
+<div class="relative w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50"></div>
+<div class="absolute top-0 left-1/4 w-3 h-3 -mt-1 bg-emerald-500 rounded-full animate-ping"></div>
+<div class="absolute top-0 left-2/3 w-3 h-3 -mt-1 bg-emerald-500 rounded-full shadow-sm"></div>
+</div>
+</div>
+<div class="flex justify-between items-end">
+<div class="flex flex-col gap-1">
+<div class="text-[8px] text-on-surface-variant font-mono font-bold uppercase">ROUTING_TO_INSTANCE:</div>
+<div class="text-xs font-bold text-emerald-600 font-mono tracking-tight">internal-cluster-0x02ff</div>
+</div>
+<div class="text-[8px] text-on-surface-variant font-mono font-bold">PING: 24ms</div>
+</div>
+</div>
+</div>
+</div>
+<div class="md:w-64 flex flex-col gap-4">
+<h4 class="font-headline text-sm font-bold tracking-tight text-on-surface uppercase">系统健康日志</h4>
+<div class="flex-1 space-y-3 font-mono text-[10px]">
+<div class="flex gap-2 text-emerald-700 font-bold">
+<span class="opacity-50">[14:19:55]</span>
+<span>NODE_01 OK</span>
+</div>
+<div class="flex gap-2 text-red-600 font-bold">
+<span class="opacity-50">[14:19:32]</span>
+<span>GPT-4 TIMEOUT</span>
+</div>
+<div class="flex gap-2 text-amber-600 font-bold">
+<span class="opacity-50">[14:18:22]</span>
+<span>RETRIED_THROUGH_DS</span>
+</div>
+<div class="flex gap-2 text-on-surface-variant font-medium">
+<span class="opacity-50">[14:18:10]</span>
+<span>GATEWAY_STABILIZED</span>
+</div>
+<div class="flex gap-2 text-on-surface-variant font-medium">
+<span class="opacity-50">[14:17:45]</span>
+<span>RELOADING_MODELS...</span>
+</div>
+</div>
+<button class="w-full bg-surface-container text-on-surface-variant py-3 rounded font-label text-[10px] font-bold tracking-widest border border-outline-variant hover:text-on-surface hover:bg-surface-container-high transition-all uppercase shadow-sm">
+                        View_Full_Logs
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-surface border-t border-outline-variant flex justify-around items-center h-16 z-50">
+<button class="flex flex-col items-center gap-1 text-emerald-600">
+<span class="material-symbols-outlined text-2xl" data-icon="dashboard">dashboard</span>
+<span class="text-[9px] uppercase font-bold font-label">Status</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-2xl" data-icon="Route">route</span>
+<span class="text-[9px] uppercase font-bold font-label">Routes</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-2xl" data-icon="bolt">bolt</span>
+<span class="text-[9px] uppercase font-bold font-label">Inject</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-2xl" data-icon="terminal">terminal</span>
+<span class="text-[9px] uppercase font-bold font-label">Admin</span>
+</button>
+</nav>
+<!-- Overlay HUD Elements -->
+<div class="fixed top-20 right-6 z-30 pointer-events-none hidden xl:block">
+<div class="bg-white p-4 border border-outline-variant rounded-lg shadow-lg">
+<div class="text-[9px] font-mono font-bold text-emerald-600 mb-2 flex justify-between gap-4">
+<span>TERMINAL_LATENCY</span>
+<span>ONLINE</span>
+</div>
+<div class="flex gap-1">
+<div class="h-4 w-1 bg-emerald-500 rounded-full"></div>
+<div class="h-4 w-1 bg-emerald-500 rounded-full"></div>
+<div class="h-4 w-1 bg-emerald-500 rounded-full opacity-80"></div>
+<div class="h-4 w-1 bg-emerald-500 rounded-full opacity-60"></div>
+<div class="h-4 w-1 bg-emerald-500 rounded-full opacity-40"></div>
+<div class="h-4 w-1 bg-gray-200 rounded-full"></div>
+<div class="h-4 w-1 bg-gray-200 rounded-full"></div>
+</div>
+</div>
+</div>
+<script>
+    async function updateStats() {
+        try {
+            const response = await fetch('/api/model-routing/stats');
+            const data = await response.json();
+            
+            // 更新系统概览
+            document.querySelector('.text-xl.font-headline.font-bold.text-on-surface').innerText = 
+                (data.runtime.health?.successCount || 0) + ' / ' + (data.runtime.health?.failureCount || 0);
+            
+            // 更新模型卡片
+            const grid = document.querySelector('.grid.grid-cols-1.lg\\:grid-cols-2.gap-6');
+            grid.innerHTML = '';
+            
+            if (data.runtime && data.runtime.details) {
+                Object.entries(data.runtime.details).forEach(([name, detail]) => {
+                    const state = data.runtime.states[name] || 'UNKNOWN';
+                    const isHealthy = state === 'CLOSED' || state === 'HALF_OPEN';
+                    const card = `
+                        <div class="bg-surface border ${isHealthy ? 'border-outline-variant' : 'border-red-100'} p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg ${isHealthy ? 'glow-primary' : 'glow-secondary'}">
+                            <div class="flex justify-between items-start mb-8">
+                                <div class="flex items-center gap-4">
+                                    <div class="relative">
+                                        <div class="w-3 h-3 ${isHealthy ? 'bg-emerald-600' : 'bg-red-600 animate-pulse'}"></div>
+                                        <div class="absolute -inset-1 border ${isHealthy ? 'border-emerald-600' : 'border-red-600'} opacity-20 scale-150"></div>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-headline text-lg font-bold tracking-tight text-on-surface">${name}</h3>
+                                        <div class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">STATE: ${state}</div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end">
+                                    <div class="${isHealthy ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'} font-mono text-xs font-bold px-2 py-0.5 border uppercase rounded">Status: ${state}</div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-4 mb-8">
+                                <div>
+                                    <div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Success</div>
+                                    <div class="text-xl font-headline font-bold text-on-surface">${detail.successCount || 0}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Failures</div>
+                                    <div class="text-xl font-headline font-bold text-on-surface">${detail.failureCount || 0}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[9px] font-label text-on-surface-variant uppercase mb-1 font-bold">Last Cost</div>
+                                    <div class="text-xl font-headline font-bold text-emerald-600">${detail.lastCostMs || 0}ms</div>
+                                </div>
+                            </div>
+                            ${!isHealthy ? `
+                            <div class="bg-red-50 p-4 mb-6 border-l-4 border-red-600 rounded">
+                                <div class="text-[9px] font-label text-red-700 uppercase mb-1 tracking-widest font-bold">Last Error</div>
+                                <div class="text-xs font-mono text-red-800 font-medium">${detail.lastFailureMessage || 'N/A'}</div>
+                            </div>` : ''}
+                        </div>
+                    `;
+                    grid.insertAdjacentHTML('beforeend', card);
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch stats:', err);
+        }
+    }
+    
+    setInterval(updateStats, 5000);
+    updateStats();
+</script>
+</body></html>

@@ -1,6 +1,8 @@
 package com.example.interview.service;
 
 import com.example.interview.core.Question;
+import com.example.interview.modelrouting.ModelRouteType;
+import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.tool.WebSearchTool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,7 +10,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -53,7 +54,7 @@ public class RAGService {
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*bearer\\s+)([A-Za-z0-9._-]{8,})");
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
 
-    private final ChatClient chatClient;
+    private final RoutingChatService routingChatService;
     private final VectorStore vectorStore;
     private final LexicalIndexService lexicalIndexService;
     private final WebSearchTool webSearchTool;
@@ -67,25 +68,20 @@ public class RAGService {
     // 注入图谱持久化组件
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
-    public RAGService(@org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.techConceptRepository = techConceptRepository;
-        String globalSkillInstruction = safeSkillText(this.agentSkillService.globalInstruction());
-        String systemPrompt = "你是一位专业的中文技术面试官与复盘助手。";
-        if (!globalSkillInstruction.isBlank()) {
-            systemPrompt = systemPrompt + "\n\n" + globalSkillInstruction;
-        }
-        this.chatClient = ChatClient.builder(chatModel)
-                .defaultSystem(systemPrompt)
-                .build();
+        this.routingChatService = routingChatService;
         this.vectorStore = vectorStore;
         this.lexicalIndexService = lexicalIndexService;
         this.webSearchTool = webSearchTool;
         this.observabilityService = observabilityService;
     }
+
+    public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
 
     /**
      * 评估入口：执行“检索→评估→证据校验→观测记录”的完整链路。
@@ -94,13 +90,14 @@ public class RAGService {
         long startAt = System.currentTimeMillis();
         KnowledgePacket packet = buildKnowledgePacket(question, userAnswer);
         try {
-            String validated = evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, "", packet);
-            recordTrace(packet.retrievalQuery(), packet.retrievedDocs().size(), packet.retrievalEvidence(), validated, false, System.currentTimeMillis() - startAt);
+            EvaluationResult result = evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, "", packet);
+            String validated = validateEvidenceReferences(result.json(), packet.retrievalEvidence());
+            recordTrace(packet.retrievalQuery(), packet.retrievedDocs().size(), packet.retrievalEvidence(), validated, false, System.currentTimeMillis() - startAt, result.inputTokens(), result.outputTokens());
             return validated;
         } catch (RuntimeException e) {
             logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
             String fallback = buildFallbackEvaluation(question, e);
-            recordTrace(packet.retrievalQuery(), packet.retrievedDocs().size(), packet.retrievalEvidence(), fallback, true, System.currentTimeMillis() - startAt);
+            recordTrace(packet.retrievalQuery(), packet.retrievedDocs().size(), packet.retrievalEvidence(), fallback, true, System.currentTimeMillis() - startAt, 0, 0);
             return fallback;
         }
     }
@@ -130,7 +127,7 @@ public class RAGService {
         return new KnowledgePacket(retrievalQuery, retrievedDocs, context, retrievalEvidence, webFallbackUsed);
     }
 
-    public String evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
+    public EvaluationResult evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
         String originalContext = packet == null ? "" : packet.context();
         String originalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
         String finalContext = truncate(originalContext, 1400);
@@ -157,12 +154,43 @@ public class RAGService {
                 packet != null && packet.webFallbackUsed()
         );
         try {
-            String raw = callWithRetry(() -> generateEvaluation(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
-            return validateEvidenceReferences(raw, finalEvidence);
+            RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
+            return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
         } catch (RuntimeException e) {
             logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-            return buildFallbackEvaluation(question, e);
+            return new EvaluationResult(buildFallbackEvaluation(question, e), 0, 0);
         }
+    }
+
+    private RoutingChatService.RoutingResult generateEvaluationResult(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String retrievalEvidence, String strategyHint) {
+        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
+        String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
+        List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
+        
+        Map<String, Object> contextMap = new HashMap<>();
+        contextMap.put("skillBlock", skillBlock);
+        contextMap.put("topic", topic);
+        contextMap.put("difficultyGuide", difficultyGuide);
+        contextMap.put("followUpState", followUpState);
+        contextMap.put("topicMastery", String.format("%.1f", topicMastery));
+        contextMap.put("strategyHint", strategyHint);
+        contextMap.put("profileSnapshot", profileSnapshot);
+        contextMap.put("context", context);
+        contextMap.put("retrievalEvidence", retrievalEvidence);
+        contextMap.put("cases", cases);
+        contextMap.put("question", question);
+        contextMap.put("userAnswer", userAnswer);
+
+        String prompt = promptManager.render("evaluation", contextMap);
+        // 使用带首包探测的同步调用，避免长时间等待无效响应
+        return callWithRetryResult(() -> {
+            String content = routingChatService.callWithFirstPacketProbeSupplier(
+                () -> { throw new RuntimeException("首包探测超时或失败"); },
+                prompt, ModelRouteType.THINKING, "回答评估"
+            );
+            // 暂时由于 callWithFirstPacketProbeSupplier 只返回 content，这里做一个包装，真正的 metadata 需后续补充或在此忽略
+            return new RoutingChatService.RoutingResult(content, 0, 0, 0);
+        }, 1, "回答评估");
     }
 
     private String validateEvidenceReferences(String rawJson, String retrievalEvidence) {
@@ -406,7 +434,7 @@ public class RAGService {
         return node;
     }
 
-    private void recordTrace(String query, int retrievedCount, String evidence, String resultJson, boolean fallbackUsed, long latencyMs) {
+    private void recordTrace(String query, int retrievedCount, String evidence, String resultJson, boolean fallbackUsed, long latencyMs, int inputTokens, int outputTokens) {
         try {
             JsonNode node = objectMapper.readTree(resultJson);
             int score = node.path("score").asInt(0);
@@ -422,7 +450,9 @@ public class RAGService {
                     conflictsCount,
                     score,
                     fallbackUsed,
-                    latencyMs
+                    latencyMs,
+                    inputTokens,
+                    outputTokens
             ));
         } catch (Exception ignored) {
         }
@@ -438,54 +468,40 @@ public class RAGService {
         return path + "::" + head;
     }
 
+    private RoutingChatService.RoutingResult callWithRetryResult(Supplier<RoutingChatService.RoutingResult> action, int maxAttempts, String stage) {
+        RuntimeException last = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return action.get();
+            } catch (RuntimeException e) {
+                last = e;
+                logger.warn("{}第{}次调用失败: {}", stage, attempt, summarizeError(e));
+                if (attempt < maxAttempts) {
+                    try {
+                        Thread.sleep(400L * attempt);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("线程中断", interruptedException);
+                    }
+                }
+            }
+        }
+        throw last == null ? new IllegalStateException(stage + "失败") : last;
+    }
+
     private String rewriteQuery(String question, String userAnswer) {
         // 使用新抽离的 query-optimizer 技能来优化检索关键词
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("query-optimizer"));
-        return chatClient.prompt()
-                .user(u -> u.text("{skillBlock}\n" +
-                        "请从下面的面试问答中提取用于知识检索的关键词。\n" +
-                        "如果回答过短，请运用 HyDE（假设性文档嵌入）策略，推测并补充几项理想答案中该有的技术专有名词。\n" +
-                        "问题：{question}\n" +
-                        "回答：{answer}\n" +
-                        "只返回关键词或检索短语，不要返回其他解释。")
-                        .param("skillBlock", skillBlock)
-                        .param("question", question)
-                        .param("answer", userAnswer))
-                .call()
-                .content();
-    }
-
-    private String generateEvaluation(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String retrievalEvidence, String strategyHint) {
-        // 移除单次答题评估时对 interview-learning-profile 技能的加载，因为我们只需要用到开始时获取的 profileSnapshot 即可，避免 Prompt 过于臃肿
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
-        String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
-        List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
-        
-        Map<String, Object> contextMap = new HashMap<>();
-        contextMap.put("skillBlock", skillBlock);
-        contextMap.put("topic", topic);
-        contextMap.put("difficultyGuide", difficultyGuide);
-        contextMap.put("followUpState", followUpState);
-        contextMap.put("topicMastery", String.format("%.1f", topicMastery));
-        contextMap.put("strategyHint", strategyHint);
-        contextMap.put("profileSnapshot", profileSnapshot);
-        contextMap.put("context", context);
-        contextMap.put("retrievalEvidence", retrievalEvidence);
-        contextMap.put("cases", cases);
-        contextMap.put("question", question);
-        contextMap.put("userAnswer", userAnswer);
-
-        String prompt = promptManager.render("evaluation", contextMap);
-
-        System.out.println("====== [RAGService - generateEvaluation] Prompt ======");
-        System.out.println(prompt);
-        String response = chatClient.prompt()
-                .user(prompt)
-                .call()
-                .content();
-        System.out.println("====== [RAGService - generateEvaluation] Response ======");
-        System.out.println(response);
-        return response;
+        String prompt = skillBlock + "\n" +
+                "请从下面的面试问答中提取用于知识检索的关键词。\n" +
+                "如果回答过短，请运用 HyDE（假设性文档嵌入）策略，推测并补充几项理想答案中该有的技术专有名词。\n" +
+                "问题：" + question + "\n" +
+                "回答：" + userAnswer + "\n" +
+                "只返回关键词或检索短语，不要返回其他解释。";
+        return routingChatService.callWithFirstPacketProbeSupplier(
+            () -> question,
+            prompt, ModelRouteType.GENERAL, "关键词提取"
+        );
     }
 
     private String callWithRetry(Supplier<String> action, int maxAttempts, String stage) {
@@ -694,14 +710,17 @@ public class RAGService {
                   "例如：“你好！看了你的简历，发现你在微服务领域有不少经验。今天我们将进行 {topic} 相关的面试。在正式开始前，能先简单做个自我介绍吗？”\n" +
                   "只输出开场白本身，必须单行，不要标题、不要策略说明、不要 markdown。";
 
-            String rawQuestion = callWithRetry(() -> chatClient.prompt()
-                     .user(u -> u.text(promptText)
-                             .param("skillBlock", skillBlock)
-                            .param("resume", truncate(resumeContent, 1500))
-                            .param("profileSnapshot", truncate(profileSnapshot, 500))
-                             .param("topic", topic))
-                     .call()
-                     .content(), 2, "首题生成");
+            String renderedPrompt = promptText
+                    .replace("{skillBlock}", skillBlock)
+                    .replace("{resume}", truncate(resumeContent, 1500))
+                    .replace("{profileSnapshot}", truncate(profileSnapshot, 500))
+                    .replace("{topic}", topic == null ? "" : topic);
+            String rawQuestion = routingChatService.callWithFirstPacketProbeSupplier(
+                    () -> buildFallbackFirstQuestion(topic),
+                    renderedPrompt,
+                    ModelRouteType.GENERAL,
+                    "首题生成"
+            );
             System.out.println("====== [RAGService - generateFirstQuestion] Response ======");
             System.out.println(rawQuestion);
              return normalizeFirstQuestion(rawQuestion, topic);
@@ -747,10 +766,10 @@ public class RAGService {
         try {
             System.out.println("====== [RAGService - generateFinalReport] Prompt Template ======");
             System.out.println(prompt);
-            String response = callWithRetry(() -> chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content(), 2, "最终复盘");
+            String response = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
+                () -> buildFallbackReport(history, targetedSuggestion),
+                prompt, ModelRouteType.THINKING, "最终复盘"
+            ), 1, "最终复盘");
             System.out.println("====== [RAGService - generateFinalReport] Response ======");
             System.out.println(response);
             return response;
@@ -776,10 +795,10 @@ public class RAGService {
         try {
             System.out.println("====== [RAGService - generateCodingQuestion] Prompt Template ======");
             System.out.println(prompt);
-            String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content(), 2, "刷题题目生成");
+            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
+                () -> "",
+                prompt, ModelRouteType.GENERAL, "刷题题目生成"
+            ), 1, "刷题题目生成");
             System.out.println("====== [RAGService - generateCodingQuestion] Response ======");
             System.out.println(raw);
             if (raw == null || raw.isBlank()) {
@@ -814,10 +833,10 @@ public class RAGService {
         try {
             System.out.println("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
             System.out.println(prompt);
-            String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content(), 2, "刷题答案评估");
+            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
+                () -> "{\"score\":0,\"feedback\":\"评估超时\"}",
+                prompt, ModelRouteType.THINKING, "刷题答案评估"
+            ), 1, "刷题答案评估");
             System.out.println("====== [RAGService - evaluateCodingAnswer] Response ======");
             System.out.println(raw);
             String clean = normalizeJsonContent(raw);
@@ -850,10 +869,10 @@ public class RAGService {
         String prompt = promptManager.render("coding-next-question", params);
 
         try {
-            String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content(), 2, "刷题下一题生成");
+            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
+                () -> "",
+                prompt, ModelRouteType.GENERAL, "刷题下一题生成"
+            ), 1, "刷题下一题生成");
             if (raw == null || raw.isBlank()) {
                 return fallbackNextCodingQuestion(topic, score);
             }
@@ -877,10 +896,10 @@ public class RAGService {
         String prompt = promptManager.render("learning-plan", params);
 
         try {
-            String raw = callWithRetry(() -> chatClient.prompt()
-                    .user(prompt)
-                    .call()
-                    .content(), 2, "学习计划生成");
+            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
+                () -> "",
+                prompt, ModelRouteType.GENERAL, "学习计划生成"
+            ), 1, "学习计划生成");
             if (raw == null || raw.isBlank()) {
                 return fallbackLearningPlan(normalizedTopic, weakPoint);
             }

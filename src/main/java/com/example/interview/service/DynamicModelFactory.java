@@ -28,7 +28,7 @@ public class DynamicModelFactory {
      */
     public ChatModel getForAgent(String agentName) {
         AgentConfig config = agentConfigService.getConfig(agentName);
-        
+
         try {
             if ("ZHIPUAI".equalsIgnoreCase(config.getProvider()) || "ZHIPU".equalsIgnoreCase(config.getProvider())) {
                 return applicationContext.getBean("zhiPuAiChatModel", ChatModel.class);
@@ -41,5 +41,31 @@ public class DynamicModelFactory {
         
         // 默认返回 OpenAI 或主模型
         return applicationContext.getBean("openAiChatModel", ChatModel.class);
+    }
+
+    public ChatModel getByRoutingCandidate(String provider, String beanName) {
+        if (beanName != null && !beanName.isBlank()) {
+            try {
+                return applicationContext.getBean(beanName, ChatModel.class);
+            } catch (Exception ignored) {
+            }
+        }
+        if ("ZHIPUAI".equalsIgnoreCase(provider) || "ZHIPU".equalsIgnoreCase(provider)) {
+            try {
+                return applicationContext.getBean("zhiPuAiChatModel", ChatModel.class);
+            } catch (Exception ignored) {
+            }
+        }
+        if ("OLLAMA".equalsIgnoreCase(provider)) {
+            try {
+                return applicationContext.getBean("ollamaChatModel", ChatModel.class);
+            } catch (Exception ignored) {
+            }
+        }
+        try {
+            return applicationContext.getBean("openAiChatModel", ChatModel.class);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }
