@@ -6,6 +6,9 @@ import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
+import com.example.interview.intent.IntentCandidate;
+import com.example.interview.intent.IntentRoutingDecision;
+import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.TrainingProfileSnapshot;
@@ -23,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,9 +55,12 @@ class TaskRouterAgentTest {
     @Mock
     private ChatModel chatModel;
 
+    @Mock
+    private IntentTreeRoutingService intentTreeRoutingService;
+
     @Test
     void shouldRouteInterviewStart() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
         InterviewSession session = new InterviewSession("Java", "", 3);
         when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3, false)).thenReturn(session);
         doNothing().when(a2aBus).publish(any());
@@ -75,7 +82,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldKeepTraceAndCorrelationAcrossPublish() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
         InterviewSession session = new InterviewSession("Java", "", 3);
         when(interviewOrchestratorAgent.startSession("u1", "Java", "", 3, false)).thenReturn(session);
         doNothing().when(a2aBus).publish(any());
@@ -106,7 +113,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldPublishReturnResultWhenReplyToProvided() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
         when(learningProfileAgent.normalizeUserId(any())).thenReturn("local-user");
         when(codingPracticeAgent.execute(any())).thenReturn(Map.of("status", "started"));
         doNothing().when(a2aBus).publish(any());
@@ -131,7 +138,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteLearningPlanToNoteAgent() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
         doNothing().when(a2aBus).publish(any());
         when(noteMakingAgent.execute(any())).thenReturn(Map.of("status", "not_implemented"));
 
@@ -147,7 +154,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteCodingPracticeToCodingAgent() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
         when(learningProfileAgent.normalizeUserId(any())).thenReturn("u1");
         doNothing().when(a2aBus).publish(any());
         when(codingPracticeAgent.execute(any())).thenReturn(Map.of("status", "started"));
@@ -164,7 +171,7 @@ class TaskRouterAgentTest {
 
     @Test
     void shouldRouteProfileSnapshotQuery() {
-        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, a2aBus, chatModel);
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
         doNothing().when(a2aBus).publish(any());
         when(learningProfileAgent.normalizeUserId("u1")).thenReturn("u1");
         when(learningProfileAgent.snapshot("u1")).thenReturn(new TrainingProfileSnapshot(
@@ -185,5 +192,29 @@ class TaskRouterAgentTest {
 
         assertTrue(response.success());
         assertTrue(response.data() instanceof TrainingProfileSnapshot);
+    }
+
+    @Test
+    void shouldReturnClarificationWhenTreeDecisionRequestsClarify() {
+        TaskRouterAgent routerAgent = new TaskRouterAgent(interviewOrchestratorAgent, codingPracticeAgent, noteMakingAgent, learningProfileAgent, promptManager, intentTreeRoutingService, a2aBus, chatModel);
+        when(intentTreeRoutingService.enabled()).thenReturn(true);
+        when(intentTreeRoutingService.route("我想练习一下", "")).thenReturn(new IntentRoutingDecision(
+                false,
+                "",
+                0.45,
+                "ambiguous",
+                Map.of(),
+                List.of(new IntentCandidate("CODING.PRACTICE.QUESTION", "CODING_PRACTICE", 0.45, "", List.of())),
+                true,
+                "请问你想刷题还是面试？",
+                List.of(Map.of("label", "刷题", "taskType", "CODING_PRACTICE"))
+        ));
+
+        TaskResponse response = routerAgent.dispatch(new TaskRequest(null, Map.of("query", "我想练习一下"), Map.of("history", "")));
+        assertTrue(response.success());
+        assertTrue(response.data() instanceof Map<?, ?>);
+        Map<?, ?> data = (Map<?, ?>) response.data();
+        assertEquals("请问你想刷题还是面试？", data.get("question"));
+        verify(codingPracticeAgent, never()).execute(any());
     }
 }

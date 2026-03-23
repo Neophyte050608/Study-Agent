@@ -13,8 +13,13 @@ import com.example.interview.core.InterviewSession;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
+import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.TrainingProfileSnapshot;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -42,23 +47,27 @@ public class TaskRouterAgent {
     private final NoteMakingAgent noteMakingAgent;
     private final LearningProfileAgent learningProfileAgent;
     private final PromptManager promptManager;
+    private final IntentTreeRoutingService intentTreeRoutingService;
     private final A2ABus a2aBus;
-    private final org.springframework.ai.chat.client.ChatClient chatClient;
+    private final ChatClient chatClient;
 
+    @Autowired
     public TaskRouterAgent(
             InterviewOrchestratorAgent interviewOrchestratorAgent,
             CodingPracticeAgent codingPracticeAgent,
             NoteMakingAgent noteMakingAgent,
             LearningProfileAgent learningProfileAgent,
             PromptManager promptManager,
+            IntentTreeRoutingService intentTreeRoutingService,
             A2ABus a2aBus,
-            @org.springframework.beans.factory.annotation.Qualifier("openAiChatModel") org.springframework.ai.chat.model.ChatModel chatModel
+            @Qualifier("openAiChatModel") ChatModel chatModel
     ) {
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
         this.codingPracticeAgent = codingPracticeAgent;
         this.noteMakingAgent = noteMakingAgent;
         this.learningProfileAgent = learningProfileAgent;
         this.promptManager = promptManager;
+        this.intentTreeRoutingService = intentTreeRoutingService;
         this.a2aBus = a2aBus;
         this.chatClient = org.springframework.ai.chat.client.ChatClient.builder(chatModel).build();
     }
@@ -73,7 +82,7 @@ public class TaskRouterAgent {
 
         // 0. ReAct 模式增强：如果未指定 taskType，使用大模型自主推理
         if (request.taskType() == null) {
-            return reactDispatch(request);
+            return treeIntentDispatch(request);
         }
         
         String correlationId = resolveCorrelationId(request.context());
@@ -112,6 +121,69 @@ public class TaskRouterAgent {
             publishReply(TaskResponse.fail(e.getMessage()), request.taskType(), replyTo, correlationId, traceId);
             throw e;
         }
+    }
+
+    /**
+     * ReAct 推理模式分发
+     */
+    private TaskResponse treeIntentDispatch(TaskRequest request) {
+        String naturalLanguageQuery = readText(request.payload(), "query");
+        String history = readText(request.context(), "history");
+        if (naturalLanguageQuery.isBlank()) {
+            return TaskResponse.fail("未指定 taskType 且 query 为空，无法进行意图识别");
+        }
+        if (intentTreeRoutingService == null || !intentTreeRoutingService.enabled()) {
+            return reactDispatch(request);
+        }
+        com.example.interview.intent.IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history);
+        if (decision.fallbackToLegacy()) {
+            return reactDispatch(request);
+        }
+        if (decision.askClarification()) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("question", decision.clarificationQuestion());
+            data.put("clarification", true);
+            data.put("clarificationOptions", decision.clarificationOptions());
+            data.put("originalQuery", naturalLanguageQuery);
+            data.put("confidence", decision.confidence());
+            data.put("reason", decision.reason());
+            return TaskResponse.ok(data);
+        }
+        if ("UNKNOWN".equalsIgnoreCase(decision.taskType())) {
+            return TaskResponse.ok(Map.of(
+                    "question",
+                    "我没完全理解你的意图。你可以说“开始模拟面试”、“来一道算法题”或“查询学习计划”。"
+            ));
+        }
+        TaskType taskType;
+        try {
+            taskType = TaskType.valueOf(decision.taskType().toUpperCase());
+        } catch (Exception ex) {
+            return reactDispatch(request);
+        }
+        Map<String, Object> newPayload = new LinkedHashMap<>(safePayload(request.payload()));
+        if (decision.slots() != null && !decision.slots().isEmpty()) {
+            newPayload.putAll(decision.slots());
+        }
+
+        // 槽位补全增强：如果识别到了具体任务类型，但关键槽位可能缺失，尝试二次精炼
+        if (!"UNKNOWN".equalsIgnoreCase(decision.taskType()) && !decision.askClarification()) {
+            Map<String, Object> refinedSlots = intentTreeRoutingService.refineSlots(decision.taskType(), naturalLanguageQuery, history);
+            if (refinedSlots != null && !refinedSlots.isEmpty()) {
+                refinedSlots.forEach((k, v) -> {
+                    if (v != null && !String.valueOf(v).isBlank()) {
+                        newPayload.put(k, v);
+                    }
+                });
+            }
+        }
+
+        normalizeQuestionType(newPayload);
+        if (naturalLanguageQuery.contains("跳过自我介绍") || naturalLanguageQuery.contains("直接出题") || naturalLanguageQuery.contains("跳过介绍")) {
+            newPayload.put("skipIntro", true);
+        }
+        TaskRequest newRequest = new TaskRequest(taskType, newPayload, request.context());
+        return dispatch(newRequest);
     }
 
     /**
@@ -163,14 +235,9 @@ public class TaskRouterAgent {
                     Map<String, Object> newPayload = new LinkedHashMap<>(safePayload(request.payload()));
                     if (!topic.isBlank()) newPayload.put("topic", topic);
                     if (!questionType.isBlank()) {
-                        // 映射为中文展示名
-                        String typeName = switch (questionType.toUpperCase()) {
-                            case "CHOICE" -> "选择题";
-                            case "FILL" -> "填空题";
-                            default -> "算法题";
-                        };
-                        newPayload.put("type", typeName);
+                        newPayload.put("questionType", questionType);
                     }
+                    normalizeQuestionType(newPayload);
 
                     // 检查是否主动跳过自我介绍
                     if (naturalLanguageQuery.contains("跳过自我介绍") || naturalLanguageQuery.contains("直接出题") || naturalLanguageQuery.contains("跳过介绍")) {
@@ -273,6 +340,19 @@ public class TaskRouterAgent {
             merged.put("type", payload.get("type"));
         }
         return merged;
+    }
+
+    private void normalizeQuestionType(Map<String, Object> payload) {
+        String questionType = readText(payload, "questionType");
+        if (questionType.isBlank()) {
+            return;
+        }
+        String typeName = switch (questionType.toUpperCase()) {
+            case "CHOICE" -> "选择题";
+            case "FILL" -> "填空题";
+            default -> "算法题";
+        };
+        payload.put("type", typeName);
     }
 
     private String receiverOf(TaskType taskType) {

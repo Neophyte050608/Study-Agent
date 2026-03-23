@@ -1,11 +1,16 @@
 package com.example.interview.config;
 
+import java.io.Serializable;
+
 /**
- * 动态 Agent 配置实体。
- * 用于保存前端配置的单个 Agent 的大模型路由及启停策略。
+ * 代理（Agent）配置实体。
+ * 用于定义模型供应商、模型名称、参数等。
+ * 实现 Serializable 以支持 Redis 缓存序列化。
  */
-public class AgentConfig {
+public class AgentConfig implements Serializable {
     
+    private static final long serialVersionUID = 1L;
+
     private boolean enabled = true;
     private String provider; // OPENAI, ZHIPU, OLLAMA
     private String modelName;

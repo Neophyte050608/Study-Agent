@@ -1,11 +1,10 @@
-# 停止当前项目的组件
-Write-Host "Stopping Milvus environment..."
-docker-compose -f "d:\Practice\InterviewReview\docker-compose.yml" stop
+# ==========================================
+# InterviewReview 环境一键停止脚本
+# ==========================================
 
-# 停止另一个目录中的 Redis 和 RocketMQ
-Write-Host "Stopping Redis and RocketMQ..."
-Push-Location "D:\Tools\NFTurbo_DockerCompose_2025_11_10\NFTurbo_DockerCompose"
-docker-compose stop redis namesrv broker
-Pop-Location
+Write-Host "正在停止 InterviewReview 依赖的所有 Docker 容器..." -ForegroundColor Cyan
 
-Write-Host "All middleware stopped successfully!"
+# 停止并移除 Docker Compose 中定义的所有服务
+docker-compose down
+
+Write-Host "所有环境容器已停止并移除。" -ForegroundColor Green

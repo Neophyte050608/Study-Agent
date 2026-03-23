@@ -30,7 +30,7 @@ import com.example.interview.service.RAGObservabilityService;
 import com.example.interview.service.RAGService;
 import com.example.interview.service.RetrievalEvaluationService;
 import com.example.interview.service.UserIdentityResolver;
-import com.example.interview.session.InMemorySessionRepository;
+import com.example.interview.session.DbSessionRepository;
 import com.example.interview.tool.StubMcpCapabilityGateway;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,8 +61,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(value = InterviewController.class, properties = {"app.a2a.bus.type=inmemory"})
-@Import({InterviewService.class, TaskRouterAgent.class, InterviewOrchestratorAgent.class, CodingPracticeAgent.class, NoteMakingAgent.class, EvaluationAgent.class, KnowledgeLayerAgent.class, DecisionLayerAgent.class, EvaluationLayerAgent.class, GrowthLayerAgent.class, InMemorySessionRepository.class, InterviewLearningProfileService.class, LearningProfileAgent.class, McpGatewayService.class, OpsAuditService.class, UserIdentityResolver.class, RAGObservabilityService.class, RetrievalEvaluationService.class, AgentEvaluationService.class, A2AIdempotencyStore.class, InMemoryA2ABus.class, A2ABusConfig.class, SecurityConfig.class, StubMcpCapabilityGateway.class, InterviewStateMachineConfig.class})
+@Import({InterviewService.class, TaskRouterAgent.class, InterviewOrchestratorAgent.class, CodingPracticeAgent.class, NoteMakingAgent.class, EvaluationAgent.class, KnowledgeLayerAgent.class, DecisionLayerAgent.class, EvaluationLayerAgent.class, GrowthLayerAgent.class, DbSessionRepository.class, InterviewLearningProfileService.class, LearningProfileAgent.class, McpGatewayService.class, OpsAuditService.class, UserIdentityResolver.class, RAGObservabilityService.class, RetrievalEvaluationService.class, AgentEvaluationService.class, A2AIdempotencyStore.class, InMemoryA2ABus.class, A2ABusConfig.class, SecurityConfig.class, StubMcpCapabilityGateway.class, InterviewStateMachineConfig.class})
 class InterviewControllerFlowTest {
+
+    @MockBean
+    private com.example.interview.mapper.InterviewSessionMapper interviewSessionMapper;
 
     @Autowired
     private MockMvc mockMvc;

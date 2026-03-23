@@ -49,6 +49,19 @@ spring:
     authentication:
       username: neo4j
   
+  datasource:
+    url: jdbc:mysql://localhost:3307/interview_review?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_PASSWORD:MIQI6666}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      pool-name: InterviewReviewHikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
   servlet:
     multipart:
       max-file-size: 12MB
@@ -61,7 +74,22 @@ spring:
   
   data:
     redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:MIQI6666}
       timeout: 2s
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
 
 logging:
   level:
@@ -91,6 +119,15 @@ app:
   learning:
     notes:
       dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
+
+  intent-tree:
+    enabled: ${APP_INTENT_TREE_ENABLED:true}
+    confidence-threshold: ${APP_INTENT_TREE_CONFIDENCE_THRESHOLD:0.60}
+    min-gap: ${APP_INTENT_TREE_MIN_GAP:0.12}
+    ambiguity-ratio: ${APP_INTENT_TREE_AMBIGUITY_RATIO:0.80}
+    clarification-ttl-minutes: ${APP_INTENT_TREE_CLARIFICATION_TTL_MINUTES:10}
+    max-candidates: ${APP_INTENT_TREE_MAX_CANDIDATES:3}
+    fallback-to-legacy-task-router: ${APP_INTENT_TREE_FALLBACK_TO_LEGACY:true}
   
   mcp:
     timeout-millis: ${APP_MCP_TIMEOUT_MILLIS:1500}

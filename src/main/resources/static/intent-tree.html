@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html class="light" lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0057c2",
+                        "on-primary": "#ffffff",
+                        "surface": "#f9f9f9",
+                        "on-surface": "#1a1c1c",
+                        "outline": "#727786",
+                        "outline-variant": "#c1c6d7",
+                        "surface-container-low": "#f3f3f3",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#e2e2e2",
+                        "secondary": "#425d97",
+                        "tertiary": "#9e3d00",
+                        "error": "#ba1a1a"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased">
+<script src="layout.js"></script>
+
+<main class="ml-64 flex flex-col min-w-0 bg-surface min-h-screen">
+    <!-- Header -->
+    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none">
+        <div class="flex items-center gap-8">
+            <h1 class="text-xl font-bold text-indigo-700 dark:text-indigo-400">意图配置管理</h1>
+            <nav class="flex gap-6 font-['Plus_Jakarta_Sans'] text-sm font-medium">
+                <a class="text-[#0057c2] dark:text-blue-400 border-b-2 border-[#0057c2] pb-1" href="#" onclick="switchTab('params')">基础参数</a>
+                <a class="text-slate-500 dark:text-slate-400 hover:text-[#1a1c1c]" href="#" onclick="switchTab('leafs')">叶子意图</a>
+                <a class="text-slate-500 dark:text-slate-400 hover:text-[#1a1c1c]" href="#" onclick="switchTab('cases')">槽位样例</a>
+            </nav>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+                <button onclick="resetConfig()" class="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded transition-all active:scale-95">重置</button>
+                <button onclick="saveConfig()" class="px-4 py-1.5 text-xs font-semibold bg-primary text-on-primary rounded shadow-sm hover:opacity-90 transition-all active:scale-95">保存配置</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <section id="content-area" class="flex-1 pt-24 pb-12 px-8 space-y-6 bg-surface overflow-y-auto">
+        <!-- Summary Bar -->
+        <div class="grid grid-cols-4 gap-4">
+            <div class="bg-surface-container-lowest p-4 rounded shadow-sm border-l-4 border-primary">
+                <div class="text-[10px] uppercase tracking-wider text-outline font-semibold mb-1">系统状态</div>
+                <div id="stat-status" class="text-2xl font-bold font-headline text-on-surface">--</div>
+            </div>
+            <div class="bg-surface-container-lowest p-4 rounded shadow-sm border-l-4 border-secondary">
+                <div class="text-[10px] uppercase tracking-wider text-outline font-semibold mb-1">叶子意图数</div>
+                <div id="stat-leaf-count" class="text-2xl font-bold font-headline text-on-surface">--</div>
+            </div>
+            <div class="bg-surface-container-lowest p-4 rounded shadow-sm border-l-4 border-tertiary">
+                <div class="text-[10px] uppercase tracking-wider text-outline font-semibold mb-1">槽位精炼用例</div>
+                <div id="stat-case-count" class="text-2xl font-bold font-headline text-on-surface">--</div>
+            </div>
+            <div class="bg-surface-container-lowest p-4 rounded shadow-sm border-l-4 border-error">
+                <div class="text-[10px] uppercase tracking-wider text-outline font-semibold mb-1">置信度阈值</div>
+                <div id="stat-threshold" class="text-2xl font-bold font-headline text-on-surface">--</div>
+            </div>
+        </div>
+
+        <div class="flex gap-6 h-full min-h-0">
+            <!-- Form Area -->
+            <div id="tab-params" class="flex-1 space-y-4 tab-content">
+                <div class="bg-surface-container-lowest p-5 rounded shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-sm font-semibold flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-lg" data-icon="tune">tune</span>
+                            核心路由参数
+                        </h2>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-medium text-on-surface-variant flex items-center gap-1">
+                                意图引擎开关
+                            </label>
+                            <div class="flex items-center h-10">
+                                <input id="config-enabled" class="w-10 h-5 bg-outline-variant rounded-full appearance-none checked:bg-primary relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer" type="checkbox"/>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-medium text-on-surface-variant">置信度阈值 (Confidence Threshold)</label>
+                            <input id="config-threshold" class="w-full accent-primary h-1 bg-surface-container-highest rounded-lg appearance-none cursor-pointer" type="range" min="0" max="1" step="0.05"/>
+                            <div class="flex justify-between text-[10px] text-outline">
+                                <span>0.0</span>
+                                <span id="threshold-val" class="text-primary font-bold">0.6</span>
+                                <span>1.0</span>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-medium text-on-surface-variant">最小置信差 (Min Gap)</label>
+                            <input id="config-minGap" class="w-full bg-surface-container-low border-none rounded text-xs py-2 px-3" type="number" step="0.01"/>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-medium text-on-surface-variant">歧义比例 (Ambiguity Ratio)</label>
+                            <input id="config-ambiguityRatio" class="w-full bg-surface-container-low border-none rounded text-xs py-2 px-3" type="number" step="0.01"/>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-medium text-on-surface-variant">澄清 TTL (分钟)</label>
+                            <input id="config-ttl" class="w-full bg-surface-container-low border-none rounded text-xs py-2 px-3" type="number"/>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[11px] font-medium text-on-surface-variant">最大候选数</label>
+                            <input id="config-maxCandidates" class="w-full bg-surface-container-low border-none rounded text-xs py-2 px-3" type="number"/>
+                        </div>
+                        <div class="col-span-2 space-y-1.5 pt-2 border-t border-surface-container flex items-center justify-between">
+                            <label class="text-[11px] font-medium text-on-surface-variant">意图引擎失败时回退到旧版路由</label>
+                            <input id="config-fallback" class="w-10 h-5 bg-outline-variant rounded-full appearance-none checked:bg-primary relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer" type="checkbox"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Leaf Intents -->
+            <div id="tab-leafs" class="flex-1 space-y-4 tab-content hidden">
+                <div class="bg-surface-container-lowest p-5 rounded shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-sm font-semibold flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-lg">list_alt</span>
+                            叶子意图配置
+                        </h2>
+                        <button onclick="addLeaf()" class="text-xs text-primary font-bold hover:underline">+ 新增意图</button>
+                    </div>
+                    <div id="leaf-container" class="space-y-3">
+                        <!-- Dynamic Leaf Nodes -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Slot Refine Cases -->
+            <div id="tab-cases" class="flex-1 space-y-4 tab-content hidden">
+                <div class="bg-surface-container-lowest p-5 rounded shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-sm font-semibold flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-lg">psychology</span>
+                            槽位精炼 Few-shot 样例
+                        </h2>
+                        <button onclick="addCase()" class="text-xs text-primary font-bold hover:underline">+ 新增样例</button>
+                    </div>
+                    <div id="case-container" class="space-y-3">
+                        <!-- Dynamic Refine Cases -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Panel -->
+            <div class="w-80 bg-surface-container-low rounded-lg p-5 flex flex-col gap-4 border border-outline-variant/10 h-fit">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold text-on-surface">策略配置指南</h3>
+                    <span class="material-symbols-outlined text-outline text-sm">lightbulb</span>
+                </div>
+                <div class="text-[11px] leading-relaxed text-on-surface-variant bg-surface-container-lowest p-3 rounded border-l-2 border-primary">
+                    <p class="font-semibold text-primary mb-1">最佳实践：</p>
+                    置信度阈值建议设置在 <b>0.6 - 0.7</b>。设置过高会频繁触发澄清，过低可能导致错误路由。
+                </div>
+                <div class="space-y-4 mt-2">
+                    <div>
+                        <div class="flex items-center gap-2 text-[11px] font-bold text-outline">
+                            什么是最小置信差？
+                        </div>
+                        <p class="text-[10px] text-outline-variant mt-1 leading-tight">第一名与第二名意图的分数差距。若差距小于此值，说明存在歧义，系统将触发澄清。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script>
+    let currentConfig = null;
+
+    async function loadData() {
+        try {
+            const [configRes, statsRes] = await Promise.all([
+                fetch('/api/intent-tree/config'),
+                fetch('/api/intent-tree/stats')
+            ]);
+            
+            if (configRes.ok) {
+                currentConfig = await configRes.json();
+                renderConfig();
+            }
+            
+            if (statsRes.ok) {
+                const stats = await statsRes.json();
+                document.getElementById('stat-status').innerText = stats.enabled ? '已启用' : '已禁用';
+                document.getElementById('stat-leaf-count').innerText = stats.leafIntentCount;
+                document.getElementById('stat-case-count').innerText = stats.slotRefineCaseCount;
+                document.getElementById('stat-threshold').innerText = stats.confidenceThreshold.toFixed(2);
+            }
+        } catch (e) {
+            console.error("Failed to load data", e);
+            alert("数据加载失败，请检查后端服务");
+        }
+    }
+
+    function renderConfig() {
+        if (!currentConfig) return;
+
+        document.getElementById('config-enabled').checked = currentConfig.enabled;
+        document.getElementById('config-threshold').value = currentConfig.confidenceThreshold;
+        document.getElementById('threshold-val').innerText = currentConfig.confidenceThreshold.toFixed(2);
+        document.getElementById('config-minGap').value = currentConfig.minGap;
+        document.getElementById('config-ambiguityRatio').value = currentConfig.ambiguityRatio;
+        document.getElementById('config-ttl').value = currentConfig.clarificationTtlMinutes;
+        document.getElementById('config-maxCandidates').value = currentConfig.maxCandidates;
+        document.getElementById('config-fallback').checked = currentConfig.fallbackToLegacyTaskRouter;
+
+        // Render Leaf Intents
+        const leafContainer = document.getElementById('leaf-container');
+        leafContainer.innerHTML = '';
+        currentConfig.leafIntents.forEach((leaf, idx) => {
+            const div = document.createElement('div');
+            div.className = 'p-3 bg-surface-container-low rounded relative group';
+            div.innerHTML = `
+                <button onclick="removeLeaf(${idx})" class="absolute top-2 right-2 text-error hidden group-hover:block material-symbols-outlined text-sm">delete</button>
+                <div class="grid grid-cols-2 gap-2 text-[10px]">
+                    <input class="border-none bg-white p-1 rounded" value="${leaf.intentId}" onchange="updateLeaf(${idx}, 'intentId', this.value)" placeholder="Intent ID"/>
+                    <input class="border-none bg-white p-1 rounded" value="${leaf.name}" onchange="updateLeaf(${idx}, 'name', this.value)" placeholder="名称"/>
+                    <input class="border-none bg-white p-1 rounded col-span-2" value="${leaf.description}" onchange="updateLeaf(${idx}, 'description', this.value)" placeholder="描述"/>
+                    <input class="border-none bg-white p-1 rounded" value="${leaf.taskType}" onchange="updateLeaf(${idx}, 'taskType', this.value)" placeholder="TaskType"/>
+                    <input class="border-none bg-white p-1 rounded" value="${leaf.path}" onchange="updateLeaf(${idx}, 'path', this.value)" placeholder="Path"/>
+                </div>
+            `;
+            leafContainer.appendChild(div);
+        });
+
+        // Render Cases
+        const caseContainer = document.getElementById('case-container');
+        caseContainer.innerHTML = '';
+        currentConfig.slotRefineCases.forEach((c, idx) => {
+            const div = document.createElement('div');
+            div.className = 'p-3 bg-surface-container-low rounded relative group';
+            div.innerHTML = `
+                <button onclick="removeCase(${idx})" class="absolute top-2 right-2 text-error hidden group-hover:block material-symbols-outlined text-sm">delete</button>
+                <div class="space-y-2 text-[10px]">
+                    <input class="w-full border-none bg-white p-1 rounded" value="${c.taskType}" onchange="updateCase(${idx}, 'taskType', this.value)" placeholder="TaskType"/>
+                    <textarea class="w-full border-none bg-white p-1 rounded resize-none" onchange="updateCase(${idx}, 'userQuery', this.value)" placeholder="用户输入">${c.userQuery}</textarea>
+                    <textarea class="w-full border-none bg-white p-1 rounded resize-none" onchange="updateCase(${idx}, 'aiOutput', this.value)" placeholder="AI 输出 (JSON)">${c.aiOutput}</textarea>
+                </div>
+            `;
+            caseContainer.appendChild(div);
+        });
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.getElementById('tab-' + tab).classList.remove('hidden');
+        
+        document.querySelectorAll('nav a').forEach(el => {
+            el.classList.remove('text-[#0057c2]', 'dark:text-blue-400', 'border-b-2', 'border-[#0057c2]', 'pb-1');
+            el.classList.add('text-slate-500', 'dark:text-slate-400');
+        });
+        const activeLink = event.currentTarget;
+        activeLink.classList.remove('text-slate-500', 'dark:text-slate-400');
+        activeLink.classList.add('text-[#0057c2]', 'dark:text-blue-400', 'border-b-2', 'border-[#0057c2]', 'pb-1');
+    }
+
+    function updateLeaf(idx, field, val) { currentConfig.leafIntents[idx][field] = val; }
+    function removeLeaf(idx) { currentConfig.leafIntents.splice(idx, 1); renderConfig(); }
+    function addLeaf() { 
+        currentConfig.leafIntents.push({intentId: '', name: '', description: '', taskType: '', path: '', examples: [], slotHints: []}); 
+        renderConfig(); 
+    }
+
+    function updateCase(idx, field, val) { currentConfig.slotRefineCases[idx][field] = val; }
+    function removeCase(idx) { currentConfig.slotRefineCases.splice(idx, 1); renderConfig(); }
+    function addCase() { 
+        currentConfig.slotRefineCases.push({taskType: '', userQuery: '', aiOutput: ''}); 
+        renderConfig(); 
+    }
+
+    function resetConfig() { loadData(); }
+
+    async function saveConfig() {
+        const payload = {
+            ...currentConfig,
+            enabled: document.getElementById('config-enabled').checked,
+            confidenceThreshold: parseFloat(document.getElementById('config-threshold').value),
+            minGap: parseFloat(document.getElementById('config-minGap').value),
+            ambiguityRatio: parseFloat(document.getElementById('config-ambiguityRatio').value),
+            clarificationTtlMinutes: parseInt(document.getElementById('config-ttl').value),
+            maxCandidates: parseInt(document.getElementById('config-maxCandidates').value),
+            fallbackToLegacyTaskRouter: document.getElementById('config-fallback').checked
+        };
+
+        try {
+            const res = await fetch('/api/intent-tree/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert("配置已保存");
+                loadData();
+            } else {
+                alert("保存失败");
+            }
+        } catch (e) {
+            alert("请求异常: " + e.message);
+        }
+    }
+
+    document.getElementById('config-threshold').oninput = function() {
+        document.getElementById('threshold-val').innerText = parseFloat(this.value).toFixed(2);
+    };
+
+    document.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>

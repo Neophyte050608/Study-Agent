@@ -17,6 +17,7 @@ public class ImConversationStore {
     }
     private static final String HISTORY_PREFIX = "im:session:history:";
     private static final String ACTIVE_SESSION_PREFIX = "im:session:active:";
+    private static final String CLARIFICATION_PREFIX = "im:session:clarification:";
     private static final int MAX_HISTORY = 10; // keep last 5 rounds (10 messages: 5 user + 5 ai)
     private static final long SESSION_TTL_HOURS = 24;
 
@@ -55,9 +56,26 @@ public class ImConversationStore {
         return messages.stream().collect(Collectors.joining("\n"));
     }
 
+    public void setPendingClarification(String sessionId, String state, long ttlMinutes) {
+        if (state == null || state.isBlank()) {
+            return;
+        }
+        long normalizedTtl = ttlMinutes <= 0 ? 10 : ttlMinutes;
+        redisTemplate.opsForValue().set(CLARIFICATION_PREFIX + sessionId, state, normalizedTtl, TimeUnit.MINUTES);
+    }
+
+    public String getPendingClarification(String sessionId) {
+        return redisTemplate.opsForValue().get(CLARIFICATION_PREFIX + sessionId);
+    }
+
+    public void clearPendingClarification(String sessionId) {
+        redisTemplate.delete(CLARIFICATION_PREFIX + sessionId);
+    }
+
     public void clearSession(String sessionId) {
         String key = HISTORY_PREFIX + sessionId;
         redisTemplate.delete(key);
         redisTemplate.delete(ACTIVE_SESSION_PREFIX + sessionId);
+        redisTemplate.delete(CLARIFICATION_PREFIX + sessionId);
     }
 }

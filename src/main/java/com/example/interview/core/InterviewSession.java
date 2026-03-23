@@ -46,6 +46,11 @@ public class InterviewSession {
     /** 当前所处的 SOP 面试环节 */
     private InterviewStage currentStage;
 
+    public InterviewSession() {
+        this.history = new ArrayList<>();
+        this.topicMastery = new HashMap<>();
+    }
+
     public InterviewSession(String topic, String resumeContent, int totalQuestions) {
         this.id = UUID.randomUUID().toString();
         this.topic = topic;

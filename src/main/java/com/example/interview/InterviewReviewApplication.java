@@ -2,6 +2,7 @@ package com.example.interview;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
 
 /**
  * InterviewReview 应用程序主入口。
@@ -11,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 2. 自动配置与组件扫描。
  */
 @SpringBootApplication
+@EnableCaching
 public class InterviewReviewApplication {
 
     public static void main(String[] args) {

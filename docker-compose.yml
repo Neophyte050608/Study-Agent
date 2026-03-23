@@ -75,6 +75,79 @@ services:
       timeout: 10s
       retries: 3
 
+  mysql:
+    image: mysql:8.4.1
+    container_name: mysql-8
+    environment:
+      - MYSQL_ROOT_PASSWORD=MIQI6666
+      - TZ=Asia/Shanghai
+      - SET_CONTAINER_TIMEZONE=true
+      - CONTAINER_TIMEZONE=Asia/Shanghai
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/config:/etc/mysql/conf.d
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/data:/var/lib/mysql
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/logs:/var/log/mysql
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/init:/docker-entrypoint-initdb.d
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 3307:3306
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redis/config/redis.conf:/usr/local/etc/redis/redis.conf:rw
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redis/data:/data:rw
+    command:
+      /bin/bash -c "redis-server /usr/local/etc/redis/redis.conf"
+
+  namesrv:
+    image: apache/rocketmq:5.2.0
+    container_name: rmqnamesrv
+    environment:
+      - JAVA_OPT_EXT=-Xms512m -Xmx1g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+
+  broker:
+    image: apache/rocketmq:5.2.0
+    container_name: rmqbroker
+    environment:
+      - JAVA_OPT_EXT=-Xms512m -Xmx1g -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=320m
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+      - "10912:10912"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/rocketMQ/data/broker/conf/broker.conf:/home/rocketmq/rocketmq-5.2.0/conf/broker.conf
+    command: sh mqbroker -n rmqnamesrv:9876 -c /home/rocketmq/rocketmq-5.2.0/conf/broker.conf
+    depends_on:
+      - namesrv
+
+  rocketmq-dashboard:
+    image: apacherocketmq/rocketmq-dashboard:2.0.0
+    container_name: rocketmq-dashboard
+    environment:
+      - JAVA_OPTS=-Drocketmq.namesrv.addr=rmqnamesrv:9876
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      - namesrv
+      - broker
+
 networks:
   default:
     name: milvus

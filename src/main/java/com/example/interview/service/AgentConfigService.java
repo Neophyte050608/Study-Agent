@@ -1,99 +1,106 @@
 package com.example.interview.service;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.interview.config.AgentConfig;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
+import com.example.interview.entity.AgentConfigDO;
+import com.example.interview.mapper.AgentConfigMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent 动态配置服务。
  * 
  * 职责：
- * 1. 管理 agent_configs.json 的持久化。
- * 2. 提供运行时配置查询。
+ * 1. 管理 Agent 数据库配置的持久化。
+ * 2. 提供基于 Redis 缓存的运行时配置查询。
  */
 @Service
 public class AgentConfigService {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentConfigService.class);
-    private static final String CONFIG_FILE = "agent_configs.json";
-    private final ObjectMapper objectMapper;
+    private final AgentConfigMapper agentConfigMapper;
 
-    // 内存缓存
-    private final Map<String, AgentConfig> configMap = new ConcurrentHashMap<>();
-
-    public AgentConfigService(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
-
-    @PostConstruct
-    public void init() {
-        loadConfig();
-    }
-
-    private void loadConfig() {
-        File file = new File(CONFIG_FILE);
-        if (file.exists()) {
-            try {
-                Map<String, AgentConfig> loaded = objectMapper.readValue(file, new TypeReference<Map<String, AgentConfig>>() {});
-                if (loaded != null) {
-                    configMap.putAll(loaded);
-                }
-            } catch (IOException e) {
-                logger.error("Failed to load agent configs from {}", CONFIG_FILE, e);
-            }
-        } else {
-            // 初始化默认配置
-            configMap.put("EvaluationAgent", new AgentConfig(true, "OPENAI", "gpt-4o", "", 0.7));
-            configMap.put("DecisionLayerAgent", new AgentConfig(true, "ZHIPUAI", "glm-4", "", 0.3));
-            configMap.put("LearningProfileAgent", new AgentConfig(true, "OLLAMA", "llama3", "", 0.9));
-            saveConfig();
-        }
-    }
-
-    private synchronized void saveConfig() {
-        try {
-            objectMapper.writeValue(new File(CONFIG_FILE), configMap);
-        } catch (IOException e) {
-            logger.error("Failed to save agent configs to {}", CONFIG_FILE, e);
-        }
+    public AgentConfigService(AgentConfigMapper agentConfigMapper) {
+        this.agentConfigMapper = agentConfigMapper;
     }
 
     /**
      * 获取指定 Agent 的配置，如果不存在则返回默认开启的配置。
      */
+    @Cacheable(value = "agentConfig", key = "#agentName")
     public AgentConfig getConfig(String agentName) {
-        return configMap.getOrDefault(agentName, new AgentConfig(true, "OPENAI", "gpt-4o", "", 0.7));
+        AgentConfigDO agentConfigDO = agentConfigMapper.selectOne(
+                Wrappers.<AgentConfigDO>lambdaQuery().eq(AgentConfigDO::getAgentName, agentName)
+        );
+        if (agentConfigDO != null) {
+            return new AgentConfig(
+                    agentConfigDO.getEnabled(),
+                    agentConfigDO.getProvider(),
+                    agentConfigDO.getModelName(),
+                    agentConfigDO.getApiKey(),
+                    agentConfigDO.getTemperature()
+            );
+        }
+        return new AgentConfig(true, "OPENAI", "gpt-4o", "", 0.7);
     }
 
     /**
      * 更新单个 Agent 的配置并持久化。
      */
+    @CacheEvict(value = "agentConfig", key = "#agentName")
     public void updateConfig(String agentName, AgentConfig newConfig) {
-        configMap.put(agentName, newConfig);
-        saveConfig();
+        AgentConfigDO existing = agentConfigMapper.selectOne(
+                Wrappers.<AgentConfigDO>lambdaQuery().eq(AgentConfigDO::getAgentName, agentName)
+        );
+        if (existing != null) {
+            existing.setEnabled(newConfig.isEnabled());
+            existing.setProvider(newConfig.getProvider());
+            existing.setModelName(newConfig.getModelName());
+            existing.setApiKey(newConfig.getApiKey());
+            existing.setTemperature(newConfig.getTemperature());
+            agentConfigMapper.updateById(existing);
+        } else {
+            AgentConfigDO newDO = new AgentConfigDO();
+            newDO.setAgentName(agentName);
+            newDO.setEnabled(newConfig.isEnabled());
+            newDO.setProvider(newConfig.getProvider());
+            newDO.setModelName(newConfig.getModelName());
+            newDO.setApiKey(newConfig.getApiKey());
+            newDO.setTemperature(newConfig.getTemperature());
+            agentConfigMapper.insert(newDO);
+        }
     }
 
     /**
      * 批量更新配置
      */
+    @CacheEvict(value = "agentConfig", allEntries = true)
     public void updateAllConfigs(Map<String, AgentConfig> newConfigs) {
-        configMap.putAll(newConfigs);
-        saveConfig();
+        newConfigs.forEach(this::updateConfig);
     }
 
     /**
      * 获取所有配置
      */
     public Map<String, AgentConfig> getAllConfigs() {
-        return configMap;
+        List<AgentConfigDO> all = agentConfigMapper.selectList(Wrappers.emptyWrapper());
+        Map<String, AgentConfig> map = new HashMap<>();
+        for (AgentConfigDO agentConfigDO : all) {
+            map.put(agentConfigDO.getAgentName(), new AgentConfig(
+                    agentConfigDO.getEnabled(),
+                    agentConfigDO.getProvider(),
+                    agentConfigDO.getModelName(),
+                    agentConfigDO.getApiKey(),
+                    agentConfigDO.getTemperature()
+            ));
+        }
+        return map;
     }
 }

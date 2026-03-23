@@ -1,11 +1,16 @@
 package com.example.interview.config;
 
+import java.io.Serializable;
+
 /**
  * 动态菜单配置实体。
  * 用于管理前端左侧边栏和扩展空间卡片的显示位置与顺序。
+ * 实现 Serializable 以支持 Redis 缓存序列化。
  */
-public class MenuConfig {
+public class MenuConfig implements Serializable {
     
+    private static final long serialVersionUID = 1L;
+
     private String id;
     private String title;
     private String description;
