@@ -1,10 +1,11 @@
 package com.example.interview.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.interview.entity.SyncIndexDO;
+import com.example.interview.mapper.SyncIndexMapper;
 import com.example.interview.rag.DocumentSplitter;
 import com.example.interview.rag.NoteLoader;
 import com.example.interview.rag.ObsidianKnowledgeExtractor;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -19,39 +20,35 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
 public class IngestionService {
 
     private static final Logger logger = LoggerFactory.getLogger(IngestionService.class);
-    private static final String INDEX_FILE = "sync_index.json";
 
     private final NoteLoader noteLoader;
     private final DocumentSplitter documentSplitter;
     private final ObsidianKnowledgeExtractor knowledgeExtractor;
     private final LexicalIndexService lexicalIndexService;
     private final VectorStore vectorStore;
-    private final ObjectMapper objectMapper;
+    private final SyncIndexMapper syncIndexMapper;
     // 注入图谱持久化组件
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
-    // Map<FilePath, FileMetadata>
-    private Map<String, FileMetadata> index = new ConcurrentHashMap<>();
     private volatile SyncSummary lastSummary = new SyncSummary(0, 0, 0, 0, 0, 0, 0);
     private volatile long lastSyncTime = 0L;
 
-    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, ObjectMapper objectMapper, com.example.interview.graph.TechConceptRepository techConceptRepository) {
+    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.noteLoader = noteLoader;
         this.documentSplitter = documentSplitter;
         this.knowledgeExtractor = knowledgeExtractor;
         this.lexicalIndexService = lexicalIndexService;
         this.vectorStore = vectorStore;
-        this.objectMapper = objectMapper;
+        this.syncIndexMapper = syncIndexMapper;
         this.techConceptRepository = techConceptRepository;
-        loadIndex();
     }
 
     public SyncSummary sync(String vaultPath) {
@@ -74,11 +71,13 @@ public class IngestionService {
                 currentFiles.add(filePath);
                 String currentHash = calculateHash(resource);
 
-                if (index.containsKey(filePath)) {
-                    FileMetadata metadata = index.get(filePath);
-                    if (!metadata.hash.equals(currentHash)) {
+                SyncIndexDO existingIndex = syncIndexMapper.selectOne(
+                        new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
+
+                if (existingIndex != null) {
+                    if (!existingIndex.getFileHash().equals(currentHash)) {
                         logger.info("File modified: {}", filePath);
-                        AddStatus status = updateFile(resource, filePath, currentHash);
+                        AddStatus status = updateFile(resource, filePath, currentHash, existingIndex.getDocIds());
                         if (status == AddStatus.ADDED) {
                             modifiedFileCount++;
                         } else if (status == AddStatus.SKIPPED_EMPTY) {
@@ -109,16 +108,21 @@ public class IngestionService {
         }
 
         // Handle deletions
-        List<String> deletedFiles = index.keySet().stream()
-                .filter(path -> !currentFiles.contains(path))
+        List<SyncIndexDO> allIndexes = syncIndexMapper.selectList(null);
+        List<SyncIndexDO> deletedFiles = allIndexes.stream()
+                .filter(idx -> !currentFiles.contains(idx.getFilePath()))
+                // Only process files that belong to this vault path logically,
+                // but since we don't have vault path prefix strictly in DB, we'll assume it's safe 
+                // to delete all DB entries not in currentFiles if they are local paths.
+                // Wait, if there are uploaded files, they start with "browser://".
+                .filter(idx -> !idx.getFilePath().startsWith("browser://"))
                 .collect(Collectors.toList());
 
-        for (String deletedPath : deletedFiles) {
-            logger.info("File deleted: {}", deletedPath);
-            removeFile(deletedPath);
+        for (SyncIndexDO deletedIndex : deletedFiles) {
+            logger.info("File deleted: {}", deletedIndex.getFilePath());
+            removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
         }
 
-        saveIndex();
         SyncSummary summary = new SyncSummary(
                 resources.size(),
                 newFileCount,
@@ -169,10 +173,12 @@ public class IngestionService {
             currentFiles.add(filePath);
             try {
                 String currentHash = calculateHash(file);
-                if (index.containsKey(filePath)) {
-                    FileMetadata metadata = index.get(filePath);
-                    if (!metadata.hash.equals(currentHash)) {
-                        AddStatus status = updateFile(file, filePath, currentHash);
+                SyncIndexDO existingIndex = syncIndexMapper.selectOne(
+                        new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
+
+                if (existingIndex != null) {
+                    if (!existingIndex.getFileHash().equals(currentHash)) {
+                        AddStatus status = updateFile(file, filePath, currentHash, existingIndex.getDocIds());
                         if (status == AddStatus.ADDED) {
                             modifiedFileCount++;
                         } else if (status == AddStatus.SKIPPED_EMPTY) {
@@ -199,16 +205,17 @@ public class IngestionService {
             }
         }
 
-        List<String> deletedFiles = index.keySet().stream()
-                .filter(path -> path.startsWith(prefix))
-                .filter(path -> !currentFiles.contains(path))
+        List<SyncIndexDO> allIndexes = syncIndexMapper.selectList(
+                new LambdaQueryWrapper<SyncIndexDO>().likeRight(SyncIndexDO::getFilePath, prefix));
+
+        List<SyncIndexDO> deletedFiles = allIndexes.stream()
+                .filter(idx -> !currentFiles.contains(idx.getFilePath()))
                 .collect(Collectors.toList());
 
-        for (String deletedPath : deletedFiles) {
-            removeFile(deletedPath);
+        for (SyncIndexDO deletedIndex : deletedFiles) {
+            removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
         }
 
-        saveIndex();
         SyncSummary summary = new SyncSummary(
                 currentFiles.size(),
                 newFileCount,
@@ -226,14 +233,15 @@ public class IngestionService {
     public Map<String, Object> getStats() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalScanned", lastSummary.totalScanned);
-        result.put("totalIndexed", index.size());
+        long totalIndexed = syncIndexMapper.selectCount(null);
+        result.put("totalIndexed", totalIndexed);
         result.put("failedFiles", lastSummary.failedFiles);
         int denominator = Math.max(1, lastSummary.totalScanned);
         int success = Math.max(0, lastSummary.totalScanned - lastSummary.failedFiles);
         int successRate = Math.max(0, Math.min(100, (success * 100) / denominator));
         result.put("successRate", successRate + "%");
         result.put("lastSyncTime", lastSyncTime == 0L ? null : lastSyncTime);
-        result.put("storagePercent", Math.min(100, index.size()));
+        result.put("storagePercent", Math.min(100, totalIndexed));
         result.put("recentReports", List.of());
         return result;
     }
@@ -276,7 +284,7 @@ public class IngestionService {
             processGraphRelationships(documents);
             
             List<String> docIds = documents.stream().map(Document::getId).collect(Collectors.toList());
-            index.put(filePath, new FileMetadata(hash, docIds));
+            saveToIndexDb(filePath, hash, docIds);
             return AddStatus.ADDED;
         } catch (Exception e) {
             logger.error("Failed to add file to vector store: {}", filePath, e);
@@ -284,8 +292,8 @@ public class IngestionService {
         }
     }
 
-    private AddStatus updateFile(Resource resource, String filePath, String hash) {
-        removeFile(filePath); // Delete old vectors
+    private AddStatus updateFile(Resource resource, String filePath, String hash, List<String> oldDocIds) {
+        removeFile(filePath, oldDocIds); // Delete old vectors
         return addFile(resource, filePath, hash); // Add new vectors
     }
 
@@ -306,7 +314,7 @@ public class IngestionService {
             processGraphRelationships(documents);
             
             List<String> docIds = documents.stream().map(Document::getId).collect(Collectors.toList());
-            index.put(filePath, new FileMetadata(hash, docIds));
+            saveToIndexDb(filePath, hash, docIds);
             return AddStatus.ADDED;
         } catch (Exception e) {
             logger.error("Failed to add uploaded file to vector store: {}", filePath, e);
@@ -314,9 +322,26 @@ public class IngestionService {
         }
     }
 
-    private AddStatus updateFile(MultipartFile file, String filePath, String hash) {
-        removeFile(filePath);
+    private AddStatus updateFile(MultipartFile file, String filePath, String hash, List<String> oldDocIds) {
+        removeFile(filePath, oldDocIds);
         return addFile(file, filePath, hash);
+    }
+
+    private void saveToIndexDb(String filePath, String hash, List<String> docIds) {
+        SyncIndexDO existing = syncIndexMapper.selectOne(
+                new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
+        if (existing == null) {
+            SyncIndexDO newIndex = new SyncIndexDO();
+            newIndex.setFilePath(filePath);
+            newIndex.setFileHash(hash);
+            newIndex.setDocIds(docIds);
+            newIndex.setCreatedAt(LocalDateTime.now());
+            syncIndexMapper.insert(newIndex);
+        } else {
+            existing.setFileHash(hash);
+            existing.setDocIds(docIds);
+            syncIndexMapper.updateById(existing);
+        }
     }
 
     private List<Document> splitIntoKnowledgeDocuments(String content, String filePath) {
@@ -343,9 +368,6 @@ public class IngestionService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 解析文档中的元数据（尤其是 wiki_links），并将其作为节点和关系存入 Neo4j 图数据库。
-     */
     private void processGraphRelationships(List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             return;
@@ -355,38 +377,30 @@ public class IngestionService {
                 String filePath = (String) doc.getMetadata().get("file_path");
                 if (filePath == null) continue;
 
-                // 提取文件名作为当前节点（主节点）
                 String fileName = new File(filePath).getName();
                 int dotIndex = fileName.lastIndexOf('.');
                 String mainConceptName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
 
-                // 获取或创建主节点
                 com.example.interview.graph.TechConcept mainConcept = techConceptRepository.findById(mainConceptName)
                         .orElse(new com.example.interview.graph.TechConcept(mainConceptName));
                 
-                // 将部分正文作为描述存入节点
                 if (mainConcept.getDescription() == null) {
                     mainConcept.setDescription(doc.getText().length() > 200 ? doc.getText().substring(0, 200) + "..." : doc.getText());
                 }
 
-                // 提取关联的 wiki_links（例如 [[Redis]] -> Redis）
                 Object wikiLinksObj = doc.getMetadata().get("wiki_links");
                 if (wikiLinksObj != null && !wikiLinksObj.toString().isBlank()) {
                     String[] links = wikiLinksObj.toString().split(",");
                     for (String link : links) {
                         String relatedName = link.trim();
                         if (!relatedName.isBlank() && !relatedName.equals(mainConceptName)) {
-                            // 获取或创建关联节点
                             com.example.interview.graph.TechConcept relatedConcept = techConceptRepository.findById(relatedName)
                                     .orElse(new com.example.interview.graph.TechConcept(relatedName));
-                            // 在 Neo4j 中建立关系：(mainConcept) -[:RELATED_TO]-> (relatedConcept)
                             mainConcept.addRelatedConcept(relatedConcept);
-                            // 保存关联节点以防其不存在
                             techConceptRepository.save(relatedConcept);
                         }
                     }
                 }
-                // 保存主节点及其关系
                 techConceptRepository.save(mainConcept);
             }
             logger.info("GraphRAG: 成功处理并同步了文档的图谱关系至 Neo4j");
@@ -395,13 +409,12 @@ public class IngestionService {
         }
     }
 
-    private void removeFile(String filePath) {
-        FileMetadata metadata = index.get(filePath);
-        if (metadata != null && metadata.docIds != null && !metadata.docIds.isEmpty()) {
-            vectorStore.delete(metadata.docIds);
-            lexicalIndexService.removeByIds(metadata.docIds);
+    private void removeFile(String filePath, List<String> docIds) {
+        if (docIds != null && !docIds.isEmpty()) {
+            vectorStore.delete(docIds);
+            lexicalIndexService.removeByIds(docIds);
         }
-        index.remove(filePath);
+        syncIndexMapper.delete(new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
     }
 
     private String calculateHash(Resource resource) throws IOException {
@@ -413,40 +426,6 @@ public class IngestionService {
     private String calculateHash(MultipartFile file) throws IOException {
         try (InputStream is = file.getInputStream()) {
             return DigestUtils.md5DigestAsHex(is);
-        }
-    }
-
-    private void loadIndex() {
-        File file = new File(INDEX_FILE);
-        if (file.exists()) {
-            try {
-                index = objectMapper.readValue(file, new TypeReference<ConcurrentHashMap<String, FileMetadata>>() {});
-                logger.info("Loaded sync index with {} entries.", index.size());
-            } catch (IOException e) {
-                logger.error("Failed to load sync index.", e);
-            }
-        }
-    }
-
-    private void saveIndex() {
-        try {
-            objectMapper.writeValue(new File(INDEX_FILE), index);
-            logger.info("Saved sync index.");
-        } catch (IOException e) {
-            logger.error("Failed to save sync index.", e);
-        }
-    }
-
-    // Helper class for JSON serialization
-    public static class FileMetadata {
-        public String hash;
-        public List<String> docIds;
-
-        public FileMetadata() {}
-
-        public FileMetadata(String hash, List<String> docIds) {
-            this.hash = hash;
-            this.docIds = docIds;
         }
     }
 

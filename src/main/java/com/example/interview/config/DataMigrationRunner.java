@@ -5,11 +5,22 @@ import com.example.interview.core.InterviewSession;
 import com.example.interview.entity.AgentConfigDO;
 import com.example.interview.entity.IntentNodeDO;
 import com.example.interview.entity.InterviewSessionDO;
+import com.example.interview.entity.LearningEventDO;
+import com.example.interview.entity.LearningProfileDO;
+import com.example.interview.entity.LexicalIndexDO;
 import com.example.interview.entity.MenuConfigDO;
+import com.example.interview.entity.SyncIndexDO;
 import com.example.interview.mapper.AgentConfigMapper;
 import com.example.interview.mapper.IntentNodeMapper;
 import com.example.interview.mapper.InterviewSessionMapper;
+import com.example.interview.mapper.LearningEventMapper;
+import com.example.interview.mapper.LearningProfileMapper;
+import com.example.interview.mapper.LexicalIndexMapper;
 import com.example.interview.mapper.MenuConfigMapper;
+import com.example.interview.mapper.SyncIndexMapper;
+import com.example.interview.service.IngestionService;
+import com.example.interview.service.LearningEvent;
+import com.example.interview.service.LearningProfileAgent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -19,9 +30,12 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 历史数据迁移启动器。
@@ -37,6 +51,10 @@ public class DataMigrationRunner implements ApplicationRunner {
     private final AgentConfigMapper agentConfigMapper;
     private final MenuConfigMapper menuConfigMapper;
     private final InterviewSessionMapper interviewSessionMapper;
+    private final LearningProfileMapper learningProfileMapper;
+    private final LearningEventMapper learningEventMapper;
+    private final LexicalIndexMapper lexicalIndexMapper;
+    private final SyncIndexMapper syncIndexMapper;
     private final ObjectMapper objectMapper;
 
     public DataMigrationRunner(
@@ -44,11 +62,19 @@ public class DataMigrationRunner implements ApplicationRunner {
             AgentConfigMapper agentConfigMapper,
             MenuConfigMapper menuConfigMapper,
             InterviewSessionMapper interviewSessionMapper,
+            LearningProfileMapper learningProfileMapper,
+            LearningEventMapper learningEventMapper,
+            LexicalIndexMapper lexicalIndexMapper,
+            SyncIndexMapper syncIndexMapper,
             ObjectMapper objectMapper) {
         this.intentNodeMapper = intentNodeMapper;
         this.agentConfigMapper = agentConfigMapper;
         this.menuConfigMapper = menuConfigMapper;
         this.interviewSessionMapper = interviewSessionMapper;
+        this.learningProfileMapper = learningProfileMapper;
+        this.learningEventMapper = learningEventMapper;
+        this.lexicalIndexMapper = lexicalIndexMapper;
+        this.syncIndexMapper = syncIndexMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -59,7 +85,118 @@ public class DataMigrationRunner implements ApplicationRunner {
         migrateAgentConfig();
         migrateMenuConfig();
         migrateInterviewSession();
+        migrateLearningProfile();
+        migrateLexicalIndex();
+        migrateSyncIndex();
         logger.info("历史数据迁移检查完毕。");
+    }
+
+    private void migrateLearningProfile() {
+        if (learningProfileMapper.selectCount(Wrappers.emptyWrapper()) == 0) {
+            File file = new File("learning_profiles_v2.json");
+            if (file.exists()) {
+                try {
+                    Map<String, LearningProfileAgent.UserProfileState> loaded = objectMapper.readValue(
+                            file, new TypeReference<Map<String, LearningProfileAgent.UserProfileState>>() {});
+                    if (loaded != null) {
+                        for (Map.Entry<String, LearningProfileAgent.UserProfileState> entry : loaded.entrySet()) {
+                            String userId = entry.getKey();
+                            LearningProfileAgent.UserProfileState state = entry.getValue();
+
+                            LearningProfileDO profileDO = new LearningProfileDO();
+                            profileDO.setUserId(userId);
+                            profileDO.setTotalEvents(state.totalEvents);
+                            Map<String, Object> metrics = new LinkedHashMap<>();
+                            if (state.topicMetrics != null) {
+                                state.topicMetrics.forEach(metrics::put);
+                            }
+                            profileDO.setTopicMetrics(metrics);
+                            profileDO.setReliabilityScore(0.0);
+                            learningProfileMapper.insert(profileDO);
+
+                            if (state.events != null) {
+                                for (LearningEvent event : state.events) {
+                                    LearningEventDO eventDO = new LearningEventDO();
+                                    eventDO.setEventId(event.eventId());
+                                    eventDO.setUserId(userId);
+                                    eventDO.setSource(event.source() != null ? event.source().name() : "INTERVIEW");
+                                    eventDO.setTopic(event.topic());
+                                    eventDO.setScore(event.score());
+                                    eventDO.setWeakPoints(event.weakPoints());
+                                    eventDO.setFamiliarPoints(event.familiarPoints());
+                                    eventDO.setEvidence(event.evidence());
+                                    eventDO.setTimestamp(event.timestamp() != null ? 
+                                            LocalDateTime.ofInstant(event.timestamp(), ZoneId.systemDefault()) : 
+                                            LocalDateTime.now());
+                                    learningEventMapper.insert(eventDO);
+                                }
+                            }
+                        }
+                        logger.info("成功迁移学习画像数据 {} 条", loaded.size());
+                    }
+                } catch (Exception e) {
+                    logger.error("迁移学习画像数据失败", e);
+                }
+            }
+        }
+    }
+
+    private void migrateLexicalIndex() {
+        if (lexicalIndexMapper.selectCount(Wrappers.emptyWrapper()) == 0) {
+            File file = new File("lexical_index.json");
+            if (file.exists()) {
+                try {
+                    Map<String, Map<String, Object>> loaded = objectMapper.readValue(
+                            file, new TypeReference<Map<String, Map<String, Object>>>() {});
+                    if (loaded != null) {
+                        for (Map.Entry<String, Map<String, Object>> entry : loaded.entrySet()) {
+                            Map<String, Object> record = entry.getValue();
+                            LexicalIndexDO indexDO = new LexicalIndexDO();
+                            indexDO.setDocId(entry.getKey());
+                            indexDO.setText((String) record.get("text"));
+                            indexDO.setFilePath((String) record.get("filePath"));
+                            indexDO.setKnowledgeTags((String) record.get("knowledgeTags"));
+                            indexDO.setSourceType((String) record.get("sourceType"));
+                            indexDO.setCreatedAt(LocalDateTime.now());
+                            lexicalIndexMapper.insert(indexDO);
+                        }
+                        logger.info("成功迁移词法索引数据 {} 条", loaded.size());
+                    }
+                } catch (Exception e) {
+                    logger.error("迁移词法索引数据失败", e);
+                }
+            }
+        }
+    }
+
+    private void migrateSyncIndex() {
+        if (syncIndexMapper.selectCount(Wrappers.emptyWrapper()) == 0) {
+            File file = new File("sync_index.json");
+            if (file.exists()) {
+                try {
+                    Map<String, OldFileMetadata> loaded = objectMapper.readValue(
+                            file, new TypeReference<ConcurrentHashMap<String, OldFileMetadata>>() {});
+                    if (loaded != null) {
+                        for (Map.Entry<String, OldFileMetadata> entry : loaded.entrySet()) {
+                            SyncIndexDO indexDO = new SyncIndexDO();
+                            indexDO.setFilePath(entry.getKey());
+                            indexDO.setFileHash(entry.getValue().hash);
+                            indexDO.setDocIds(entry.getValue().docIds);
+                            indexDO.setCreatedAt(LocalDateTime.now());
+                            syncIndexMapper.insert(indexDO);
+                        }
+                        logger.info("成功迁移同步索引数据 {} 条", loaded.size());
+                    }
+                } catch (Exception e) {
+                    logger.error("迁移同步索引数据失败", e);
+                }
+            }
+        }
+    }
+
+    public static class OldFileMetadata {
+        public String hash;
+        public List<String> docIds;
     }
 
     private void migrateIntentTree() {

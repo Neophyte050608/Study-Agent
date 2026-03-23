@@ -1,5 +1,10 @@
 package com.example.interview.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.interview.entity.LearningEventDO;
+import com.example.interview.entity.LearningProfileDO;
+import com.example.interview.mapper.LearningEventMapper;
+import com.example.interview.mapper.LearningProfileMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,11 +13,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -22,12 +30,33 @@ class LearningProfileAgentTest {
     @Mock
     private InterviewLearningProfileService interviewLearningProfileService;
 
+    @Mock
+    private LearningProfileMapper learningProfileMapper;
+
+    @Mock
+    private LearningEventMapper learningEventMapper;
+
     private LearningProfileAgent learningProfileAgent;
 
     @BeforeEach
     void setUp() {
         when(interviewLearningProfileService.normalizeUserId(anyString())).thenReturn("u1");
-        learningProfileAgent = new LearningProfileAgent(new ObjectMapper(), interviewLearningProfileService);
+        
+        // Mock profile
+        LearningProfileDO mockProfile = new LearningProfileDO();
+        mockProfile.setUserId("u1");
+        mockProfile.setTotalEvents(1);
+        mockProfile.setTopicMetrics(new LinkedHashMap<>());
+        
+        when(learningProfileMapper.selectOne(any())).thenReturn(mockProfile);
+        when(learningEventMapper.selectList(any())).thenReturn(new ArrayList<>());
+        
+        learningProfileAgent = new LearningProfileAgent(
+                interviewLearningProfileService, 
+                learningProfileMapper, 
+                learningEventMapper, 
+                new ObjectMapper()
+        );
     }
 
     @Test
@@ -43,6 +72,10 @@ class LearningProfileAgentTest {
                 "第一次提交",
                 Instant.now()
         );
+        
+        // Mock insert logic
+        when(learningEventMapper.selectCount(any())).thenReturn(0L).thenReturn(1L);
+        
         boolean first = learningProfileAgent.upsertEvent(event);
         boolean second = learningProfileAgent.upsertEvent(event);
         assertTrue(first);
@@ -52,6 +85,7 @@ class LearningProfileAgentTest {
 
     @Test
     void shouldGenerateDifferentRecommendationsByMode() {
+        when(learningEventMapper.selectCount(any())).thenReturn(0L);
         learningProfileAgent.upsertEvent(new LearningEvent(
                 "evt-2",
                 "u1",
