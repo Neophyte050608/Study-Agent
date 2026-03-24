@@ -1,0 +1,23 @@
+{
+  "name": "interview-review-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:spring": "vite build --outDir ../src/main/resources/static/spa --emptyOutDir",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "marked": "^17.0.5",
+    "mysql2": "^3.20.0",
+    "redis": "^5.11.0",
+    "vue": "^3.5.18",
+    "vue-router": "^4.4.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "vite": "^5.4.8"
+  }
+}

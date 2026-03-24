@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -255,36 +256,54 @@ public class RAGService {
         }
     }
 
+    /**
+     * 核心多路召回引擎。
+     * 
+     * 【技术演进与设计思考】
+     * 1. 痛点：原来的单一向量检索（Vector Search）会因为“语义漂移”导致实体边界模糊。比如搜“Redis 缓存击穿”，它会召回大量“MySQL 缓存”的八股文。
+     * 2. 优化：引入基于倒排/词法匹配的“意图定向通道”，结合 `knowledge_tags` 权重，确保精准命中专业术语；再保留全局向量作为兜底，提高泛化能力。
+     * 3. 并发：通过自定义线程池 `ragRetrieveExecutor` 让三路通道并发执行，整体耗时取决于最慢的一路，不增加接口 RT。
+     * 
+     * 实现：意图定向检索 + 全局向量检索 + 图谱关联检索 并行执行。
+     */
     private List<Document> retrieveHybridDocuments(String retrievalQuery) {
-        // 使用自定义的 ragRetrieveExecutor 线程池并行执行向量检索、词法检索和图谱检索，降低整体检索耗时，避免阻塞默认池
+        List<String> intentFocusTerms = buildIntentFocusTerms(retrievalQuery);
+        // 通道 A：意图定向检索（利用词法索引服务进行高精度标签/路径匹配）
+        java.util.concurrent.CompletableFuture<List<Document>> intentDirectedFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Document> docs = lexicalIndexService.searchIntentDirected(retrievalQuery, intentFocusTerms, 8);
+                return markRetrieveChannel(docs, "intent_directed");
+            } catch (RuntimeException e) {
+                logger.warn("意图定向检索失败，返回空列表。原因: {}", summarizeError(e));
+                return List.<Document>of();
+            }
+        }, ragRetrieveExecutor);
+
+        // 通道 B：全局向量检索（纯语义兜底）
         java.util.concurrent.CompletableFuture<List<Document>> vectorFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
-                return vectorStore.similaritySearch(
+                List<Document> docs = vectorStore.similaritySearch(
                         SearchRequest.builder().query(retrievalQuery).topK(8).build()
                 );
+                return markRetrieveChannel(docs, "global_vector");
             } catch (RuntimeException e) {
                 logger.warn("向量检索失败，返回空列表。原因: {}", summarizeError(e));
                 return List.<Document>of();
             }
         }, ragRetrieveExecutor);
 
-        java.util.concurrent.CompletableFuture<List<Document>> lexicalFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> 
-            lexicalIndexService.search(retrievalQuery, 8)
-        , ragRetrieveExecutor);
-
-        // 新增：GraphRAG 检索分支
+        // 通道 C：GraphRAG 检索分支（图谱实体扩展）
         java.util.concurrent.CompletableFuture<List<Document>> graphFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
                 List<Document> graphDocs = new ArrayList<>();
-                // 提取查询中的关键词
-                List<String> queryTokens = tokenize(retrievalQuery);
+                List<String> queryTokens = intentFocusTerms.isEmpty() ? tokenize(retrievalQuery) : intentFocusTerms;
                 for (String token : queryTokens) {
-                    // 查询图谱中的 1度到2度 邻居节点
                     List<String> relatedConcepts = techConceptRepository.findRelatedConceptsWithinTwoHops(token);
                     if (relatedConcepts != null && !relatedConcepts.isEmpty()) {
                         String graphContext = "知识图谱关联提示：与【" + token + "】存在深度技术关联的概念包括 -> " + String.join(", ", relatedConcepts);
                         Document doc = new Document(graphContext);
                         doc.getMetadata().put("source_type", "graph_rag");
+                        doc.getMetadata().put("retrieve_channel", "graph_rag");
                         graphDocs.add(doc);
                     }
                 }
@@ -295,31 +314,42 @@ public class RAGService {
             }
         }, ragRetrieveExecutor);
 
+        List<Document> intentDocs = intentDirectedFuture.join();
         List<Document> vectorDocs = vectorFuture.join();
-        List<Document> lexicalDocs = lexicalFuture.join();
         List<Document> graphDocs = graphFuture.join();
 
-        // 融合三路结果
-        List<Document> fused = reciprocalRankFuse(vectorDocs, lexicalDocs);
-        fused.addAll(graphDocs); // 图谱关联直接作为补充上下文
+        // RRF 融合去重与重排流水线
+        List<Document> fused = reciprocalRankFuse(intentDocs, vectorDocs);
+        fused.addAll(graphDocs);
         return rerankByQueryOverlap(retrievalQuery, fused, 5);
     }
 
-    private List<Document> reciprocalRankFuse(List<Document> vectorDocs, List<Document> lexicalDocs) {
+    /**
+     * RRF (Reciprocal Rank Fusion) 倒数排名融合算法。
+     * 
+     * 【为什么要用 RRF？】
+     * 1. 分数量纲不一致：向量检索返回的是余弦相似度（通常在 0.7~1.0），而词法检索（TF-IDF）返回的是绝对分数（可能 > 10）。
+     * 2. 无法直接相加或简单归一化：强行归一化会被极端离群值带偏。
+     * 3. 解决思路：抛弃绝对分数，只看“排名”。公式：Score = 1 / (k + rank)。
+     *    文档在两个通道中排名越靠前，倒数和就越大，有效抹平了不同检索引擎的尺度差异。
+     * 
+     * 同时，在融合时针对 `intent_directed` 意图定向通道的文档给予 `1.12` 的提权（Channel Boost）。
+     */
+    private List<Document> reciprocalRankFuse(List<Document> intentDirectedDocs, List<Document> globalVectorDocs) {
         Map<String, FusedCandidate> fused = new LinkedHashMap<>();
-        for (int i = 0; i < vectorDocs.size(); i++) {
-            Document doc = vectorDocs.get(i);
+        for (int i = 0; i < intentDirectedDocs.size(); i++) {
+            Document doc = intentDirectedDocs.get(i);
             String key = candidateKey(doc);
             FusedCandidate candidate = fused.computeIfAbsent(key, k -> new FusedCandidate(doc));
             double sourceBoost = sourceTypeBoost(doc);
-            candidate.score += (1.0 / (60 + i + 1)) * sourceBoost;
+            candidate.score += (1.0 / (60 + i + 1)) * sourceBoost * channelBoost(doc);
         }
-        for (int i = 0; i < lexicalDocs.size(); i++) {
-            Document doc = lexicalDocs.get(i);
+        for (int i = 0; i < globalVectorDocs.size(); i++) {
+            Document doc = globalVectorDocs.get(i);
             String key = candidateKey(doc);
             FusedCandidate candidate = fused.computeIfAbsent(key, k -> new FusedCandidate(doc));
             double sourceBoost = sourceTypeBoost(doc);
-            candidate.score += (1.0 / (60 + i + 1)) * sourceBoost;
+            candidate.score += (1.0 / (60 + i + 1)) * sourceBoost * channelBoost(doc);
             Object lexicalScore = doc.getMetadata().get("lexical_score");
             if (lexicalScore instanceof Number number) {
                 candidate.score += number.doubleValue() * 0.01 * sourceBoost;
@@ -329,6 +359,41 @@ public class RAGService {
                 .sorted(Comparator.comparingDouble(FusedCandidate::score).reversed())
                 .map(FusedCandidate::document)
                 .collect(Collectors.toList());
+    }
+
+    private List<String> buildIntentFocusTerms(String retrievalQuery) {
+        if (retrievalQuery == null || retrievalQuery.isBlank()) {
+            return List.of();
+        }
+        return tokenize(retrievalQuery).stream()
+                .filter(token -> token.length() >= 2)
+                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new))
+                .stream()
+                .limit(8)
+                .collect(Collectors.toList());
+    }
+
+    private List<Document> markRetrieveChannel(List<Document> docs, String channel) {
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+        for (Document doc : docs) {
+            if (doc != null) {
+                doc.getMetadata().put("retrieve_channel", channel);
+            }
+        }
+        return docs;
+    }
+
+    private double channelBoost(Document doc) {
+        if (doc == null || doc.getMetadata() == null) {
+            return 1.0;
+        }
+        String channel = String.valueOf(doc.getMetadata().getOrDefault("retrieve_channel", "")).toLowerCase(Locale.ROOT);
+        if ("intent_directed".equals(channel)) {
+            return 1.12;
+        }
+        return 1.0;
     }
 
     private List<Document> rerankByQueryOverlap(String query, List<Document> docs, int topK) {

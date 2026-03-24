@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -136,16 +137,115 @@ public class LexicalIndexService {
         return scored.stream()
                 .sorted(Comparator.comparingDouble(ScoredRecord::score).reversed())
                 .limit(topK)
-                .map(item -> {
-                    Document doc = new Document(item.record().getText());
-                    doc.getMetadata().put("file_path", item.record().getFilePath());
-                    doc.getMetadata().put("knowledge_tags", item.record().getKnowledgeTags());
-                    doc.getMetadata().put("source_type", item.record().getSourceType() == null || item.record().getSourceType().isBlank() ? "obsidian" : item.record().getSourceType());
-                    doc.getMetadata().put("lexical_score", item.score());
-                    doc.getMetadata().put("doc_id", item.record().getDocId());
-                    return doc;
-                })
+                .map(item -> toDocument(item.record(), item.score(), "lexical"))
                 .collect(Collectors.toList());
+    }
+
+    public List<Document> searchIntentDirected(String query, List<String> focusTerms, int topK) {
+        if (topK <= 0) {
+            return List.of();
+        }
+        List<String> queryTokens = tokenize(query);
+        List<String> normalizedFocusTerms = normalizeTerms(focusTerms);
+        if (queryTokens.isEmpty() && normalizedFocusTerms.isEmpty()) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<LexicalIndexDO> wrapper = new LambdaQueryWrapper<>();
+        List<String> retrievalTerms = normalizedFocusTerms.isEmpty() ? queryTokens : normalizedFocusTerms;
+        for (int i = 0; i < retrievalTerms.size(); i++) {
+            String term = retrievalTerms.get(i);
+            if (i == 0) {
+                wrapper.like(LexicalIndexDO::getKnowledgeTags, term)
+                        .or().like(LexicalIndexDO::getFilePath, term)
+                        .or().like(LexicalIndexDO::getText, term);
+            } else {
+                wrapper.or().like(LexicalIndexDO::getKnowledgeTags, term)
+                        .or().like(LexicalIndexDO::getFilePath, term)
+                        .or().like(LexicalIndexDO::getText, term);
+            }
+        }
+        wrapper.last("LIMIT " + Math.max(topK * 8, 40));
+
+        List<LexicalIndexDO> recalledDocs = lexicalIndexMapper.selectList(wrapper);
+        if (recalledDocs.isEmpty()) {
+            return normalizedFocusTerms.isEmpty() ? List.of() : search(query, topK);
+        }
+
+        int totalDocs = recalledDocs.size();
+        Map<String, Integer> docFreq = new HashMap<>();
+        for (LexicalIndexDO record : recalledDocs) {
+            Set<String> tokenSet = new HashSet<>(tokenize(record.getText()));
+            for (String token : tokenSet) {
+                docFreq.merge(token, 1, Integer::sum);
+            }
+        }
+
+        List<ScoredRecord> scored = new ArrayList<>();
+        for (LexicalIndexDO record : recalledDocs) {
+            List<String> docTokens = tokenize(record.getText());
+            if (docTokens.isEmpty()) {
+                continue;
+            }
+            Map<String, Long> tf = docTokens.stream().collect(Collectors.groupingBy(token -> token, Collectors.counting()));
+            double tfIdfScore = 0.0;
+            for (String token : queryTokens) {
+                long termFreq = tf.getOrDefault(token, 0L);
+                if (termFreq == 0) {
+                    continue;
+                }
+                int df = docFreq.getOrDefault(token, 0);
+                double idf = Math.log(1.0 + (double) (totalDocs + 1) / (df + 1));
+                tfIdfScore += termFreq * idf;
+            }
+            String tags = record.getKnowledgeTags() == null ? "" : record.getKnowledgeTags().toLowerCase(Locale.ROOT);
+            String path = record.getFilePath() == null ? "" : record.getFilePath().toLowerCase(Locale.ROOT);
+            double focusBoost = 0.0;
+            for (String term : normalizedFocusTerms) {
+                if (tags.contains(term)) {
+                    focusBoost += 1.2;
+                }
+                if (path.contains(term)) {
+                    focusBoost += 0.8;
+                }
+            }
+            double finalScore = tfIdfScore + focusBoost;
+            if (finalScore > 0.0) {
+                scored.add(new ScoredRecord(record, finalScore));
+            }
+        }
+
+        if (scored.isEmpty()) {
+            return search(query, topK);
+        }
+
+        return scored.stream()
+                .sorted(Comparator.comparingDouble(ScoredRecord::score).reversed())
+                .limit(topK)
+                .map(item -> toDocument(item.record(), item.score(), "intent_directed"))
+                .collect(Collectors.toList());
+    }
+
+    private List<String> normalizeTerms(List<String> terms) {
+        if (terms == null || terms.isEmpty()) {
+            return List.of();
+        }
+        return terms.stream()
+                .filter(item -> item != null && !item.isBlank())
+                .map(item -> item.toLowerCase(Locale.ROOT).trim())
+                .filter(item -> item.length() >= 2)
+                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
+    }
+
+    private Document toDocument(LexicalIndexDO record, double score, String fallbackSourceType) {
+        Document doc = new Document(record.getText());
+        doc.getMetadata().put("file_path", record.getFilePath());
+        doc.getMetadata().put("knowledge_tags", record.getKnowledgeTags());
+        String sourceType = record.getSourceType();
+        doc.getMetadata().put("source_type", sourceType == null || sourceType.isBlank() ? fallbackSourceType : sourceType);
+        doc.getMetadata().put("lexical_score", score);
+        doc.getMetadata().put("doc_id", record.getDocId());
+        return doc;
     }
 
     private List<String> tokenize(String text) {

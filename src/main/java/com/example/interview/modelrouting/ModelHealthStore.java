@@ -7,6 +7,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * 模型健康状态存储与三态熔断器实现。
+ * 
+ * 【架构演进与技术选型】
+ * 1. 痛点：早期的单点 LLM 调用（如只调 OpenAI）非常脆弱，遇到 Rate Limit 或 502 时直接抛错给前端，导致核心业务（面试、出题）不可用。
+ * 2. 为什么不用 Spring Cloud Resilience4j？
+ *    Resilience4j 主要是基于 HTTP 状态码和异常来做熔断，但在 LLM 场景中，最大的痛点是“首包假死”（连接成功，HTTP 200，但一直不返回流式数据）。
+ *    我们需要一套能与“首包超时探测（First-Packet Probe）”深度绑定的自定义熔断状态机。
+ * 3. 三态机制流转：
+ *    - CLOSED (正常)：请求直接放行。若连续失败达到阈值，切换为 OPEN。
+ *    - OPEN (熔断)：直接拒绝请求，走降级逻辑（尝试下一个模型候选）。设置一个冷却时间（如 30 秒）。
+ *    - HALF_OPEN (半开)：冷却时间到后，允许放行少量请求（如 1 个）去探活。如果成功，恢复为 CLOSED；如果失败，立刻切回 OPEN。
+ * 
+ * 维护每个模型候选者的健康状态（CLOSED, OPEN, HALF_OPEN），并控制状态流转。
+ */
 @Component
 public class ModelHealthStore {
 

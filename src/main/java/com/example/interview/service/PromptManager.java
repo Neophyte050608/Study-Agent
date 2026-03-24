@@ -16,9 +16,17 @@ import java.util.regex.Pattern;
 /**
  * 提示词管理器 (PromptManager)
  * 
+ * 【痛点与优化思考】
+ * 1. 为什么不用硬编码或 String.format？
+ *    之前提示词散落在各个 Java 类里，改一个错别字或调整一个 Few-shot 样例都要重新编译发版，效率极低。
+ *    String.format 无法处理复杂的条件分支（if/else）和循环（for-loop）渲染。
+ * 2. 为什么选 Jinjava？
+ *    - Jinjava 是 Jinja2 模板引擎的 Java 实现。Jinja2 在 Python (LangChain/LlamaIndex) 生态中是标准。
+ *    - 选择它意味着未来如果将 AI 核心逻辑迁移到 Python 侧，提示词可以无缝复用，实现跨语言对齐。
+ * 
  * 核心职责：
  * 1. 集中管理所有 AI 提示词模板，从单个 prompts.txt 文件中解析所有提示词。
- * 2. 使用 Jinjava 模板引擎进行动态渲染。
+ * 2. 使用 Jinjava 模板引擎进行动态渲染，结合 Few-shot 动态注入缓解模型格式幻觉。
  * 3. 提供缓存机制，避免频繁读取文件。
  */
 @Service

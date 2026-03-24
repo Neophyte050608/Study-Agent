@@ -45,6 +45,13 @@ public class IntentTreeRoutingService {
         return properties.getClarificationTtlMinutes();
     }
 
+    /**
+     * 核心意图路由逻辑。
+     * 根据用户输入和历史记录，利用意图树进行分类，并判定是否需要主动澄清。
+     * @param query 用户当前输入
+     * @param history 对话历史
+     * @return 意图路由决策 (IntentRoutingDecision)，包含任务类型、置信度及是否需要澄清等状态
+     */
     public IntentRoutingDecision route(String query, String history) {
         if (query == null || query.isBlank()) {
             return IntentRoutingDecision.fallback();
@@ -61,8 +68,11 @@ public class IntentTreeRoutingService {
             vars.put("confidenceThreshold", properties.getConfidenceThreshold());
             vars.put("minGap", properties.getMinGap());
             vars.put("ambiguityRatio", properties.getAmbiguityRatio());
+            // 使用 Jinjava 渲染提示词，解耦了提示词与代码逻辑
             String prompt = promptManager.render("intent-tree-classifier", vars);
+            // 调用大模型进行意图分类
             String response = routingChatService.call(prompt, ModelRouteType.THINKING, "意图树分类");
+            // 解析并归一化模型返回结果
             return normalizeDecision(response, query, history);
         } catch (Exception ex) {
             if (properties.isFallbackToLegacyTaskRouter()) {
@@ -204,10 +214,28 @@ public class IntentTreeRoutingService {
         return new IntentRoutingDecision(false, taskType, confidence, reason, slots, candidates, askClarification, clarificationQuestion, options);
     }
 
+    /**
+     * 判断是否需要主动向用户澄清意图。
+     * 
+     * 【设计思考】
+     * 1. 为什么不用传统的“置信度最高即命中”？
+     *    传统 NLP 或简单的 Prompt 路由遇到模棱两可的输入（如“来两道题”，既可能是选择题也可能是算法题）时，会强行猜一个。
+     *    这会导致极其糟糕的用户体验（比如用户想写算法，系统却丢了一道选择题）。
+     * 2. 本方案的优势：
+     *    引入了“短路澄清机制”。把大模型的不确定性暴露给用户，让用户做选择（1. 算法题 2. 选择题），
+     *    这非常符合真实人类对话的逻辑。
+     * 
+     * 触发条件：
+     * 1. 绝对置信度过低（< 阈值）
+     * 2. Top1 和 Top2 意图分数相近（差距 < 最小差距阈值，或者比值 >= 模糊率阈值）
+     * 3. 特定任务（如刷题）缺少关键槽位（如主题和题型均为空）
+     */
     private boolean shouldClarify(List<IntentCandidate> candidates, double confidence, Map<String, Object> slots, String taskType) {
+        // 1. 绝对置信度过低，直接澄清
         if (confidence < properties.getConfidenceThreshold()) {
             return true;
         }
+        // 2. 意图模糊：前两名候选意图得分相近
         if (candidates.size() >= 2) {
             double top1 = candidates.get(0).score();
             double top2 = candidates.get(1).score();
@@ -218,6 +246,7 @@ public class IntentTreeRoutingService {
                 return true;
             }
         }
+        // 3. 核心槽位缺失（例如刷题没有提供主题和题型），短路阻断并触发澄清
         if ("CODING_PRACTICE".equals(taskType) && textOf(slots.get("topic")).isBlank() && textOf(slots.get("questionType")).isBlank()) {
             return true;
         }

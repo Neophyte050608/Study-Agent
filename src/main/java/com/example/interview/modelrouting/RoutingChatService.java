@@ -71,6 +71,11 @@ public class RoutingChatService {
         }, stage);
     }
 
+    /**
+     * 带首包探测的模型调用。
+     * 使用 CompletableFuture 异步发起请求，并结合 FirstPacketAwaiter 检查响应时间。
+     * 如果某候选模型响应过慢（未在规定时间内返回首包），将抛出超时异常，触发熔断器状态转换并降级到下一个模型。
+     */
     public String callWithFirstPacketProbe(String prompt, ModelRouteType routeType, String stage) {
         if (!properties.isEnabled()) {
             return callWithModel(fallbackChatModel, prompt);
@@ -81,7 +86,9 @@ public class RoutingChatService {
         }
         return modelRoutingExecutor.execute(candidates, candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
+            // 异步发起模型调用
             CompletableFuture<String> firstPacketFuture = CompletableFuture.supplyAsync(() -> callWithModel(chatModel, prompt));
+            // 阻塞等待，如果超时则抛出 TimeoutException，由外层 executor 捕获并记录失败
             String result = firstPacketAwaiter.awaitFirstPacket(firstPacketFuture);
             logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(), modelHealthStore.stateOf(candidate.name()));
             return result;
