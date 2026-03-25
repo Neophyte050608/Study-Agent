@@ -5,35 +5,39 @@ import com.example.interview.agent.TaskRouterAgent;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
+import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.core.InterviewSession;
+import com.example.interview.core.RAGTraceContext;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * 面试业务服务门面。
- * 对外提供统一接口，把请求编排到 Orchestrator，并输出前端所需结构。
- *
- * <p>分层定位：</p>
- * <ul>
- *   <li>Controller：负责 HTTP 参数解析与错误码映射。</li>
- *   <li>InterviewService：负责把“外部请求”转成 TaskRequest，统一走 TaskRouterAgent（便于观测与扩展）。</li>
- *   <li>InterviewOrchestratorAgent：负责多层 Agent 的编排与会话状态推进。</li>
- * </ul>
+ * 面试业务逻辑门面服务。
  */
 @Service
 public class InterviewService {
 
-    private final InterviewOrchestratorAgent orchestratorAgent;
     private final TaskRouterAgent taskRouterAgent;
+    private final InterviewOrchestratorAgent orchestratorAgent;
     private final InterviewLearningProfileService learningProfileService;
     private final LearningProfileAgent learningProfileAgent;
     private final McpGatewayService mcpGatewayService;
     private final RAGObservabilityService ragObservabilityService;
     private final RetrievalEvaluationService retrievalEvaluationService;
+    private final ObservabilitySwitchProperties observabilitySwitchProperties;
 
-    public InterviewService(InterviewOrchestratorAgent orchestratorAgent, TaskRouterAgent taskRouterAgent, InterviewLearningProfileService learningProfileService, LearningProfileAgent learningProfileAgent, McpGatewayService mcpGatewayService, RAGObservabilityService ragObservabilityService, RetrievalEvaluationService retrievalEvaluationService) {
+    public InterviewService(
+            TaskRouterAgent taskRouterAgent,
+            InterviewOrchestratorAgent orchestratorAgent,
+            InterviewLearningProfileService learningProfileService,
+            LearningProfileAgent learningProfileAgent,
+            McpGatewayService mcpGatewayService,
+            RAGObservabilityService ragObservabilityService,
+            RetrievalEvaluationService retrievalEvaluationService,
+            ObservabilitySwitchProperties observabilitySwitchProperties
+    ) {
         this.orchestratorAgent = orchestratorAgent;
         this.taskRouterAgent = taskRouterAgent;
         this.learningProfileService = learningProfileService;
@@ -41,6 +45,7 @@ public class InterviewService {
         this.mcpGatewayService = mcpGatewayService;
         this.ragObservabilityService = ragObservabilityService;
         this.retrievalEvaluationService = retrievalEvaluationService;
+        this.observabilitySwitchProperties = observabilitySwitchProperties;
     }
 
     /**
@@ -52,10 +57,15 @@ public class InterviewService {
         payload.put("topic", topic == null ? "" : topic);
         payload.put("resumePath", resumePath == null ? "" : resumePath);
         payload.put("totalQuestions", totalQuestions);
+        
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("source", "InterviewService.startSession");
+        context.put("traceId", RAGTraceContext.getTraceId());
+        
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
                 TaskType.INTERVIEW_START,
                 payload,
-                Map.of("source", "InterviewService.startSession")
+                context
         ));
         if (!response.success() || !(response.data() instanceof InterviewSession session)) {
             throw new IllegalStateException(response.message());
@@ -67,13 +77,17 @@ public class InterviewService {
      * 提交回答：将外部字段映射为编排 Agent 期望的 payload 结构，并把编排结果裁剪为前端展示模型。
      */
     public AnswerResult submitAnswer(String sessionId, String userAnswer) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("source", "InterviewService.submitAnswer");
+        context.put("traceId", RAGTraceContext.getTraceId());
+        
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
                 TaskType.INTERVIEW_ANSWER,
                 Map.of(
                         "sessionId", sessionId == null ? "" : sessionId,
                         "userAnswer", userAnswer == null ? "" : userAnswer
                 ),
-                Map.of("source", "InterviewService.submitAnswer")
+                context
         ));
         if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.AnswerResult result)) {
             throw new IllegalStateException(response.message());
@@ -107,13 +121,17 @@ public class InterviewService {
      * 生成最终报告：同样走任务路由，以便记录状态并与画像更新/审计链路保持一致。
      */
     public FinalReport generateFinalReport(String sessionId, String userId) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("source", "InterviewService.generateFinalReport");
+        context.put("traceId", RAGTraceContext.getTraceId());
+        
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
                 TaskType.INTERVIEW_REPORT,
                 Map.of(
                         "sessionId", sessionId == null ? "" : sessionId,
                         "userId", userId == null ? "" : userId
                 ),
-                Map.of("source", "InterviewService.generateFinalReport")
+                context
         ));
         if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.FinalReport report)) {
             throw new IllegalStateException(response.message());
@@ -158,19 +176,32 @@ public class InterviewService {
         return mcpGatewayService.invoke(userId, capability, params, context);
     }
 
-    public java.util.List<RAGObservabilityService.TraceRecord> getRecentRagTraces(int limit) {
+    public java.util.List<RAGObservabilityService.RAGTrace> getRecentRagTraces(int limit) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return java.util.List.of();
+        }
         return ragObservabilityService.listRecent(limit);
     }
 
     public java.util.Map<String, Object> getRagOverview() {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return java.util.Map.of(
+                    "enabled", false,
+                    "avgLatencyMs", 0,
+                    "avgRetrievedDocs", 0.0,
+                    "cacheHitRate", "0.0%"
+            );
+        }
         return ragObservabilityService.getOverview();
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
+        ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.runDefaultEval();
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(java.util.List<RetrievalEvaluationService.EvalCase> cases) {
+        ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.runCustomEval(cases);
     }
 
@@ -184,7 +215,39 @@ public class InterviewService {
     }
 
     public java.util.List<RetrievalEvaluationService.EvalCase> parseRetrievalEvalCsv(String csvText) {
+        ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.parseCasesFromCsv(csvText);
+    }
+
+    public boolean isRagTraceEnabled() {
+        return observabilitySwitchProperties.isRagTraceEnabled();
+    }
+
+    public boolean isRetrievalEvalEnabled() {
+        return observabilitySwitchProperties.isRetrievalEvalEnabled();
+    }
+
+    public java.util.Map<String, Object> getObservabilitySwitches() {
+        return java.util.Map.of(
+                "ragTraceEnabled", observabilitySwitchProperties.isRagTraceEnabled(),
+                "retrievalEvalEnabled", observabilitySwitchProperties.isRetrievalEvalEnabled()
+        );
+    }
+
+    public java.util.Map<String, Object> updateObservabilitySwitches(Boolean ragTraceEnabled, Boolean retrievalEvalEnabled) {
+        if (ragTraceEnabled != null) {
+            observabilitySwitchProperties.setRagTraceEnabled(ragTraceEnabled);
+        }
+        if (retrievalEvalEnabled != null) {
+            observabilitySwitchProperties.setRetrievalEvalEnabled(retrievalEvalEnabled);
+        }
+        return getObservabilitySwitches();
+    }
+
+    private void ensureRetrievalEvalEnabled() {
+        if (!observabilitySwitchProperties.isRetrievalEvalEnabled()) {
+            throw new IllegalStateException("召回率评测已关闭，请设置 app.observability.retrieval-eval-enabled=true 后重试");
+        }
     }
 
     public record AnswerResult(

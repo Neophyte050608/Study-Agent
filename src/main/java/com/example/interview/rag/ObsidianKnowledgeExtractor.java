@@ -70,33 +70,16 @@ public class ObsidianKnowledgeExtractor {
         String sourceType = detectSourceType(normalizedPath, normalizedText, knowledgeTags);
         Set<String> wikiLinks = extractWikiLinks(markdown); // 新增：提取双向链接
 
-        // 重组文档内容，使其更适合向量化搜索
+        // 重组文档内容，使其更适合向量化搜索 (不再将全文压缩到只剩摘要，而是保留原始正文以便后续分块)
         StringBuilder builder = new StringBuilder();
-        builder.append("标题：").append(title).append("\n");
-        if (!knowledgeTags.isEmpty()) {
-            builder.append("知识类型：").append(String.join("、", knowledgeTags)).append("\n");
-        }
-        if (!keywords.isEmpty()) {
-            builder.append("关键词：").append(String.join("、", keywords)).append("\n");
-        }
-        if (!summaries.isEmpty()) {
-            builder.append("总结：\n").append(String.join("\n", summaries)).append("\n");
-        }
-        if (!techBullets.isEmpty()) {
-            builder.append("技术要点：\n").append(String.join("\n", techBullets)).append("\n");
-        }
-        if (!codeBlocks.isEmpty()) {
-            // 仅保留前两个代码块，避免噪声过大
-            builder.append("代码片段：\n").append(String.join("\n\n", codeBlocks.subList(0, Math.min(2, codeBlocks.size())))).append("\n");
-        }
+        builder.append(markdown);
 
-        String extracted = builder.toString().trim();
         // 如果提取后的有效信息过少，则不入库
-        if (extracted.length() < 40) {
+        if (builder.length() < 40) {
             return ExtractionResult.empty();
         }
 
-        Document document = new Document(extracted);
+        Document document = new Document(builder.toString().trim());
         // 注入元数据，方便后续溯源和过滤
         document.getMetadata().put("file_path", filePath);
         document.getMetadata().put("source_type", sourceType);

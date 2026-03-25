@@ -58,13 +58,13 @@ class EvaluationAgentTest {
     void shouldEvaluateWithKnowledgePacket() {
         RAGService ragService = mock(RAGService.class);
         RAGService.KnowledgePacket packet = new RAGService.KnowledgePacket("并发 可见性", java.util.List.of(), "上下文", "1. [note.md]", false);
-        when(ragService.evaluateWithKnowledge("Java并发", "什么是可见性", "回答", "INTERMEDIATE", "ADVANCE", 82.0, "画像", "优先场景化深挖", packet)).thenReturn("""
+        when(ragService.evaluateWithKnowledge("Java并发", "什么是可见性", "回答", "INTERMEDIATE", "ADVANCE", 82.0, "画像", "优先场景化深挖", packet)).thenReturn(new RAGService.EvaluationResult("""
                 {"score":90,"accuracy":89,"logic":88,"depth":87,"boundary":86,
                 "deductions":["术语还可更精准"],
                 "citations":["1. [note.md]"],
                 "conflicts":[],
                 "feedback":"回答扎实","nextQuestion":"请谈可见性与有序性"}
-                """);
+                """, 100, 50));
         EvaluationAgent agent = new EvaluationAgent(ragService, new ObjectMapper());
 
         EvaluationAgent.LayeredEvaluation result = agent.evaluateAnswerWithKnowledge("Java并发", "什么是可见性", "回答", "INTERMEDIATE", "ADVANCE", 82.0, "画像", "优先场景化深挖", packet);

@@ -1,6 +1,8 @@
 package com.example.interview.service;
 
+import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.core.Question;
+import com.example.interview.core.RAGTraceContext;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.tool.WebSearchTool;
@@ -18,16 +20,8 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.net.SocketTimeoutException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -68,8 +62,10 @@ public class RAGService {
     private final java.util.concurrent.Executor ragRetrieveExecutor;
     // 注入图谱持久化组件
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
+    // 可观测开关配置
+    private final ObservabilitySwitchProperties observabilitySwitchProperties;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -80,6 +76,7 @@ public class RAGService {
         this.lexicalIndexService = lexicalIndexService;
         this.webSearchTool = webSearchTool;
         this.observabilityService = observabilityService;
+        this.observabilitySwitchProperties = observabilitySwitchProperties;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -105,14 +102,26 @@ public class RAGService {
 
     public KnowledgePacket buildKnowledgePacket(String question, String userAnswer) {
         // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
+        String traceId = RAGTraceContext.getTraceId();
+        String rewriteNodeId = UUID.randomUUID().toString();
+        observabilityService.startNode(traceId, rewriteNodeId, RAGTraceContext.getCurrentNodeId(), "REWRITE", "Query Rewrite");
+        
         String retrievalQuery = question + " " + userAnswer;
         try {
             retrievalQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
+            observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "RW: " + retrievalQuery, null);
         } catch (RuntimeException e) {
             logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
+            observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "FALLBACK: " + retrievalQuery, e.getMessage());
         }
         // 注意：retrievalQuery 可能包含用户原话，日志里只用于排障；必要时可将该日志级别改为 DEBUG。
-        logger.info("Rewritten Query: {}", retrievalQuery);
+        if (observabilitySwitchProperties.isRagTraceEnabled()) {
+            logger.info("Rewritten Query: {}", retrievalQuery);
+        }
+        
+        String retrievalNodeId = UUID.randomUUID().toString();
+        observabilityService.startNode(traceId, retrievalNodeId, RAGTraceContext.getCurrentNodeId(), "RETRIEVAL", "Hybrid Retrieval");
+        
         List<Document> retrievedDocs = retrieveHybridDocuments(retrievalQuery);
         String context = retrievedDocs.stream()
                 .map(Document::getText)
@@ -125,6 +134,9 @@ public class RAGService {
             retrievalEvidence = buildWebEvidence(webContext);
             webFallbackUsed = true;
         }
+        
+        observabilityService.endNode(traceId, retrievalNodeId, retrievalQuery, retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed, null);
+        
         return new KnowledgePacket(retrievalQuery, retrievedDocs, context, retrievalEvidence, webFallbackUsed);
     }
 
@@ -135,25 +147,27 @@ public class RAGService {
         String finalEvidence = truncate(originalEvidence, 900);
         String safeProfileSnapshot = truncate(profileSnapshot, 480);
         String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
-        logger.info(
-                "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
-                safeLogText(topic, 40),
-                safeLogText(difficultyLevel, 24),
-                safeLogText(followUpState, 24),
-                String.format("%.1f", topicMastery),
-                safeLength(question),
-                safeLength(userAnswer),
-                safeLength(normalizedStrategy),
-                safeLength(safeProfileSnapshot),
-                safeLength(profileSnapshot),
-                safeLength(finalContext),
-                safeLength(originalContext),
-                safeLength(finalEvidence),
-                safeLength(originalEvidence),
-                parseEvidenceCatalog(originalEvidence).size(),
-                packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
-                packet != null && packet.webFallbackUsed()
-        );
+        if (observabilitySwitchProperties.isRagTraceEnabled()) {
+            logger.info(
+                    "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
+                    safeLogText(topic, 40),
+                    safeLogText(difficultyLevel, 24),
+                    safeLogText(followUpState, 24),
+                    String.format("%.1f", topicMastery),
+                    safeLength(question),
+                    safeLength(userAnswer),
+                    safeLength(normalizedStrategy),
+                    safeLength(safeProfileSnapshot),
+                    safeLength(profileSnapshot),
+                    safeLength(finalContext),
+                    safeLength(originalContext),
+                    safeLength(finalEvidence),
+                    safeLength(originalEvidence),
+                    parseEvidenceCatalog(originalEvidence).size(),
+                    packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
+                    packet != null && packet.webFallbackUsed()
+            );
+        }
         try {
             RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
             return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
@@ -164,34 +178,46 @@ public class RAGService {
     }
 
     private RoutingChatService.RoutingResult generateEvaluationResult(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String retrievalEvidence, String strategyHint) {
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
-        String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
-        List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
+        String traceId = RAGTraceContext.getTraceId();
+        String nodeId = UUID.randomUUID().toString();
+        observabilityService.startNode(traceId, nodeId, RAGTraceContext.getCurrentNodeId(), "GENERATION", "LLM Evaluation");
         
-        Map<String, Object> contextMap = new HashMap<>();
-        contextMap.put("skillBlock", skillBlock);
-        contextMap.put("topic", topic);
-        contextMap.put("difficultyGuide", difficultyGuide);
-        contextMap.put("followUpState", followUpState);
-        contextMap.put("topicMastery", String.format("%.1f", topicMastery));
-        contextMap.put("strategyHint", strategyHint);
-        contextMap.put("profileSnapshot", profileSnapshot);
-        contextMap.put("context", context);
-        contextMap.put("retrievalEvidence", retrievalEvidence);
-        contextMap.put("cases", cases);
-        contextMap.put("question", question);
-        contextMap.put("userAnswer", userAnswer);
+        try {
+            String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
+            String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
+            List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
+            
+            Map<String, Object> contextMap = new HashMap<>();
+            contextMap.put("skillBlock", skillBlock);
+            contextMap.put("topic", topic);
+            contextMap.put("difficultyGuide", difficultyGuide);
+            contextMap.put("followUpState", followUpState);
+            contextMap.put("topicMastery", String.format("%.1f", topicMastery));
+            contextMap.put("strategyHint", strategyHint);
+            contextMap.put("profileSnapshot", profileSnapshot);
+            contextMap.put("context", context);
+            contextMap.put("retrievalEvidence", retrievalEvidence);
+            contextMap.put("cases", cases);
+            contextMap.put("question", question);
+            contextMap.put("userAnswer", userAnswer);
 
-        String prompt = promptManager.render("evaluation", contextMap);
-        // 使用带首包探测的同步调用，避免长时间等待无效响应
-        return callWithRetryResult(() -> {
-            String content = routingChatService.callWithFirstPacketProbeSupplier(
-                () -> { throw new RuntimeException("首包探测超时或失败"); },
-                prompt, ModelRouteType.THINKING, "回答评估"
-            );
-            // 暂时由于 callWithFirstPacketProbeSupplier 只返回 content，这里做一个包装，真正的 metadata 需后续补充或在此忽略
-            return new RoutingChatService.RoutingResult(content, 0, 0, 0);
-        }, 1, "回答评估");
+            String prompt = promptManager.render("evaluation", contextMap);
+            // 使用带首包探测的同步调用，避免长时间等待无效响应
+            RoutingChatService.RoutingResult result = callWithRetryResult(() -> {
+                String content = routingChatService.callWithFirstPacketProbeSupplier(
+                    () -> { throw new RuntimeException("首包探测超时或失败"); },
+                    prompt, ModelRouteType.THINKING, "回答评估"
+                );
+                // 暂时由于 callWithFirstPacketProbeSupplier 只返回 content，这里做一个包装，真正的 metadata 需后续补充或在此忽略
+                return new RoutingChatService.RoutingResult(content, 0, 0, 0);
+            }, 1, "回答评估");
+            
+            observabilityService.endNode(traceId, nodeId, "Q: " + question, "Score: " + result.content().substring(0, Math.min(20, result.content().length())), null);
+            return result;
+        } catch (Exception e) {
+            observabilityService.endNode(traceId, nodeId, "Q: " + question, null, e.getMessage());
+            throw e;
+        }
     }
 
     private String validateEvidenceReferences(String rawJson, String retrievalEvidence) {
@@ -500,6 +526,9 @@ public class RAGService {
     }
 
     private void recordTrace(String query, int retrievedCount, String evidence, String resultJson, boolean fallbackUsed, long latencyMs, int inputTokens, int outputTokens) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return;
+        }
         try {
             JsonNode node = objectMapper.readTree(resultJson);
             int score = node.path("score").asInt(0);

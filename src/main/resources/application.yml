@@ -101,6 +101,10 @@ rocketmq:
     group: ${ROCKETMQ_PRODUCER_GROUP:interview-review-a2a-producer}
 
 app:
+  observability:
+    rag-trace-enabled: ${APP_OBSERVABILITY_RAG_TRACE_ENABLED:true}
+    retrieval-eval-enabled: ${APP_OBSERVABILITY_RETRIEVAL_EVAL_ENABLED:true}
+
   a2a:
     bus:
       type: ${APP_A2A_BUS_TYPE:inmemory} # 默认内存，私密配置中可重写为 rocketmq
@@ -157,6 +161,18 @@ app:
     max-candidates: ${APP_INTENT_TREE_MAX_CANDIDATES:3}
     fallback-to-legacy-task-router: ${APP_INTENT_TREE_FALLBACK_TO_LEGACY:true}
   
+  rag:
+    chunking:
+      strategy: ${APP_RAG_CHUNKING_STRATEGY:STRUCTURE_RECURSIVE_WITH_METADATA}
+      target-size: ${APP_RAG_CHUNKING_TARGET_SIZE:550}
+      max-size: ${APP_RAG_CHUNKING_MAX_SIZE:800}
+      overlap: ${APP_RAG_CHUNKING_OVERLAP:80}
+      heading-levels: ${APP_RAG_CHUNKING_HEADING_LEVELS:3}
+      metadata-prefix-enabled: ${APP_RAG_CHUNKING_METADATA_PREFIX_ENABLED:true}
+      fallback-token-split-enabled: ${APP_RAG_CHUNKING_FALLBACK_TOKEN_SPLIT_ENABLED:true}
+      include-source-type: ${APP_RAG_CHUNKING_INCLUDE_SOURCE_TYPE:true}
+      include-knowledge-tags: ${APP_RAG_CHUNKING_INCLUDE_KNOWLEDGE_TAGS:true}
+
   mcp:
     timeout-millis: ${APP_MCP_TIMEOUT_MILLIS:1500}
     retries: ${APP_MCP_RETRIES:2}

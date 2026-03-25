@@ -30,6 +30,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.example.interview.service.RAGObservabilityService;
+import com.example.interview.core.RAGTraceContext;
+
 /**
  * 任务路由智能体 (TaskRouterAgent)
  * 
@@ -49,6 +52,7 @@ public class TaskRouterAgent {
     private final IntentTreeRoutingService intentTreeRoutingService;
     private final A2ABus a2aBus;
     private final RoutingChatService routingChatService;
+    private final RAGObservabilityService ragObservabilityService;
 
     @Autowired
     public TaskRouterAgent(
@@ -59,7 +63,8 @@ public class TaskRouterAgent {
             PromptManager promptManager,
             IntentTreeRoutingService intentTreeRoutingService,
             A2ABus a2aBus,
-            RoutingChatService routingChatService
+            RoutingChatService routingChatService,
+            RAGObservabilityService ragObservabilityService
     ) {
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
         this.codingPracticeAgent = codingPracticeAgent;
@@ -69,6 +74,7 @@ public class TaskRouterAgent {
         this.intentTreeRoutingService = intentTreeRoutingService;
         this.a2aBus = a2aBus;
         this.routingChatService = routingChatService;
+        this.ragObservabilityService = ragObservabilityService;
     }
 
     /**
@@ -89,15 +95,21 @@ public class TaskRouterAgent {
         String parentMessageId = resolveParentMessageId(request.context());
         String replyTo = resolveReplyTo(request.context());
         
+        // 统一 Trace 上下文
+        RAGTraceContext.setTraceId(traceId);
+        String nodeId = UUID.randomUUID().toString();
+        ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + request.taskType());
+        
         // 发布任务状态：PENDING
         publish(request, receiverOf(request.taskType()), A2AStatus.PENDING, correlationId, traceId, parentMessageId);
         
+        TaskResponse response;
         try {
             // 发布任务状态：PROCESSING
             publish(request, receiverOf(request.taskType()), A2AStatus.PROCESSING, correlationId, traceId, parentMessageId);
             
             // 使用 Java 21+ 的现代 Switch 表达式进行路由分发
-            TaskResponse response = switch (request.taskType()) {
+            response = switch (request.taskType()) {
                 case INTERVIEW_START -> TaskResponse.ok(routeInterviewStart(request.payload()));
                 case INTERVIEW_ANSWER -> TaskResponse.ok(routeInterviewAnswer(request.payload()));
                 case INTERVIEW_REPORT -> TaskResponse.ok(routeInterviewReport(request.payload()));
@@ -114,11 +126,15 @@ public class TaskRouterAgent {
             // 处理异步回传请求
             publishReply(response, request.taskType(), replyTo, correlationId, traceId);
             
+            ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), response.message(), null);
             return response;
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             publish(request, receiverOf(request.taskType()), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             publishReply(TaskResponse.fail(e.getMessage()), request.taskType(), replyTo, correlationId, traceId);
-            throw e;
+            ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), null, e.getMessage());
+            return TaskResponse.fail("任务路由失败: " + e.getMessage());
+        } finally {
+            RAGTraceContext.clear();
         }
     }
 

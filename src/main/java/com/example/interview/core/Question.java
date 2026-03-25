@@ -28,6 +28,10 @@ public class Question {
     /** 详细反馈与改进建议 */
     private String feedback;
 
+    public Question() {
+        // 默认构造函数，供 Jackson 反序列化使用
+    }
+
     public Question(String questionText, String userAnswer, int score, String feedback) {
         this(questionText, userAnswer, score, 0, 0, 0, 0, "", "", "", feedback);
     }
@@ -47,15 +51,26 @@ public class Question {
     }
 
     public int getScore() { return score; }
-    // Getters
+    // Getters and Setters
     public String getQuestionText() { return questionText; }
+    public void setQuestionText(String questionText) { this.questionText = questionText; }
     public String getUserAnswer() { return userAnswer; }
+    public void setUserAnswer(String userAnswer) { this.userAnswer = userAnswer; }
+    public void setScore(int score) { this.score = score; }
     public int getAccuracy() { return accuracy; }
+    public void setAccuracy(int accuracy) { this.accuracy = accuracy; }
     public int getLogic() { return logic; }
+    public void setLogic(int logic) { this.logic = logic; }
     public int getDepth() { return depth; }
+    public void setDepth(int depth) { this.depth = depth; }
     public int getBoundary() { return boundary; }
+    public void setBoundary(int boundary) { this.boundary = boundary; }
     public String getDeductions() { return deductions; }
+    public void setDeductions(String deductions) { this.deductions = deductions; }
     public String getCitations() { return citations; }
+    public void setCitations(String citations) { this.citations = citations; }
     public String getConflicts() { return conflicts; }
+    public void setConflicts(String conflicts) { this.conflicts = conflicts; }
     public String getFeedback() { return feedback; }
+    public void setFeedback(String feedback) { this.feedback = feedback; }
 }

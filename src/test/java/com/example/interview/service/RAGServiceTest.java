@@ -1,5 +1,6 @@
 package com.example.interview.service;
 
+import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.tool.WebSearchTool;
@@ -68,9 +69,24 @@ class RAGServiceTest {
 
     private RAGService ragService;
 
+    @Mock
+    private ObservabilitySwitchProperties observabilitySwitchProperties;
+
     @BeforeEach
     void setUp() {
-        ragService = new RAGService(routingChatService, vectorStore, lexicalIndexService, webSearchTool, observabilityService, agentSkillService, promptTemplateService, promptManager, ragRetrieveExecutor, techConceptRepository);
+        ragService = new RAGService(
+                routingChatService,
+                vectorStore,
+                lexicalIndexService,
+                webSearchTool,
+                observabilityService,
+                agentSkillService,
+                promptTemplateService,
+                promptManager,
+                ragRetrieveExecutor,
+                techConceptRepository,
+                observabilitySwitchProperties
+        );
     }
 
     @Test
@@ -214,7 +230,7 @@ class RAGServiceTest {
     void shouldReturnFallbackEvaluationWhenLayeredEvaluateTimeout() throws Exception {
         when(routingChatService.call(nullable(String.class), any(ModelRouteType.class), anyString())).thenThrow(new ResourceAccessException("timeout"));
 
-        String result = ragService.evaluateWithKnowledge(
+        RAGService.EvaluationResult result = ragService.evaluateWithKnowledge(
                 "Java",
                 "什么是JVM内存模型",
                 "我的回答",
@@ -226,7 +242,7 @@ class RAGServiceTest {
                 new RAGService.KnowledgePacket("query", List.of(), "", "[]", true)
         );
 
-        JsonNode node = new ObjectMapper().readTree(result);
+        JsonNode node = new ObjectMapper().readTree(result.json());
         assertEquals(0, node.path("score").asInt());
         assertTrue(node.path("feedback").asText().contains("超时") || node.path("feedback").asText().contains("不可用"));
     }

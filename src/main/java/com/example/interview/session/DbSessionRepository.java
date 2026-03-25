@@ -49,11 +49,15 @@ public class DbSessionRepository implements SessionRepository {
 
     @Override
     public Optional<InterviewSession> findById(String sessionId) {
-        InterviewSessionDO existing = interviewSessionMapper.selectOne(
-                Wrappers.<InterviewSessionDO>lambdaQuery().eq(InterviewSessionDO::getSessionId, sessionId)
-        );
-        if (existing != null && existing.getContextData() != null) {
-            return Optional.of(existing.getContextData());
+        try {
+            InterviewSessionDO existing = interviewSessionMapper.selectOne(
+                    Wrappers.<InterviewSessionDO>lambdaQuery().eq(InterviewSessionDO::getSessionId, sessionId)
+            );
+            if (existing != null && existing.getContextData() != null) {
+                return Optional.of(existing.getContextData());
+            }
+        } catch (RuntimeException e) {
+            logger.error("读取面试会话失败，sessionId={}", sessionId, e);
         }
         return Optional.empty();
     }

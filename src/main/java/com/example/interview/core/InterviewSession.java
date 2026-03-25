@@ -1,5 +1,8 @@
 package com.example.interview.core;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,6 +13,7 @@ import java.util.UUID;
  * 面试会话实体类。
  * 承载单场面试的所有上下文信息，包括题目历史、当前状态、自适应难度等。
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class InterviewSession {
     /** 会话唯一 ID */
     private String id;
@@ -82,6 +86,7 @@ public class InterviewSession {
     /**
      * 获取当前面试的平均分。
      */
+    @JsonIgnore
     public double getAverageScore() {
         if (questionCount == 0) return 0;
         return (double) totalScore / questionCount;
@@ -142,15 +147,27 @@ public class InterviewSession {
 
     // Getters and Setters
     public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
     public String getTopic() { return topic; }
+    public void setTopic(String topic) { this.topic = topic; }
     public String getResumeContent() { return resumeContent; }
+    public void setResumeContent(String resumeContent) { this.resumeContent = resumeContent; }
     public List<Question> getHistory() { return history; }
+    public void setHistory(List<Question> history) { this.history = history; }
     public String getCurrentQuestion() { return currentQuestion; }
     public void setCurrentQuestion(String currentQuestion) { this.currentQuestion = currentQuestion; }
+    public int getTotalScore() { return totalScore; }
+    public void setTotalScore(int totalScore) { this.totalScore = totalScore; }
+    public int getQuestionCount() { return questionCount; }
+    public void setQuestionCount(int questionCount) { this.questionCount = questionCount; }
     public int getTotalQuestions() { return totalQuestions; }
+    public void setTotalQuestions(int totalQuestions) { this.totalQuestions = totalQuestions; }
     public DifficultyLevel getDifficultyLevel() { return difficultyLevel; }
+    public void setDifficultyLevel(DifficultyLevel difficultyLevel) { this.difficultyLevel = difficultyLevel; }
     public int getLowScoreStreak() { return lowScoreStreak; }
+    public void setLowScoreStreak(int lowScoreStreak) { this.lowScoreStreak = lowScoreStreak; }
     public int getHighScoreStreak() { return highScoreStreak; }
+    public void setHighScoreStreak(int highScoreStreak) { this.highScoreStreak = highScoreStreak; }
     public String getProfileSnapshot() { return profileSnapshot; }
     public void setProfileSnapshot(String profileSnapshot) { this.profileSnapshot = profileSnapshot == null ? "" : profileSnapshot; }
     public String getRollingSummary() { return rollingSummary == null ? "" : rollingSummary; }

@@ -110,11 +110,12 @@ class InterviewControllerFlowTest {
     void shouldCompleteInterviewFlow() throws Exception {
         when(ragService.generateFirstQuestion(anyString(), anyString(), anyString(), anyBoolean())).thenReturn("什么是线程安全？");
         when(ragService.buildKnowledgePacket(anyString(), anyString())).thenReturn(new RAGService.KnowledgePacket("线程安全", java.util.List.of(), "上下文", "1. [note.md] tags=技术栈 | 线程安全定义", false));
-        when(ragService.evaluateWithKnowledge(anyString(), anyString(), anyString(), anyString(), anyString(), anyDouble(), anyString(), anyString(), any())).thenReturn("""
+        when(ragService.evaluateWithKnowledge(any(), any(), any(), any(), any(), anyDouble(), any(), any(), any()))
+                .thenReturn(new RAGService.EvaluationResult("""
                 {"score":88,"accuracy":86,"logic":85,"depth":84,"boundary":83,
                 "deductions":["边界条件不完整"],"citations":["1. [note.md]"],"conflicts":["可见性描述不完整｜1"],
                 "feedback":"结构清晰，覆盖了关键点。","nextQuestion":"请说明 synchronized 与 Lock 的区别。"}
-                """);
+                """, 100, 50));
         when(ragService.generateFinalReport(anyString(), any(), anyString(), anyString())).thenReturn("""
                 <summary>整体表现良好。</summary>
                 <incomplete>暂无明显不完整回答。</incomplete>

@@ -1,0 +1,27 @@
+[
+  {
+    "query": "Redis 缓存击穿的解决方案有哪些？",
+    "expected_hits": ["redis", "缓存击穿", "互斥锁", "热点数据", "逻辑过期"],
+    "tag": "high-frequency"
+  },
+  {
+    "query": "Spring Cloud Alibaba Nacos 的配置中心原理是什么？",
+    "expected_hits": ["nacos", "配置中心", "长轮询", "ConfigService", "监听器"],
+    "tag": "core-skill"
+  },
+  {
+    "query": "MySQL MVCC 机制是如何解决幻读问题的？",
+    "expected_hits": ["mysql", "mvcc", "幻读", "ReadView", "Undo Log", "Gap Lock"],
+    "tag": "deep-dive"
+  },
+  {
+    "query": "RocketMQ 事务消息的半消息机制流程是什么？",
+    "expected_hits": ["rocketmq", "事务消息", "半消息", "Half Message", "回查", "Commit/Rollback"],
+    "tag": "distributed-system"
+  },
+  {
+    "query": "如何解决多级缓存中的缓存一致性问题？",
+    "expected_hits": ["多级缓存", "一致性", "Caffeine", "Redis", "延迟双删", "Canal", "Binlog"],
+    "tag": "scenario"
+  }
+]

@@ -1,5 +1,6 @@
 package com.example.interview.service;
 
+import com.example.interview.config.ObservabilitySwitchProperties;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -21,48 +22,203 @@ import java.util.List;
 public class RAGObservabilityService {
 
     private static final int MAX_TRACES = 300;
-    private final Deque<TraceRecord> traces = new ArrayDeque<>();
+    private final Deque<RAGTrace> allTraces = new ArrayDeque<>();
+    private final java.util.Map<String, RAGTrace> activeTraces = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ObservabilitySwitchProperties observabilitySwitchProperties;
 
-    public synchronized void record(TraceRecord record) {
-        if (record == null) {
-            return;
-        }
-        traces.addLast(record);
-        while (traces.size() > MAX_TRACES) {
-            traces.removeFirst();
+    public RAGObservabilityService(ObservabilitySwitchProperties observabilitySwitchProperties) {
+        this.observabilitySwitchProperties = observabilitySwitchProperties;
+    }
+
+    /**
+     * 开始一个链路节点。
+     */
+    public synchronized void startNode(String traceId, String nodeId, String parentNodeId, String nodeType, String nodeName) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) return;
+        
+        RAGTrace trace = activeTraces.computeIfAbsent(traceId, id -> new RAGTrace(id, Instant.now()));
+        RAGTraceNode node = new RAGTraceNode(nodeId, parentNodeId, nodeType, nodeName, Instant.now());
+        trace.addNode(node);
+    }
+
+    /**
+     * 结束一个链路节点。
+     */
+    public synchronized void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) return;
+
+        RAGTrace trace = activeTraces.get(traceId);
+        if (trace != null) {
+            RAGTraceNode node = trace.findNode(nodeId);
+            if (node != null) {
+                node.complete(Instant.now(), inputSummary, outputSummary, errorSummary);
+                // 如果是根节点完成，则移入历史列表
+                if (node.parentNodeId() == null || node.parentNodeId().isBlank()) {
+                    activeTraces.remove(traceId);
+                    allTraces.addLast(trace);
+                    while (allTraces.size() > MAX_TRACES) {
+                        allTraces.removeFirst();
+                    }
+                }
+            }
         }
     }
 
-    public synchronized List<TraceRecord> listRecent(int limit) {
+    public synchronized List<RAGTrace> listRecent(int limit) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return List.of();
+        }
         int safeLimit = limit <= 0 ? 20 : Math.min(limit, 200);
-        List<TraceRecord> all = new ArrayList<>(traces);
+        List<RAGTrace> all = new ArrayList<>(allTraces);
         return all.stream()
-                .sorted(Comparator.comparing(TraceRecord::timestamp).reversed())
+                .sorted(Comparator.comparing(RAGTrace::startTime).reversed())
                 .limit(safeLimit)
                 .toList();
     }
 
+    public synchronized RAGTrace getTraceDetail(String traceId) {
+        // 先查活跃的，再查历史的
+        RAGTrace trace = activeTraces.get(traceId);
+        if (trace != null) return trace;
+        
+        return allTraces.stream()
+                .filter(t -> t.traceId().equals(traceId))
+                .findFirst()
+                .orElse(null);
+    }
+
     public synchronized java.util.Map<String, Object> getOverview() {
-        if (traces.isEmpty()) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return java.util.Map.of(
+                    "enabled", false,
                     "avgLatencyMs", 0,
                     "avgRetrievedDocs", 0.0,
                     "cacheHitRate", "0.0%"
             );
         }
-        double avgLatency = traces.stream().mapToLong(TraceRecord::latencyMs).average().orElse(0.0);
-        double avgDocs = traces.stream().mapToInt(TraceRecord::retrievedCount).average().orElse(0.0);
-        // 这里模拟一个缓存命中率逻辑，比如耗时小于50ms认为是命中缓存
-        long hitCount = traces.stream().filter(t -> t.latencyMs() < 50).count();
-        double hitRate = (double) hitCount / traces.size() * 100;
+        if (allTraces.isEmpty()) {
+            return java.util.Map.of(
+                    "enabled", true,
+                    "avgLatencyMs", 0,
+                    "avgRetrievedDocs", 0.0,
+                    "cacheHitRate", "0.0%"
+            );
+        }
+        
+        // 计算根节点的平均耗时
+        double avgLatency = allTraces.stream()
+                .mapToLong(t -> t.getDurationMs())
+                .average()
+                .orElse(0.0);
+                
+        // 尝试从检索节点提取召回数量
+        double avgDocs = allTraces.stream()
+                .flatMap(t -> t.nodes().stream())
+                .filter(n -> "RETRIEVAL".equals(n.nodeType()))
+                .mapToInt(n -> {
+                    try {
+                        // 假设摘要中存了数量，这里简单处理
+                        return Integer.parseInt(n.outputSummary().split(" ")[0]);
+                    } catch (Exception e) {
+                        return 0;
+                    }
+                })
+                .average()
+                .orElse(0.0);
 
         return java.util.Map.of(
+                "enabled", true,
                 "avgLatencyMs", (int) avgLatency,
                 "avgRetrievedDocs", String.format("%.1f", avgDocs),
-                "cacheHitRate", String.format("%.1f%%", hitRate)
+                "cacheHitRate", "N/A"
         );
     }
 
+    // --- 数据模型 ---
+
+    /**
+     * RAG 追踪链路记录。
+     */
+    public record RAGTrace(
+            String traceId,
+            Instant startTime,
+            List<RAGTraceNode> nodes
+    ) {
+        public RAGTrace(String traceId, Instant startTime) {
+            this(traceId, startTime, new ArrayList<>());
+        }
+
+        public void addNode(RAGTraceNode node) {
+            nodes.add(node);
+        }
+
+        public RAGTraceNode findNode(String nodeId) {
+            return nodes.stream().filter(n -> n.nodeId().equals(nodeId)).findFirst().orElse(null);
+        }
+
+        public long getDurationMs() {
+            if (nodes.isEmpty()) return 0;
+            // 根节点的耗时即为整条链路耗时
+            return nodes.get(0).durationMs();
+        }
+    }
+
+    /**
+     * RAG 追踪节点记录。
+     */
+    public static final class RAGTraceNode {
+        private final String nodeId;
+        private final String parentNodeId;
+        private final String nodeType;
+        private final String nodeName;
+        private final Instant startTime;
+        private Instant endTime;
+        private String inputSummary;
+        private String outputSummary;
+        private String errorSummary;
+        private String status = "RUNNING";
+
+        public RAGTraceNode(String nodeId, String parentNodeId, String nodeType, String nodeName, Instant startTime) {
+            this.nodeId = nodeId;
+            this.parentNodeId = parentNodeId;
+            this.nodeType = nodeType;
+            this.nodeName = nodeName;
+            this.startTime = startTime;
+        }
+
+        public void complete(Instant endTime, String inputSummary, String outputSummary, String errorSummary) {
+            this.endTime = endTime;
+            this.inputSummary = inputSummary;
+            this.outputSummary = outputSummary;
+            this.errorSummary = errorSummary;
+            this.status = (errorSummary == null || errorSummary.isBlank()) ? "COMPLETED" : "FAILED";
+        }
+
+        public long durationMs() {
+            if (endTime == null) return java.time.Duration.between(startTime, Instant.now()).toMillis();
+            return java.time.Duration.between(startTime, endTime).toMillis();
+        }
+
+        // Getters
+        public String nodeId() { return nodeId; }
+        public String parentNodeId() { return parentNodeId; }
+        public String nodeType() { return nodeType; }
+        public String nodeName() { return nodeName; }
+        public Instant startTime() { return startTime; }
+        public Instant endTime() { return endTime; }
+        public String inputSummary() { return inputSummary; }
+        public String outputSummary() { return outputSummary; }
+        public String errorSummary() { return errorSummary; }
+        public String status() { return status; }
+    }
+
+    // 兼容旧代码，保留但标记过时
+    @Deprecated
+    public synchronized void record(TraceRecord record) {
+        // ... 原有逻辑可以映射到新模型，或者直接留空
+    }
+
+    @Deprecated
     public record TraceRecord(
             Instant timestamp,
             String query,

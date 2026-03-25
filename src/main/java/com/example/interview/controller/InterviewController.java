@@ -6,6 +6,9 @@ import com.example.interview.agent.a2a.RocketMqA2ABus;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
+import com.example.interview.core.RAGTraceContext;
+import com.example.interview.ingestion.IngestionTaskExecutionResult;
+import com.example.interview.ingestion.IngestionTaskService;
 import com.example.interview.service.AgentEvaluationService;
 import com.example.interview.service.IngestionService;
 import com.example.interview.service.InterviewService;
@@ -56,26 +59,32 @@ public class InterviewController {
 
     private final InterviewService interviewService;
     private final IngestionService ingestionService;
+    private final IngestionTaskService ingestionTaskService;
     private final UserIdentityResolver userIdentityResolver;
     private final OpsAuditService opsAuditService;
     private final AgentEvaluationService agentEvaluationService;
+    private final RetrievalEvaluationService retrievalEvaluationService;
     private final A2ABus a2aBus;
     private final A2AIdempotencyStore a2AIdempotencyStore;
 
     public InterviewController(
             InterviewService interviewService,
             IngestionService ingestionService,
+            IngestionTaskService ingestionTaskService,
             UserIdentityResolver userIdentityResolver,
             OpsAuditService opsAuditService,
             AgentEvaluationService agentEvaluationService,
+            RetrievalEvaluationService retrievalEvaluationService,
             A2ABus a2aBus,
             A2AIdempotencyStore a2AIdempotencyStore
     ) {
         this.interviewService = interviewService;
         this.ingestionService = ingestionService;
+        this.ingestionTaskService = ingestionTaskService;
         this.userIdentityResolver = userIdentityResolver;
         this.opsAuditService = opsAuditService;
         this.agentEvaluationService = agentEvaluationService;
+        this.retrievalEvaluationService = retrievalEvaluationService;
         this.a2aBus = a2aBus;
         this.a2AIdempotencyStore = a2AIdempotencyStore;
     }
@@ -93,7 +102,8 @@ public class InterviewController {
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
         try {
-            IngestionService.SyncSummary summary = ingestionService.sync(path, ignoredList);
+            IngestionTaskExecutionResult executionResult = ingestionTaskService.executeLocal(path, ignoredList);
+            IngestionService.SyncSummary summary = executionResult.summary();
             String message = String.format(
                     "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
                     summary.totalScanned,
@@ -104,7 +114,11 @@ public class InterviewController {
                     summary.failedFiles,
                     summary.skippedEmptyFiles
             );
-            return ResponseEntity.ok(Map.of("message", message));
+            return ResponseEntity.ok(Map.of(
+                    "message", message,
+                    "taskId", executionResult.taskId(),
+                    "taskStatus", executionResult.status().name()
+            ));
         } catch (Exception e) {
             String message = e.getMessage() == null ? "同步失败，请检查配置" : e.getMessage();
             if (message.contains("401")) {
@@ -133,7 +147,8 @@ public class InterviewController {
         // 上传笔记文件后同步：支持保留相对路径（relativePaths）以恢复目录结构。
         try {
             List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-            IngestionService.SyncSummary summary = ingestionService.syncUploadedNotes(files, relativePaths, folderName, ignoredList);
+            IngestionTaskExecutionResult executionResult = ingestionTaskService.executeUpload(files, relativePaths, folderName, ignoredList);
+            IngestionService.SyncSummary summary = executionResult.summary();
             String message = String.format(
                     "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
                     summary.totalScanned,
@@ -144,7 +159,11 @@ public class InterviewController {
                     summary.failedFiles,
                     summary.skippedEmptyFiles
             );
-            return ResponseEntity.ok(Map.of("message", message));
+            return ResponseEntity.ok(Map.of(
+                    "message", message,
+                    "taskId", executionResult.taskId(),
+                    "taskStatus", executionResult.status().name()
+            ));
         } catch (Exception e) {
             String message = e.getMessage() == null ? "同步失败，请检查文件内容" : e.getMessage();
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
@@ -177,21 +196,28 @@ public class InterviewController {
         String userId = userIdentityResolver.resolve(request);
         String topic = payload.get("topic") == null ? "" : payload.get("topic").toString();
         String resumePath = payload.get("resumePath") == null ? "" : payload.get("resumePath").toString();
-        Integer totalQuestions = null;
-        Object rawTotal = payload.get("totalQuestions");
-        if (rawTotal instanceof Number) {
-            totalQuestions = ((Number) rawTotal).intValue();
-        } else if (rawTotal instanceof String) {
-            String raw = (String) rawTotal;
-            if (!raw.isBlank()) {
-                try {
-                    totalQuestions = Integer.parseInt(raw.trim());
-                } catch (NumberFormatException ignored) {
-                    totalQuestions = null;
+        String traceId = payload.get("traceId") == null ? UUID.randomUUID().toString() : payload.get("traceId").toString();
+
+        RAGTraceContext.setTraceId(traceId);
+        try {
+            Integer totalQuestions = null;
+            Object rawTotal = payload.get("totalQuestions");
+            if (rawTotal instanceof Number) {
+                totalQuestions = ((Number) rawTotal).intValue();
+            } else if (rawTotal instanceof String) {
+                String raw = (String) rawTotal;
+                if (!raw.isBlank()) {
+                    try {
+                        totalQuestions = Integer.parseInt(raw.trim());
+                    } catch (NumberFormatException ignored) {
+                        totalQuestions = null;
+                    }
                 }
             }
+            return interviewService.startSession(userId, topic, resumePath, totalQuestions);
+        } finally {
+            RAGTraceContext.clear();
         }
-        return interviewService.startSession(userId, topic, resumePath, totalQuestions);
     }
 
     /**
@@ -204,6 +230,9 @@ public class InterviewController {
     public ResponseEntity<?> submitAnswer(@RequestBody Map<String, String> payload) {
         String sessionId = payload.get("sessionId");
         String answer = payload.get("answer");
+        String traceId = payload.getOrDefault("traceId", UUID.randomUUID().toString());
+
+        RAGTraceContext.setTraceId(traceId);
         try {
             return ResponseEntity.ok(interviewService.submitAnswer(sessionId, answer));
         } catch (Exception e) {
@@ -213,6 +242,8 @@ public class InterviewController {
                 message = "回答分析超时，请稍后重试或简化回答后再试";
             }
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", message));
+        } finally {
+            RAGTraceContext.clear();
         }
     }
 
@@ -227,11 +258,16 @@ public class InterviewController {
     public ResponseEntity<?> report(@RequestBody Map<String, String> payload, HttpServletRequest request) {
         String sessionId = payload.get("sessionId");
         String userId = userIdentityResolver.resolve(request);
+        String traceId = payload.getOrDefault("traceId", UUID.randomUUID().toString());
+
+        RAGTraceContext.setTraceId(traceId);
         try {
             return ResponseEntity.ok(interviewService.generateFinalReport(sessionId, userId));
         } catch (Exception e) {
             String message = e.getMessage() == null ? "总结生成失败，请稍后重试" : e.getMessage();
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", message));
+        } finally {
+            RAGTraceContext.clear();
         }
     }
 
@@ -271,23 +307,37 @@ public class InterviewController {
                 (left, right) -> right
         ))
                 : Map.of();
-        if (!context.containsKey("userId")) {
-            // 兼容外部调用：如果未显式传业务 userId，则默认用 operator 作为 userId（便于画像归集）。
-            context = new java.util.LinkedHashMap<>(context);
-            context.put("userId", operator);
+
+        String traceId = context.get("traceId") == null ? UUID.randomUUID().toString() : context.get("traceId").toString();
+        RAGTraceContext.setTraceId(traceId);
+
+        try {
+            if (!context.containsKey("userId")) {
+                // 兼容外部调用：如果未显式传业务 userId，则默认用 operator 作为 userId（便于画像归集）。
+                context = new java.util.LinkedHashMap<>(context);
+                context.put("userId", operator);
+            }
+            // 确保 context 中包含 traceId
+            if (!context.containsKey("traceId")) {
+                context = new java.util.LinkedHashMap<>(context);
+                context.put("traceId", traceId);
+            }
+
+            TaskResponse response = interviewService.dispatchTask(taskType, taskPayload, context);
+            opsAuditService.record(
+                    operator,
+                    "TASK_DISPATCH",
+                    Map.of("taskType", taskType.name(), "contextUserId", String.valueOf(context.get("userId"))),
+                    response.success(),
+                    response.message()
+            );
+            if (response.success()) {
+                return ResponseEntity.ok(response);
+            }
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        } finally {
+            RAGTraceContext.clear();
         }
-        TaskResponse response = interviewService.dispatchTask(taskType, taskPayload, context);
-        opsAuditService.record(
-                operator,
-                "TASK_DISPATCH",
-                Map.of("taskType", taskType.name(), "contextUserId", String.valueOf(context.get("userId"))),
-                response.success(),
-                response.message()
-        );
-        if (response.success()) {
-            return ResponseEntity.ok(response);
-        }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     /**
@@ -394,7 +444,25 @@ public class InterviewController {
      */
     @GetMapping("/observability/rag-traces")
     public ResponseEntity<?> ragTraces(@RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit) {
+        if (!interviewService.isRagTraceEnabled()) {
+            return ResponseEntity.ok(List.of());
+        }
         return ResponseEntity.ok(interviewService.getRecentRagTraces(limit == null ? 20 : limit));
+    }
+
+    @GetMapping("/observability/switches")
+    public ResponseEntity<?> observabilitySwitches() {
+        return ResponseEntity.ok(interviewService.getObservabilitySwitches());
+    }
+
+    @PutMapping("/observability/switches")
+    public ResponseEntity<?> updateObservabilitySwitches(@RequestBody Map<String, Object> payload) {
+        Boolean ragTraceEnabled = parseBooleanFlag(payload.get("ragTraceEnabled"));
+        Boolean retrievalEvalEnabled = parseBooleanFlag(payload.get("retrievalEvalEnabled"));
+        if (ragTraceEnabled == null && retrievalEvalEnabled == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "请至少提供一个开关字段"));
+        }
+        return ResponseEntity.ok(interviewService.updateObservabilitySwitches(ragTraceEnabled, retrievalEvalEnabled));
     }
 
     /**
@@ -402,7 +470,11 @@ public class InterviewController {
      */
     @GetMapping("/observability/retrieval-eval")
     public ResponseEntity<?> retrievalEval() {
-        return ResponseEntity.ok(interviewService.runRetrievalOfflineEval());
+        try {
+            return ResponseEntity.ok(interviewService.runRetrievalOfflineEval());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
     }
 
     /**
@@ -410,11 +482,15 @@ public class InterviewController {
      */
     @PostMapping("/observability/retrieval-eval/run")
     public ResponseEntity<?> runRetrievalEval(@RequestBody Map<String, Object> payload) {
-        List<RetrievalEvaluationService.EvalCase> cases = parseEvalCases(payload.get("cases"));
-        if (cases.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测用例为空，请提供 cases"));
+        try {
+            List<RetrievalEvaluationService.EvalCase> cases = parseEvalCases(payload.get("cases"));
+            if (cases.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测用例为空，请提供 cases"));
+            }
+            return ResponseEntity.ok(interviewService.runRetrievalEvalWithCases(cases));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }
-        return ResponseEntity.ok(interviewService.runRetrievalEvalWithCases(cases));
     }
 
     /**
@@ -427,11 +503,10 @@ public class InterviewController {
         }
         try {
             String text = new String(file.getBytes(), StandardCharsets.UTF_8);
-            List<RetrievalEvaluationService.EvalCase> cases = interviewService.parseRetrievalEvalCsv(text);
-            if (cases.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "未解析到有效评测用例，请检查 CSV 格式"));
-            }
-            return ResponseEntity.ok(interviewService.runRetrievalEvalWithCases(cases));
+            List<RetrievalEvaluationService.EvalCase> cases = retrievalEvaluationService.parseCasesFromCsv(text);
+            return ResponseEntity.ok(retrievalEvaluationService.runCustomEval(cases));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测集文件读取失败"));
         }
@@ -745,18 +820,67 @@ public class InterviewController {
                     } else {
                         keywords = List.of();
                     }
-                    return new RetrievalEvaluationService.EvalCase(query, keywords);
+                    return new RetrievalEvaluationService.EvalCase(query, keywords, "manual");
                 })
                 .filter(item -> item != null)
                 .toList();
+    }
+
+    private Boolean parseBooleanFlag(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        String text = raw.toString().trim().toLowerCase();
+        if ("true".equals(text) || "1".equals(text) || "on".equals(text) || "yes".equals(text)) {
+            return true;
+        }
+        if ("false".equals(text) || "0".equals(text) || "off".equals(text) || "no".equals(text)) {
+            return false;
+        }
+        return null;
     }
 
     /**
      * 获取知识库同步统计数据。
      */
     @GetMapping("/observability/ingest/stats")
-    public Map<String, Object> getIngestStats() {
-        return ingestionService.getStats();
+    public Map<String, Object> getIngestStats(
+            @RequestParam(value = "windowMinutes", required = false) Integer windowMinutes,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
+            @RequestParam(value = "groupBySourceType", required = false, defaultValue = "true") boolean groupBySourceType
+    ) {
+        Map<String, Object> result = new LinkedHashMap<>(ingestionService.getStats());
+        result.putAll(ingestionTaskService.buildOverview(10, windowMinutes, sourceType, groupBySourceType));
+        return result;
+    }
+
+    @GetMapping("/ingestion/tasks")
+    public ResponseEntity<?> listIngestionTasks(
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "includeNodeLogs", required = false, defaultValue = "false") boolean includeNodeLogs
+    ) {
+        int safeLimit = limit == null ? 20 : limit;
+        return ResponseEntity.ok(ingestionTaskService.listTaskViews(safeLimit, sourceType, status, includeNodeLogs));
+    }
+
+    @GetMapping("/ingestion/pipelines")
+    public ResponseEntity<?> listIngestionPipelines() {
+        return ResponseEntity.ok(ingestionTaskService.listPipelines());
+    }
+
+    @GetMapping("/ingestion/tasks/{taskId}")
+    public ResponseEntity<?> getIngestionTaskDetail(
+            @PathVariable("taskId") String taskId,
+            @RequestParam(value = "includeNodeLogs", required = false, defaultValue = "true") boolean includeNodeLogs
+    ) {
+        return ingestionTaskService.findTaskViewById(taskId, includeNodeLogs)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "任务不存在")));
     }
 
     /**
