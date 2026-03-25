@@ -211,26 +211,4 @@ public class RAGObservabilityService {
         public String errorSummary() { return errorSummary; }
         public String status() { return status; }
     }
-
-    // 兼容旧代码，保留但标记过时
-    @Deprecated
-    public synchronized void record(TraceRecord record) {
-        // ... 原有逻辑可以映射到新模型，或者直接留空
-    }
-
-    @Deprecated
-    public record TraceRecord(
-            Instant timestamp,
-            String query,
-            int retrievedCount,
-            int evidenceCount,
-            int citationsCount,
-            int conflictsCount,
-            int score,
-            boolean fallbackUsed,
-            long latencyMs,
-            int inputTokens,
-            int outputTokens
-    ) {
-    }
 }

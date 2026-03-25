@@ -56,6 +56,21 @@ public class LexicalIndexService {
             String filePath = metadata == null ? "" : String.valueOf(metadata.getOrDefault("file_path", ""));
             String tags = metadata == null ? "" : String.valueOf(metadata.getOrDefault("knowledge_tags", ""));
             String sourceType = metadata == null ? "obsidian" : String.valueOf(metadata.getOrDefault("source_type", "obsidian"));
+            String parentId = metadata == null ? "" : String.valueOf(metadata.getOrDefault("parent_id", ""));
+            String chunkStrategy = metadata == null ? "" : String.valueOf(metadata.getOrDefault("chunk_strategy", ""));
+            Integer childIndex = null;
+            if (metadata != null && metadata.get("child_index") != null) {
+                Object raw = metadata.get("child_index");
+                if (raw instanceof Number number) {
+                    childIndex = number.intValue();
+                } else {
+                    try {
+                        childIndex = Integer.parseInt(String.valueOf(raw));
+                    } catch (Exception ignored) {
+                        childIndex = null;
+                    }
+                }
+            }
             String normalized = doc.getText().replaceAll("\\s+", " ").trim();
             
             // 先删除旧记录
@@ -68,6 +83,9 @@ public class LexicalIndexService {
             indexDO.setFilePath(filePath);
             indexDO.setKnowledgeTags(tags);
             indexDO.setSourceType(sourceType);
+            indexDO.setParentId(parentId);
+            indexDO.setChildIndex(childIndex);
+            indexDO.setChunkStrategy(chunkStrategy);
             indexDO.setCreatedAt(LocalDateTime.now());
             
             lexicalIndexMapper.insert(indexDO);
@@ -245,6 +263,15 @@ public class LexicalIndexService {
         doc.getMetadata().put("source_type", sourceType == null || sourceType.isBlank() ? fallbackSourceType : sourceType);
         doc.getMetadata().put("lexical_score", score);
         doc.getMetadata().put("doc_id", record.getDocId());
+        if (record.getParentId() != null) {
+            doc.getMetadata().put("parent_id", record.getParentId());
+        }
+        if (record.getChildIndex() != null) {
+            doc.getMetadata().put("child_index", record.getChildIndex());
+        }
+        if (record.getChunkStrategy() != null) {
+            doc.getMetadata().put("chunk_strategy", record.getChunkStrategy());
+        }
         return doc;
     }
 

@@ -35,19 +35,21 @@ public class IngestionService {
     private final LexicalIndexService lexicalIndexService;
     private final VectorStore vectorStore;
     private final SyncIndexMapper syncIndexMapper;
+    private final ParentChildIndexService parentChildIndexService;
     // 注入图谱持久化组件
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
     private volatile SyncSummary lastSummary = new SyncSummary(0, 0, 0, 0, 0, 0, 0);
     private volatile long lastSyncTime = 0L;
 
-    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, com.example.interview.graph.TechConceptRepository techConceptRepository) {
+    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, ParentChildIndexService parentChildIndexService, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.noteLoader = noteLoader;
         this.documentSplitter = documentSplitter;
         this.knowledgeExtractor = knowledgeExtractor;
         this.lexicalIndexService = lexicalIndexService;
         this.vectorStore = vectorStore;
         this.syncIndexMapper = syncIndexMapper;
+        this.parentChildIndexService = parentChildIndexService;
         this.techConceptRepository = techConceptRepository;
     }
 
@@ -135,6 +137,72 @@ public class IngestionService {
         lastSummary = summary;
         lastSyncTime = System.currentTimeMillis();
         logger.info("Sync complete. {}", summary.toLogMessage());
+        return summary;
+    }
+
+    public SyncSummary forceReindexParentChild(String vaultPath, List<String> ignoredDirs) {
+        logger.info("Starting force reindex for vault: {}", vaultPath);
+        List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        Set<String> currentFiles = new HashSet<>();
+        int newFileCount = 0;
+        int modifiedFileCount = 0;
+        int unchangedFileCount = 0;
+        int failedFileCount = 0;
+        int skippedEmptyFileCount = 0;
+
+        for (Resource resource : resources) {
+            try {
+                String filePath = resource.getFile().getAbsolutePath();
+                currentFiles.add(filePath);
+                String currentHash = calculateHash(resource);
+                SyncIndexDO existingIndex = syncIndexMapper.selectOne(
+                        new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
+                if (existingIndex != null) {
+                    AddStatus status = updateFile(resource, filePath, currentHash, existingIndex.getDocIds());
+                    if (status == AddStatus.ADDED) {
+                        modifiedFileCount++;
+                    } else if (status == AddStatus.SKIPPED_EMPTY) {
+                        skippedEmptyFileCount++;
+                    } else {
+                        failedFileCount++;
+                    }
+                } else {
+                    AddStatus status = addFile(resource, filePath, currentHash);
+                    if (status == AddStatus.ADDED) {
+                        newFileCount++;
+                    } else if (status == AddStatus.SKIPPED_EMPTY) {
+                        skippedEmptyFileCount++;
+                    } else {
+                        failedFileCount++;
+                    }
+                }
+            } catch (IOException e) {
+                logger.error("Error processing file during force reindex: {}", resource.getFilename(), e);
+                failedFileCount++;
+            }
+        }
+
+        List<SyncIndexDO> allIndexes = syncIndexMapper.selectList(null);
+        List<SyncIndexDO> deletedFiles = allIndexes.stream()
+                .filter(idx -> !currentFiles.contains(idx.getFilePath()))
+                .filter(idx -> !idx.getFilePath().startsWith("browser://"))
+                .collect(Collectors.toList());
+        for (SyncIndexDO deletedIndex : deletedFiles) {
+            removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
+        }
+
+        SyncSummary summary = new SyncSummary(
+                resources.size(),
+                newFileCount,
+                modifiedFileCount,
+                unchangedFileCount,
+                deletedFiles.size(),
+                failedFileCount,
+                skippedEmptyFileCount
+        );
+        lastSummary = summary;
+        lastSyncTime = System.currentTimeMillis();
+        logger.info("Force reindex complete. {}", summary.toLogMessage());
         return summary;
     }
 
@@ -246,6 +314,26 @@ public class IngestionService {
         return result;
     }
 
+    public Map<String, Object> getParentChildReport() {
+        Map<String, Object> report = new LinkedHashMap<>();
+        long parentCount = parentChildIndexService.countParents();
+        long childCount = parentChildIndexService.countChildren();
+        report.put("parentCount", parentCount);
+        report.put("childCount", childCount);
+        report.put("avgChildrenPerParent", parentCount == 0 ? 0.0 : ((double) childCount) / parentCount);
+        report.put("lastSyncTime", lastSyncTime == 0L ? null : lastSyncTime);
+        report.put("lastSummary", Map.of(
+                "totalScanned", lastSummary.totalScanned,
+                "newFiles", lastSummary.newFiles,
+                "modifiedFiles", lastSummary.modifiedFiles,
+                "unchangedFiles", lastSummary.unchangedFiles,
+                "deletedFiles", lastSummary.deletedFiles,
+                "failedFiles", lastSummary.failedFiles,
+                "skippedEmptyFiles", lastSummary.skippedEmptyFiles
+        ));
+        return report;
+    }
+
     private String sanitizeFolderKey(String folderName) {
         String raw = folderName == null || folderName.isBlank() ? "selected-folder" : folderName.trim();
         String sanitized = raw.replaceAll("[^a-zA-Z0-9._-]", "_");
@@ -279,6 +367,7 @@ public class IngestionService {
             }
             vectorStore.add(documents);
             lexicalIndexService.upsertDocuments(documents);
+            parentChildIndexService.rebuildByChunks(filePath, documents);
             
             // GraphRAG: 提取双向链接并写入 Neo4j
             processGraphRelationships(documents);
@@ -309,6 +398,7 @@ public class IngestionService {
             }
             vectorStore.add(documents);
             lexicalIndexService.upsertDocuments(documents);
+            parentChildIndexService.rebuildByChunks(filePath, documents);
             
             // GraphRAG: 提取双向链接并写入 Neo4j
             processGraphRelationships(documents);
@@ -414,6 +504,7 @@ public class IngestionService {
             vectorStore.delete(docIds);
             lexicalIndexService.removeByIds(docIds);
         }
+        parentChildIndexService.deleteByFilePath(filePath);
         syncIndexMapper.delete(new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
     }
 

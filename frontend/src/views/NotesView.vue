@@ -181,15 +181,19 @@ const syncAll = async () => {
     await saveIngestConfig({ paths: pathsText.value, ignoreDirs: ignoreDirs.value })
     let successCount = 0
     let failCount = 0
+    const failReasons = []
     for (const path of paths) {
       try {
         await runIngest({ path, ignoreDirs: ignoreDirs.value })
         successCount += 1
       } catch (error) {
         failCount += 1
+        failReasons.push(`${path}: ${error.message || 'unknown'}`)
       }
     }
-    message.value = `同步完成：成功 ${successCount}，失败 ${failCount}`
+    message.value = failCount > 0
+      ? `同步完成：成功 ${successCount}，失败 ${failCount}。${failReasons.join('；')}`
+      : `同步完成：成功 ${successCount}，失败 ${failCount}`
     lastSyncTime.value = new Date().toLocaleString('zh-CN')
     await refreshStats()
   } finally {
@@ -200,6 +204,16 @@ const syncAll = async () => {
 const onFileChange = async (event) => {
   const file = event.target.files?.[0]
   if (!file) {
+    return
+  }
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    message.value = '上传失败: 仅支持 PDF 简历'
+    event.target.value = ''
+    return
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    message.value = '上传失败: 简历文件过大，请上传 20MB 以内 PDF'
+    event.target.value = ''
     return
   }
   loading.value = true

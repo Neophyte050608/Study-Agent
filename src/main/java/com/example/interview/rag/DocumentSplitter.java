@@ -1,12 +1,13 @@
 package com.example.interview.rag;
 
+import com.example.interview.config.ParentChildRetrievalProperties;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 文档切分器。
@@ -17,12 +18,11 @@ import java.util.Map;
 public class DocumentSplitter {
 
     private final ChunkingProperties properties;
-    private final TokenTextSplitter fallbackSplitter;
+    private final ParentChildRetrievalProperties parentChildProperties;
 
-    public DocumentSplitter(ChunkingProperties properties) {
+    public DocumentSplitter(ChunkingProperties properties, ParentChildRetrievalProperties parentChildProperties) {
         this.properties = properties;
-        // 兼容旧版的纯 Token 切分器
-        this.fallbackSplitter = new TokenTextSplitter(properties.getTargetSize(), properties.getOverlap(), 5, 10000, true);
+        this.parentChildProperties = parentChildProperties;
     }
 
     /**
@@ -32,15 +32,13 @@ public class DocumentSplitter {
      * @return 切分后的子文档列表
      */
     public List<Document> split(List<Document> documents) {
-        if (properties.getStrategy() == ChunkingStrategy.TOKEN_ONLY) {
-            return fallbackSplitter.apply(documents);
-        }
-
         List<Document> result = new ArrayList<>();
+        int childTargetSize = parentChildProperties.isEnabled() ? parentChildProperties.getChildTargetSize() : properties.getTargetSize();
+        int childOverlap = parentChildProperties.isEnabled() ? parentChildProperties.getChildOverlap() : properties.getOverlap();
         RecursiveChunker recursiveChunker = new RecursiveChunker(
-                properties.getTargetSize(), 
-                properties.getMaxSize(), 
-                properties.getOverlap(), 
+                childTargetSize,
+                properties.getMaxSize(),
+                childOverlap,
                 properties.isFallbackTokenSplitEnabled()
         );
 
@@ -55,6 +53,8 @@ public class DocumentSplitter {
 
             int chunkIndex = 0;
             for (MarkdownSection section : sections) {
+                String parentId = UUID.randomUUID().toString();
+                String parentText = safeParentText(section.getContent());
                 // 2. 对每个 Section 执行递归切分
                 List<String> textChunks = recursiveChunker.split(section.getContent());
 
@@ -76,6 +76,10 @@ public class DocumentSplitter {
                     chunkDoc.getMetadata().put("section_path", section.getFormattedPath());
                     chunkDoc.getMetadata().put("chunk_index", chunkIndex++);
                     chunkDoc.getMetadata().put("chunk_strategy", properties.getStrategy().name());
+                    chunkDoc.getMetadata().put("parent_id", parentId);
+                    chunkDoc.getMetadata().put("parent_text", parentText);
+                    chunkDoc.getMetadata().put("child_id", UUID.randomUUID().toString());
+                    chunkDoc.getMetadata().put("child_index", chunkIndex - 1);
 
                     result.add(chunkDoc);
                 }
@@ -128,5 +132,13 @@ public class DocumentSplitter {
         String fileName = java.nio.file.Path.of(filePath).getFileName().toString();
         int dot = fileName.lastIndexOf('.');
         return dot > 0 ? fileName.substring(0, dot) : fileName;
+    }
+
+    private String safeParentText(String text) {
+        if (text == null) {
+            return "";
+        }
+        int max = Math.max(200, parentChildProperties.getParentMaxSize());
+        return text.length() > max ? text.substring(0, max) : text;
     }
 }

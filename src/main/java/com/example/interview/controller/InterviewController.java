@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
 public class InterviewController {
 
     private static final Logger logger = LoggerFactory.getLogger(InterviewController.class);
-    private static final long MAX_RESUME_SIZE_BYTES = 10L * 1024 * 1024;
+    private static final long MAX_RESUME_SIZE_BYTES = 20L * 1024 * 1024;
 
     private final InterviewService interviewService;
     private final IngestionService ingestionService;
@@ -126,6 +126,38 @@ public class InterviewController {
             }
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
         }
+    }
+
+    @PostMapping("/ingestion/reindex/parent-child")
+    public ResponseEntity<Map<String, Object>> forceReindexParentChild(@RequestBody Map<String, String> payload) {
+        String path = payload.get("path");
+        String ignoreDirs = payload.get("ignoreDirs");
+        List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
+        try {
+            IngestionService.SyncSummary summary = ingestionService.forceReindexParentChild(path, ignoredList);
+            Map<String, Object> report = ingestionService.getParentChildReport();
+            String message = String.format(
+                    "Parent-Child 重建完成：共扫描 %d 个文件，新增 %d，重建 %d，删除 %d，失败 %d，空内容跳过 %d",
+                    summary.totalScanned,
+                    summary.newFiles,
+                    summary.modifiedFiles,
+                    summary.deletedFiles,
+                    summary.failedFiles,
+                    summary.skippedEmptyFiles
+            );
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("message", message);
+            result.put("report", report);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            String message = e.getMessage() == null ? "Parent-Child 重建失败，请检查参数与数据源" : e.getMessage();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
+        }
+    }
+
+    @GetMapping("/ingestion/reindex/parent-child/report")
+    public ResponseEntity<Map<String, Object>> getParentChildReindexReport() {
+        return ResponseEntity.ok(ingestionService.getParentChildReport());
     }
 
     /**
@@ -748,14 +780,17 @@ public class InterviewController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "请上传 PDF 简历文件"));
         }
         if (file.getSize() > MAX_RESUME_SIZE_BYTES) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "简历文件过大，请上传 10MB 以内 PDF"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "简历文件过大，请上传 20MB 以内 PDF"));
         }
         String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
         if (!originalName.endsWith(".pdf")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "仅支持 PDF 简历"));
         }
         String contentType = file.getContentType();
-        if (contentType != null && !contentType.equalsIgnoreCase("application/pdf")) {
+        if (contentType != null && !contentType.isBlank()
+                && !contentType.equalsIgnoreCase("application/pdf")
+                && !contentType.equalsIgnoreCase("application/octet-stream")
+                && !contentType.toLowerCase().startsWith("application/pdf")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "文件类型不是有效 PDF"));
         }
         try {

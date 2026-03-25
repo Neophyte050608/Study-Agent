@@ -6,13 +6,13 @@ import org.springframework.ai.document.Document;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class DocumentSplitterTest {
 
     private ChunkingProperties properties;
+    private com.example.interview.config.ParentChildRetrievalProperties parentChildProperties;
     private DocumentSplitter splitter;
 
     @BeforeEach
@@ -24,7 +24,8 @@ class DocumentSplitterTest {
         properties.setOverlap(20);
         properties.setHeadingLevels(3);
         properties.setMetadataPrefixEnabled(true);
-        splitter = new DocumentSplitter(properties);
+        parentChildProperties = new com.example.interview.config.ParentChildRetrievalProperties();
+        splitter = new DocumentSplitter(properties, parentChildProperties);
     }
 
     @Test
@@ -70,7 +71,7 @@ class DocumentSplitterTest {
         properties.setStrategy(ChunkingStrategy.TOKEN_ONLY);
         properties.setTargetSize(100);
         properties.setOverlap(10);
-        splitter = new DocumentSplitter(properties);
+        splitter = new DocumentSplitter(properties, parentChildProperties);
 
         String text = "A".repeat(1000); // 超长文本，保证大于 100 Token
         Document doc = new Document(text);

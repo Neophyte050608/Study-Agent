@@ -42,6 +42,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         // 统一安全入口配置
         http
+                // 启用 CORS 支持，以便 Spring Security 与 WebMvcConfigurer 的跨域配置协同工作
+                .cors(org.springframework.security.config.Customizer.withDefaults())
                 // 禁用 CSRF 防护，因为 API 调用通常不依赖浏览器 Cookie
                 .csrf(AbstractHttpConfigurer::disable)
                 // 设置为无状态会话策略，系统不会在服务器端存储任何用户会话信息

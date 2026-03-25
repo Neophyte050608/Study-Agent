@@ -1,6 +1,7 @@
 package com.example.interview.service;
 
 import com.example.interview.config.ObservabilitySwitchProperties;
+import com.example.interview.config.ParentChildRetrievalProperties;
 import com.example.interview.core.Question;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.modelrouting.ModelRouteType;
@@ -64,8 +65,10 @@ public class RAGService {
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
     // 可观测开关配置
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
+    private final ParentChildRetrievalProperties parentChildRetrievalProperties;
+    private final ParentChildIndexService parentChildIndexService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -77,6 +80,8 @@ public class RAGService {
         this.webSearchTool = webSearchTool;
         this.observabilityService = observabilityService;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
+        this.parentChildRetrievalProperties = parentChildRetrievalProperties;
+        this.parentChildIndexService = parentChildIndexService;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -85,18 +90,13 @@ public class RAGService {
      * 评估入口：执行“检索→评估→证据校验→观测记录”的完整链路。
      */
     public String processAnswer(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot) {
-        long startAt = System.currentTimeMillis();
         KnowledgePacket packet = buildKnowledgePacket(question, userAnswer);
         try {
             EvaluationResult result = evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, "", packet);
-            String validated = validateEvidenceReferences(result.json(), packet.retrievalEvidence());
-            recordTrace(packet.retrievalQuery(), packet.retrievedDocs().size(), packet.retrievalEvidence(), validated, false, System.currentTimeMillis() - startAt, result.inputTokens(), result.outputTokens());
-            return validated;
+            return validateEvidenceReferences(result.json(), packet.retrievalEvidence());
         } catch (RuntimeException e) {
             logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-            String fallback = buildFallbackEvaluation(question, e);
-            recordTrace(packet.retrievalQuery(), packet.retrievedDocs().size(), packet.retrievalEvidence(), fallback, true, System.currentTimeMillis() - startAt, 0, 0);
-            return fallback;
+            return buildFallbackEvaluation(question, e);
         }
     }
 
@@ -347,7 +347,54 @@ public class RAGService {
         // RRF 融合去重与重排流水线
         List<Document> fused = reciprocalRankFuse(intentDocs, vectorDocs);
         fused.addAll(graphDocs);
-        return rerankByQueryOverlap(retrievalQuery, fused, 5);
+        List<Document> hydrated = maybeHydrateParentDocuments(fused);
+        return rerankByQueryOverlap(retrievalQuery, hydrated, 5);
+    }
+
+    private List<Document> maybeHydrateParentDocuments(List<Document> docs) {
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+        if (!parentChildRetrievalProperties.isEnabled()) {
+            return docs;
+        }
+        int hydrateLimit = Math.max(1, parentChildRetrievalProperties.getHydrateParentTopN());
+        List<Document> candidates = docs.stream().limit(hydrateLimit).collect(Collectors.toList());
+        Set<String> parentIds = candidates.stream()
+                .map(doc -> String.valueOf(doc.getMetadata().getOrDefault("parent_id", "")))
+                .filter(item -> item != null && !item.isBlank() && !"null".equalsIgnoreCase(item))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (parentIds.isEmpty()) {
+            return docs;
+        }
+        Map<String, com.example.interview.entity.RagParentDO> parentMap = parentChildIndexService.queryParentsByIds(parentIds);
+        if (parentMap.isEmpty()) {
+            return docs;
+        }
+        List<Document> result = new ArrayList<>();
+        for (int i = 0; i < docs.size(); i++) {
+            Document doc = docs.get(i);
+            if (i >= hydrateLimit) {
+                result.add(doc);
+                continue;
+            }
+            String parentId = String.valueOf(doc.getMetadata().getOrDefault("parent_id", ""));
+            com.example.interview.entity.RagParentDO parent = parentMap.get(parentId);
+            if (parent == null || parent.getParentText() == null || parent.getParentText().isBlank()) {
+                result.add(doc);
+                continue;
+            }
+            Document hydrated = new Document(parent.getParentText());
+            hydrated.getMetadata().putAll(doc.getMetadata());
+            hydrated.getMetadata().put("parent_id", parent.getParentId());
+            hydrated.getMetadata().put("parent_source", parent.getFilePath());
+            hydrated.getMetadata().put("file_path", parent.getFilePath());
+            hydrated.getMetadata().put("section_path", parent.getSectionPath());
+            hydrated.getMetadata().put("knowledge_tags", parent.getKnowledgeTags());
+            hydrated.getMetadata().put("source_type", parent.getSourceType());
+            result.add(hydrated);
+        }
+        return result;
     }
 
     /**
@@ -525,33 +572,6 @@ public class RAGService {
         return node;
     }
 
-    private void recordTrace(String query, int retrievedCount, String evidence, String resultJson, boolean fallbackUsed, long latencyMs, int inputTokens, int outputTokens) {
-        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
-            return;
-        }
-        try {
-            JsonNode node = objectMapper.readTree(resultJson);
-            int score = node.path("score").asInt(0);
-            int citationsCount = node.path("citations").isArray() ? node.path("citations").size() : 0;
-            int conflictsCount = node.path("conflicts").isArray() ? node.path("conflicts").size() : 0;
-            int evidenceCount = parseEvidenceCatalog(evidence).size();
-            observabilityService.record(new RAGObservabilityService.TraceRecord(
-                    Instant.now(),
-                    query,
-                    retrievedCount,
-                    evidenceCount,
-                    citationsCount,
-                    conflictsCount,
-                    score,
-                    fallbackUsed,
-                    latencyMs,
-                    inputTokens,
-                    outputTokens
-            ));
-        } catch (Exception ignored) {
-        }
-    }
-
     private String candidateKey(Document doc) {
         if (doc == null) {
             return "null";
@@ -645,12 +665,16 @@ public class RAGService {
             Map<String, Object> metadata = doc.getMetadata();
             String path = metadata == null ? "" : String.valueOf(metadata.getOrDefault("file_path", "unknown"));
             String sourceType = metadata == null ? "" : String.valueOf(metadata.getOrDefault("source_type", "obsidian"));
+            String parentId = metadata == null ? "" : String.valueOf(metadata.getOrDefault("parent_id", ""));
+            String childIndex = metadata == null ? "" : String.valueOf(metadata.getOrDefault("child_index", ""));
             String tags = metadata == null ? "" : String.valueOf(metadata.getOrDefault("knowledge_tags", ""));
             String text = doc.getText() == null ? "" : doc.getText().replaceAll("\\s+", " ").trim();
             if (text.length() > 90) {
                 text = text.substring(0, 90);
             }
-            lines.add((i + 1) + ". [" + sourceType + ":" + path + "] tags=" + tags + " | " + text);
+            String parentPart = (parentId == null || parentId.isBlank() || "null".equalsIgnoreCase(parentId)) ? "" : " parent=" + parentId;
+            String childPart = (childIndex == null || childIndex.isBlank() || "null".equalsIgnoreCase(childIndex)) ? "" : " child=" + childIndex;
+            lines.add((i + 1) + ". [" + sourceType + ":" + path + "] tags=" + tags + parentPart + childPart + " | " + text);
         }
         return String.join("\n", lines);
     }

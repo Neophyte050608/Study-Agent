@@ -1,6 +1,7 @@
 package com.example.interview.service;
 
 import com.example.interview.config.ObservabilitySwitchProperties;
+import com.example.interview.config.ParentChildRetrievalProperties;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.tool.WebSearchTool;
@@ -72,6 +73,12 @@ class RAGServiceTest {
     @Mock
     private ObservabilitySwitchProperties observabilitySwitchProperties;
 
+    @Mock
+    private ParentChildRetrievalProperties parentChildRetrievalProperties;
+
+    @Mock
+    private ParentChildIndexService parentChildIndexService;
+
     @BeforeEach
     void setUp() {
         ragService = new RAGService(
@@ -85,7 +92,9 @@ class RAGServiceTest {
                 promptManager,
                 ragRetrieveExecutor,
                 techConceptRepository,
-                observabilitySwitchProperties
+                observabilitySwitchProperties,
+                parentChildRetrievalProperties,
+                parentChildIndexService
         );
     }
 

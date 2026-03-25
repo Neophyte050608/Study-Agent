@@ -107,11 +107,49 @@ CREATE TABLE IF NOT EXISTS `t_lexical_index` (
     `file_path` VARCHAR(255) COMMENT '原始路径',
     `knowledge_tags` VARCHAR(255) COMMENT '标签',
     `source_type` VARCHAR(64) COMMENT '来源类型',
+    `parent_id` VARCHAR(128) COMMENT '父文档ID',
+    `child_index` INT COMMENT '子块索引',
+    `chunk_strategy` VARCHAR(64) COMMENT '切分策略',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_doc_id` (`doc_id`),
-    KEY `idx_file_path` (`file_path`)
+    KEY `idx_file_path` (`file_path`),
+    KEY `idx_parent_id` (`parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='词法索引表';
+
+-- 创建 RAG Parent 表
+CREATE TABLE IF NOT EXISTS `t_rag_parent` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `parent_id` VARCHAR(128) NOT NULL COMMENT '父文档业务ID',
+    `file_path` VARCHAR(255) NOT NULL COMMENT '来源文件路径',
+    `section_path` VARCHAR(512) COMMENT '章节路径',
+    `source_type` VARCHAR(64) COMMENT '来源类型',
+    `knowledge_tags` VARCHAR(255) COMMENT '知识标签',
+    `parent_text` MEDIUMTEXT COMMENT '父文档内容',
+    `parent_hash` VARCHAR(128) COMMENT '父文档哈希',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_parent_id` (`parent_id`),
+    KEY `idx_parent_file_path` (`file_path`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG父文档索引表';
+
+-- 创建 RAG Child 表
+CREATE TABLE IF NOT EXISTS `t_rag_child` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `child_id` VARCHAR(128) NOT NULL COMMENT '子文档业务ID',
+    `parent_id` VARCHAR(128) NOT NULL COMMENT '父文档业务ID',
+    `child_index` INT COMMENT '子块序号',
+    `child_text` MEDIUMTEXT COMMENT '子块内容',
+    `chunk_strategy` VARCHAR(64) COMMENT '切分策略',
+    `vector_doc_id` VARCHAR(128) COMMENT '向量文档ID',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_child_id` (`child_id`),
+    KEY `idx_child_parent_id` (`parent_id`),
+    KEY `idx_vector_doc_id` (`vector_doc_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG子文档索引表';
 
 -- 创建同步索引表
 CREATE TABLE IF NOT EXISTS `t_sync_index` (

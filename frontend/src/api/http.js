@@ -14,7 +14,14 @@ export async function httpPostJson(url, payload) {
     body: JSON.stringify(payload)
   })
   const raw = await response.text()
-  const data = raw ? JSON.parse(raw) : {}
+  let data = {}
+  if (raw) {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { message: raw }
+    }
+  }
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }
@@ -27,7 +34,14 @@ export async function httpPostFormData(url, formData) {
     body: formData
   })
   const raw = await response.text()
-  const data = raw ? JSON.parse(raw) : {}
+  let data = {}
+  if (raw) {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { message: raw }
+    }
+  }
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }

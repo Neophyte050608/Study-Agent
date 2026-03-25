@@ -95,6 +95,7 @@ logging:
   level:
     org.springframework.ai: DEBUG
     org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: ERROR
+    org.springframework.data.neo4j.cypher.deprecation: ERROR
 
 rocketmq:
   producer:
@@ -172,6 +173,13 @@ app:
       fallback-token-split-enabled: ${APP_RAG_CHUNKING_FALLBACK_TOKEN_SPLIT_ENABLED:true}
       include-source-type: ${APP_RAG_CHUNKING_INCLUDE_SOURCE_TYPE:true}
       include-knowledge-tags: ${APP_RAG_CHUNKING_INCLUDE_KNOWLEDGE_TAGS:true}
+    parent-child:
+      enabled: ${APP_RAG_PARENT_CHILD_ENABLED:true}
+      child-target-size: ${APP_RAG_PARENT_CHILD_CHILD_TARGET_SIZE:220}
+      child-overlap: ${APP_RAG_PARENT_CHILD_CHILD_OVERLAP:40}
+      parent-max-size: ${APP_RAG_PARENT_CHILD_PARENT_MAX_SIZE:1200}
+      hydrate-parent-top-n: ${APP_RAG_PARENT_CHILD_HYDRATE_PARENT_TOP_N:8}
+      fallback-to-flat-retrieval: ${APP_RAG_PARENT_CHILD_FALLBACK_TO_FLAT_RETRIEVAL:false}
 
   mcp:
     timeout-millis: ${APP_MCP_TIMEOUT_MILLIS:1500}
@@ -214,7 +222,7 @@ app:
       paths: ${APP_AGENT_SKILLS_PATHS:skills}
   
   security:
-    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:9596}
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:8080,http://localhost:9596,http://localhost:5173,http://127.0.0.1:5173}
 
 im:
   qq:
