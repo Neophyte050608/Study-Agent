@@ -1,7 +1,7 @@
 <template>
   <main class="ml-64 pt-24 px-8 pb-12 w-full min-h-screen relative z-10 bg-[#f9fafb]">
     <!-- Dashboard Header -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12 w-[80%]">
       <div>
         <h1 class="font-headline text-4xl font-bold tracking-tighter text-[#111827] mb-2">模型路由与健康分析</h1>
         <p class="text-[#4b5563] text-sm flex items-center gap-2">
@@ -103,7 +103,7 @@
       </div>
 
       <!-- Bento Card: Traffic Distribution Map -->
-      <div class="lg:col-span-2 bg-white border border-[#e5e7eb] p-6 rounded-xl flex flex-col md:flex-row gap-8 shadow-sm">
+      <div class="lg:col-span-2 bg-white border border-[#e5e7eb] p-6 rounded-xl flex flex-col md:flex-row gap-8 shadow-sm w-[60%]">
         <div class="flex-1">
           <h4 class="font-headline text-sm font-bold tracking-tight text-[#111827] mb-6 uppercase">实时流量路由拓扑</h4>
           <div class="relative w-full h-48 bg-[#f8fafc] border border-[#e5e7eb] rounded-lg flex items-center justify-center overflow-hidden">
