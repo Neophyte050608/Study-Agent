@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { loadSidebarMenus } from '../api/menu'
 
@@ -130,10 +130,10 @@ const loadMenus = async () => {
 
 onMounted(() => {
   loadMenus()
+  window.addEventListener('menu-layout-changed', loadMenus)
 })
 
-// Listen for custom event from workspace view
-window.addEventListener('menu-layout-changed', () => {
-  loadMenus()
+onBeforeUnmount(() => {
+  window.removeEventListener('menu-layout-changed', loadMenus)
 })
 </script>

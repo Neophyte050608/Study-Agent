@@ -32,6 +32,9 @@ public class AsyncConfig {
         executor.setThreadNamePrefix("RagRetrieve-");
         // 拒绝策略：由调用线程（主线程）自己执行，保证降级但任务不丢
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 优雅停机：等待队列中的任务执行完毕后再关闭
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(15);
         executor.initialize();
         return executor;
     }
@@ -49,6 +52,24 @@ public class AsyncConfig {
         executor.setThreadNamePrefix("ProfileUpdate-");
         // 拒绝策略：如果队列满了，让调用线程去执行，保证数据不丢失
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 优雅停机：画像数据较重要，给予较长等待时间
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "interviewStreamingExecutor")
+    public Executor interviewStreamingExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(300);
+        executor.setThreadNamePrefix("InterviewStream-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 优雅停机：流式任务需等待当前发送完毕
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(15);
         executor.initialize();
         return executor;
     }

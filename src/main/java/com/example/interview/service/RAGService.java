@@ -135,7 +135,14 @@ public class RAGService {
             webFallbackUsed = true;
         }
         
-        observabilityService.endNode(traceId, retrievalNodeId, retrievalQuery, retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed, null);
+        observabilityService.endNode(
+                traceId,
+                retrievalNodeId,
+                retrievalQuery,
+                retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed,
+                null,
+                new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), webFallbackUsed)
+        );
         
         return new KnowledgePacket(retrievalQuery, retrievedDocs, context, retrievalEvidence, webFallbackUsed);
     }
@@ -808,7 +815,7 @@ public class RAGService {
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro) {
          String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
          try {
-            System.out.println("====== [RAGService - generateFirstQuestion] Params: topic=" + topic + " skipIntro=" + skipIntro + " ======");
+            logger.debug("[generateFirstQuestion] Params: topic={}, skipIntro={}", topic, skipIntro);
             
             String promptText = skipIntro 
                 ? "{skillBlock}\n" +
@@ -839,8 +846,7 @@ public class RAGService {
                     ModelRouteType.GENERAL,
                     "首题生成"
             );
-            System.out.println("====== [RAGService - generateFirstQuestion] Response ======");
-            System.out.println(rawQuestion);
+            logger.debug("[generateFirstQuestion] Response length={}", rawQuestion == null ? 0 : rawQuestion.length());
              return normalizeFirstQuestion(rawQuestion, topic);
          } catch (RuntimeException e) {
              logger.warn("首题生成失败，返回降级问题。原因: {}", summarizeError(e));
@@ -882,8 +888,7 @@ public class RAGService {
         String prompt = promptManager.render("final-report", params);
 
         try {
-            System.out.println("====== [RAGService - generateFinalReport] Prompt Template ======");
-            System.out.println(prompt);
+            logger.debug("[generateFinalReport] Prompt length={}", prompt.length());
             String response = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> buildFallbackReport(history, targetedSuggestion),
                 prompt, ModelRouteType.THINKING, "最终复盘"
@@ -900,13 +905,14 @@ public class RAGService {
     public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot) {
         String normalizedTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic.trim();
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
-        // 使用新抽离的 coding-interview-coach 技能来专注生成题目
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
+        String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
+        String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
         
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", skillBlock);
         params.put("topic", normalizedTopic);
         params.put("difficulty", normalizedDifficulty);
+        params.put("questionType", normalizedQuestionType);
         params.put("profileSnapshot", truncate(profileSnapshot, 240));
         String prompt = promptManager.render("coding-question", params);
 
@@ -920,12 +926,12 @@ public class RAGService {
             System.out.println("====== [RAGService - generateCodingQuestion] Response ======");
             System.out.println(raw);
             if (raw == null || raw.isBlank()) {
-                return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty);
+                return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
             }
             return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 280);
         } catch (RuntimeException e) {
             logger.warn("刷题题目生成失败，返回降级题目。原因: {}", summarizeError(e));
-            return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty);
+            return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
         }
     }
 
@@ -935,15 +941,16 @@ public class RAGService {
         String safeQuestion = question == null ? "" : question.trim();
         String safeAnswer = answer == null ? "" : answer.trim();
         if (safeAnswer.isBlank()) {
-            return new CodingAssessment(20, "未提供有效答案。", "先补充完整思路，再给出复杂度分析。", fallbackNextCodingQuestion(normalizedTopic, 20));
+            return new CodingAssessment(20, "未提供有效答案。", "先补充完整思路，再给出复杂度分析。", fallbackNextCodingQuestion(normalizedTopic, 20, normalizeCodingQuestionType(normalizedTopic)));
         }
-        // 使用新抽离的 coding-interview-coach 技能来进行多维度代码审查
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
+        String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
+        String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
         
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", skillBlock);
         params.put("topic", normalizedTopic);
         params.put("difficulty", normalizedDifficulty);
+        params.put("questionType", normalizedQuestionType);
         params.put("question", truncate(safeQuestion, 280));
         params.put("answer", truncate(safeAnswer, 800));
         String prompt = promptManager.render("coding-evaluation", params);
@@ -969,18 +976,19 @@ public class RAGService {
             return new CodingAssessment(Math.max(0, Math.min(score, 100)), feedback, nextHint, truncate(nextQuestion, 220));
         } catch (Exception e) {
             logger.warn("刷题答案评估失败，返回降级评分。原因: {}", summarizeError(e));
-            return fallbackCodingAssessment(safeAnswer);
+            return fallbackCodingAssessment(safeAnswer, normalizedQuestionType, normalizedTopic);
         }
     }
 
     public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
-        // 使用新抽离的 coding-interview-coach 技能来生成进阶追问
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
+        String normalizedQuestionType = normalizeCodingQuestionType(topic);
+        String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
         
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", skillBlock);
         params.put("topic", topic == null ? "算法" : topic);
         params.put("difficulty", difficulty == null ? "medium" : difficulty);
+        params.put("questionType", normalizedQuestionType);
         params.put("question", truncate(question, 240));
         params.put("answer", truncate(answer, 500));
         params.put("score", String.valueOf(score));
@@ -992,12 +1000,12 @@ public class RAGService {
                 prompt, ModelRouteType.GENERAL, "刷题下一题生成"
             ), 1, "刷题下一题生成");
             if (raw == null || raw.isBlank()) {
-                return fallbackNextCodingQuestion(topic, score);
+                return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
             }
             return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 220);
         } catch (RuntimeException e) {
             logger.warn("刷题下一题生成失败，返回降级问题。原因: {}", summarizeError(e));
-            return fallbackNextCodingQuestion(topic, score);
+            return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
         }
     }
 
@@ -1055,12 +1063,30 @@ public class RAGService {
         return "你好！欢迎参加今天的「" + safeTopic + "」模拟面试。在正式开始技术交流之前，能请你先花 1-2 分钟做一个简单的自我介绍吗？";
     }
 
-    private String buildFallbackCodingQuestion(String topic, String difficulty) {
+    private String buildFallbackCodingQuestion(String topic, String difficulty, String questionType) {
+        if ("CHOICE".equals(questionType)) {
+            return "请生成一道" + difficulty + "难度的「" + topic + "」选择题，包含 4 个选项，不要输出答案。";
+        }
+        if ("FILL".equals(questionType)) {
+            return "请生成一道" + difficulty + "难度的「" + topic + "」填空题，给出题干与必要约束，不要输出答案。";
+        }
+        if ("SCENARIO".equals(questionType)) {
+            return "请生成一道" + difficulty + "难度的「" + topic + "」场景题，要求贴近真实工程情境，不要输出答案。";
+        }
         return "请完成一道" + difficulty + "难度的「" + topic + "」算法题：给定整数数组与目标值，返回两数之和等于目标值的下标，并说明时间复杂度与空间复杂度。";
     }
 
-    private String fallbackNextCodingQuestion(String topic, int score) {
+    private String fallbackNextCodingQuestion(String topic, int score, String questionType) {
         String safeTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic;
+        if ("CHOICE".equals(questionType)) {
+            return "请继续生成一道「" + safeTopic + "」选择题，难度参考当前得分，包含 4 个选项且不要输出答案。";
+        }
+        if ("FILL".equals(questionType)) {
+            return "请继续生成一道「" + safeTopic + "」填空题，难度参考当前得分，给出题干与必要约束。";
+        }
+        if ("SCENARIO".equals(questionType)) {
+            return "请继续生成一道「" + safeTopic + "」场景题，难度参考当前得分，聚焦真实工程情境。";
+        }
         if (score < 60) {
             return "请给出一道「" + safeTopic + "」基础题的完整暴力解，并说明如何优化到更低时间复杂度。";
         }
@@ -1081,8 +1107,17 @@ public class RAGService {
                 "Day7: 做一次 30 分钟小测，整理错题并形成下周目标。";
     }
 
-    private CodingAssessment fallbackCodingAssessment(String answer) {
+    private CodingAssessment fallbackCodingAssessment(String answer, String questionType, String topic) {
         String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
+        if (!"ALGORITHM".equals(questionType)) {
+            int score = lower.length() > 40 ? 68 : 48;
+            return new CodingAssessment(
+                    score,
+                    "答案已提交，但评估服务暂不可用。建议补充关键判断条件、约束与边界情况。",
+                    "请补充你对题干条件的理解，并说明最核心的判断依据。",
+                    fallbackNextCodingQuestion(topic, score, questionType)
+            );
+        }
         int score = 35;
         if (lower.contains("o(")) {
             score += 20;
@@ -1101,7 +1136,7 @@ public class RAGService {
                 : "题解基本可用，建议进一步优化复杂度论证。";
         String nextHint = score < 60 ? "先给出可运行解法，再补充复杂度。"
                 : "尝试提供另一种实现并比较 trade-off。";
-        return new CodingAssessment(score, feedback, nextHint, fallbackNextCodingQuestion("算法", score));
+        return new CodingAssessment(score, feedback, nextHint, fallbackNextCodingQuestion("算法", score, "ALGORITHM"));
     }
 
     private String normalizeJsonContent(String raw) {
@@ -1188,6 +1223,27 @@ public class RAGService {
             return "中级进阶（原理+实战）";
         }
         return "基础巩固";
+    }
+
+    private String resolveCodingSkillBlock(String questionType) {
+        if ("ALGORITHM".equals(questionType)) {
+            return safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
+        }
+        return "";
+    }
+
+    private String normalizeCodingQuestionType(String text) {
+        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (normalized.contains("选择") || normalized.contains("choice") || normalized.contains("单选") || normalized.contains("多选")) {
+            return "CHOICE";
+        }
+        if (normalized.contains("填空") || normalized.contains("fill") || normalized.contains("补全")) {
+            return "FILL";
+        }
+        if (normalized.contains("场景") || normalized.contains("scenario")) {
+            return "SCENARIO";
+        }
+        return "ALGORITHM";
     }
 
     private String safeSkillText(String content) {

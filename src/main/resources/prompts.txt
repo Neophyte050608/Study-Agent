@@ -78,7 +78,7 @@ leafIntents 是一个 JSON 数组，每个元素包含：
 
 槽位抽取规范：
 - topic：优先抽取技术栈/主题词（如 Java 并发、Spring Boot、Redis、JVM、MySQL、算法等）。
-- questionType：仅限 "ALGORITHM" / "CHOICE" / "FILL"；若用户说“选择题/单选/多选”，用 CHOICE；若说“填空/补全”，用 FILL；其余刷题默认 ALGORITHM。
+- questionType：仅限 "ALGORITHM" / "CHOICE" / "FILL"；若用户说“选择题/单选/多选”，用 CHOICE；若说“填空/补全”，用 FILL；若用户未明确题型则保持空字符串，并在 missingSlots 中标记 questionType。
 - difficulty：仅限 "easy" / "medium" / "hard"；不确定留空。
 - count：题目数量，无法确定用 null。
 - skipIntro：用户明确要求“跳过自我介绍/直接出题/跳过介绍”时为 true，否则为 null。
@@ -227,17 +227,19 @@ JSON 字段：score,accuracy,logic,depth,boundary,deductions(array),citations(ar
 {{ skillBlock }}
 你是一位专业的技术教练，请根据要求生成一道中文题目。
 主题与类型：{{ topic }}
+题型标识：{{ questionType }}
 难度：{{ difficulty }}
 用户画像：{{ profileSnapshot }}
 输出要求：
-1. 如果主题中包含“选择题”或“填空题”，请严格按照对应的格式生成，禁止生成算法实现题。
+1. 如果题型标识是 CHOICE，必须生成选择题；如果是 FILL，必须生成填空题；如果是 SCENARIO，必须生成场景题；如果是 ALGORITHM，生成算法题。
 2. 只输出题目正文与必要的选项/约束，禁止输出答案。
 3. 单段文本，不要 markdown，不要标题。
 
 ---[coding-evaluation]---
 {{ skillBlock }}
-你是一位算法面试评估官，请评估候选人的题解文本。
+你是一位技术面试评估官，请评估候选人的回答文本。
 主题：{{ topic }}
+题型：{{ questionType }}
 难度：{{ difficulty }}
 题目：{{ question }}
 回答：{{ answer }}
@@ -248,6 +250,7 @@ score 范围 0-100 。
 {{ skillBlock }}
 你是一位专业的技术教练，请根据当前答题质量生成下一道追问题。
 主题与类型：{{ topic }}
+题型标识：{{ questionType }}
 难度：{{ difficulty }}
 当前题目：{{ question }}
 用户回答：{{ answer }}
@@ -273,7 +276,7 @@ score 范围 0-100 。
 
 字段说明：
 - topic：主题/技术栈/知识点（如 Java、Redis、JVM、数组与字符串）。如果用户没说，输出空字符串。
-- type：题型，只能是 "算法" / "选择" / "填空"。如果用户没说，默认输出 "选择"。
+- type：题型，只能是 "算法" / "选择" / "填空" / "场景"。如果用户没说，默认输出 "选择"。
 - count：题目数量（整数）。如果用户没说，默认输出 1。
 - difficulty：难度，只能是 "easy" / "medium" / "hard"。如果用户没说，默认输出 "medium"。
 

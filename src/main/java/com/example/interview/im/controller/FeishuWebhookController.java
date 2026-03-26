@@ -71,18 +71,14 @@ public class FeishuWebhookController {
                 String eventType = headerNode.get("event_type").asText();
                 String eventId = headerNode.get("event_id").asText();
 
-                // Idempotency Check (Fast Ack if duplicate)
-                if (imWebhookService.isDuplicateEvent(eventId)) {
-                    log.info("Duplicate event_id detected, fast ack: {}", eventId);
-                    return ResponseEntity.ok(Map.of("code", 1, "msg", "Skip repeat event"));
-                }
-
                 // Process specific event types
                 if ("im.message.receive_v1".equals(eventType)) {
+                    if (!imWebhookService.tryRecordEvent(eventId)) {
+                        log.info("Duplicate event_id detected, fast ack: {}", eventId);
+                        return ResponseEntity.ok(Map.of("code", 1, "msg", "Skip repeat event"));
+                    }
                     UnifiedMessage message = feishuEventParser.parseMessageEvent(rootNode, appId);
                     if (message != null) {
-                        // Mark as processing and dispatch asynchronously
-                        imWebhookService.recordEvent(eventId);
                         imWebhookService.dispatchMessageAsync(message);
                     }
                 } else {

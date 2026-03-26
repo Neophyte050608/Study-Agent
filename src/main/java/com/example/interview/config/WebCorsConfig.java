@@ -37,8 +37,7 @@ public class WebCorsConfig implements WebMvcConfigurer {
                 .toList();
                 
         registry.addMapping("/api/**")
-                // 允许所有域（本地开发环境）
-                .allowedOriginPatterns("*")
+                .allowedOriginPatterns(origins.toArray(String[]::new))
                 // 设置允许的 HTTP 方法
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 // 允许携带所有请求头

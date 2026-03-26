@@ -122,10 +122,11 @@ public class FeishuWsService {
             UnifiedMessage message = feishuEventParser.parseMessageEventFromWs(rootNode, feishuProperties.getAppId());
             
             if (message != null) {
-                // 1. 记录事件唯一标识，防止重复消费（幂等性）
-                imWebhookService.recordEvent(message.getEventId());
-                // 2. 将消息派发给后续的 Agent 路由逻辑
-                imWebhookService.dispatchMessageAsync(message);
+                if (imWebhookService.tryRecordEvent(message.getEventId())) {
+                    imWebhookService.dispatchMessageAsync(message);
+                } else {
+                    log.info("【飞书长连接】检测到重复事件，跳过分发: {}", message.getEventId());
+                }
             }
         } catch (Exception e) {
             log.error("【飞书长连接】解析 WS 事件数据失败", e);

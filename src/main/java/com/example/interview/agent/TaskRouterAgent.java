@@ -370,6 +370,7 @@ public class TaskRouterAgent {
         String typeName = switch (questionType.toUpperCase()) {
             case "CHOICE" -> "选择题";
             case "FILL" -> "填空题";
+            case "SCENARIO" -> "场景题";
             default -> "算法题";
         };
         payload.put("type", typeName);

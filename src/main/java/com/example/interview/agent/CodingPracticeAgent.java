@@ -10,6 +10,8 @@ import com.example.interview.modelrouting.RoutingChatService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -27,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<String, Object>> {
+    private static final Logger logger = LoggerFactory.getLogger(CodingPracticeAgent.class);
     /** RAG 服务，用于生成题目和评估回答 */
     private final RAGService ragService;
     /** 学习画像智能体，用于获取用户背景和记录练习结果 */
@@ -113,23 +116,21 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 cases = objectMapper.readValue(resource.getInputStream(), new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
             }
         } catch (Exception e) {
-            System.err.println("Failed to load intent_cases.json: " + e.getMessage());
+            logger.debug("加载 intent_cases.json 失败: {}", e.getMessage());
         }
 
         String prompt = promptManager.render("coding-intent", Map.of("message", message, "cases", cases));
-        System.out.println("====== [CodingPracticeAgent - Intent] Prompt ======");
-        System.out.println(prompt);
+        logger.debug("[CodingPracticeAgent - Intent] Prompt length={}", prompt.length());
         // 使用路由服务进行意图识别
         String jsonStr = routingChatService.call(
             "你是一个意图识别助手。请从用户的输入中提取刷题意图。\n" + prompt, 
             ModelRouteType.GENERAL, 
             "刷题意图识别"
         );
-        System.out.println("====== [CodingPracticeAgent - Intent] Response ======");
-        System.out.println(jsonStr);
+        logger.debug("[CodingPracticeAgent - Intent] Response length={}", jsonStr == null ? 0 : jsonStr.length());
         
         String topic = "";
-        String type = "算法";
+        String type = "选择题";
         int count = 1;
         String difficulty = "medium";
         try {
@@ -147,6 +148,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         } catch (JsonProcessingException e) {
             // 解析失败使用默认值
         }
+        type = normalizePracticeType(type, message + " " + topic);
 
         if (topic.isBlank()) {
             List<String> recommended = learningProfileAgent.snapshot(userId).recommendedNextCodingTopics();
@@ -176,7 +178,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String resolvedProfileSnapshot = learningProfileAgent.snapshotForPrompt(session.userId(), session.topic());
         String question = ragService.generateCodingQuestion(buildTopicWithType(session.topic(), session.type()), session.difficulty(), resolvedProfileSnapshot);
         if (question == null || question.isBlank()) {
-            question = buildQuestion(session.topic(), session.difficulty()) + " (" + session.type() + ")";
+            question = buildQuestion(session.topic(), session.difficulty(), session.type()) + " (" + session.type() + ")";
         }
 
         CodingSession updatedSession = new CodingSession(
@@ -210,7 +212,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         // 异步写入画像，使用自定义线程池 profileUpdateExecutor，避免阻塞评估结果返回和占用默认池
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像开始 ======");
+                logger.debug("异步更新学习画像开始");
                 learningProfileAgent.upsertEvent(new LearningEvent(
                         "coding-" + session.sessionId() + "-" + attempts,
                         session.userId(),
@@ -222,9 +224,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                         finalAssessment.feedback(),
                         Instant.now()
                 ));
-                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像完成 ======");
+                logger.debug("异步更新学习画像完成");
             } catch (Exception e) {
-                System.err.println("====== [CodingPracticeAgent] 异步更新学习画像失败: " + e.getMessage() + " ======");
+                logger.warn("异步更新学习画像失败: {}", e.getMessage());
             }
         }, profileUpdateExecutor);
 
@@ -269,7 +271,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         // 归一化主题、难度、类型和画像快照
         String normalizedTopic = topic.isBlank() ? (recommendedTopic.isBlank() ? "数组与字符串" : recommendedTopic) : topic;
         String normalizedDifficulty = difficulty.isBlank() ? "medium" : difficulty.toLowerCase();
-        String normalizedType = type.isBlank() ? "算法题" : type;
+        String normalizedType = normalizePracticeType(type, normalizedTopic);
         
         String resolvedProfileSnapshot = profileSnapshot.isBlank()
                 ? learningProfileAgent.snapshotForPrompt(userId, normalizedTopic)
@@ -280,7 +282,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String ragTopic = buildTopicWithType(normalizedTopic, normalizedType);
         String question = ragService.generateCodingQuestion(ragTopic, normalizedDifficulty, resolvedProfileSnapshot);
         if (question == null || question.isBlank()) {
-            question = buildQuestion(normalizedTopic, normalizedDifficulty) + " (" + normalizedType + ")";
+            question = buildQuestion(normalizedTopic, normalizedDifficulty, normalizedType) + " (" + normalizedType + ")";
         }
         
         // 保存会话并返回结果
@@ -324,7 +326,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         
         // 调用 RAG 评估代码质量
         RAGService.CodingAssessment assessment = ragService.evaluateCodingAnswer(
-                session.topic(),
+                buildTopicWithType(session.topic(), session.type()),
                 session.difficulty(),
                 session.currentQuestion(),
                 answer
@@ -356,7 +358,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         // 将练习结果异步沉淀为学习事件写入画像，使用自定义线程池 profileUpdateExecutor
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像开始 ======");
+                logger.debug("异步更新学习画像开始");
                 learningProfileAgent.upsertEvent(new LearningEvent(
                         "coding-" + sessionId + "-" + attempts,
                         session.userId(),
@@ -368,9 +370,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                         finalAssessment.feedback(),
                         Instant.now()
                 ));
-                System.out.println("====== [CodingPracticeAgent] 异步更新学习画像完成 ======");
+                logger.debug("异步更新学习画像完成");
             } catch (Exception e) {
-                System.err.println("====== [CodingPracticeAgent] 异步更新学习画像失败: " + e.getMessage() + " ======");
+                logger.warn("异步更新学习画像失败: {}", e.getMessage());
             }
         }, profileUpdateExecutor);
         
@@ -481,20 +483,30 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
      */
     private RAGService.CodingAssessment fallbackAssessment(String answer, String topic) {
         int score = evaluate(answer);
-        String nextQuestion = buildQuestion(topic, score >= 80 ? "hard" : score >= 60 ? "medium" : "easy");
+        String nextQuestion = buildQuestion(topic, score >= 80 ? "hard" : score >= 60 ? "medium" : "easy", normalizePracticeType("", topic));
         return new RAGService.CodingAssessment(score, feedback(score), hint(score, topic), nextQuestion);
     }
 
     /**
      * 构建题目文本模板。
      */
-    private String buildQuestion(String topic, String difficulty) {
+    private String buildQuestion(String topic, String difficulty, String type) {
+        String normalizedType = normalizePracticeType(type, topic);
+        if (normalizedType.contains("选择")) {
+            return "请生成一道" + difficulty + "难度的「" + topic + "」选择题，包含 4 个选项，不要输出答案。";
+        }
+        if (normalizedType.contains("填空")) {
+            return "请生成一道" + difficulty + "难度的「" + topic + "」填空题，给出题干与必要约束，不要输出答案。";
+        }
+        if (normalizedType.contains("场景")) {
+            return "请生成一道" + difficulty + "难度的「" + topic + "」场景题，聚焦真实工程情境，不要输出答案。";
+        }
         return "请实现一道" + difficulty + "难度的「" + topic + "」算法题，要求说明思路、复杂度与边界条件。";
     }
 
     private String buildTopicWithType(String topic, String type) {
         String normalizedTopic = topic == null ? "" : topic.trim();
-        String normalizedType = type == null ? "" : type.trim();
+        String normalizedType = normalizePracticeType(type, normalizedTopic);
         if (normalizedType.isBlank()) {
             return normalizedTopic;
         }
@@ -502,6 +514,23 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             return normalizedType;
         }
         return normalizedTopic + "（" + normalizedType + "）";
+    }
+
+    private String normalizePracticeType(String rawType, String userText) {
+        String source = ((rawType == null ? "" : rawType) + " " + (userText == null ? "" : userText)).toLowerCase();
+        if (source.contains("选择") || source.contains("choice") || source.contains("单选") || source.contains("多选")) {
+            return "选择题";
+        }
+        if (source.contains("填空") || source.contains("fill") || source.contains("补全")) {
+            return "填空题";
+        }
+        if (source.contains("场景") || source.contains("scenario")) {
+            return "场景题";
+        }
+        if (source.contains("算法") || source.contains("algorithm") || source.contains("编程")) {
+            return "算法题";
+        }
+        return "选择题";
     }
 
     /**

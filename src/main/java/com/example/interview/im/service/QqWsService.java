@@ -181,10 +181,10 @@ public class QqWsService {
                 log.info("【QQ WS】收到事件: {}", eventType);
                 UnifiedMessage unifiedMessage = qqEventParser.parseMessageEvent(rootNode);
                 if (unifiedMessage != null) {
-                    // 幂等校验
-                    if (!imWebhookService.isDuplicateEvent(unifiedMessage.getEventId())) {
-                        imWebhookService.recordEvent(unifiedMessage.getEventId());
+                    if (imWebhookService.tryRecordEvent(unifiedMessage.getEventId())) {
                         imWebhookService.dispatchMessageAsync(unifiedMessage);
+                    } else {
+                        log.info("【QQ WS】检测到重复事件，跳过分发: {}", unifiedMessage.getEventId());
                     }
                 }
             }

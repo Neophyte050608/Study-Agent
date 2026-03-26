@@ -28,6 +28,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, String>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ignored) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of("message", "上传文件超过服务端限制，请上传 10MB 以内 PDF"));
+                .body(Map.of("message", "上传文件超过服务端限制，请上传 20MB 以内 PDF"));
     }
 }

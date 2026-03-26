@@ -82,6 +82,18 @@ public class ImWebhookService {
     }
 
     /**
+     * 原子写入事件处理标记。
+     * 成功返回 true，表示当前调用方获得处理权；返回 false 表示该事件已被其他节点或线程记录。
+     */
+    public boolean tryRecordEvent(String eventId) {
+        if (eventId == null || eventId.isBlank()) {
+            return false;
+        }
+        String key = EVENT_IDEMPOTENCY_PREFIX + eventId;
+        return Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key, "1", 1, TimeUnit.HOURS));
+    }
+
+    /**
      * 异步处理 IM 消息，避免阻塞 Webhook 响应线程
      */
     public void dispatchMessageAsync(UnifiedMessage message) {

@@ -8,6 +8,8 @@ import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,6 +20,8 @@ import java.util.Map;
 
 @Service
 public class IntentTreeRoutingService {
+
+    private static final Logger logger = LoggerFactory.getLogger(IntentTreeRoutingService.class);
 
     private final PromptManager promptManager;
     private final IntentTreeProperties properties;
@@ -114,7 +118,8 @@ public class IntentTreeRoutingService {
                 slots.put("type", type);
             }
             return slots;
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            logger.debug("槽位精炼失败, taskType={}: {}", taskType, ex.getMessage());
             return Map.of();
         }
     }
@@ -264,7 +269,8 @@ public class IntentTreeRoutingService {
             if (response != null && !response.isBlank()) {
                 return response.trim();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            logger.debug("澄清问题生成失败: {}", ex.getMessage());
         }
         if (candidates.isEmpty()) {
             return "我不太确定你的意图，你是想进行模拟面试、刷题练习，还是查询学习计划？";
@@ -292,8 +298,14 @@ public class IntentTreeRoutingService {
                         List.of("开始一场 Java 面试", "我们来一场 Spring Boot 模拟面试"), List.of("topic", "skipIntro")),
                 new IntentTreeNode("INTERVIEW.REPORT.GENERAL", "interview/report/general", "生成面试报告", "生成已结束面试的复盘报告", "INTERVIEW_REPORT",
                         List.of("生成报告", "给我这次面试总结"), List.of("sessionId")),
-                new IntentTreeNode("CODING.PRACTICE.QUESTION", "coding/practice/question", "刷题练习", "题目训练与刷题请求", "CODING_PRACTICE",
-                        List.of("来一道算法题", "出一道 Java 选择题"), List.of("topic", "questionType", "difficulty", "count")),
+                new IntentTreeNode("CODING.PRACTICE.CHOICE", "coding/practice/choice", "刷选择题", "编程选择题训练请求", "CODING_PRACTICE",
+                        List.of("来一道 Redis 选择题", "出一道 Java 单选题"), List.of("topic", "questionType=CHOICE", "difficulty", "count")),
+                new IntentTreeNode("CODING.PRACTICE.FILL", "coding/practice/fill", "刷填空题", "编程填空题训练请求", "CODING_PRACTICE",
+                        List.of("来一道 JVM 填空题", "出一道并发补全题"), List.of("topic", "questionType=FILL", "difficulty", "count")),
+                new IntentTreeNode("CODING.PRACTICE.ALGORITHM", "coding/practice/algorithm", "刷算法题", "算法实现题训练请求", "CODING_PRACTICE",
+                        List.of("来一道数组算法题", "出一道链表算法题"), List.of("topic", "questionType=ALGORITHM", "difficulty", "count")),
+                new IntentTreeNode("CODING.PRACTICE.SCENARIO", "coding/practice/scenario", "刷场景题", "工程场景分析题训练请求", "CODING_PRACTICE",
+                        List.of("来一道缓存击穿场景题", "出一道 Redis 场景题"), List.of("topic", "difficulty", "count")),
                 new IntentTreeNode("PROFILE.TRAINING.QUERY", "profile/training/query", "查询学习计划", "查询学习画像或学习建议", "PROFILE_TRAINING_PLAN_QUERY",
                         List.of("查询我的学习计划", "我最近薄弱点是什么"), List.of("mode")),
                 new IntentTreeNode("UNKNOWN", "unknown", "未知意图", "无法判定具体业务意图", "UNKNOWN",

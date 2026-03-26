@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * RAG 可观测性服务。
@@ -22,6 +24,7 @@ import java.util.List;
 public class RAGObservabilityService {
 
     private static final int MAX_TRACES = 300;
+    private static final Pattern RETRIEVED_DOCS_PATTERN = Pattern.compile("(\\d+)\\s+docs?\\s+retrieved");
     private final Deque<RAGTrace> allTraces = new ArrayDeque<>();
     private final java.util.Map<String, RAGTrace> activeTraces = new java.util.concurrent.ConcurrentHashMap<>();
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
@@ -45,13 +48,17 @@ public class RAGObservabilityService {
      * 结束一个链路节点。
      */
     public synchronized void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary) {
+        endNode(traceId, nodeId, inputSummary, outputSummary, errorSummary, null);
+    }
+
+    public synchronized void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) return;
 
         RAGTrace trace = activeTraces.get(traceId);
         if (trace != null) {
             RAGTraceNode node = trace.findNode(nodeId);
             if (node != null) {
-                node.complete(Instant.now(), inputSummary, outputSummary, errorSummary);
+                node.complete(Instant.now(), inputSummary, outputSummary, errorSummary, metrics);
                 // 如果是根节点完成，则移入历史列表
                 if (node.parentNodeId() == null || node.parentNodeId().isBlank()) {
                     activeTraces.remove(traceId);
@@ -115,14 +122,7 @@ public class RAGObservabilityService {
         double avgDocs = allTraces.stream()
                 .flatMap(t -> t.nodes().stream())
                 .filter(n -> "RETRIEVAL".equals(n.nodeType()))
-                .mapToInt(n -> {
-                    try {
-                        // 假设摘要中存了数量，这里简单处理
-                        return Integer.parseInt(n.outputSummary().split(" ")[0]);
-                    } catch (Exception e) {
-                        return 0;
-                    }
-                })
+                .mapToInt(this::resolveRetrievedDocs)
                 .average()
                 .orElse(0.0);
 
@@ -134,7 +134,29 @@ public class RAGObservabilityService {
         );
     }
 
+    private int resolveRetrievedDocs(RAGTraceNode node) {
+        if (node.metrics() != null && node.metrics().retrievedDocs() != null) {
+            return Math.max(0, node.metrics().retrievedDocs());
+        }
+        String outputSummary = node.outputSummary();
+        if (outputSummary == null || outputSummary.isBlank()) {
+            return 0;
+        }
+        Matcher matcher = RETRIEVED_DOCS_PATTERN.matcher(outputSummary);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
     // --- 数据模型 ---
+
+    public record NodeMetrics(Integer retrievedDocs, Boolean webFallbackUsed) {
+    }
 
     /**
      * RAG 追踪链路记录。
@@ -158,8 +180,11 @@ public class RAGObservabilityService {
 
         public long getDurationMs() {
             if (nodes.isEmpty()) return 0;
-            // 根节点的耗时即为整条链路耗时
-            return nodes.get(0).durationMs();
+            return nodes.stream()
+                    .filter(node -> node.parentNodeId() == null || node.parentNodeId().isBlank())
+                    .findFirst()
+                    .orElse(nodes.get(0))
+                    .durationMs();
         }
     }
 
@@ -176,6 +201,7 @@ public class RAGObservabilityService {
         private String inputSummary;
         private String outputSummary;
         private String errorSummary;
+        private NodeMetrics metrics;
         private String status = "RUNNING";
 
         public RAGTraceNode(String nodeId, String parentNodeId, String nodeType, String nodeName, Instant startTime) {
@@ -186,11 +212,12 @@ public class RAGObservabilityService {
             this.startTime = startTime;
         }
 
-        public void complete(Instant endTime, String inputSummary, String outputSummary, String errorSummary) {
+        public void complete(Instant endTime, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
             this.endTime = endTime;
             this.inputSummary = inputSummary;
             this.outputSummary = outputSummary;
             this.errorSummary = errorSummary;
+            this.metrics = metrics;
             this.status = (errorSummary == null || errorSummary.isBlank()) ? "COMPLETED" : "FAILED";
         }
 
@@ -209,6 +236,7 @@ public class RAGObservabilityService {
         public String inputSummary() { return inputSummary; }
         public String outputSummary() { return outputSummary; }
         public String errorSummary() { return errorSummary; }
+        public NodeMetrics metrics() { return metrics; }
         public String status() { return status; }
     }
 }

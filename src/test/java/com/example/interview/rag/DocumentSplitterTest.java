@@ -68,17 +68,18 @@ class DocumentSplitterTest {
 
     @Test
     void testFallbackTokenStrategy() {
-        properties.setStrategy(ChunkingStrategy.TOKEN_ONLY);
+        properties.setStrategy(ChunkingStrategy.STRUCTURE_RECURSIVE);
+        properties.setMetadataPrefixEnabled(false);
         properties.setTargetSize(100);
         properties.setOverlap(10);
         splitter = new DocumentSplitter(properties, parentChildProperties);
 
-        String text = "A".repeat(1000); // 超长文本，保证大于 100 Token
+        String text = "算法训练需要边界处理。".repeat(120);
         Document doc = new Document(text);
         doc.getMetadata().put("file_path", "test.md");
 
         List<Document> chunks = splitter.split(List.of(doc));
-        // 使用旧版切分器，应该被硬切为多块
+        // 不注入 metadata 前缀时，仍应能按递归分隔策略切出多块
         assertTrue(chunks.size() > 1);
         // 不会有 metadata 注入
         assertFalse(chunks.get(0).getText().contains("[文档: test]"));

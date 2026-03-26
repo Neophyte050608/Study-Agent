@@ -1,9 +1,9 @@
 package com.example.interview.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -39,7 +39,10 @@ public class SecurityConfig {
      * 配置安全过滤链。
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            @Value("${app.security.jwt-secret:}") String jwtSecret
+    ) throws Exception {
         // 统一安全入口配置
         http
                 // 启用 CORS 支持，以便 Spring Security 与 WebMvcConfigurer 的跨域配置协同工作
@@ -52,9 +55,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 针对单机版，放行所有请求
                         .anyRequest().permitAll()
-                )
-                // 配置 OAuth2 资源服务器支持，使用 JWT 鉴权
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+                );
+        if (jwtSecret != null && !jwtSecret.isBlank()) {
+            http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+        }
         return http.build();
     }
 
@@ -64,6 +68,7 @@ public class SecurityConfig {
      * @param secret 从配置文件读取的 JWT 签名密钥
      */
     @Bean
+    @ConditionalOnProperty(name = "app.security.jwt-secret")
     public JwtDecoder jwtDecoder(@Value("${app.security.jwt-secret}") String secret) {
         // 使用 HMAC-SHA256 算法和对称密钥解码 JWT
         SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");

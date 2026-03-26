@@ -48,8 +48,8 @@
             </div>
           </div>
           <div class="mt-10 flex justify-center">
-            <button @click="start" :disabled="loading" class="px-10 py-4 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-bold rounded-lg shadow-lg hover:opacity-90 active:scale-95 transition-all text-lg flex items-center space-x-3 disabled:opacity-60">
-              <span>{{ loading ? '启动中...' : '开始面试' }}</span>
+            <button @click="isStreaming ? stopStreaming() : start()" :disabled="loading && !isStreaming" class="px-10 py-4 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-bold rounded-lg shadow-lg hover:opacity-90 active:scale-95 transition-all text-lg flex items-center space-x-3 disabled:opacity-60">
+              <span>{{ isStreaming ? '停止生成' : (loading ? '启动中...' : '开始面试') }}</span>
               <span class="material-symbols-outlined" data-icon="rocket_launch">rocket_launch</span>
             </button>
           </div>
@@ -72,15 +72,15 @@
               <h3 class="text-xl font-bold text-on-surface leading-snug mb-8 whitespace-pre-wrap">{{ currentQuestion }}</h3>
               <div class="space-y-4">
                 <label class="block text-sm font-semibold text-on-surface-variant">手动输入回答</label>
-                <textarea class="w-full p-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all text-sm leading-relaxed" placeholder="请输入您的详细回答，建议包含核心逻辑与边界处理..." rows="10" v-model="answer" :disabled="loading || finished"></textarea>
+                <textarea class="w-full p-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all text-sm leading-relaxed" placeholder="请输入您的详细回答，建议包含核心逻辑与边界处理..." rows="10" v-model="answer" :disabled="loading || finished || isStreaming"></textarea>
               </div>
               <div class="mt-6 flex justify-end">
-                <button type="button" class="mr-4 px-6 py-3 bg-slate-100 text-on-surface font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center space-x-2" :disabled="loading || finished" @click="toggleRecording">
+                <button type="button" class="mr-4 px-6 py-3 bg-slate-100 text-on-surface font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center space-x-2" :disabled="loading || finished || isStreaming" @click="toggleRecording">
                   <span>{{ isRecording ? '停止录音' : '语音回答' }}</span>
                   <span class="material-symbols-outlined" :class="isRecording ? 'text-error' : ''" data-icon="mic">{{ isRecording ? 'stop_circle' : 'mic' }}</span>
                 </button>
-                <button @click="submit" :disabled="loading || finished || !answer.trim()" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors flex items-center space-x-2 disabled:opacity-60">
-                  <span>提交回答</span>
+                <button @click="isStreaming ? stopStreaming() : submit()" :disabled="(loading && !isStreaming) || finished || (!answer.trim() && !isStreaming)" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors flex items-center space-x-2 disabled:opacity-60">
+                  <span>{{ isStreaming ? '停止生成' : '提交回答' }}</span>
                   <span class="material-symbols-outlined" data-icon="send">send</span>
                 </button>
               </div>
@@ -132,7 +132,7 @@
 
 <script setup>
 import { computed, ref, onUnmounted } from 'vue'
-import { generateInterviewReport, startInterview, submitInterviewAnswer } from '../api/interview'
+import { generateInterviewReportStream, startInterviewStream, stopInterviewStream, submitInterviewAnswerStream } from '../api/interview'
 
 const loading = ref(false)
 const topic = ref('高级后端开发工程师')
@@ -145,10 +145,12 @@ const averageScore = ref(0)
 const feedbackText = ref('等待开始面试')
 const hint = ref('配置好方向后可立即开始')
 const finished = ref(false)
+const isStreaming = ref(false)
+const streamTaskId = ref('')
+const streamAbort = ref(null)
 
 const averageScoreDisplay = computed(() => averageScore.value ? averageScore.value.toFixed(1) : '-')
 
-// Timer logic
 const timerSeconds = ref(0)
 let timerInterval = null
 
@@ -171,10 +173,13 @@ const stopTimer = () => {
 }
 
 onUnmounted(() => {
+  if (streamTaskId.value) {
+    stopInterviewStream(streamTaskId.value).catch(() => null)
+  }
+  streamAbort.value?.()
   stopTimer()
 })
 
-// Recording logic
 const isRecording = ref(false)
 let recognition = null
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -190,18 +195,15 @@ if (SpeechRecognition) {
   }
 
   recognition.onresult = (event) => {
-    let interimTranscript = ''
     let currentFinal = ''
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
         currentFinal += event.results[i][0].transcript
-      } else {
-        interimTranscript += event.results[i][0].transcript
       }
     }
     answer.value += currentFinal
   }
-  
+
   recognition.onend = () => {
     isRecording.value = false
   }
@@ -219,24 +221,89 @@ const toggleRecording = () => {
   }
 }
 
-const start = async () => {
+const randomTraceId = () => `trace-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+const runStream = async (stream) => {
   loading.value = true
-  hint.value = '正在启动面试...'
+  isStreaming.value = true
+  streamTaskId.value = ''
+  streamAbort.value = stream.cancel
   try {
-    const data = await startInterview(topic.value || '高级后端开发工程师', totalQuestions.value || 10)
-    sessionId.value = data.id || ''
-    currentQuestion.value = data.currentQuestion || ''
-    currentQuestionIndex.value = 1
-    answer.value = ''
-    averageScore.value = 0
-    feedbackText.value = '请回答当前问题'
-    finished.value = false
-    hint.value = '面试已开始'
-    startTimer()
-  } catch (error) {
-    hint.value = `启动失败: ${error.message || 'unknown'}`
+    await stream.start()
   } finally {
     loading.value = false
+    isStreaming.value = false
+    streamTaskId.value = ''
+    streamAbort.value = null
+  }
+}
+
+const stopStreaming = async () => {
+  if (!isStreaming.value) {
+    return
+  }
+  if (streamTaskId.value) {
+    try {
+      await stopInterviewStream(streamTaskId.value)
+    } catch {
+      streamAbort.value?.()
+    }
+  } else {
+    streamAbort.value?.()
+  }
+}
+
+const start = async () => {
+  hint.value = '正在启动面试...'
+  currentQuestion.value = ''
+  feedbackText.value = '请回答当前问题'
+  let streamError = null
+  const stream = startInterviewStream(
+    topic.value || '高级后端开发工程师',
+    totalQuestions.value || 10,
+    {
+      onMeta: (payload) => {
+        if (payload?.streamTaskId) {
+          streamTaskId.value = payload.streamTaskId
+        }
+      },
+      onProgress: (payload) => {
+        if (payload?.label) {
+          hint.value = payload.label
+        }
+      },
+      onMessage: (payload) => {
+        if (payload?.channel === 'question') {
+          currentQuestion.value += payload.delta || ''
+        }
+      },
+      onFinish: (payload) => {
+        const result = payload?.result || {}
+        sessionId.value = result.id || sessionId.value
+        currentQuestion.value = result.currentQuestion || currentQuestion.value
+        currentQuestionIndex.value = result.currentQuestionIndex || 1
+        answer.value = ''
+        averageScore.value = result.averageScore || 0
+        finished.value = false
+        hint.value = '面试已开始'
+        startTimer()
+      },
+      onCancel: () => {
+        hint.value = '已停止生成'
+      },
+      onError: (error) => {
+        streamError = error
+      }
+    },
+    randomTraceId()
+  )
+  try {
+    await runStream(stream)
+    if (streamError) {
+      throw streamError
+    }
+  } catch (error) {
+    hint.value = `启动失败: ${error.message || 'unknown'}`
   }
 }
 
@@ -244,25 +311,69 @@ const submit = async () => {
   if (!sessionId.value || !answer.value.trim()) {
     return
   }
-  loading.value = true
   hint.value = '正在提交回答...'
+  feedbackText.value = ''
+  let streamError = null
+  let nextQuestionBuffer = ''
+  let shouldGenerateReport = false
+  const stream = submitInterviewAnswerStream(
+    sessionId.value,
+    answer.value.trim(),
+    {
+      onMeta: (payload) => {
+        if (payload?.streamTaskId) {
+          streamTaskId.value = payload.streamTaskId
+        }
+      },
+      onProgress: (payload) => {
+        if (payload?.label) {
+          hint.value = payload.label
+        }
+      },
+      onMessage: (payload) => {
+        const channel = payload?.channel
+        const delta = payload?.delta || ''
+        if (channel === 'feedback') {
+          feedbackText.value += delta
+        }
+        if (channel === 'question') {
+          nextQuestionBuffer += delta
+        }
+      },
+      onFinish: (payload) => {
+        const result = payload?.result || {}
+        averageScore.value = result.averageScore || 0
+        answer.value = ''
+        if (result.finished) {
+          shouldGenerateReport = true
+          finished.value = true
+          hint.value = '答题已完成，正在生成报告...'
+          return
+        }
+        currentQuestionIndex.value += 1
+        currentQuestion.value = nextQuestionBuffer || result.nextQuestion || ''
+        hint.value = '已进入下一题'
+        startTimer()
+      },
+      onCancel: () => {
+        hint.value = '已停止生成'
+      },
+      onError: (error) => {
+        streamError = error
+      }
+    },
+    randomTraceId()
+  )
   try {
-    const data = await submitInterviewAnswer(sessionId.value, answer.value.trim())
-    averageScore.value = data.averageScore || 0
-    feedbackText.value = `回答已提交，得分 ${data.averageScore?.toFixed(1) || '-'}\n反馈: 知识点覆盖较好，继续保持！`
-    answer.value = ''
-    if (data.finished) {
-      await finishNow()
-      return
+    await runStream(stream)
+    if (streamError) {
+      throw streamError
     }
-    currentQuestionIndex.value += 1
-    currentQuestion.value = data.nextQuestion || ''
-    hint.value = '已进入下一题'
-    startTimer()
+    if (shouldGenerateReport) {
+      await finishNow()
+    }
   } catch (error) {
     hint.value = `提交失败: ${error.message || 'unknown'}`
-  } finally {
-    loading.value = false
   }
 }
 
@@ -270,18 +381,52 @@ const finishNow = async () => {
   if (!sessionId.value) {
     return
   }
-  loading.value = true
   stopTimer()
   hint.value = '正在生成报告...'
+  currentQuestion.value = '面试完成\n\n'
+  let streamError = null
+  const stream = generateInterviewReportStream(
+    sessionId.value,
+    {
+      onMeta: (payload) => {
+        if (payload?.streamTaskId) {
+          streamTaskId.value = payload.streamTaskId
+        }
+      },
+      onProgress: (payload) => {
+        if (payload?.label) {
+          hint.value = payload.label
+        }
+      },
+      onMessage: (payload) => {
+        if (payload?.channel === 'report') {
+          currentQuestion.value += payload.delta || ''
+        }
+      },
+      onFinish: (payload) => {
+        const result = payload?.result || {}
+        if (!currentQuestion.value.trim() || currentQuestion.value.trim() === '面试完成') {
+          currentQuestion.value = `面试完成\n\n${result.summary || '报告已生成'}`
+        }
+        finished.value = true
+        hint.value = '报告已生成'
+      },
+      onCancel: () => {
+        hint.value = '已停止生成'
+      },
+      onError: (error) => {
+        streamError = error
+      }
+    },
+    randomTraceId()
+  )
   try {
-    const data = await generateInterviewReport(sessionId.value)
-    currentQuestion.value = `面试完成\n\n${data.summary || '报告已生成'}`
-    finished.value = true
-    hint.value = '报告已生成'
+    await runStream(stream)
+    if (streamError) {
+      throw streamError
+    }
   } catch (error) {
     hint.value = `报告生成失败: ${error.message || 'unknown'}`
-  } finally {
-    loading.value = false
   }
 }
 
@@ -291,7 +436,12 @@ const resetInterview = () => {
   answer.value = ''
   averageScore.value = 0
   finished.value = false
+  isStreaming.value = false
+  streamTaskId.value = ''
+  streamAbort.value = null
   stopTimer()
   timerSeconds.value = 0
+  feedbackText.value = '等待开始面试'
+  hint.value = '配置好方向后可立即开始'
 }
 </script>

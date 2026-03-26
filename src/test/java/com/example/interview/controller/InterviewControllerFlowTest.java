@@ -67,6 +67,12 @@ class InterviewControllerFlowTest {
     @MockBean
     private com.example.interview.mapper.InterviewSessionMapper interviewSessionMapper;
 
+    @MockBean
+    private com.example.interview.mapper.LearningProfileMapper learningProfileMapper;
+
+    @MockBean
+    private com.example.interview.mapper.LearningEventMapper learningEventMapper;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -93,6 +99,9 @@ class InterviewControllerFlowTest {
 
     @MockBean
     private DynamicModelFactory dynamicModelFactory;
+
+    @MockBean
+    private com.example.interview.modelrouting.RoutingChatService routingChatService;
 
     @MockBean
     private AgentSkillService agentSkillService;

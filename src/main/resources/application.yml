@@ -64,8 +64,8 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 12MB
-      max-request-size: 12MB
+      max-file-size: 20MB
+      max-request-size: 20MB
   
   http:
     client:
@@ -124,6 +124,12 @@ app:
   learning:
     notes:
       dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
+
+  interview:
+    streaming:
+      enabled: ${APP_INTERVIEW_STREAMING_ENABLED:true}
+      timeout-millis: ${APP_INTERVIEW_STREAMING_TIMEOUT_MILLIS:180000}
+      message-chunk-size: ${APP_INTERVIEW_STREAMING_MESSAGE_CHUNK_SIZE:48}
 
   model-routing:
     enabled: ${APP_MODEL_ROUTING_ENABLED:true}

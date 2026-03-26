@@ -67,7 +67,6 @@ class ParentChildRetrievalHydrationTest {
     void setUp() {
         ParentChildRetrievalProperties parentChildRetrievalProperties = new ParentChildRetrievalProperties();
         parentChildRetrievalProperties.setEnabled(true);
-        parentChildRetrievalProperties.setFallbackToFlatRetrieval(false);
         parentChildRetrievalProperties.setHydrateParentTopN(8);
         Executor executor = Runnable::run;
         ragService = new RAGService(
