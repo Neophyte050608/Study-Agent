@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /d/Practice/InterviewReview/src/main/java/com/example/interview/**/*.java)",
+      "mcp__plugin_claude-mem_mcp-search__smart_outline",
+      "Bash(find D:/Practice/InterviewReview/src/main/resources -name *.j2 -o -name *.txt -o -name *.md)",
+      "Bash(ccb-ping codex:*)",
+      "Bash(ccb-ping gemini:*)",
+      "Bash(ls D:/Practice/InterviewReview/.ccb/*.log)",
+      "Read(//c/Users/imzmq/AppData/Local/Temp/ccb-tasks/**)",
+      "Bash(tasklist)",
+      "Bash(wezterm cli:*)",
+      "Bash(jar tf:*)",
+      "Bash(grep \"^org/springframework/ai/chat/client/ChatClient$\")",
+      "Bash(xargs -I{} sh -c \"jar tf \"\"{}\"\" 2>/dev/null | grep -l \"\"model/ChatModel\"\" || true\")",
+      "Read(//c/Users/imzmq/.m2/repository/org/springframework/ai//**)",
+      "Bash(while read:*)",
+      "Bash(do if:*)",
+      "Bash(then echo:*)",
+      "Bash(fi)",
+      "Bash(done)"
+    ]
+  }
+}

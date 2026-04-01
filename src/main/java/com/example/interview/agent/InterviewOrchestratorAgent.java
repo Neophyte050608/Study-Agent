@@ -8,7 +8,6 @@ import com.example.interview.core.statemachine.InterviewContext;
 import com.example.interview.core.statemachine.InterviewEvent;
 import com.example.interview.core.statemachine.InterviewStateMachineConfig;
 import com.example.interview.rag.ResumeLoader;
-import com.example.interview.service.InterviewLearningProfileService;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
@@ -50,14 +49,13 @@ public class InterviewOrchestratorAgent {
     private final GrowthLayerAgent growthLayerAgent;
     private final ResumeLoader resumeLoader;
     private final SessionRepository sessionRepository;
-    private final InterviewLearningProfileService learningProfileService;
     private final LearningProfileAgent learningProfileAgent;
     /** Agent-to-Agent 消息总线，用于跨 Agent 异步发送滚动总结任务 */
     private final com.example.interview.agent.a2a.A2ABus a2aBus;
     /** 自定义画像异步更新线程池 */
     private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, InterviewLearningProfileService learningProfileService, LearningProfileAgent learningProfileAgent, com.example.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
+    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileAgent learningProfileAgent, com.example.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.evaluationAgent = evaluationAgent;
         this.knowledgeLayerAgent = knowledgeLayerAgent;
         this.decisionLayerAgent = decisionLayerAgent;
@@ -65,7 +63,6 @@ public class InterviewOrchestratorAgent {
         this.growthLayerAgent = growthLayerAgent;
         this.resumeLoader = resumeLoader;
         this.sessionRepository = sessionRepository;
-        this.learningProfileService = learningProfileService;
         this.learningProfileAgent = learningProfileAgent;
         this.a2aBus = a2aBus;
         this.profileUpdateExecutor = profileUpdateExecutor;
@@ -92,7 +89,7 @@ public class InterviewOrchestratorAgent {
         // 2) 绑定用户画像快照：把“历史学习记录/训练偏好”压缩为可直接拼进提示词的文本
         int normalizedTotal = (totalQuestions == null || totalQuestions < 1) ? 5 : Math.min(totalQuestions, 20);
         InterviewSession session = new InterviewSession(topic, resumeContent, normalizedTotal);
-        String normalizedUserId = learningProfileService.normalizeUserId(userId);
+        String normalizedUserId = learningProfileAgent.normalizeUserId(userId);
         session.setUserId(normalizedUserId);
         String profileSnapshot = learningProfileAgent.snapshotForPrompt(normalizedUserId, topic);
         session.setProfileSnapshot(profileSnapshot);
@@ -306,18 +303,15 @@ public class InterviewOrchestratorAgent {
         // 处理用户ID归一化
         String profileUserId = session.getUserId();
         if (profileUserId == null || profileUserId.isBlank()) {
-            profileUserId = learningProfileService.normalizeUserId(userId);
+            profileUserId = learningProfileAgent.normalizeUserId(userId);
             session.setUserId(profileUserId);
         }
         
         // 生成总结与画像更新
-        String targetedSuggestion = learningProfileService.buildTargetedSuggestion(profileUserId);
+        String targetedSuggestion = learningProfileAgent.recommend(profileUserId, "interview");
         EvaluationAgent.FinalReportContent report = evaluationAgent.summarize(session.getTopic(), session.getHistory(), targetedSuggestion, session.getRollingSummary());
         
-        // 1. 记录到传统统计表
-        learningProfileService.recordSession(profileUserId, session.getTopic(), session.getHistory(), report, session.getAverageScore());
-        
-        // 2. 异步沉淀为画像事件（LearningEvent），避免阻塞最终报告的返回，使用自定义线程池 profileUpdateExecutor
+        // 异步沉淀为画像事件（LearningEvent），避免阻塞最终报告的返回，使用自定义线程池 profileUpdateExecutor
         final String finalProfileUserId = profileUserId;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
@@ -345,7 +339,7 @@ public class InterviewOrchestratorAgent {
         String weak = report.weak().isBlank() ? "暂无明显薄弱点。" : report.weak();
         String wrong = report.wrong().isBlank() ? "暂无明确错误结论。" : report.wrong();
         String obsidianUpdates = report.obsidianUpdates().isBlank() ? "建议补充：核心定义、实现原理、常见误区、边界条件。" : report.obsidianUpdates();
-        String nextFocusSeed = report.nextFocus().isBlank() ? learningProfileService.buildTargetedSuggestion(profileUserId) : report.nextFocus();
+        String nextFocusSeed = report.nextFocus().isBlank() ? learningProfileAgent.recommend(profileUserId, "interview") : report.nextFocus();
         
         // 成长层精炼最终建议
         String nextFocus = growthLayerAgent.refineNextFocus(nextFocusSeed, targetedSuggestion, session.getAverageScore());

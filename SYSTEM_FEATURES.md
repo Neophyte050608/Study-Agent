@@ -117,6 +117,8 @@
 - **知识入库任务视图摘要已落地（2026-03-25）**：`GET /api/ingestion/tasks` 与 `GET /api/ingestion/tasks/{taskId}` 已输出 `stageOverview` 阶段摘要（耗时、输入输出、消息与 details），并支持 `includeNodeLogs` 开关按需回传完整节点日志，兼顾前端展示与接口负载控制。
 - **知识入库瓶颈阶段观测已落地（2026-03-25）**：`stageOverview` 新增 `durationRatio` 字段用于单任务阶段耗时占比分析；任务视图与概览新增 `hotStages` 热点阶段排序，输出总耗时、均耗时与失败率，支持快速定位性能瓶颈与高风险阶段。
 - **知识入库窗口化与分组观测已落地（2026-03-25）**：`/api/observability/ingest/stats` 已支持 `windowMinutes/sourceType/groupBySourceType` 参数，能够按时间窗口和数据源过滤最近任务，并输出 `hotStagesBySourceType` 分组热点阶段统计，便于对比本地入库与上传入库的瓶颈差异。
+- **迁移残留清理首版已落地（2026-04-01）**：后端已完成学习画像链路收敛，`InterviewOrchestratorAgent` 与 `InterviewService` 不再依赖 `InterviewLearningProfileService`，统一改为复用 `LearningProfileAgent`；`InterviewController` 的 `/api/ingest/config` 已移除对根目录 `sync_config.json` 的文件读写硬依赖，改为基于 `app.ingestion.config.*` 的运行态配置；`RetrievalEvaluationService` 已删除过时兼容方法 `getHitRate()`，减少历史接口残留。
+- **入库配置数据库持久化已落地（2026-04-01）**：新增 `t_ingest_config` 表及 `IngestConfigDO/Mapper/Service`，`/api/ingest/config` 已从“仅内存态保存”升级为数据库持久化读写；当数据库无记录时回退 `app.ingestion.config.paths` 与 `app.ingestion.config.ignore-dirs` 默认值，确保配置在重启后可恢复且具备可观测的一致来源；同时已删除根目录遗留 `sync_config.json` 文件，完成文件态配置收口。
 
 ## 13. 意图树与核心配置数据库迁移架构 (2026-03)
 **重构职责**：
@@ -159,7 +161,7 @@
 
 ***
 
-*(最后更新时间：2026-03-26)*
+*(最后更新时间：2026-04-01)*
 
 ## 16. 检索评测趋势、失败聚类与参数模板（2026-03-26）
 **新增职责**：

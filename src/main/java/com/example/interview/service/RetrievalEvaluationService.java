@@ -864,10 +864,6 @@ public class RetrievalEvaluationService {
             double mrr,
             List<EvalResult> results
     ) {
-        @Deprecated
-        public double getHitRate() {
-            return recallAt5;
-        }
     }
 
     /**

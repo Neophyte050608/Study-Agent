@@ -10,6 +10,7 @@ import com.example.interview.core.RAGTraceContext;
 import com.example.interview.ingestion.IngestionTaskExecutionResult;
 import com.example.interview.ingestion.IngestionTaskService;
 import com.example.interview.service.AgentEvaluationService;
+import com.example.interview.service.IngestConfigService;
 import com.example.interview.service.IngestionService;
 import com.example.interview.service.InterviewService;
 import com.example.interview.service.OpsAuditService;
@@ -66,6 +67,7 @@ public class InterviewController {
     private final RetrievalEvaluationService retrievalEvaluationService;
     private final A2ABus a2aBus;
     private final A2AIdempotencyStore a2AIdempotencyStore;
+    private final IngestConfigService ingestConfigService;
 
     public InterviewController(
             InterviewService interviewService,
@@ -76,7 +78,8 @@ public class InterviewController {
             AgentEvaluationService agentEvaluationService,
             RetrievalEvaluationService retrievalEvaluationService,
             A2ABus a2aBus,
-            A2AIdempotencyStore a2AIdempotencyStore
+            A2AIdempotencyStore a2AIdempotencyStore,
+            IngestConfigService ingestConfigService
     ) {
         this.interviewService = interviewService;
         this.ingestionService = ingestionService;
@@ -87,6 +90,7 @@ public class InterviewController {
         this.retrievalEvaluationService = retrievalEvaluationService;
         this.a2aBus = a2aBus;
         this.a2AIdempotencyStore = a2AIdempotencyStore;
+        this.ingestConfigService = ingestConfigService;
     }
 
     /**
@@ -1076,16 +1080,7 @@ public class InterviewController {
      */
     @GetMapping("/ingest/config")
     public ResponseEntity<?> getIngestConfig() {
-        try {
-            Path path = Paths.get("sync_config.json");
-            if (Files.exists(path)) {
-                String content = Files.readString(path, StandardCharsets.UTF_8);
-                return ResponseEntity.ok(new com.fasterxml.jackson.databind.ObjectMapper().readValue(content, Map.class));
-            }
-        } catch (Exception e) {
-            logger.error("Read sync config error", e);
-        }
-        return ResponseEntity.ok(Map.of("paths", "", "ignoreDirs", ""));
+        return ResponseEntity.ok(ingestConfigService.getConfig());
     }
 
     /**
@@ -1093,14 +1088,12 @@ public class InterviewController {
      */
     @PostMapping("/ingest/config")
     public ResponseEntity<?> saveIngestConfig(@RequestBody Map<String, String> payload) {
-        try {
-            Path path = Paths.get("sync_config.json");
-            Files.writeString(path, new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload), StandardCharsets.UTF_8);
-            return ResponseEntity.ok(Map.of("message", "success"));
-        } catch (Exception e) {
-            logger.error("Save sync config error", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Save failed"));
-        }
+        Map<String, String> saved = ingestConfigService.saveConfig(payload);
+        return ResponseEntity.ok(Map.of(
+                "message", "success",
+                "paths", saved.get("paths"),
+                "ignoreDirs", saved.get("ignoreDirs")
+        ));
     }
 
     /**

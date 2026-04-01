@@ -26,28 +26,30 @@ import java.util.stream.Collectors;
 @Component
 public class LearningProfileAgent {
 
+    private static final String DEFAULT_USER = "local-user";
     private static final int EVENT_LIMIT_PER_USER = 300;
     private static final int RANK_LIMIT = 8;
     private static final double INTERVIEW_SOURCE_WEIGHT = 1.0;
     private static final double CODING_SOURCE_WEIGHT = 0.75;
 
-    private final InterviewLearningProfileService interviewLearningProfileService;
     private final LearningProfileMapper learningProfileMapper;
     private final LearningEventMapper learningEventMapper;
     private final ObjectMapper objectMapper;
 
-    public LearningProfileAgent(InterviewLearningProfileService interviewLearningProfileService,
-                                LearningProfileMapper learningProfileMapper,
+    public LearningProfileAgent(LearningProfileMapper learningProfileMapper,
                                 LearningEventMapper learningEventMapper,
                                 ObjectMapper objectMapper) {
-        this.interviewLearningProfileService = interviewLearningProfileService;
         this.learningProfileMapper = learningProfileMapper;
         this.learningEventMapper = learningEventMapper;
         this.objectMapper = objectMapper;
     }
 
     public String normalizeUserId(String userId) {
-        return interviewLearningProfileService.normalizeUserId(userId);
+        if (userId == null || userId.isBlank()) {
+            return DEFAULT_USER;
+        }
+        String normalized = userId.trim();
+        return normalized.isBlank() ? DEFAULT_USER : normalized;
     }
 
     @CacheEvict(value = "learningProfiles", key = "#input.userId()")
@@ -251,6 +253,29 @@ public class LearningProfileAgent {
         return data;
     }
 
+    public TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
+        String normalizedTopic = (topic == null || topic.isBlank()) ? "未命名主题" : topic.trim();
+        UserProfileState profile = getProfileState(userId);
+        if (profile == null || profile.events.isEmpty()) {
+            return new TopicCapabilityCurve(normalizedTopic, List.of(), List.of(), 0.0);
+        }
+        List<LearningEvent> topicEvents = profile.events.stream()
+                .filter(event -> normalizedTopic.equals(event.topic()))
+                .sorted(Comparator.comparing(LearningEvent::timestamp))
+                .toList();
+        if (topicEvents.isEmpty()) {
+            return new TopicCapabilityCurve(normalizedTopic, List.of(), List.of(), 0.0);
+        }
+        List<String> timestamps = topicEvents.stream()
+                .map(event -> event.timestamp().toString())
+                .toList();
+        List<Double> scores = topicEvents.stream()
+                .map(event -> (double) event.score())
+                .toList();
+        double averageScore = scores.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        return new TopicCapabilityCurve(normalizedTopic, timestamps, scores, averageScore);
+    }
+
     private List<Map<String, Object>> rankTopics(UserProfileState profile, boolean weakRank) {
         Comparator<Map.Entry<String, TopicMetricState>> comparator = weakRank
                 ? Comparator.<Map.Entry<String, TopicMetricState>>comparingDouble(entry -> entry.getValue().weakScore).reversed()
@@ -376,5 +401,13 @@ public class LearningProfileAgent {
         public double weightedScoreSum;
         public double weightSum;
         public String lastEventAt = "";
+    }
+
+    public record TopicCapabilityCurve(
+            String topic,
+            List<String> timestamps,
+            List<Double> scores,
+            double averageScore
+    ) {
     }
 }

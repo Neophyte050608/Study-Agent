@@ -21,7 +21,6 @@ public class InterviewService {
 
     private final TaskRouterAgent taskRouterAgent;
     private final InterviewOrchestratorAgent orchestratorAgent;
-    private final InterviewLearningProfileService learningProfileService;
     private final LearningProfileAgent learningProfileAgent;
     private final McpGatewayService mcpGatewayService;
     private final RAGObservabilityService ragObservabilityService;
@@ -31,7 +30,6 @@ public class InterviewService {
     public InterviewService(
             TaskRouterAgent taskRouterAgent,
             InterviewOrchestratorAgent orchestratorAgent,
-            InterviewLearningProfileService learningProfileService,
             LearningProfileAgent learningProfileAgent,
             McpGatewayService mcpGatewayService,
             RAGObservabilityService ragObservabilityService,
@@ -40,7 +38,6 @@ public class InterviewService {
     ) {
         this.orchestratorAgent = orchestratorAgent;
         this.taskRouterAgent = taskRouterAgent;
-        this.learningProfileService = learningProfileService;
         this.learningProfileAgent = learningProfileAgent;
         this.mcpGatewayService = mcpGatewayService;
         this.ragObservabilityService = ragObservabilityService;
@@ -148,8 +145,8 @@ public class InterviewService {
         );
     }
 
-    public InterviewLearningProfileService.TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
-        return learningProfileService.getTopicCapabilityCurve(userId, topic);
+    public LearningProfileAgent.TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
+        return learningProfileAgent.getTopicCapabilityCurve(userId, topic);
     }
 
     public Map<String, Object> getProfileOverview(String userId) {
