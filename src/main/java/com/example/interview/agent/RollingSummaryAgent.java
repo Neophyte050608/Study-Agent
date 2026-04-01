@@ -3,6 +3,7 @@ package com.example.interview.agent;
 import com.example.interview.agent.a2a.A2ABus;
 import com.example.interview.agent.a2a.A2AMessage;
 import com.example.interview.core.InterviewSession;
+import com.example.interview.mapper.InterviewSessionMapper;
 import com.example.interview.session.SessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -37,13 +38,16 @@ public class RollingSummaryAgent {
 
     private final A2ABus a2aBus;
     private final SessionRepository sessionRepository;
+    private final InterviewSessionMapper interviewSessionMapper;
     private final RoutingChatService routingChatService;
     private final ObjectMapper objectMapper;
 
-    public RollingSummaryAgent(A2ABus a2aBus, SessionRepository sessionRepository, 
+    public RollingSummaryAgent(A2ABus a2aBus, SessionRepository sessionRepository,
+                               InterviewSessionMapper interviewSessionMapper,
                                RoutingChatService routingChatService) {
         this.a2aBus = a2aBus;
         this.sessionRepository = sessionRepository;
+        this.interviewSessionMapper = interviewSessionMapper;
         this.routingChatService = routingChatService;
         this.objectMapper = new ObjectMapper();
     }
@@ -84,22 +88,24 @@ public class RollingSummaryAgent {
             
             String prompt = "你是一个会话上下文压缩器。\n" +
                     "请根据【旧的总结】和【最近的5轮对话】，生成一个全新的、精简的【全局总结】。\n\n" +
-                    "【旧的总结】：\n" + (oldSummary.isBlank() ? "无" : oldSummary) + "\n\n" +
+                    "【旧的总结】：\n" + ((oldSummary == null || oldSummary.isBlank()) ? "无" : oldSummary) + "\n\n" +
                     "【最近对话】：\n" + historyJson + "\n\n" +
                     "要求：\n" +
                     "1. 只保留用户的核心表现、暴露的技术盲点以及关键背景信息。\n" +
                     "2. 剔除一切客套话、寒暄以及冗长的代码细节。\n" +
                     "3. 总结长度尽量控制在 200 字以内，必须是纯文本。";
 
-            System.out.println("====== [RollingSummaryAgent] 开始异步压缩上下文 ======");
+            logger.debug("====== [RollingSummaryAgent] 开始异步压缩上下文 ======");
             String newSummary = routingChatService.call(prompt, ModelRouteType.THINKING, "滚动总结");
-            System.out.println("====== [RollingSummaryAgent] 新的滚动总结 ======\n" + newSummary);
+            logger.debug("====== [RollingSummaryAgent] 新的滚动总结 ======\n{}", newSummary);
 
-            // 3. 更新会话状态并持久化
-            // 注意：在实际生产的高并发环境下，这里最好使用带乐观锁的 SQL 更新（如 UPDATE ... WHERE version < targetCount）
-            session.setRollingSummary(newSummary);
-            sessionRepository.save(session);
-            
+            // 3. 仅局部更新 rollingSummary 字段，避免覆盖并发期间其他字段更新。
+            int updated = interviewSessionMapper.updateRollingSummary(sessionId, newSummary);
+            if (updated <= 0) {
+                logger.warn("滚动总结写回失败或会话不存在: sessionId={}", sessionId);
+                return;
+            }
+
             logger.info("滚动总结完成，会话 {} 的上下文已更新。", sessionId);
 
         } catch (Exception e) {

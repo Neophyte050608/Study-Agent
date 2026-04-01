@@ -171,6 +171,7 @@
 import { ref, nextTick } from 'vue'
 import { dispatchCodingChat } from '../api/coding'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 let serial = 0
 const loading = ref(false)
@@ -185,7 +186,7 @@ const textareaRef = ref(null)
 const messages = ref([])
 
 const renderMarkdown = (text) => {
-  return marked.parse(text || '')
+  return DOMPurify.sanitize(marked.parse(text || ''))
 }
 
 const adjustTextareaHeight = () => {

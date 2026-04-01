@@ -1,5 +1,7 @@
 package com.example.interview.agent.a2a;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -24,6 +26,8 @@ import java.util.UUID;
  */
 @Component
 public class InMemoryA2ABus implements A2ABus {
+
+    private static final Logger logger = LoggerFactory.getLogger(InMemoryA2ABus.class);
 
     private final Map<String, List<Consumer<A2AMessage>>> subscribers = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<A2AMessage>> pendingReplies = new ConcurrentHashMap<>();
@@ -54,9 +58,9 @@ public class InMemoryA2ABus implements A2ABus {
 
         // 同 receiver 的订阅先投递；再投递给 "*" 的通配订阅（常用于观测/审计）。
         List<Consumer<A2AMessage>> directHandlers = subscribers.getOrDefault(message.receiver(), List.of());
-        directHandlers.forEach(handler -> handler.accept(message));
+        directHandlers.forEach(handler -> invokeHandlerSafely("direct", message, handler));
         List<Consumer<A2AMessage>> wildcardHandlers = subscribers.getOrDefault("*", List.of());
-        wildcardHandlers.forEach(handler -> handler.accept(message));
+        wildcardHandlers.forEach(handler -> invokeHandlerSafely("wildcard", message, handler));
     }
 
     @Override
@@ -151,5 +155,20 @@ public class InMemoryA2ABus implements A2ABus {
             }
         }
         return defaultValue;
+    }
+
+    private void invokeHandlerSafely(String type, A2AMessage message, Consumer<A2AMessage> handler) {
+        try {
+            handler.accept(message);
+        } catch (Exception e) {
+            logger.error(
+                    "A2A {} handler failed. receiver={}, messageId={}, correlationId={}",
+                    type,
+                    message.receiver(),
+                    message.messageId(),
+                    message.correlationId(),
+                    e
+            );
+        }
     }
 }

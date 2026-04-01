@@ -161,6 +161,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import {
   createChatSession,
   listChatSessions,
@@ -304,19 +305,11 @@ const scrollToBottom = async () => {
   }
 }
 
-function sanitizeHtml(html) {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/\bon\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/\bon\w+\s*=\s*'[^']*'/gi, '')
-    .replace(/\bon\w+\s*=[^\s>]*/gi, '')
-}
-
 // 渲染 markdown，只在内容不为空时渲染
 const renderMarkdown = (content) => {
   if (!content) return ''
   try {
-    return sanitizeHtml(marked.parse(content, { breaks: true }))
+    return DOMPurify.sanitize(marked.parse(content, { breaks: true }))
   } catch (e) {
     return content
   }
