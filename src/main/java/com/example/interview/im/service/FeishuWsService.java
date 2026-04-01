@@ -9,10 +9,13 @@ import com.lark.oapi.event.EventDispatcher;
 import com.lark.oapi.service.im.ImService;
 import com.lark.oapi.service.im.v1.model.P2MessageReceiveV1;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.Executor;
 
 /**
  * 飞书长连接服务 (FeishuWsService)
@@ -36,6 +39,7 @@ public class FeishuWsService {
     private final FeishuEventParser feishuEventParser;
     private final ImWebhookService imWebhookService;
     private final ObjectMapper objectMapper;
+    private final Executor executor;
     private Client wsClient;
 
     /**
@@ -44,11 +48,13 @@ public class FeishuWsService {
     public FeishuWsService(FeishuProperties feishuProperties,
                            FeishuEventParser feishuEventParser,
                            ImWebhookService imWebhookService,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           @Qualifier("profileUpdateExecutor") Executor executor) {
         this.feishuProperties = feishuProperties;
         this.feishuEventParser = feishuEventParser;
         this.imWebhookService = imWebhookService;
         this.objectMapper = objectMapper;
+        this.executor = executor;
     }
 
     /**
@@ -89,15 +95,15 @@ public class FeishuWsService {
                     .build();
 
             // 3. 异步启动长连接监听
-            // 使用新线程启动 wsClient.start() 以免阻塞 Spring 容器的初始化
-            new Thread(() -> {
+            // 使用 Spring 管理线程池，避免原生线程无法受控。
+            executor.execute(() -> {
                 try {
                     log.info("【飞书长连接】正在尝试与飞书服务器建立 WebSocket 连接... AppID: {}", feishuProperties.getAppId());
                     wsClient.start();
                 } catch (Exception e) {
                     log.error("【飞书长连接】WebSocket 连接运行异常，请检查网络或 App 凭证", e);
                 }
-            }, "Feishu-WebSocket-Pool").start();
+            });
 
         } catch (Exception e) {
             log.error("【飞书长连接】初始化长连接客户端失败", e);

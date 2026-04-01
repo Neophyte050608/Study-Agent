@@ -13,6 +13,8 @@ import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
 import com.example.interview.service.RAGService;
 import com.example.interview.session.SessionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +43,8 @@ import java.util.stream.Collectors;
  */
 @Component
 public class InterviewOrchestratorAgent {
+
+    private static final Logger logger = LoggerFactory.getLogger(InterviewOrchestratorAgent.class);
 
     private final EvaluationAgent evaluationAgent;
     private final KnowledgeLayerAgent knowledgeLayerAgent;
@@ -222,7 +226,7 @@ public class InterviewOrchestratorAgent {
         // [长对话滚动式总结优化]：当对话轮数达到阈值（如5轮）时，触发 RocketMQ 异步总结任务
         int dialogueCount = session.getHistory().size();
         if (dialogueCount > 0 && dialogueCount % 5 == 0) {
-            System.out.println("====== [InterviewOrchestratorAgent] 触发异步滚动总结 (当前轮数: " + dialogueCount + ") ======");
+            logger.debug("====== [InterviewOrchestratorAgent] 触发异步滚动总结 (当前轮数: {}) ======", dialogueCount);
             // 获取最近5轮的对话数据
             List<Question> recentQuestions = session.getHistory().subList(dialogueCount - 5, dialogueCount);
             List<Map<String, Object>> recentHistory = recentQuestions.stream().map(q -> Map.of(
@@ -321,7 +325,7 @@ public class InterviewOrchestratorAgent {
         final String finalProfileUserId = profileUserId;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                System.out.println("====== [InterviewOrchestratorAgent] 异步更新学习画像开始 ======");
+                logger.debug("====== [InterviewOrchestratorAgent] 异步更新学习画像开始 ======");
                 learningProfileAgent.upsertEvent(new LearningEvent(
                         "interview-" + session.getId() + "-" + UUID.randomUUID(),
                         finalProfileUserId,
@@ -333,9 +337,9 @@ public class InterviewOrchestratorAgent {
                         report.summary(),
                         Instant.now()
                 ));
-                System.out.println("====== [InterviewOrchestratorAgent] 异步更新学习画像完成 ======");
+                logger.debug("====== [InterviewOrchestratorAgent] 异步更新学习画像完成 ======");
             } catch (Exception e) {
-                System.err.println("====== [InterviewOrchestratorAgent] 异步更新学习画像失败: " + e.getMessage() + " ======");
+                logger.error("====== [InterviewOrchestratorAgent] 异步更新学习画像失败 ======", e);
             }
         }, profileUpdateExecutor);
         

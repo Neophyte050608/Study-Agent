@@ -1296,8 +1296,8 @@ public class RAGService {
                 () -> buildFallbackReport(history, targetedSuggestion),
                 prompt, ModelRouteType.THINKING, "最终复盘"
             ), 1, "最终复盘");
-            System.out.println("====== [RAGService - generateFinalReport] Response ======");
-            System.out.println(response);
+            logger.debug("====== [RAGService - generateFinalReport] Response ======");
+            logger.debug("{}", response);
             return response;
         } catch (RuntimeException e) {
             logger.warn("最终复盘生成失败，返回降级报告。原因: {}", summarizeError(e));
@@ -1320,14 +1320,14 @@ public class RAGService {
         String prompt = promptManager.render("coding-question", params);
 
         try {
-            System.out.println("====== [RAGService - generateCodingQuestion] Prompt Template ======");
-            System.out.println(prompt);
+            logger.debug("====== [RAGService - generateCodingQuestion] Prompt Template ======");
+            logger.debug("{}", prompt);
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
                 prompt, ModelRouteType.GENERAL, "刷题题目生成"
             ), 1, "刷题题目生成");
-            System.out.println("====== [RAGService - generateCodingQuestion] Response ======");
-            System.out.println(raw);
+            logger.debug("====== [RAGService - generateCodingQuestion] Response ======");
+            logger.debug("{}", raw);
             if (raw == null || raw.isBlank()) {
                 return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
             }
@@ -1359,14 +1359,14 @@ public class RAGService {
         String prompt = promptManager.render("coding-evaluation", params);
 
         try {
-            System.out.println("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
-            System.out.println(prompt);
+            logger.debug("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
+            logger.debug("{}", prompt);
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "{\"score\":0,\"feedback\":\"评估超时\"}",
                 prompt, ModelRouteType.THINKING, "刷题答案评估"
             ), 1, "刷题答案评估");
-            System.out.println("====== [RAGService - evaluateCodingAnswer] Response ======");
-            System.out.println(raw);
+            logger.debug("====== [RAGService - evaluateCodingAnswer] Response ======");
+            logger.debug("{}", raw);
             String clean = normalizeJsonContent(raw);
             JsonNode node = objectMapper.readTree(clean);
             int score = node.path("score").asInt(0);

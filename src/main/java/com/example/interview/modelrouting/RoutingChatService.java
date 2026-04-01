@@ -7,7 +7,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Qualifier;
 import java.util.concurrent.Executor;
 import reactor.core.publisher.Flux;
 
@@ -28,7 +27,7 @@ public class RoutingChatService {
     private final ModelRoutingExecutor modelRoutingExecutor;
     private final ModelHealthStore modelHealthStore;
     private final DynamicModelFactory dynamicModelFactory;
-    private final FirstPacketAwaiter firstPacketAwaiter;
+    private final ModelProbeAwaiter modelProbeAwaiter;
     private final ChatModel fallbackChatModel;
     private final AtomicLong routeFallbackCount = new AtomicLong(0);
     private final AtomicLong firstPacketTimeoutCount = new AtomicLong(0);
@@ -42,7 +41,7 @@ public class RoutingChatService {
             ModelRoutingExecutor modelRoutingExecutor,
             ModelHealthStore modelHealthStore,
             DynamicModelFactory dynamicModelFactory,
-            FirstPacketAwaiter firstPacketAwaiter,
+            ModelProbeAwaiter modelProbeAwaiter,
             @Qualifier("openAiChatModel") ChatModel fallbackChatModel
     ) {
         this.properties = properties;
@@ -50,7 +49,7 @@ public class RoutingChatService {
         this.modelRoutingExecutor = modelRoutingExecutor;
         this.modelHealthStore = modelHealthStore;
         this.dynamicModelFactory = dynamicModelFactory;
-        this.firstPacketAwaiter = firstPacketAwaiter;
+        this.modelProbeAwaiter = modelProbeAwaiter;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.fallbackChatModel = fallbackChatModel;
     }
@@ -80,7 +79,7 @@ public class RoutingChatService {
 
     /**
      * 带首包探测的模型调用。
-     * 使用 CompletableFuture 异步发起请求，并结合 FirstPacketAwaiter 检查响应时间。
+     * 使用 CompletableFuture 异步发起请求，并结合 ModelProbeAwaiter 检查响应时间。
      * 如果某候选模型响应过慢（未在规定时间内返回首包），将抛出超时异常，触发熔断器状态转换并降级到下一个模型。
      */
     public String callWithFirstPacketProbe(String prompt, ModelRouteType routeType, String stage) {
@@ -96,7 +95,7 @@ public class RoutingChatService {
             // 异步发起模型调用
             CompletableFuture<String> firstPacketFuture = CompletableFuture.supplyAsync(() -> callWithModel(chatModel, prompt), ragRetrieveExecutor);
             // 阻塞等待，如果超时则抛出 TimeoutException，由外层 executor 捕获并记录失败
-            String result = firstPacketAwaiter.awaitFirstPacket(firstPacketFuture);
+            String result = modelProbeAwaiter.awaitFirstPacket(firstPacketFuture);
             logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(), modelHealthStore.stateOf(candidate.name()));
             return result;
         }, stage + "-first-packet");

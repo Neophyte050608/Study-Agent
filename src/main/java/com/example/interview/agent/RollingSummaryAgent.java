@@ -65,7 +65,7 @@ public class RollingSummaryAgent {
         try {
             Map<String, Object> payload = message.payload();
             String sessionId = (String) payload.get("sessionId");
-            int targetCount = (Integer) payload.get("targetCount");
+            int targetCount = ((Number) payload.get("targetCount")).intValue();
             
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> recentHistory = (List<Map<String, Object>>) payload.get("recentHistory");

@@ -14,8 +14,5 @@ public enum InterviewEvent {
     COMPLETE_CORE_KNOWLEDGE,
     
     /** 算法题/场景题完成 */
-    COMPLETE_CODING,
-    
-    /** 面试时间到或候选人主动结束 */
-    END_INTERVIEW
+    COMPLETE_CODING
 }

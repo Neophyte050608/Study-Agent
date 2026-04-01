@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,11 +28,12 @@ class RoutingChatServiceTest {
         ModelSelector selector = new ModelSelector(properties);
         ModelHealthStore healthStore = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(healthStore);
-        FirstPacketAwaiter awaiter = new FirstPacketAwaiter(properties);
+        ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties);
         DynamicModelFactory factory = mock(DynamicModelFactory.class);
         when(factory.getByRoutingCandidate("openai", "")).thenReturn(null);
         ChatModel fallbackModel = mock(ChatModel.class);
-        RoutingChatService service = new RoutingChatService(properties, selector, executor, healthStore, factory, awaiter, fallbackModel);
+        Executor asyncExecutor = Runnable::run;
+        RoutingChatService service = new RoutingChatService(asyncExecutor, properties, selector, executor, healthStore, factory, awaiter, fallbackModel);
 
         String result = service.callWithFirstPacketProbeSupplier(
                 () -> "fallback-ok",
@@ -53,10 +55,11 @@ class RoutingChatServiceTest {
         ModelSelector selector = new ModelSelector(properties);
         ModelHealthStore healthStore = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(healthStore);
-        FirstPacketAwaiter awaiter = new FirstPacketAwaiter(properties);
+        ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties);
         DynamicModelFactory factory = mock(DynamicModelFactory.class);
         ChatModel fallbackModel = mock(ChatModel.class);
-        RoutingChatService service = new RoutingChatService(properties, selector, executor, healthStore, factory, awaiter, fallbackModel);
+        Executor asyncExecutor = Runnable::run;
+        RoutingChatService service = new RoutingChatService(asyncExecutor, properties, selector, executor, healthStore, factory, awaiter, fallbackModel);
 
         healthStore.markFailure("m-observe");
         Map<String, Object> stats = service.snapshotStats();

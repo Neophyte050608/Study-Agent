@@ -10,11 +10,11 @@ import java.util.concurrent.TimeUnit;
  * 专门用于解决大模型调用时的“首包假死”问题（TCP连接建立成功，但模型长时间不返回第一个Token）。
  */
 @Component
-public class FirstPacketAwaiter {
+public class ModelProbeAwaiter {
 
     private final ModelRoutingProperties properties;
 
-    public FirstPacketAwaiter(ModelRoutingProperties properties) {
+    public ModelProbeAwaiter(ModelRoutingProperties properties) {
         this.properties = properties;
     }
 

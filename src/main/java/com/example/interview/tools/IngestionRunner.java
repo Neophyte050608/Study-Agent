@@ -1,6 +1,8 @@
 package com.example.interview.tools;
 
 import com.example.interview.service.IngestionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +18,8 @@ import java.util.Arrays;
 @Component
 public class IngestionRunner implements CommandLineRunner {
 
+    private static final Logger logger = LoggerFactory.getLogger(IngestionRunner.class);
+
     private final IngestionService ingestionService;
 
     public IngestionRunner(IngestionService ingestionService) {
@@ -30,9 +34,9 @@ public class IngestionRunner implements CommandLineRunner {
                 .findFirst()
                 .ifPresent(arg -> {
                     String path = arg.split("=")[1];
-                    System.out.println("Starting CLI Ingestion for: " + path);
+                    logger.info("Starting CLI Ingestion for: {}", path);
                     ingestionService.sync(path);
-                    System.out.println("CLI Ingestion Complete.");
+                    logger.info("CLI Ingestion Complete.");
                 });
     }
 }

@@ -370,12 +370,8 @@ const handleSend = async () => {
       },
       onDone: () => {
         if (isStreaming.value) {
-          messages.value.push({ role: 'assistant', content: streamingContent.value })
-          streamingContent.value = ''
           isStreaming.value = false
           streamHandle.value = null
-          loadSessions()
-          scrollToBottom()
         }
       }
     })

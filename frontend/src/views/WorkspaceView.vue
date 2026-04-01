@@ -83,9 +83,8 @@ const menus = ref([])
 
 const toSpaPath = (url) => {
   if (!url) return '#'
-  if (url.startsWith('/spa/')) return url
   const base = url.replace(/\.html$/, '')
-  return base.startsWith('/') ? `/spa${base}` : `/spa/${base}`
+  return base.startsWith('/') ? base : `/${base}`
 }
 
 const togglePosition = (menu) => {

@@ -159,6 +159,7 @@
 </template>
 
 <script setup>
+import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick, watch } from 'vue'
 import { loadProfileEvents, loadProfileOverview } from '../api/profile'
 
