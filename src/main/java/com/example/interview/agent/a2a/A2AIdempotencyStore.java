@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.Cursor;
+import java.util.HashSet;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,6 +54,8 @@ public class A2AIdempotencyStore {
     private final String redisKeyPrefix;
     private final AtomicBoolean warned = new AtomicBoolean(false);
     private volatile boolean redisDisabled = false;
+    private volatile long lastPurgeTime = 0;
+    private static final long PURGE_INTERVAL_MS = 60_000;
 
     @Autowired
     public A2AIdempotencyStore(
@@ -138,8 +143,11 @@ public class A2AIdempotencyStore {
 
     private boolean shouldProcessInMemory(String uniqueKey) {
         // 内存路径：只保证进程内去重；会定期清理过期键并在超出 maxSize 时做一次“近似清理”。
-        purgeExpired();
         long now = Instant.now().toEpochMilli();
+        if (now - lastPurgeTime > PURGE_INTERVAL_MS) {
+            purgeExpired();
+            lastPurgeTime = now;
+        }
         Long existing = processed.putIfAbsent(uniqueKey, now);
         if (existing != null) {
             return false;
@@ -170,8 +178,6 @@ public class A2AIdempotencyStore {
             Map.Entry<String, Long> entry = iterator.next();
             if (entry.getValue() < threshold) {
                 iterator.remove();
-            } else {
-                break;
             }
         }
     }
@@ -182,8 +188,13 @@ public class A2AIdempotencyStore {
         if (redisAvailable) {
             try {
                 // Approximate redis key count for idempotency
-                Set<String> keys = redisTemplate.keys(redisKeyPrefix + "*");
-                redisKeys = keys != null ? keys.size() : 0;
+                ScanOptions options = ScanOptions.scanOptions().match(redisKeyPrefix + "*").count(100).build();
+                try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                    while (cursor.hasNext()) {
+                        cursor.next();
+                        redisKeys++;
+                    }
+                }
             } catch (Exception e) {
                 redisAvailable = false;
             }
@@ -224,8 +235,14 @@ public class A2AIdempotencyStore {
             if (redisTemplate != null && !redisDisabled) {
                 try {
                     String pattern = contains.isBlank() ? redisKeyPrefix + "*" : redisKeyPrefix + "*" + contains + "*";
-                    Set<String> keys = redisTemplate.keys(pattern);
-                    if (keys != null && !keys.isEmpty()) {
+                    Set<String> keys = new HashSet<>();
+                    ScanOptions options = ScanOptions.scanOptions().match(pattern).count(100).build();
+                    try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                        while (cursor.hasNext()) {
+                            keys.add(cursor.next());
+                        }
+                    }
+                    if (!keys.isEmpty()) {
                         Long deleted = redisTemplate.delete(keys);
                         clearedRedis = deleted == null ? 0 : deleted;
                     }

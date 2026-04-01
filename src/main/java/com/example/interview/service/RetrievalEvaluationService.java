@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.ArrayDeque;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
@@ -51,12 +52,12 @@ public class RetrievalEvaluationService {
     /**
      * 内存历史兜底：当数据库不可用时，仍然保留最近评测结果供列表与对比使用。
      */
-    private final Deque<RetrievalEvalReport> reportHistory = new ArrayDeque<>();
+    private final Deque<RetrievalEvalReport> reportHistory = new ConcurrentLinkedDeque<>();
 
     /**
      * 内存详情兜底：按 runId 缓存完整报告，避免数据库不可用时详情接口失效。
      */
-    private final Map<String, RetrievalEvalReport> reportDetailHistory = new LinkedHashMap<>();
+    private final Map<String, RetrievalEvalReport> reportDetailHistory = new ConcurrentHashMap<>();
 
     /**
      * Spring 正常注入使用的构造器。
@@ -137,7 +138,7 @@ public class RetrievalEvaluationService {
      * @param runLabel 运行标签
      * @return 评测结果
      */
-    public synchronized RetrievalEvalReport runCustomEval(List<EvalCase> cases, String datasetSource, String runLabel) {
+    public RetrievalEvalReport runCustomEval(List<EvalCase> cases, String datasetSource, String runLabel) {
         return runCustomEval(cases, new EvalRunOptions(datasetSource, runLabel, "", Map.of(), ""));
     }
 
@@ -148,7 +149,7 @@ public class RetrievalEvaluationService {
      * @param options 评测运行配置
      * @return 评测结果
      */
-    public synchronized RetrievalEvalReport runCustomEval(List<EvalCase> cases, EvalRunOptions options) {
+    public RetrievalEvalReport runCustomEval(List<EvalCase> cases, EvalRunOptions options) {
         ensureEvalEnabled();
         List<EvalCase> normalizedCases = normalizeCases(cases);
         String runId = UUID.randomUUID().toString();
@@ -344,7 +345,7 @@ public class RetrievalEvaluationService {
      * @param limit 返回条数上限
      * @return 评测运行摘要列表
      */
-    public synchronized List<RetrievalEvalRunSummary> listRecentRuns(int limit) {
+    public List<RetrievalEvalRunSummary> listRecentRuns(int limit) {
         ensureEvalEnabled();
         int safeLimit = limit <= 0 ? 20 : Math.min(limit, 100);
         Map<String, RetrievalEvalRunSummary> merged = new LinkedHashMap<>();
@@ -366,7 +367,7 @@ public class RetrievalEvaluationService {
      * @param runId 运行 ID
      * @return 详情；不存在时返回 null
      */
-    public synchronized RetrievalEvalReport getRunDetail(String runId) {
+    public RetrievalEvalReport getRunDetail(String runId) {
         ensureEvalEnabled();
         String safeRunId = normalizeText(runId, "");
         if (safeRunId.isBlank()) {
@@ -386,7 +387,7 @@ public class RetrievalEvaluationService {
      * @param candidateRunId 候选运行 ID
      * @return 对比结果；任一运行不存在时返回 null
      */
-    public synchronized RetrievalEvalComparison compareRuns(String baselineRunId, String candidateRunId) {
+    public RetrievalEvalComparison compareRuns(String baselineRunId, String candidateRunId) {
         ensureEvalEnabled();
         RetrievalEvalReport baseline = getRunDetail(baselineRunId);
         RetrievalEvalReport candidate = getRunDetail(candidateRunId);
@@ -462,7 +463,7 @@ public class RetrievalEvaluationService {
      * @param limit 返回的历史窗口大小
      * @return 趋势聚合结果
      */
-    public synchronized RetrievalEvalTrend getTrend(int limit) {
+    public RetrievalEvalTrend getTrend(int limit) {
         ensureEvalEnabled();
         List<RetrievalEvalRunSummary> runs = listRecentRuns(limit);
         if (runs.isEmpty()) {
@@ -483,7 +484,7 @@ public class RetrievalEvaluationService {
      * @param runId 运行 ID
      * @return 聚类结果；运行不存在时返回 null
      */
-    public synchronized List<RetrievalEvalFailureCluster> clusterFailures(String runId) {
+    public List<RetrievalEvalFailureCluster> clusterFailures(String runId) {
         ensureEvalEnabled();
         RetrievalEvalReport report = getRunDetail(runId);
         if (report == null) {

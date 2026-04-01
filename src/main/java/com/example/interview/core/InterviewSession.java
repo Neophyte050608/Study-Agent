@@ -134,15 +134,6 @@ public class InterviewSession {
         double oldMastery = topicMastery.getOrDefault(normalizedTopic, 65.0);
         double newMastery = oldMastery * 0.7 + score * 0.3;
         topicMastery.put(normalizedTopic, newMastery);
-        
-        // 基于掌握度的全局难度微调
-        if (newMastery < 60) {
-            difficultyLevel = DifficultyLevel.BASIC;
-        } else if (newMastery < 80) {
-            difficultyLevel = DifficultyLevel.INTERMEDIATE;
-        } else {
-            difficultyLevel = DifficultyLevel.ADVANCED;
-        }
     }
 
     // Getters and Setters

@@ -245,8 +245,13 @@ public class TaskRouterAgent {
             String questionType = "";
             if (reactDecisionStr != null) {
                 if (reactDecisionStr.contains("INTERVIEW_START")) decidedTaskType = "INTERVIEW_START";
+                else if (reactDecisionStr.contains("INTERVIEW_ANSWER")) decidedTaskType = "INTERVIEW_ANSWER";
+                else if (reactDecisionStr.contains("INTERVIEW_REPORT")) decidedTaskType = "INTERVIEW_REPORT";
                 else if (reactDecisionStr.contains("CODING_PRACTICE")) decidedTaskType = "CODING_PRACTICE";
+                else if (reactDecisionStr.contains("LEARNING_PLAN")) decidedTaskType = "LEARNING_PLAN";
+                else if (reactDecisionStr.contains("PROFILE_EVENT_UPSERT")) decidedTaskType = "PROFILE_EVENT_UPSERT";
                 else if (reactDecisionStr.contains("PROFILE_TRAINING_PLAN_QUERY")) decidedTaskType = "PROFILE_TRAINING_PLAN_QUERY";
+                else if (reactDecisionStr.contains("PROFILE_SNAPSHOT_QUERY")) decidedTaskType = "PROFILE_SNAPSHOT_QUERY";
                 else if (reactDecisionStr.contains("KNOWLEDGE_QA")) decidedTaskType = "KNOWLEDGE_QA";
                 else if (reactDecisionStr.contains("UNKNOWN")) decidedTaskType = "UNKNOWN";
 

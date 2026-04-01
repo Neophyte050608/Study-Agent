@@ -197,7 +197,7 @@ public class InterviewOrchestratorAgent {
         
         // 尝试触发多个阶段流转事件（COLA 状态机会根据 Condition 自动决定是否流转）
         // 因为在一个回合中，可能刚好满足进入下一个阶段的条件
-        com.example.interview.core.InterviewStage nextStage;
+        com.example.interview.core.InterviewStage nextStage = session.getCurrentStage();
         if (previousStage == com.example.interview.core.InterviewStage.INTRODUCTION) {
             nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.FINISH_INTRO, context);
             if (nextStage != null) session.setCurrentStage(nextStage);
@@ -210,6 +210,13 @@ public class InterviewOrchestratorAgent {
         } else if (previousStage == com.example.interview.core.InterviewStage.SCENARIO_OR_CODING) {
             nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_CODING, context);
             if (nextStage != null) session.setCurrentStage(nextStage);
+        }
+
+        // 当面试已结束但状态机还没到达 CLOSING 时，强制跳转
+        boolean finished = session.getHistory().size() >= session.getTotalQuestions();
+        if (finished && nextStage != com.example.interview.core.InterviewStage.CLOSING) {
+            nextStage = com.example.interview.core.InterviewStage.CLOSING;
+            session.setCurrentStage(nextStage);
         }
 
         // [长对话滚动式总结优化]：当对话轮数达到阈值（如5轮）时，触发 RocketMQ 异步总结任务
@@ -251,7 +258,6 @@ public class InterviewOrchestratorAgent {
         // 6. 自适应状态机更新：回写掌握度、难度和追问阶段
         session.updateAdaptiveState(session.getTopic(), evaluation.score());
 
-        boolean finished = session.getHistory().size() >= session.getTotalQuestions();
         if (!finished) {
             session.setCurrentQuestion(evaluation.nextQuestion());
         } else {
@@ -339,7 +345,7 @@ public class InterviewOrchestratorAgent {
         String weak = report.weak().isBlank() ? "暂无明显薄弱点。" : report.weak();
         String wrong = report.wrong().isBlank() ? "暂无明确错误结论。" : report.wrong();
         String obsidianUpdates = report.obsidianUpdates().isBlank() ? "建议补充：核心定义、实现原理、常见误区、边界条件。" : report.obsidianUpdates();
-        String nextFocusSeed = report.nextFocus().isBlank() ? learningProfileAgent.recommend(profileUserId, "interview") : report.nextFocus();
+        String nextFocusSeed = report.nextFocus().isBlank() ? targetedSuggestion : report.nextFocus();
         
         // 成长层精炼最终建议
         String nextFocus = growthLayerAgent.refineNextFocus(nextFocusSeed, targetedSuggestion, session.getAverageScore());

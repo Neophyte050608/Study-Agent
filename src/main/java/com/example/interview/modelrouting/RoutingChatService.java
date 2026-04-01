@@ -7,6 +7,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Qualifier;
+import java.util.concurrent.Executor;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -31,8 +33,10 @@ public class RoutingChatService {
     private final AtomicLong routeFallbackCount = new AtomicLong(0);
     private final AtomicLong firstPacketTimeoutCount = new AtomicLong(0);
     private final AtomicLong firstPacketFailureCount = new AtomicLong(0);
+    private final Executor ragRetrieveExecutor;
 
     public RoutingChatService(
+            @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor,
             ModelRoutingProperties properties,
             ModelSelector modelSelector,
             ModelRoutingExecutor modelRoutingExecutor,
@@ -47,6 +51,7 @@ public class RoutingChatService {
         this.modelHealthStore = modelHealthStore;
         this.dynamicModelFactory = dynamicModelFactory;
         this.firstPacketAwaiter = firstPacketAwaiter;
+        this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.fallbackChatModel = fallbackChatModel;
     }
 
@@ -89,7 +94,7 @@ public class RoutingChatService {
         return modelRoutingExecutor.execute(candidates, candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
             // 异步发起模型调用
-            CompletableFuture<String> firstPacketFuture = CompletableFuture.supplyAsync(() -> callWithModel(chatModel, prompt));
+            CompletableFuture<String> firstPacketFuture = CompletableFuture.supplyAsync(() -> callWithModel(chatModel, prompt), ragRetrieveExecutor);
             // 阻塞等待，如果超时则抛出 TimeoutException，由外层 executor 捕获并记录失败
             String result = firstPacketAwaiter.awaitFirstPacket(firstPacketFuture);
             logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(), modelHealthStore.stateOf(candidate.name()));

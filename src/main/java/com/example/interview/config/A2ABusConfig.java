@@ -27,6 +27,11 @@ import java.util.Locale;
 @Configuration
 public class A2ABusConfig {
 
+    @org.springframework.context.annotation.Bean
+    public com.example.interview.agent.a2a.InMemoryA2ABus inMemoryA2ABus(com.example.interview.agent.a2a.A2AIdempotencyStore idempotencyStore) {
+        return new com.example.interview.agent.a2a.InMemoryA2ABus(idempotencyStore);
+    }
+
     /**
      * 定义 A2ABus Bean。
      * 

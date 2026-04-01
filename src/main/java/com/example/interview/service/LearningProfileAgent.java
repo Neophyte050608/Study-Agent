@@ -57,13 +57,6 @@ public class LearningProfileAgent {
         LearningEvent event = sanitizeEvent(input);
         String userId = normalizeUserId(event.userId());
 
-        // 检查事件是否已存在
-        Long count = learningEventMapper.selectCount(new LambdaQueryWrapper<LearningEventDO>()
-                .eq(LearningEventDO::getEventId, event.eventId()));
-        if (count != null && count > 0) {
-            return false;
-        }
-
         // 保存学习事件
         LearningEventDO eventDO = new LearningEventDO();
         eventDO.setEventId(event.eventId());
@@ -75,7 +68,12 @@ public class LearningProfileAgent {
         eventDO.setFamiliarPoints(event.familiarPoints());
         eventDO.setEvidence(event.evidence());
         eventDO.setTimestamp(LocalDateTime.ofInstant(event.timestamp(), ZoneId.systemDefault()));
-        learningEventMapper.insert(eventDO);
+
+        try {
+            learningEventMapper.insert(eventDO);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            return false;
+        }
 
         // 获取并更新画像
         LearningProfileDO profileDO = getOrCreateProfileDO(userId);

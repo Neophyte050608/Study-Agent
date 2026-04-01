@@ -2,7 +2,6 @@ package com.example.interview.agent.a2a;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,6 @@ import java.util.UUID;
  *   <li>请求-应答：当 intent=RETURN_RESULT 且携带 correlationId 时，用 pendingReplies 完成“按关联ID唤醒”。</li>
  * </ul>
  */
-@Component
 public class InMemoryA2ABus implements A2ABus {
 
     private static final Logger logger = LoggerFactory.getLogger(InMemoryA2ABus.class);

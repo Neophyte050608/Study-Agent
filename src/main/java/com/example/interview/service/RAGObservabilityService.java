@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayDeque;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
@@ -49,7 +49,7 @@ public class RAGObservabilityService {
     /**
      * 已完成 Trace 的内存历史，用于数据库不可用时的安全回退。
      */
-    private final Deque<RAGTrace> allTraces = new ArrayDeque<>();
+    private final Deque<RAGTrace> allTraces = new ConcurrentLinkedDeque<>();
 
     /**
      * 当前活跃 Trace，按 traceId 存放。
@@ -96,7 +96,7 @@ public class RAGObservabilityService {
      * @param nodeType 节点类型
      * @param nodeName 节点名称
      */
-    public synchronized void startNode(String traceId, String nodeId, String parentNodeId, String nodeType, String nodeName) {
+    public void startNode(String traceId, String nodeId, String parentNodeId, String nodeType, String nodeName) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return;
         }
@@ -116,7 +116,7 @@ public class RAGObservabilityService {
      * @param outputSummary 输出摘要
      * @param errorSummary 错误摘要
      */
-    public synchronized void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary) {
+    public void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary) {
         endNode(traceId, nodeId, inputSummary, outputSummary, errorSummary, null);
     }
 
@@ -130,7 +130,7 @@ public class RAGObservabilityService {
      * @param errorSummary 错误摘要
      * @param metrics 节点结构化指标
      */
-    public synchronized void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
+    public void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return;
         }
@@ -159,7 +159,7 @@ public class RAGObservabilityService {
      * @param limit 返回条数上限
      * @return 最近 Trace 列表
      */
-    public synchronized List<RAGTrace> listRecent(int limit) {
+    public List<RAGTrace> listRecent(int limit) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return List.of();
         }
@@ -173,7 +173,7 @@ public class RAGObservabilityService {
      * @param traceId Trace ID
      * @return Trace 详情；不存在时返回 null
      */
-    public synchronized RAGTrace getTraceDetail(String traceId) {
+    public RAGTrace getTraceDetail(String traceId) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return null;
         }
@@ -200,7 +200,7 @@ public class RAGObservabilityService {
      *
      * @return 概览统计结果
      */
-    public synchronized Map<String, Object> getOverview() {
+    public Map<String, Object> getOverview() {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return Map.of(
                     "enabled", false,
