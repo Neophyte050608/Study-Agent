@@ -47,3 +47,42 @@ export async function httpPostFormData(url, formData) {
   }
   return data
 }
+
+export async function httpPut(url, payload = {}) {
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  const raw = await response.text()
+  let data = {}
+  if (raw) {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { message: raw }
+    }
+  }
+  if (!response.ok) {
+    throw new Error(data.message || `请求失败: ${response.status}`)
+  }
+  return data
+}
+
+export async function httpDelete(url) {
+  const response = await fetch(url, { method: 'DELETE' })
+  if (response.status === 204 || response.headers.get('content-length') === '0') return {}
+  const raw = await response.text()
+  let data = {}
+  if (raw) {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { message: raw }
+    }
+  }
+  if (!response.ok) {
+    throw new Error(data.message || `请求失败: ${response.status}`)
+  }
+  return data
+}

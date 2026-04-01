@@ -10,6 +10,7 @@ import SettingsView from '../views/SettingsView.vue'
 import WorkspaceView from '../views/WorkspaceView.vue'
 import McpView from '../views/McpView.vue'
 import IntentTreeView from '../views/IntentTreeView.vue'
+import ChatView from '../views/ChatView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
 
 const routes = [
@@ -80,6 +81,12 @@ const routes = [
         name: 'intent-tree',
         component: IntentTreeView,
         alias: ['intent-tree.html']
+      },
+      {
+        path: 'chat',
+        name: 'chat',
+        component: ChatView,
+        alias: ['chat.html']
       },
       {
         path: ':pathMatch(.*)*',
