@@ -49,6 +49,7 @@ public class TaskRouterAgent {
     private final CodingPracticeAgent codingPracticeAgent;
     private final NoteMakingAgent noteMakingAgent;
     private final LearningProfileAgent learningProfileAgent;
+    private final KnowledgeQaAgent knowledgeQaAgent;
     private final PromptManager promptManager;
     private final IntentTreeRoutingService intentTreeRoutingService;
     private final A2ABus a2aBus;
@@ -61,6 +62,7 @@ public class TaskRouterAgent {
             CodingPracticeAgent codingPracticeAgent,
             NoteMakingAgent noteMakingAgent,
             LearningProfileAgent learningProfileAgent,
+            KnowledgeQaAgent knowledgeQaAgent,
             PromptManager promptManager,
             IntentTreeRoutingService intentTreeRoutingService,
             A2ABus a2aBus,
@@ -71,6 +73,7 @@ public class TaskRouterAgent {
         this.codingPracticeAgent = codingPracticeAgent;
         this.noteMakingAgent = noteMakingAgent;
         this.learningProfileAgent = learningProfileAgent;
+        this.knowledgeQaAgent = knowledgeQaAgent;
         this.promptManager = promptManager;
         this.intentTreeRoutingService = intentTreeRoutingService;
         this.a2aBus = a2aBus;
@@ -123,6 +126,10 @@ public class TaskRouterAgent {
                 case PROFILE_EVENT_UPSERT -> TaskResponse.ok(routeProfileEventUpsert(request.payload(), request.context())); // 更新学习画像事件
                 case PROFILE_SNAPSHOT_QUERY -> TaskResponse.ok(routeProfileSnapshot(request.payload(), request.context())); // 查询学习画像快照
                 case PROFILE_TRAINING_PLAN_QUERY -> TaskResponse.ok(routeProfileTrainingPlan(request.payload(), request.context())); // 查询训练计划
+                case KNOWLEDGE_QA -> TaskResponse.ok(knowledgeQaAgent.execute(
+                        readText(request.payload(), "query"),
+                        readText(request.context(), "history")
+                ));
             };
             
             // 6. 发布任务状态：DONE/FAILED（根据响应结果通知 A2A 总线任务结束）
@@ -240,6 +247,7 @@ public class TaskRouterAgent {
                 if (reactDecisionStr.contains("INTERVIEW_START")) decidedTaskType = "INTERVIEW_START";
                 else if (reactDecisionStr.contains("CODING_PRACTICE")) decidedTaskType = "CODING_PRACTICE";
                 else if (reactDecisionStr.contains("PROFILE_TRAINING_PLAN_QUERY")) decidedTaskType = "PROFILE_TRAINING_PLAN_QUERY";
+                else if (reactDecisionStr.contains("KNOWLEDGE_QA")) decidedTaskType = "KNOWLEDGE_QA";
                 else if (reactDecisionStr.contains("UNKNOWN")) decidedTaskType = "UNKNOWN";
 
                 java.util.regex.Matcher mTopic = java.util.regex.Pattern.compile("\"topic\"\\s*:\\s*\"([^\"]+)\"").matcher(reactDecisionStr);
@@ -390,6 +398,7 @@ public class TaskRouterAgent {
             case LEARNING_PLAN -> "NoteAgent";
             case CODING_PRACTICE -> "CodingAgent";
             case PROFILE_EVENT_UPSERT, PROFILE_SNAPSHOT_QUERY, PROFILE_TRAINING_PLAN_QUERY -> "LearningProfileAgent";
+            case KNOWLEDGE_QA -> "KnowledgeQaAgent";
         };
     }
 

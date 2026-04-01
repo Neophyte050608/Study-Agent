@@ -53,6 +53,19 @@ CREATE TABLE IF NOT EXISTS `t_menu_config` (
     UNIQUE KEY `uk_menu_code` (`menu_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='菜单配置表';
 
+-- 创建入库配置表
+CREATE TABLE IF NOT EXISTS `t_ingest_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `config_key` VARCHAR(128) NOT NULL COMMENT '配置唯一键',
+    `paths` TEXT COMMENT '知识库路径配置',
+    `ignore_dirs` VARCHAR(1000) COMMENT '忽略目录（逗号分隔）',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_ingest_config_key` (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识入库配置表';
+
 -- 创建面试会话表
 CREATE TABLE IF NOT EXISTS `t_interview_session` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -256,3 +269,32 @@ CREATE TABLE IF NOT EXISTS `t_sync_index` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_file_path` (`file_path`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同步索引表';
+
+-- ==================== Web 聊天会话 ====================
+CREATE TABLE IF NOT EXISTS `t_chat_session` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `session_id` VARCHAR(128) NOT NULL,
+    `user_id` VARCHAR(128) NOT NULL,
+    `title` VARCHAR(255) NOT NULL DEFAULT '新对话',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_session_id` (`session_id`),
+    KEY `idx_user_id_updated` (`user_id`, `updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Web 聊天会话';
+
+CREATE TABLE IF NOT EXISTS `t_chat_message` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `message_id` VARCHAR(128) NOT NULL,
+    `session_id` VARCHAR(128) NOT NULL,
+    `role` VARCHAR(16) NOT NULL COMMENT 'user|assistant|system',
+    `content_type` VARCHAR(32) NOT NULL DEFAULT 'text' COMMENT '预留多模态: text|image|file',
+    `content` MEDIUMTEXT,
+    `metadata` JSON COMMENT 'traceId, sources, taskType 等扩展元数据',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_message_id` (`message_id`),
+    KEY `idx_session_created` (`session_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Web 聊天消息';

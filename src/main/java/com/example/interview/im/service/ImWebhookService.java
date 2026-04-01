@@ -415,6 +415,9 @@ public class ImWebhookService {
         // 4. 处理通用 Map 结构（如刷题、画像查询等）
         if (data instanceof Map<?, ?> map) {
             // 优先提取核心业务字段，避免展示全部元数据
+            if (map.containsKey("answer")) {
+                return String.valueOf(map.get("answer"));
+            }
             if (map.containsKey("question")) {
                 return String.valueOf(map.get("question"));
             }

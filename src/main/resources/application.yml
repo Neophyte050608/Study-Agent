@@ -124,12 +124,21 @@ app:
   learning:
     notes:
       dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
+  ingestion:
+    config:
+      paths: ${APP_INGESTION_CONFIG_PATHS:}
+      ignore-dirs: ${APP_INGESTION_CONFIG_IGNORE_DIRS:}
 
   interview:
     streaming:
       enabled: ${APP_INTERVIEW_STREAMING_ENABLED:true}
       timeout-millis: ${APP_INTERVIEW_STREAMING_TIMEOUT_MILLIS:180000}
       message-chunk-size: ${APP_INTERVIEW_STREAMING_MESSAGE_CHUNK_SIZE:48}
+
+  chat:
+    streaming:
+      timeout-millis: 180000
+      message-chunk-size: 48
 
   model-routing:
     enabled: ${APP_MODEL_ROUTING_ENABLED:true}
