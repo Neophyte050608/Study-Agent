@@ -380,6 +380,10 @@ public class IntentTreeRoutingService {
                         List.of("来一道缓存击穿场景题", "出一道 Redis 场景题"), List.of("topic", "difficulty", "count")),
                 new IntentTreeNode("PROFILE.TRAINING.QUERY", "profile/training/query", "查询学习计划", "查询学习画像或学习建议", "PROFILE_TRAINING_PLAN_QUERY",
                         List.of("查询我的学习计划", "我最近薄弱点是什么"), List.of("mode")),
+                new IntentTreeNode("KNOWLEDGE.QA.GENERAL", "knowledge/qa/general", "知识问答",
+                        "用户直接询问技术知识、概念解释、原理分析，如'什么是XXX'、'如何实现XXX'、'XXX和YYY的区别'等", "KNOWLEDGE_QA",
+                        List.of("什么是Redis的持久化机制", "Java的垃圾回收是怎么工作的", "解释一下Spring的IOC原理", "HashMap和ConcurrentHashMap的区别"),
+                        List.of("topic")),
                 new IntentTreeNode("UNKNOWN", "unknown", "未知意图", "无法判定具体业务意图", "UNKNOWN",
                         List.of("你好", "今天天气不错"), List.of())
         );

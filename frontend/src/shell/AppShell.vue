@@ -126,7 +126,8 @@ const loadMenus = async () => {
       { id: 'NOTES', title: '知识库管理', icon: 'description', url: '/notes' },
       { id: 'CODING', title: '算法刷题', icon: 'code', url: '/coding' },
       { id: 'PROFILE', title: '能力画像', icon: 'analytics', url: '/profile' },
-      { id: 'MONITORING', title: '系统监控', icon: 'monitoring', url: '/monitoring' }
+      { id: 'MONITORING', title: '系统监控', icon: 'monitoring', url: '/monitoring' },
+      { id: 'CHAT', title: 'AI 助手', icon: 'chat_bubble', url: '/chat' }
     ]
   }
 }

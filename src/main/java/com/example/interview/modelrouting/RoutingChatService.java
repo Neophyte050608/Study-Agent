@@ -7,11 +7,13 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 @Service
@@ -93,6 +95,54 @@ public class RoutingChatService {
             logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(), modelHealthStore.stateOf(candidate.name()));
             return result;
         }, stage + "-first-packet");
+    }
+
+    /**
+     * 流式调用模型，每产生一个 token 就通过 tokenConsumer 回调。
+     * 方法本身阻塞到流完成，返回完整响应文本。
+     */
+    public String callStream(String prompt, ModelRouteType routeType, String stage,
+                             Consumer<String> tokenConsumer) {
+        if (!properties.isEnabled()) {
+            return streamWithModel(fallbackChatModel, prompt, tokenConsumer);
+        }
+        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
+        if (candidates.isEmpty()) {
+            return streamWithModel(fallbackChatModel, prompt, tokenConsumer);
+        }
+        return modelRoutingExecutor.execute(candidates, candidate -> {
+            ChatModel chatModel = resolveChatModel(candidate);
+            long start = System.currentTimeMillis();
+            String response = streamWithModel(chatModel, prompt, tokenConsumer);
+            long cost = System.currentTimeMillis() - start;
+            logger.info("模型路由命中(流式): stage={}, candidate={}, provider={}, state={}, costMs={}",
+                    stage, candidate.name(), candidate.provider(),
+                    modelHealthStore.stateOf(candidate.name()), cost);
+            return response;
+        }, stage);
+    }
+
+    private String streamWithModel(ChatModel chatModel, String prompt, Consumer<String> tokenConsumer) {
+        Flux<String> tokenFlux = ChatClient.builder(chatModel)
+                .build()
+                .prompt()
+                .user(prompt)
+                .stream()
+                .content();
+
+        List<String> tokens = tokenFlux
+                .doOnNext(token -> {
+                    if (token != null && !token.isEmpty()) {
+                        tokenConsumer.accept(token);
+                    }
+                })
+                .collectList()
+                .block();
+
+        if (tokens == null || tokens.isEmpty()) {
+            throw new ModelRoutingException("模型流式返回为空");
+        }
+        return String.join("", tokens);
     }
 
     /**
