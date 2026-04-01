@@ -94,6 +94,7 @@ public class InterviewStreamingService {
     }
 
     private void runStart(Map<String, Object> payload, String userId, String traceId, String taskId, InterviewSseEmitterSender sender) {
+        // [BUG FIX] 必须首先将父线程传递过来的 traceId 设置到当前执行线程的 ThreadLocal 中，保证后续 RAGService 能拿到同一个 traceId。
         RAGTraceContext.setTraceId(traceId);
         try {
             if (isStopped(taskId)) {
@@ -125,6 +126,7 @@ public class InterviewStreamingService {
     }
 
     private void runAnswer(Map<String, Object> payload, String traceId, String taskId, InterviewSseEmitterSender sender) {
+        // [BUG FIX] 确保异步线程拥有 trace 上下文
         RAGTraceContext.setTraceId(traceId);
         try {
             if (isStopped(taskId)) {
@@ -161,6 +163,7 @@ public class InterviewStreamingService {
     }
 
     private void runReport(Map<String, Object> payload, String userId, String traceId, String taskId, InterviewSseEmitterSender sender) {
+        // [BUG FIX] 确保异步线程拥有 trace 上下文
         RAGTraceContext.setTraceId(traceId);
         try {
             if (isStopped(taskId)) {

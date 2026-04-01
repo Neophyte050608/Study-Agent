@@ -482,6 +482,21 @@ public class InterviewController {
         return ResponseEntity.ok(interviewService.getRecentRagTraces(limit == null ? 20 : limit));
     }
 
+    /**
+     * 获取单条 RAG Trace 的完整节点详情。
+     */
+    @GetMapping("/observability/rag-traces/{traceId}")
+    public ResponseEntity<?> ragTraceDetail(@PathVariable("traceId") String traceId) {
+        if (!interviewService.isRagTraceEnabled()) {
+            return ResponseEntity.ok(Map.of());
+        }
+        var trace = interviewService.getRagTraceDetail(traceId);
+        if (trace == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的 RAG Trace"));
+        }
+        return ResponseEntity.ok(trace);
+    }
+
     @GetMapping("/observability/switches")
     public ResponseEntity<?> observabilitySwitches() {
         return ResponseEntity.ok(interviewService.getObservabilitySwitches());
@@ -510,6 +525,107 @@ public class InterviewController {
     }
 
     /**
+     * 查询最近的检索评测运行历史。
+     */
+    @GetMapping("/observability/retrieval-eval/runs")
+    public ResponseEntity<?> listRetrievalEvalRuns(
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit
+    ) {
+        try {
+            int normalizedLimit = limit == null ? 20 : limit;
+            return ResponseEntity.ok(Map.of(
+                    "limit", normalizedLimit,
+                    "records", interviewService.listRecentRetrievalEvalRuns(normalizedLimit)
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 查询单次检索评测详情。
+     */
+    @GetMapping("/observability/retrieval-eval/runs/{runId}")
+    public ResponseEntity<?> getRetrievalEvalRunDetail(@PathVariable("runId") String runId) {
+        try {
+            RetrievalEvaluationService.RetrievalEvalReport report = interviewService.getRetrievalEvalRunDetail(runId);
+            if (report == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的检索评测运行"));
+            }
+            return ResponseEntity.ok(report);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 对比两次检索评测运行结果。
+     */
+    @GetMapping("/observability/retrieval-eval/compare")
+    public ResponseEntity<?> compareRetrievalEvalRuns(
+            @RequestParam("baselineRunId") String baselineRunId,
+            @RequestParam("candidateRunId") String candidateRunId
+    ) {
+        try {
+            RetrievalEvaluationService.RetrievalEvalComparison comparison = interviewService.compareRetrievalEvalRuns(baselineRunId, candidateRunId);
+            if (comparison == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到可对比的检索评测运行"));
+            }
+            return ResponseEntity.ok(comparison);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 查询检索评测趋势摘要。
+     */
+    @GetMapping("/observability/retrieval-eval/trend")
+    public ResponseEntity<?> getRetrievalEvalTrend(
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit
+    ) {
+        try {
+            int normalizedLimit = limit == null ? 20 : limit;
+            return ResponseEntity.ok(interviewService.getRetrievalEvalTrend(normalizedLimit));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 查询指定评测运行的失败样本聚类结果。
+     */
+    @GetMapping("/observability/retrieval-eval/runs/{runId}/failure-clusters")
+    public ResponseEntity<?> getRetrievalEvalFailureClusters(@PathVariable("runId") String runId) {
+        try {
+            List<RetrievalEvaluationService.RetrievalEvalFailureCluster> clusters = interviewService.clusterRetrievalEvalFailures(runId);
+            if (clusters == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的检索评测运行"));
+            }
+            return ResponseEntity.ok(Map.of(
+                    "runId", runId,
+                    "clusters", clusters
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取检索评测参数模板列表。
+     */
+    @GetMapping("/observability/retrieval-eval/templates")
+    public ResponseEntity<?> listRetrievalEvalTemplates() {
+        try {
+            return ResponseEntity.ok(Map.of(
+                    "records", interviewService.listRetrievalEvalParameterTemplates()
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
      * 运行带自定义用例的检索评测。
      */
     @PostMapping("/observability/retrieval-eval/run")
@@ -519,7 +635,14 @@ public class InterviewController {
             if (cases.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测用例为空，请提供 cases"));
             }
-            return ResponseEntity.ok(interviewService.runRetrievalEvalWithCases(cases));
+            RetrievalEvaluationService.EvalRunOptions options = new RetrievalEvaluationService.EvalRunOptions(
+                    stringifyValue(payload.get("datasetSource")),
+                    stringifyValue(payload.get("runLabel")),
+                    stringifyValue(payload.get("experimentTag")),
+                    extractParameterSnapshot(payload.get("parameterSnapshot")),
+                    stringifyValue(payload.get("notes"))
+            );
+            return ResponseEntity.ok(interviewService.runRetrievalEvalWithCases(cases, options));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }
@@ -536,7 +659,10 @@ public class InterviewController {
         try {
             String text = new String(file.getBytes(), StandardCharsets.UTF_8);
             List<RetrievalEvaluationService.EvalCase> cases = retrievalEvaluationService.parseCasesFromCsv(text);
-            return ResponseEntity.ok(retrievalEvaluationService.runCustomEval(cases));
+            return ResponseEntity.ok(retrievalEvaluationService.runCustomEval(
+                    cases,
+                    new RetrievalEvaluationService.EvalRunOptions("csv", "csv-upload", "", Map.of(), "CSV 上传评测")
+            ));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         } catch (IOException e) {
@@ -855,10 +981,37 @@ public class InterviewController {
                     } else {
                         keywords = List.of();
                     }
-                    return new RetrievalEvaluationService.EvalCase(query, keywords, "manual");
+                    String tag = map.get("tag") == null ? "manual" : String.valueOf(map.get("tag")).trim();
+                    return new RetrievalEvaluationService.EvalCase(query, keywords, tag.isBlank() ? "manual" : tag);
                 })
                 .filter(item -> item != null)
                 .toList();
+    }
+
+    /**
+     * 将参数快照提取为字符串键的 Map，便于统一落库存档。
+     */
+    private Map<String, Object> extractParameterSnapshot(Object rawParameterSnapshot) {
+        if (!(rawParameterSnapshot instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        return map.entrySet().stream().collect(Collectors.toMap(
+                entry -> String.valueOf(entry.getKey()),
+                Map.Entry::getValue,
+                (left, right) -> right,
+                LinkedHashMap::new
+        ));
+    }
+
+    /**
+     * 统一将可选字段转换为字符串，避免 null 与空白值污染评测元数据。
+     */
+    private String stringifyValue(Object rawValue) {
+        if (rawValue == null) {
+            return null;
+        }
+        String text = String.valueOf(rawValue).trim();
+        return text.isEmpty() ? null : text;
     }
 
     private Boolean parseBooleanFlag(Object raw) {

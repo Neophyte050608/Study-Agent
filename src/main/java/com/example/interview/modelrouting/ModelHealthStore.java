@@ -34,6 +34,13 @@ public class ModelHealthStore {
         this.properties = properties;
     }
 
+    /**
+     * 获取指定模型候选者的当前熔断状态。
+     * 如果处于 OPEN 状态且冷却时间已到，会自动将其切换为 HALF_OPEN。
+     *
+     * @param candidateName 候选模型名称
+     * @return 当前熔断状态 (CLOSED / OPEN / HALF_OPEN)
+     */
     public ModelCircuitState stateOf(String candidateName) {
         HealthState state = states.computeIfAbsent(candidateName, ignored -> new HealthState());
         synchronized (state) {
@@ -46,6 +53,12 @@ public class ModelHealthStore {
         }
     }
 
+    /**
+     * 判断当前是否允许向指定模型发起请求。
+     *
+     * @param candidateName 候选模型名称
+     * @return true 表示允许尝试（CLOSED 或 HALF_OPEN 且未达最大探活次数）；false 表示拒绝（OPEN）
+     */
     public boolean canTry(String candidateName) {
         HealthState state = states.computeIfAbsent(candidateName, ignored -> new HealthState());
         synchronized (state) {

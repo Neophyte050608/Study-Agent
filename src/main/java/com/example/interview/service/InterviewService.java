@@ -183,6 +183,19 @@ public class InterviewService {
         return ragObservabilityService.listRecent(limit);
     }
 
+    /**
+     * 获取单条 RAG Trace 详情。
+     *
+     * @param traceId Trace ID
+     * @return Trace 详情；不存在时返回 null
+     */
+    public RAGObservabilityService.RAGTrace getRagTraceDetail(String traceId) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return null;
+        }
+        return ragObservabilityService.getTraceDetail(traceId);
+    }
+
     public java.util.Map<String, Object> getRagOverview() {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return java.util.Map.of(
@@ -203,6 +216,87 @@ public class InterviewService {
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(java.util.List<RetrievalEvaluationService.EvalCase> cases) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.runCustomEval(cases);
+    }
+
+    /**
+     * 使用带实验元数据的评测配置运行检索评测。
+     *
+     * @param cases 评测用例
+     * @param options 评测运行配置
+     * @return 评测报告
+     */
+    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(
+            java.util.List<RetrievalEvaluationService.EvalCase> cases,
+            RetrievalEvaluationService.EvalRunOptions options
+    ) {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.runCustomEval(cases, options);
+    }
+
+    /**
+     * 查询最近的检索评测运行历史。
+     *
+     * @param limit 返回条数上限
+     * @return 评测运行摘要列表
+     */
+    public java.util.List<RetrievalEvaluationService.RetrievalEvalRunSummary> listRecentRetrievalEvalRuns(int limit) {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.listRecentRuns(limit);
+    }
+
+    /**
+     * 查询单次检索评测详情。
+     *
+     * @param runId 运行 ID
+     * @return 评测详情；不存在时返回 null
+     */
+    public RetrievalEvaluationService.RetrievalEvalReport getRetrievalEvalRunDetail(String runId) {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.getRunDetail(runId);
+    }
+
+    /**
+     * 对比两次检索评测运行结果。
+     *
+     * @param baselineRunId 基线运行 ID
+     * @param candidateRunId 候选运行 ID
+     * @return 对比结果；任一运行不存在时返回 null
+     */
+    public RetrievalEvaluationService.RetrievalEvalComparison compareRetrievalEvalRuns(String baselineRunId, String candidateRunId) {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.compareRuns(baselineRunId, candidateRunId);
+    }
+
+    /**
+     * 查询检索评测趋势摘要。
+     *
+     * @param limit 历史窗口大小
+     * @return 趋势结果
+     */
+    public RetrievalEvaluationService.RetrievalEvalTrend getRetrievalEvalTrend(int limit) {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.getTrend(limit);
+    }
+
+    /**
+     * 查询指定运行的失败样本聚类结果。
+     *
+     * @param runId 运行 ID
+     * @return 聚类结果；运行不存在时返回 null
+     */
+    public java.util.List<RetrievalEvaluationService.RetrievalEvalFailureCluster> clusterRetrievalEvalFailures(String runId) {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.clusterFailures(runId);
+    }
+
+    /**
+     * 获取检索评测参数模板列表。
+     *
+     * @return 参数模板列表
+     */
+    public java.util.List<RetrievalEvaluationService.RetrievalEvalParameterTemplate> listRetrievalEvalParameterTemplates() {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.listParameterTemplates();
     }
 
     public TaskResponse dispatchTask(TaskType taskType, Map<String, Object> payload, Map<String, Object> context) {

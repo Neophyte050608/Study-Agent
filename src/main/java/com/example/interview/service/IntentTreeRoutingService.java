@@ -41,17 +41,26 @@ public class IntentTreeRoutingService {
         this.routingChatService = routingChatService;
     }
 
+    /**
+     * 判断意图树路由功能是否启用。
+     * @return 如果启用了意图树路由则返回 true，否则返回 false
+     */
     public boolean enabled() {
         return properties.isEnabled();
     }
 
+    /**
+     * 获取主动澄清状态的有效保留时间（分钟）。
+     * 当系统向用户发起意图澄清后，在此时效内用户的回复将被作为澄清选项处理。
+     * @return 存活时间（分钟）
+     */
     public long clarificationTtlMinutes() {
         return properties.getClarificationTtlMinutes();
     }
 
     /**
      * 核心意图路由逻辑。
-     * 根据用户输入和历史记录，利用意图树进行分类，并判定是否需要主动澄清。
+     * 根据用户输入和历史记录，利用意图树进行分类，并判定是否需要主动向用户发起澄清。
      * @param query 用户当前输入
      * @param history 对话历史
      * @return 意图路由决策 (IntentRoutingDecision)，包含任务类型、置信度及是否需要澄清等状态
@@ -89,6 +98,16 @@ public class IntentTreeRoutingService {
         }
     }
 
+    /**
+     * 槽位精炼 (Slot Refinement)
+     * 在粗粒度意图识别后，针对特定任务类型，利用动态 Few-shot 样例进行二次参数（槽位）提取。
+     * 这能有效缓解大模型在一次性生成复杂 JSON 时的格式不稳定和过度补全（幻觉）问题。
+     * 
+     * @param taskType 已经识别出的主要任务类型（如 CODING_PRACTICE）
+     * @param query 用户的原始输入
+     * @param history 对话历史
+     * @return 提取出的精确槽位键值对（如 topic, questionType, difficulty）
+     */
     public Map<String, Object> refineSlots(String taskType, String query, String history) {
         if (taskType == null || taskType.isBlank() || query == null || query.isBlank()) {
             return Map.of();
@@ -124,6 +143,14 @@ public class IntentTreeRoutingService {
         }
     }
 
+    /**
+     * 动态加载并组装用于槽位精炼的 Few-shot（少样本）示例。
+     * 为了防止 Token 爆炸和模型注意力分散（Lost in the middle），这里采用动态剪枝策略，
+     * 仅加载与当前 taskType 强相关的示例。
+     *
+     * @param taskType 任务类型
+     * @return 匹配的示例列表，每个示例包含 user_query 和 ai_response
+     */
     private List<Map<String, String>> loadSlotRefineCases(String taskType) {
         String normalizedTaskType = taskType == null ? "" : taskType.trim().toUpperCase();
         List<Map<String, String>> configuredCases = new ArrayList<>();
@@ -148,6 +175,13 @@ public class IntentTreeRoutingService {
         return defaultSlotRefineCases(normalizedTaskType);
     }
 
+    /**
+     * 提供默认的（硬编码兜底）Few-shot 示例。
+     * 当外部配置文件或数据库中未提供对应 taskType 的示例时，作为降级使用。
+     *
+     * @param taskType 任务类型
+     * @return 默认示例列表
+     */
     private List<Map<String, String>> defaultSlotRefineCases(String taskType) {
         if ("CODING_PRACTICE".equals(taskType)) {
             return List.of(
@@ -180,6 +214,16 @@ public class IntentTreeRoutingService {
         return List.of();
     }
 
+    /**
+     * 将大模型返回的原始 JSON 字符串解析并归一化为系统的 IntentRoutingDecision 对象。
+     * 包含对模型格式幻觉的容错处理（如去除 Markdown 代码块），以及主动澄清逻辑的最终裁定。
+     *
+     * @param raw 模型返回的原始文本
+     * @param query 用户的原始输入
+     * @param history 对话历史
+     * @return 归一化后的意图决策
+     * @throws Exception JSON 解析失败时抛出
+     */
     private IntentRoutingDecision normalizeDecision(String raw, String query, String history) throws Exception {
         if (raw == null || raw.isBlank()) {
             return IntentRoutingDecision.fallback();
@@ -234,6 +278,12 @@ public class IntentTreeRoutingService {
      * 1. 绝对置信度过低（< 阈值）
      * 2. Top1 和 Top2 意图分数相近（差距 < 最小差距阈值，或者比值 >= 模糊率阈值）
      * 3. 特定任务（如刷题）缺少关键槽位（如主题和题型均为空）
+     * 
+     * @param candidates 候选意图列表（按分数倒序）
+     * @param confidence 最终采纳的置信度
+     * @param slots 已提取的槽位
+     * @param taskType 决定的任务类型
+     * @return 是否需要打断流程向用户澄清
      */
     private boolean shouldClarify(List<IntentCandidate> candidates, double confidence, Map<String, Object> slots, String taskType) {
         // 1. 绝对置信度过低，直接澄清
@@ -258,6 +308,16 @@ public class IntentTreeRoutingService {
         return false;
     }
 
+    /**
+     * 动态生成澄清问题。
+     * 调用大模型，根据用户的上下文和候选意图，生成一句自然友好的反问（例如：“您是想刷算法题还是进行模拟面试？”）。
+     * 如果大模型生成失败，则提供硬编码的后备澄清文本。
+     *
+     * @param query 用户输入
+     * @param history 对话历史
+     * @param candidates 候选意图列表
+     * @return 澄清问题文本
+     */
     private String buildClarificationQuestion(String query, String history, List<IntentCandidate> candidates) {
         try {
             Map<String, Object> vars = new LinkedHashMap<>();
@@ -284,6 +344,12 @@ public class IntentTreeRoutingService {
         return sb.toString();
     }
 
+    /**
+     * 加载当前系统支持的所有“叶子意图（Leaf Intents）”。
+     * 优先从数据库/缓存（IntentTreeService）中加载配置的意图树，若为空则回退到代码内置的默认意图。
+     *
+     * @return 叶子意图节点列表
+     */
     private List<IntentTreeNode> loadLeafIntents() {
         List<IntentTreeNode> configured = intentTreeService.loadAllLeafIntents();
         if (!configured.isEmpty()) {
@@ -292,6 +358,12 @@ public class IntentTreeRoutingService {
         return defaultLeafIntents();
     }
 
+    /**
+     * 提供默认的内置意图树。
+     * 包含核心业务：开启面试、生成报告、刷题（选择/填空/算法/场景）、查询学习计划等。
+     *
+     * @return 默认意图列表
+     */
     private List<IntentTreeNode> defaultLeafIntents() {
         return List.of(
                 new IntentTreeNode("INTERVIEW.START.GENERAL", "interview/start/general", "开启模拟面试", "开始一场模拟面试", "INTERVIEW_START",
@@ -313,6 +385,13 @@ public class IntentTreeRoutingService {
         );
     }
 
+    /**
+     * 从 JSON 节点中读取并解析大模型返回的候选意图列表。
+     * 按置信度分数倒序排列，并根据配置的最大候选数（MaxCandidates）进行截断。
+     *
+     * @param node JSON节点
+     * @return 解析后的候选意图列表
+     */
     private List<IntentCandidate> readCandidates(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -333,6 +412,13 @@ public class IntentTreeRoutingService {
                 .toList();
     }
 
+    /**
+     * 从 JSON 节点中提取并规范化业务槽位参数。
+     * 包括对布尔值、整数的转换，以及字符串的去空处理。
+     *
+     * @param slotsNode JSON节点
+     * @return 槽位键值对集合
+     */
     private Map<String, Object> readSlots(JsonNode slotsNode) {
         if (slotsNode == null || !slotsNode.isObject()) {
             return Map.of();
@@ -351,6 +437,14 @@ public class IntentTreeRoutingService {
         return slots;
     }
 
+    /**
+     * 读取澄清选项（选项卡片）。
+     * 如果模型明确返回了选项数组，则直接使用；否则根据候选意图列表兜底生成。
+     *
+     * @param node JSON节点
+     * @param candidates 候选意图列表
+     * @return 选项列表（含标签、意图ID、提示等）
+     */
     private List<Map<String, String>> readClarificationOptions(JsonNode node, List<IntentCandidate> candidates) {
         if (node == null || !node.isArray()) {
             return buildOptionsFromCandidates(candidates);
@@ -374,6 +468,13 @@ public class IntentTreeRoutingService {
         return options;
     }
 
+    /**
+     * 基于候选意图列表，组装默认的澄清选项卡片。
+     * 用于大模型未能按格式返回选项时的兜底保护。
+     *
+     * @param candidates 候选意图列表
+     * @return 选项列表
+     */
     private List<Map<String, String>> buildOptionsFromCandidates(List<IntentCandidate> candidates) {
         if (candidates.isEmpty()) {
             return List.of();
@@ -390,12 +491,19 @@ public class IntentTreeRoutingService {
         return options;
     }
 
+    /**
+     * 安全地将非空字符串放入槽位 Map 中。
+     */
     private void putSlot(Map<String, Object> slots, String key, String value) {
         if (!value.isBlank()) {
             slots.put(key, value);
         }
     }
 
+    /**
+     * 安全读取 JSON 节点中的文本字段。
+     * 防御 NullNode 及字段缺失。
+     */
     private String readText(JsonNode node, String field) {
         if (node == null || field == null || !node.has(field) || node.get(field).isNull()) {
             return "";
@@ -403,6 +511,9 @@ public class IntentTreeRoutingService {
         return node.get(field).asText("").trim();
     }
 
+    /**
+     * 安全读取 JSON 节点中的数值评分（置信度），并将其截断在 [0, 1] 之间。
+     */
     private double readScore(JsonNode node, String field) {
         if (node == null || !node.has(field) || node.get(field).isNull()) {
             return 0D;
@@ -410,6 +521,9 @@ public class IntentTreeRoutingService {
         return Math.max(0D, Math.min(1D, node.get(field).asDouble(0D)));
     }
 
+    /**
+     * 安全读取 JSON 节点中的文本数组（如缺失的槽位列表）。
+     */
     private List<String> readTextArray(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -424,6 +538,9 @@ public class IntentTreeRoutingService {
         return data;
     }
 
+    /**
+     * 将 Object 安全转换为 String 并去除前后空格。
+     */
     private String textOf(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }

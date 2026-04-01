@@ -169,6 +169,10 @@ app:
     fallback-to-legacy-task-router: ${APP_INTENT_TREE_FALLBACK_TO_LEGACY:true}
   
   rag:
+    retrieval:
+      lexical-search-mode: ${APP_RAG_RETRIEVAL_LEXICAL_SEARCH_MODE:AUTO}
+      web-fallback-mode: ${APP_RAG_RETRIEVAL_WEB_FALLBACK_MODE:ON_EMPTY}
+      web-fallback-quality-threshold: ${APP_RAG_RETRIEVAL_WEB_FALLBACK_QUALITY_THRESHOLD:0.10}
     chunking:
       strategy: ${APP_RAG_CHUNKING_STRATEGY:STRUCTURE_RECURSIVE_WITH_METADATA}
       target-size: ${APP_RAG_CHUNKING_TARGET_SIZE:550}
@@ -185,6 +189,8 @@ app:
       child-overlap: ${APP_RAG_PARENT_CHILD_CHILD_OVERLAP:40}
       parent-max-size: ${APP_RAG_PARENT_CHILD_PARENT_MAX_SIZE:1200}
       hydrate-parent-top-n: ${APP_RAG_PARENT_CHILD_HYDRATE_PARENT_TOP_N:8}
+      hydrate-parent-context-chars: ${APP_RAG_PARENT_CHILD_HYDRATE_PARENT_CONTEXT_CHARS:420}
+      hydrate-child-match-chars: ${APP_RAG_PARENT_CHILD_HYDRATE_CHILD_MATCH_CHARS:180}
       fallback-to-flat-retrieval: ${APP_RAG_PARENT_CHILD_FALLBACK_TO_FLAT_RETRIEVAL:false}
 
   mcp:

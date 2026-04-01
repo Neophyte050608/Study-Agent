@@ -68,6 +68,29 @@ public final class RAGTraceContext {
     }
 
     /**
+     * 按节点 ID 安全退出节点。
+     *
+     * <p>优先弹出栈顶节点；若由于异常链路导致结束顺序不严格，
+     * 则退化为从栈中移除指定节点，避免脏节点长期残留。</p>
+     *
+     * @param nodeId 待退出的节点 ID
+     */
+    public static void removeNode(String nodeId) {
+        if (nodeId == null || nodeId.isBlank()) {
+            return;
+        }
+        Deque<String> stack = NODE_STACK.get();
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        if (nodeId.equals(stack.peek())) {
+            stack.pop();
+            return;
+        }
+        stack.removeFirstOccurrence(nodeId);
+    }
+
+    /**
      * 清理上下文。
      */
     public static void clear() {

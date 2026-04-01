@@ -15,15 +15,16 @@ import java.util.List;
 public interface TechConceptRepository extends Neo4jRepository<TechConcept, String> {
 
     /**
-     * 核心 GraphRAG 查询：查找指定技术名词的 1 度到 2 度关联邻居节点。
-     * 这在面试时极其有用：当候选人提到 $conceptName 时，查出与其相关的底层技术或延伸概念，
-     * 用于生成深度连环追问。
+     * 核心 GraphRAG 查询：查找指定技术名词在 1 到 2 跳范围内的关联概念摘要。
+     *
+     * <p>相比只返回概念名称，这里额外返回 description 与 type，
+     * 让上层检索链路可以直接拼出更像证据片段的文本。</p>
      *
      * @param conceptName 中心技术名词，如 "HashMap"
-     * @return 返回相关联的技术名词列表（例如可能返回 "红黑树", "ConcurrentHashMap", "CAS"）
+     * @return 关联概念的轻量摘要视图
      */
     @Query("MATCH (n:TechConcept {name: $conceptName})-[*1..2]-(m:TechConcept) " +
            "WHERE n <> m " +
-           "RETURN DISTINCT m.name LIMIT 10")
-    List<String> findRelatedConceptsWithinTwoHops(@Param("conceptName") String conceptName);
+           "RETURN DISTINCT m.name AS name, m.description AS description, m.type AS type LIMIT 10")
+    List<TechConceptSnippetView> findRelatedConceptSnippetsWithinTwoHops(@Param("conceptName") String conceptName);
 }

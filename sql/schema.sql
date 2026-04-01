@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS `t_lexical_index` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_doc_id` (`doc_id`),
     KEY `idx_file_path` (`file_path`),
-    KEY `idx_parent_id` (`parent_id`)
+    KEY `idx_parent_id` (`parent_id`),
+    FULLTEXT KEY `ft_lexical_text` (`text`) WITH PARSER ngram
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='词法索引表';
 
 -- 创建 RAG Parent 表
@@ -150,6 +151,99 @@ CREATE TABLE IF NOT EXISTS `t_rag_child` (
     KEY `idx_child_parent_id` (`parent_id`),
     KEY `idx_vector_doc_id` (`vector_doc_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG子文档索引表';
+
+-- 创建 RAG Trace 汇总表
+CREATE TABLE IF NOT EXISTS `t_rag_trace` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `trace_id` VARCHAR(128) NOT NULL COMMENT '链路唯一追踪ID',
+    `root_node_id` VARCHAR(128) COMMENT '根节点ID',
+    `root_node_type` VARCHAR(64) COMMENT '根节点类型',
+    `root_node_name` VARCHAR(255) COMMENT '根节点名称',
+    `trace_status` VARCHAR(32) NOT NULL DEFAULT 'COMPLETED' COMMENT '链路状态',
+    `node_count` INT NOT NULL DEFAULT 0 COMMENT '链路节点总数',
+    `retrieval_node_count` INT NOT NULL DEFAULT 0 COMMENT '检索节点总数',
+    `total_retrieved_docs` INT NOT NULL DEFAULT 0 COMMENT '召回文档数总和',
+    `max_retrieved_docs` INT NOT NULL DEFAULT 0 COMMENT '单节点最大召回文档数',
+    `web_fallback_used` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否发生过Web fallback',
+    `started_at` DATETIME NOT NULL COMMENT '链路开始时间',
+    `ended_at` DATETIME COMMENT '链路结束时间',
+    `duration_ms` BIGINT NOT NULL DEFAULT 0 COMMENT '链路总耗时(毫秒)',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_rag_trace_id` (`trace_id`),
+    KEY `idx_rag_trace_started_at` (`started_at`),
+    KEY `idx_rag_trace_status` (`trace_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG Trace 汇总表';
+
+-- 创建 RAG Trace 节点明细表
+CREATE TABLE IF NOT EXISTS `t_rag_trace_node` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `trace_id` VARCHAR(128) NOT NULL COMMENT '所属Trace ID',
+    `node_id` VARCHAR(128) NOT NULL COMMENT '节点ID',
+    `parent_node_id` VARCHAR(128) COMMENT '父节点ID',
+    `node_type` VARCHAR(64) NOT NULL COMMENT '节点类型',
+    `node_name` VARCHAR(255) COMMENT '节点名称',
+    `node_status` VARCHAR(32) NOT NULL DEFAULT 'RUNNING' COMMENT '节点状态',
+    `input_summary` TEXT COMMENT '输入摘要',
+    `output_summary` TEXT COMMENT '输出摘要',
+    `error_summary` TEXT COMMENT '错误摘要',
+    `retrieved_docs` INT COMMENT '结构化召回文档数',
+    `web_fallback_used` TINYINT(1) COMMENT '是否触发Web fallback',
+    `started_at` DATETIME NOT NULL COMMENT '节点开始时间',
+    `ended_at` DATETIME COMMENT '节点结束时间',
+    `duration_ms` BIGINT NOT NULL DEFAULT 0 COMMENT '节点耗时(毫秒)',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_rag_trace_node` (`trace_id`, `node_id`),
+    KEY `idx_rag_trace_node_trace_id` (`trace_id`),
+    KEY `idx_rag_trace_node_parent` (`parent_node_id`),
+    KEY `idx_rag_trace_node_started_at` (`started_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG Trace 节点明细表';
+
+-- 创建检索评测运行汇总表
+CREATE TABLE IF NOT EXISTS `t_retrieval_eval_run` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `run_id` VARCHAR(128) NOT NULL COMMENT '评测运行唯一ID',
+    `dataset_source` VARCHAR(64) NOT NULL DEFAULT 'manual' COMMENT '评测数据集来源',
+    `run_label` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '评测运行展示标签',
+    `experiment_tag` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '实验标签',
+    `parameter_snapshot` JSON COMMENT '参数快照',
+    `notes` VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '运行备注',
+    `total_cases` INT NOT NULL DEFAULT 0 COMMENT '样本总数',
+    `hit_cases` INT NOT NULL DEFAULT 0 COMMENT 'Recall@5 命中样本数',
+    `recall_at1` DOUBLE NOT NULL DEFAULT 0 COMMENT 'Recall@1 指标',
+    `recall_at3` DOUBLE NOT NULL DEFAULT 0 COMMENT 'Recall@3 指标',
+    `recall_at5` DOUBLE NOT NULL DEFAULT 0 COMMENT 'Recall@5 指标',
+    `mrr` DOUBLE NOT NULL DEFAULT 0 COMMENT 'MRR 指标',
+    `report_timestamp` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '报告时间戳字符串',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_retrieval_eval_run_id` (`run_id`),
+    KEY `idx_retrieval_eval_run_created_at` (`created_at`),
+    KEY `idx_retrieval_eval_run_source` (`dataset_source`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检索评测运行汇总表';
+
+-- 创建检索评测单样本结果表
+CREATE TABLE IF NOT EXISTS `t_retrieval_eval_case` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `run_id` VARCHAR(128) NOT NULL COMMENT '所属运行ID',
+    `case_index` INT NOT NULL DEFAULT 0 COMMENT '样本序号',
+    `query` VARCHAR(500) NOT NULL COMMENT '查询文本',
+    `expected_keywords` JSON COMMENT '预期关键词列表',
+    `tag` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '样本标签',
+    `hit` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否命中',
+    `rank` INT NOT NULL DEFAULT -1 COMMENT '首次命中排名',
+    `retrieved_snippets` JSON COMMENT '召回片段列表',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_retrieval_eval_case_run_index` (`run_id`, `case_index`),
+    KEY `idx_retrieval_eval_case_run_id` (`run_id`),
+    KEY `idx_retrieval_eval_case_hit` (`hit`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检索评测单样本结果表';
 
 -- 创建同步索引表
 CREATE TABLE IF NOT EXISTS `t_sync_index` (

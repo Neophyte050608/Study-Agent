@@ -2,6 +2,7 @@ package com.example.interview.service;
 
 import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.config.ParentChildRetrievalProperties;
+import com.example.interview.config.RagRetrievalProperties;
 import com.example.interview.core.Question;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.modelrouting.ModelRouteType;
@@ -65,10 +66,12 @@ public class RAGService {
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
     // 可观测开关配置
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
+    private final RetrievalTokenizerService retrievalTokenizerService;
+    private final RagRetrievalProperties ragRetrievalProperties;
     private final ParentChildRetrievalProperties parentChildRetrievalProperties;
     private final ParentChildIndexService parentChildIndexService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -80,6 +83,8 @@ public class RAGService {
         this.webSearchTool = webSearchTool;
         this.observabilityService = observabilityService;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
+        this.retrievalTokenizerService = retrievalTokenizerService;
+        this.ragRetrievalProperties = ragRetrievalProperties;
         this.parentChildRetrievalProperties = parentChildRetrievalProperties;
         this.parentChildIndexService = parentChildIndexService;
     }
@@ -90,97 +95,174 @@ public class RAGService {
      * 评估入口：执行“检索→评估→证据校验→观测记录”的完整链路。
      */
     public String processAnswer(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot) {
-        KnowledgePacket packet = buildKnowledgePacket(question, userAnswer);
-        try {
-            EvaluationResult result = evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, "", packet);
-            return validateEvidenceReferences(result.json(), packet.retrievalEvidence());
-        } catch (RuntimeException e) {
-            logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-            return buildFallbackEvaluation(question, e);
-        }
+        return executeWithinTraceRoot("PROCESS", "RAG Answer Evaluation", "Q: " + question, () -> {
+            KnowledgePacket packet = buildKnowledgePacket(question, userAnswer);
+            try {
+                EvaluationResult result = evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, "", packet);
+                return validateEvidenceReferences(result.json(), packet.retrievalEvidence());
+            } catch (RuntimeException e) {
+                logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
+                return buildFallbackEvaluation(question, e);
+            }
+        });
     }
 
+    /**
+     * 构建知识包（默认允许 Web fallback）。
+     *
+     * <p>该方法通常用于线上链路：如果本地混合检索为空/质量不足，会根据开关策略触发 WebSearch 兜底。</p>
+     *
+     * @param question  用户问题
+     * @param userAnswer 用户回答（可为空；用于改写检索 query）
+     * @return 知识包（包含改写 query、召回文档列表、拼接后的上下文与证据目录）
+     */
     public KnowledgePacket buildKnowledgePacket(String question, String userAnswer) {
-        // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
-        String traceId = RAGTraceContext.getTraceId();
-        String rewriteNodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(traceId, rewriteNodeId, RAGTraceContext.getCurrentNodeId(), "REWRITE", "Query Rewrite");
-        
-        String retrievalQuery = question + " " + userAnswer;
-        try {
-            retrievalQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
-            observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "RW: " + retrievalQuery, null);
-        } catch (RuntimeException e) {
-            logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
-            observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "FALLBACK: " + retrievalQuery, e.getMessage());
-        }
-        // 注意：retrievalQuery 可能包含用户原话，日志里只用于排障；必要时可将该日志级别改为 DEBUG。
-        if (observabilitySwitchProperties.isRagTraceEnabled()) {
-            logger.info("Rewritten Query: {}", retrievalQuery);
-        }
-        
-        String retrievalNodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(traceId, retrievalNodeId, RAGTraceContext.getCurrentNodeId(), "RETRIEVAL", "Hybrid Retrieval");
-        
-        List<Document> retrievedDocs = retrieveHybridDocuments(retrievalQuery);
-        String context = retrievedDocs.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n\n"));
-        String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
-        boolean webFallbackUsed = false;
-        if (context.isBlank()) {
-            List<String> webContext = webSearchTool.run(new WebSearchTool.Query(retrievalQuery, 3));
-            context = webContext.stream().collect(Collectors.joining("\n\n"));
-            retrievalEvidence = buildWebEvidence(webContext);
-            webFallbackUsed = true;
-        }
-        
-        observabilityService.endNode(
-                traceId,
-                retrievalNodeId,
-                retrievalQuery,
-                retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed,
-                null,
-                new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), webFallbackUsed)
-        );
-        
-        return new KnowledgePacket(retrievalQuery, retrievedDocs, context, retrievalEvidence, webFallbackUsed);
+        return buildKnowledgePacket(question, userAnswer, true);
     }
 
-    public EvaluationResult evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
-        String originalContext = packet == null ? "" : packet.context();
-        String originalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
-        String finalContext = truncate(originalContext, 1400);
-        String finalEvidence = truncate(originalEvidence, 900);
-        String safeProfileSnapshot = truncate(profileSnapshot, 480);
-        String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
-        if (observabilitySwitchProperties.isRagTraceEnabled()) {
-            logger.info(
-                    "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
-                    safeLogText(topic, 40),
-                    safeLogText(difficultyLevel, 24),
-                    safeLogText(followUpState, 24),
-                    String.format("%.1f", topicMastery),
-                    safeLength(question),
-                    safeLength(userAnswer),
-                    safeLength(normalizedStrategy),
-                    safeLength(safeProfileSnapshot),
-                    safeLength(profileSnapshot),
-                    safeLength(finalContext),
-                    safeLength(originalContext),
-                    safeLength(finalEvidence),
-                    safeLength(originalEvidence),
-                    parseEvidenceCatalog(originalEvidence).size(),
-                    packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
-                    packet != null && packet.webFallbackUsed()
+    /**
+     * 构建检索知识包，并允许调用方决定是否启用 Web fallback。
+     */
+    public KnowledgePacket buildKnowledgePacket(String question, String userAnswer, boolean allowWebFallback) {
+        return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question, () -> {
+            // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
+            String traceId = RAGTraceContext.getTraceId();
+            String rewriteNodeId = UUID.randomUUID().toString();
+            observabilityService.startNode(traceId, rewriteNodeId, RAGTraceContext.getCurrentNodeId(), "REWRITE", "Query Rewrite");
+
+            String retrievalQuery = question + " " + userAnswer;
+            try {
+                retrievalQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
+                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "RW: " + retrievalQuery, null);
+            } catch (RuntimeException e) {
+                logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
+                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "FALLBACK: " + retrievalQuery, e.getMessage());
+            }
+            // 注意：retrievalQuery 可能包含用户原话，日志里只用于排障；必要时可将该日志级别改为 DEBUG。
+            if (observabilitySwitchProperties.isRagTraceEnabled()) {
+                logger.info("Rewritten Query: {}", retrievalQuery);
+            }
+
+            String retrievalNodeId = UUID.randomUUID().toString();
+            observabilityService.startNode(traceId, retrievalNodeId, RAGTraceContext.getCurrentNodeId(), "RETRIEVAL", "Hybrid Retrieval");
+
+            List<Document> retrievedDocs = retrieveHybridDocuments(retrievalQuery, 5);
+            String context = retrievedDocs.stream()
+                    .map(Document::getText)
+                    .collect(Collectors.joining("\n\n"));
+            String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
+            double bestRetrievalScore = bestRetrievalScore(retrievalQuery, retrievedDocs);
+            boolean webFallbackUsed = false;
+            if (shouldUseWebFallback(allowWebFallback, retrievalQuery, retrievedDocs, context, bestRetrievalScore)) {
+                List<String> webContext = webSearchTool.run(new WebSearchTool.Query(retrievalQuery, 3));
+                context = webContext.stream().collect(Collectors.joining("\n\n"));
+                retrievalEvidence = buildWebEvidence(webContext);
+                webFallbackUsed = true;
+            }
+
+            observabilityService.endNode(
+                    traceId,
+                    retrievalNodeId,
+                    retrievalQuery,
+                    retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed + ", best score: " + String.format(Locale.ROOT, "%.3f", bestRetrievalScore),
+                    null,
+                    new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), webFallbackUsed)
             );
+
+            return new KnowledgePacket(retrievalQuery, retrievedDocs, context, retrievalEvidence, webFallbackUsed);
+        });
+    }
+
+    /**
+     * 基于检索上下文执行回答评估（LLM 生成）。
+     *
+     * <p>该方法会将 {@link KnowledgePacket} 中的 context/evidence 注入提示词模板，并执行模型调用生成结构化评估 JSON。
+     * 为了控制 token 成本，会对 context/evidence/profileSnapshot 做截断（truncate），同时保留 evidence 编号约束。</p>
+     *
+     * <p>异常/超时降级：</p>
+     * <ul>
+     *     <li>模型调用失败：返回 fallback 评估 JSON，并将 token 计数置 0</li>
+     *     <li>上层入口 {@link #processAnswer} 还会额外做 citations/conflicts 的证据编号校验与修补</li>
+     * </ul>
+     *
+     * @param topic           当前题目主题
+     * @param question        当前问题
+     * @param userAnswer      用户回答
+     * @param difficultyLevel 难度等级
+     * @param followUpState   追问状态
+     * @param topicMastery    主题掌握度（画像侧传入）
+     * @param profileSnapshot 画像快照（可能较长，会被截断）
+     * @param strategyHint    策略提示（可选）
+     * @param packet          知识包（包含 context 与证据目录）
+     * @return 评估结果（content 为 JSON 字符串，含 citations/conflicts 等字段）
+     */
+    public EvaluationResult evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
+        return executeWithinTraceRoot("KNOWLEDGE_EVAL", "Knowledge Evaluation", "Q: " + question, () -> {
+            String originalContext = packet == null ? "" : packet.context();
+            String originalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
+            String finalContext = truncate(originalContext, 1400);
+            String finalEvidence = truncate(originalEvidence, 900);
+            String safeProfileSnapshot = truncate(profileSnapshot, 480);
+            String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
+            if (observabilitySwitchProperties.isRagTraceEnabled()) {
+                logger.info(
+                        "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
+                        safeLogText(topic, 40),
+                        safeLogText(difficultyLevel, 24),
+                        safeLogText(followUpState, 24),
+                        String.format("%.1f", topicMastery),
+                        safeLength(question),
+                        safeLength(userAnswer),
+                        safeLength(normalizedStrategy),
+                        safeLength(safeProfileSnapshot),
+                        safeLength(profileSnapshot),
+                        safeLength(finalContext),
+                        safeLength(originalContext),
+                        safeLength(finalEvidence),
+                        safeLength(originalEvidence),
+                        parseEvidenceCatalog(originalEvidence).size(),
+                        packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
+                        packet != null && packet.webFallbackUsed()
+                );
+            }
+            try {
+                RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
+                return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
+            } catch (RuntimeException e) {
+                logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
+                return new EvaluationResult(buildFallbackEvaluation(question, e), 0, 0);
+            }
+        });
+    }
+
+    /**
+     * 在缺少父节点时自动补齐一层 Trace 根节点，避免链路被拆成多个孤立片段。
+     *
+     * <p>如果当前线程已经处于某个 Trace 节点内部，则直接复用现有父节点，
+     * 不再额外创建新根节点；只有在直接调用入口方法时才会自动包一层根节点。</p>
+     *
+     * @param nodeType 根节点类型
+     * @param nodeName 根节点名称
+     * @param inputSummary 根节点输入摘要
+     * @param action 需要在根节点内执行的动作
+     * @return 动作执行结果
+     * @param <T> 返回值类型
+     */
+    private <T> T executeWithinTraceRoot(String nodeType, String nodeName, String inputSummary, Supplier<T> action) {
+        String currentNodeId = RAGTraceContext.getCurrentNodeId();
+        if (currentNodeId != null && !currentNodeId.isBlank()) {
+            return action.get();
         }
+        String traceId = RAGTraceContext.getTraceId();
+        String rootNodeId = UUID.randomUUID().toString();
+        observabilityService.startNode(traceId, rootNodeId, null, nodeType, nodeName);
         try {
-            RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
-            return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
+            T result = action.get();
+            observabilityService.endNode(traceId, rootNodeId, inputSummary, nodeName + " completed", null);
+            return result;
         } catch (RuntimeException e) {
-            logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-            return new EvaluationResult(buildFallbackEvaluation(question, e), 0, 0);
+            observabilityService.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
+            throw e;
         }
     }
 
@@ -299,12 +381,12 @@ public class RAGService {
      * 
      * 实现：意图定向检索 + 全局向量检索 + 图谱关联检索 并行执行。
      */
-    private List<Document> retrieveHybridDocuments(String retrievalQuery) {
+    private List<Document> retrieveHybridDocuments(String retrievalQuery, int topK) {
         List<String> intentFocusTerms = buildIntentFocusTerms(retrievalQuery);
         // 通道 A：意图定向检索（利用词法索引服务进行高精度标签/路径匹配）
         java.util.concurrent.CompletableFuture<List<Document>> intentDirectedFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
-                List<Document> docs = lexicalIndexService.searchIntentDirected(retrievalQuery, intentFocusTerms, 8);
+                List<Document> docs = lexicalIndexService.searchIntentDirected(retrievalQuery, intentFocusTerms, Math.max(topK + 3, 8));
                 return markRetrieveChannel(docs, "intent_directed");
             } catch (RuntimeException e) {
                 logger.warn("意图定向检索失败，返回空列表。原因: {}", summarizeError(e));
@@ -316,7 +398,7 @@ public class RAGService {
         java.util.concurrent.CompletableFuture<List<Document>> vectorFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
                 List<Document> docs = vectorStore.similaritySearch(
-                        SearchRequest.builder().query(retrievalQuery).topK(8).build()
+                        SearchRequest.builder().query(retrievalQuery).topK(Math.max(topK + 3, 8)).build()
                 );
                 return markRetrieveChannel(docs, "global_vector");
             } catch (RuntimeException e) {
@@ -329,14 +411,22 @@ public class RAGService {
         java.util.concurrent.CompletableFuture<List<Document>> graphFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
                 List<Document> graphDocs = new ArrayList<>();
-                List<String> queryTokens = intentFocusTerms.isEmpty() ? tokenize(retrievalQuery) : intentFocusTerms;
+                List<String> queryTokens = intentFocusTerms.isEmpty() ? lexicalIndexService.tokenize(retrievalQuery) : intentFocusTerms;
                 for (String token : queryTokens) {
-                    List<String> relatedConcepts = techConceptRepository.findRelatedConceptsWithinTwoHops(token);
+                    // 这里先兼容旧的概念名拼装语句，随后统一覆写为描述型 GraphRAG 上下文。
+                    List relatedConcepts =
+                            techConceptRepository.findRelatedConceptSnippetsWithinTwoHops(token);
                     if (relatedConcepts != null && !relatedConcepts.isEmpty()) {
                         String graphContext = "知识图谱关联提示：与【" + token + "】存在深度技术关联的概念包括 -> " + String.join(", ", relatedConcepts);
+                        graphContext = buildGraphConceptContext(token, relatedConcepts);
+                        if (graphContext.isBlank()) {
+                            continue;
+                        }
                         Document doc = new Document(graphContext);
                         doc.getMetadata().put("source_type", "graph_rag");
                         doc.getMetadata().put("retrieve_channel", "graph_rag");
+                        doc.getMetadata().put("graph_anchor", token);
+                        doc.getMetadata().put("evidence_snippet", truncate(graphContext, 90));
                         graphDocs.add(doc);
                     }
                 }
@@ -354,18 +444,86 @@ public class RAGService {
         // RRF 融合去重与重排流水线
         List<Document> fused = reciprocalRankFuse(intentDocs, vectorDocs);
         fused.addAll(graphDocs);
-        List<Document> hydrated = maybeHydrateParentDocuments(fused);
-        return rerankByQueryOverlap(retrievalQuery, hydrated, 5);
+        List<Document> hydrated = maybeHydrateParentDocuments(fused, topK);
+        return rerankByQueryOverlap(retrievalQuery, hydrated, topK);
     }
 
-    private List<Document> maybeHydrateParentDocuments(List<Document> docs) {
+    /**
+     * 根据配置判断是否需要触发 Web fallback。
+     *
+     * @param allowWebFallback 当前调用方是否允许使用 Web fallback
+     * @param retrievalQuery 重写后的检索词
+     * @param retrievedDocs 本地检索结果
+     * @param context 本地拼接上下文
+     * @param bestRetrievalScore 本地结果最佳重排分数
+     * @return true 表示需要使用 Web fallback
+     */
+    private boolean shouldUseWebFallback(
+            boolean allowWebFallback,
+            String retrievalQuery,
+            List<Document> retrievedDocs,
+            String context,
+            double bestRetrievalScore
+    ) {
+        if (!allowWebFallback) {
+            return false;
+        }
+        boolean emptyContext = context == null || context.isBlank() || retrievedDocs == null || retrievedDocs.isEmpty();
+        RagRetrievalProperties.WebFallbackMode mode = ragRetrievalProperties.getWebFallbackMode();
+        return switch (mode) {
+            case NONE -> false;
+            case ON_EMPTY -> emptyContext;
+            case ON_LOW_QUALITY -> emptyContext || bestRetrievalScore < ragRetrievalProperties.getWebFallbackQualityThreshold();
+        };
+    }
+
+    /**
+     * 计算本地检索结果中最佳的一条重排分数，用作低质量 fallback 的判定依据。
+     *
+     * @param query 查询文本
+     * @param docs 本地检索结果
+     * @return 最高分；若没有结果则返回 0
+     */
+    private double bestRetrievalScore(String query, List<Document> docs) {
+        if (docs == null || docs.isEmpty()) {
+            return 0.0D;
+        }
+        List<String> queryTokens = retrievalTokenizerService.tokenize(query);
+        if (queryTokens.isEmpty()) {
+            return 0.0D;
+        }
+        double bestScore = 0.0D;
+        for (int i = 0; i < docs.size(); i++) {
+            Document doc = docs.get(i);
+            List<String> docTokens = retrievalTokenizerService.tokenize(doc.getText());
+            long overlap = queryTokens.stream().filter(docTokens::contains).count();
+            double overlapRatio = docTokens.isEmpty()
+                    ? 0.0D
+                    : (double) overlap / (double) Math.min(queryTokens.size(), Math.max(1, docTokens.size()));
+            double score = (overlapRatio * 0.7D + (1.0D / (i + 1)) * 0.3D) * sourceTypeBoost(doc);
+            bestScore = Math.max(bestScore, score);
+        }
+        return bestScore;
+    }
+
+    /**
+     * 针对 Parent-Child 检索结果做“父文上下文 + 子块命中片段”回填。
+     *
+     * <p>这里不再直接用整段 parent 覆盖 child，而是保留局部命中片段，
+     * 再补上一段围绕命中位置的 parent 上下文，避免语义被整段长文稀释。</p>
+     *
+     * @param docs 融合后的候选文档
+     * @param topK 当前链路期望返回的结果条数
+     * @return 完成拼接回填后的候选文档
+     */
+    private List<Document> maybeHydrateParentDocuments(List<Document> docs, int topK) {
         if (docs == null || docs.isEmpty()) {
             return List.of();
         }
         if (!parentChildRetrievalProperties.isEnabled()) {
             return docs;
         }
-        int hydrateLimit = Math.max(1, parentChildRetrievalProperties.getHydrateParentTopN());
+        int hydrateLimit = Math.max(1, Math.min(parentChildRetrievalProperties.getHydrateParentTopN(), Math.max(1, topK)));
         List<Document> candidates = docs.stream().limit(hydrateLimit).collect(Collectors.toList());
         Set<String> parentIds = candidates.stream()
                 .map(doc -> String.valueOf(doc.getMetadata().getOrDefault("parent_id", "")))
@@ -391,7 +549,8 @@ public class RAGService {
                 result.add(doc);
                 continue;
             }
-            Document hydrated = new Document(parent.getParentText());
+            ParentChildHydrationPayload payload = buildParentChildHydrationPayload(doc, parent);
+            Document hydrated = new Document(payload.hydratedText());
             hydrated.getMetadata().putAll(doc.getMetadata());
             hydrated.getMetadata().put("parent_id", parent.getParentId());
             hydrated.getMetadata().put("parent_source", parent.getFilePath());
@@ -399,9 +558,235 @@ public class RAGService {
             hydrated.getMetadata().put("section_path", parent.getSectionPath());
             hydrated.getMetadata().put("knowledge_tags", parent.getKnowledgeTags());
             hydrated.getMetadata().put("source_type", parent.getSourceType());
+            hydrated.getMetadata().put("hydration_mode", "parent_child_concat");
+            hydrated.getMetadata().put("parent_context_excerpt", payload.parentContextExcerpt());
+            hydrated.getMetadata().put("child_match_excerpt", payload.childMatchExcerpt());
+            hydrated.getMetadata().put("evidence_snippet", payload.evidenceSnippet());
             result.add(hydrated);
         }
         return result;
+    }
+
+    /**
+     * 构建 parent-child 回填载荷，统一生成最终上下文与证据摘要。
+     *
+     * @param doc 原始 child 文档
+     * @param parent parent 文档信息
+     * @return 结构化回填结果
+     */
+    private ParentChildHydrationPayload buildParentChildHydrationPayload(Document doc, com.example.interview.entity.RagParentDO parent) {
+        String childMatchExcerpt = extractChildMatchExcerpt(doc == null ? "" : doc.getText());
+        String parentContextExcerpt = extractParentContextExcerpt(parent == null ? "" : parent.getParentText(), childMatchExcerpt);
+        String hydratedText = composeHydratedText(parent, parentContextExcerpt, childMatchExcerpt);
+        String evidenceSnippet = buildHydratedEvidenceSnippet(parentContextExcerpt, childMatchExcerpt);
+        return new ParentChildHydrationPayload(hydratedText, parentContextExcerpt, childMatchExcerpt, evidenceSnippet);
+    }
+
+    /**
+     * 从 child 文本中抽取真正命中的正文片段。
+     *
+     * <p>chunk 文本前面可能带有文档名、章节名、标签等前缀，
+     * 这里优先剥离这类元数据，避免 evidence 被装饰性信息占满。</p>
+     *
+     * @param childText 原始 child 文本
+     * @return 归一化后的命中片段
+     */
+    private String extractChildMatchExcerpt(String childText) {
+        if (childText == null || childText.isBlank()) {
+            return "";
+        }
+        String normalized = childText.replace("\r\n", "\n").trim();
+        String[] parts = normalized.split("\\n", 2);
+        String candidate = parts.length >= 2 ? parts[1] : normalized;
+        candidate = candidate.replaceFirst("^(\\[[^\\]]+\\]\\s*)+", "");
+        candidate = normalizeSnippet(candidate);
+        return truncate(candidate, Math.max(60, parentChildRetrievalProperties.getHydrateChildMatchChars()));
+    }
+
+    /**
+     * 截取围绕命中片段的 parent 上下文窗口。
+     *
+     * <p>如果能在 parent 中定位到 child 片段，就按锚点附近截取；
+     * 如果定位失败，则退化为 parent 头部摘要，保证链路稳定。</p>
+     *
+     * @param parentText parent 全量文本
+     * @param childMatchExcerpt child 命中片段
+     * @return parent 上下文摘要
+     */
+    private String extractParentContextExcerpt(String parentText, String childMatchExcerpt) {
+        String normalizedParent = normalizeSnippet(parentText);
+        if (normalizedParent.isBlank()) {
+            return "";
+        }
+        int maxChars = Math.max(160, parentChildRetrievalProperties.getHydrateParentContextChars());
+        String anchor = resolveParentAnchor(normalizedParent, childMatchExcerpt);
+        if (anchor.isBlank()) {
+            return truncate(normalizedParent, maxChars);
+        }
+        int anchorStart = normalizedParent.indexOf(anchor);
+        if (anchorStart < 0) {
+            return truncate(normalizedParent, maxChars);
+        }
+        return excerptAroundRange(normalizedParent, anchorStart, anchorStart + anchor.length(), maxChars);
+    }
+
+    /**
+     * 通过 child 前缀递减匹配的方式，为 parent 文本找到可定位的锚点。
+     *
+     * @param parentText 归一化后的 parent 文本
+     * @param childMatchExcerpt child 命中片段
+     * @return 可定位锚点；若未找到则返回空字符串
+     */
+    private String resolveParentAnchor(String parentText, String childMatchExcerpt) {
+        String normalizedChild = normalizeSnippet(childMatchExcerpt);
+        if (normalizedChild.isBlank()) {
+            return "";
+        }
+        int maxLength = Math.min(80, normalizedChild.length());
+        for (int length = maxLength; length >= 18; length -= 10) {
+            String candidate = normalizedChild.substring(0, length);
+            if (parentText.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 围绕命中位置截取固定大小的上下文窗口，并用省略号提示裁剪边界。
+     *
+     * @param text 原始文本
+     * @param start 命中起始位置
+     * @param end 命中结束位置
+     * @param maxChars 最长保留字符数
+     * @return 裁剪后的上下文摘要
+     */
+    private String excerptAroundRange(String text, int start, int end, int maxChars) {
+        if (text == null || text.isBlank() || text.length() <= maxChars) {
+            return text == null ? "" : text;
+        }
+        int safeStart = Math.max(0, start - maxChars / 3);
+        int safeEnd = Math.min(text.length(), safeStart + maxChars);
+        if (safeEnd < end) {
+            safeEnd = Math.min(text.length(), end + maxChars / 3);
+            safeStart = Math.max(0, safeEnd - maxChars);
+        }
+        String excerpt = text.substring(safeStart, safeEnd).trim();
+        if (safeStart > 0) {
+            excerpt = "..." + excerpt;
+        }
+        if (safeEnd < text.length()) {
+            excerpt = excerpt + "...";
+        }
+        return excerpt;
+    }
+
+    /**
+     * 将 parent 上下文与 child 命中片段拼成最终写回 RAG 的文本。
+     *
+     * @param parent parent 元数据
+     * @param parentContextExcerpt parent 摘要
+     * @param childMatchExcerpt child 摘要
+     * @return 拼接后的文本
+     */
+    private String composeHydratedText(com.example.interview.entity.RagParentDO parent, String parentContextExcerpt, String childMatchExcerpt) {
+        StringBuilder builder = new StringBuilder();
+        if (parent != null && parent.getSectionPath() != null && !parent.getSectionPath().isBlank()) {
+            builder.append("\u3010\u7AE0\u8282\u8DEF\u5F84\u3011").append(parent.getSectionPath().trim()).append("\n");
+        }
+        if (parentContextExcerpt != null && !parentContextExcerpt.isBlank()) {
+            builder.append("\u3010\u7236\u6587\u4E0A\u4E0B\u6587\u3011").append(parentContextExcerpt.trim());
+        }
+        if (childMatchExcerpt != null && !childMatchExcerpt.isBlank()) {
+            if (builder.length() > 0) {
+                builder.append("\n\n");
+            }
+            builder.append("\u3010\u547D\u4E2D\u7247\u6BB5\u3011").append(childMatchExcerpt.trim());
+        }
+        return builder.toString().trim();
+    }
+
+    /**
+     * 生成证据目录优先展示的摘要文本。
+     *
+     * @param parentContextExcerpt parent 摘要
+     * @param childMatchExcerpt child 摘要
+     * @return 便于 citations 复用的单行摘要
+     */
+    private String buildHydratedEvidenceSnippet(String parentContextExcerpt, String childMatchExcerpt) {
+        String contextPart = truncate(normalizeSnippet(parentContextExcerpt), 48);
+        String matchPart = truncate(normalizeSnippet(childMatchExcerpt), 36);
+        if (!matchPart.isBlank() && !contextPart.isBlank()) {
+            return "\u547D\u4E2D=" + matchPart + " | \u4E0A\u6587=" + contextPart;
+        }
+        if (!matchPart.isBlank()) {
+            return "\u547D\u4E2D=" + matchPart;
+        }
+        return contextPart;
+    }
+
+    /**
+     * 统一做空白字符归一化，减少换行噪音对重排和 evidence 的影响。
+     *
+     * @param text 原始文本
+     * @return 单行化后的文本
+     */
+    private String normalizeSnippet(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        return text.replaceAll("\\s+", " ").trim();
+    }
+
+    /**
+     * 将图谱关联概念摘要拼装成更适合 RAG 消费的自然语言证据。
+     *
+     * @param anchorConcept 当前查询命中的锚点概念
+     * @param relatedConcepts 图谱返回的关联概念摘要
+     * @return 描述性图谱上下文；若无有效内容则返回空字符串
+     */
+    private String buildGraphConceptContext(String anchorConcept, List<com.example.interview.graph.TechConceptSnippetView> relatedConcepts) {
+        if (relatedConcepts == null || relatedConcepts.isEmpty()) {
+            return "";
+        }
+        String relatedSummary = relatedConcepts.stream()
+                .filter(Objects::nonNull)
+                .map(this::formatGraphConceptSnippet)
+                .filter(item -> item != null && !item.isBlank())
+                .limit(5)
+                .collect(Collectors.joining("；"));
+        if (relatedSummary.isBlank()) {
+            return "";
+        }
+        return "知识图谱关联提示：围绕「" + anchorConcept + "」可继续延展的概念包括：" + relatedSummary;
+    }
+
+    /**
+     * 将单个图谱概念整理为“名称 + 类型 + 描述”的紧凑片段。
+     *
+     * @param concept 图谱概念摘要
+     * @return 单个概念的可读文本
+     */
+    private String formatGraphConceptSnippet(com.example.interview.graph.TechConceptSnippetView concept) {
+        if (concept == null) {
+            return "";
+        }
+        String name = concept.getName() == null ? "" : concept.getName().trim();
+        String type = concept.getType() == null ? "" : concept.getType().trim();
+        String description = truncate(normalizeSnippet(concept.getDescription()), 60);
+        if (name.isBlank() && description.isBlank()) {
+            return "";
+        }
+        if (!name.isBlank() && !type.isBlank() && !description.isBlank()) {
+            return name + "（" + type + "）: " + description;
+        }
+        if (!name.isBlank() && !description.isBlank()) {
+            return name + ": " + description;
+        }
+        if (!name.isBlank() && !type.isBlank()) {
+            return name + "（" + type + "）";
+        }
+        return name.isBlank() ? description : name;
     }
 
     /**
@@ -445,7 +830,7 @@ public class RAGService {
         if (retrievalQuery == null || retrievalQuery.isBlank()) {
             return List.of();
         }
-        return tokenize(retrievalQuery).stream()
+        return lexicalIndexService.tokenize(retrievalQuery).stream()
                 .filter(token -> token.length() >= 2)
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new))
                 .stream()
@@ -481,14 +866,14 @@ public class RAGService {
             return List.of();
         }
         // 为了和词法检索统一分词标准，这里借用了更优的分词逻辑（见下方 tokenize 的优化）
-        List<String> queryTokens = tokenize(query);
+        List<String> queryTokens = lexicalIndexService.tokenize(query);
         if (queryTokens.isEmpty()) {
             return docs.stream().limit(topK).collect(Collectors.toList());
         }
         Map<Document, Double> scoreMap = new HashMap<>();
         for (int i = 0; i < docs.size(); i++) {
             Document doc = docs.get(i);
-            List<String> docTokens = tokenize(doc.getText());
+            List<String> docTokens = lexicalIndexService.tokenize(doc.getText());
             long overlap = queryTokens.stream().filter(docTokens::contains).count();
             double overlapRatio = docTokens.isEmpty() ? 0.0 : (double) overlap / (double) Math.min(queryTokens.size(), Math.max(1, docTokens.size()));
             double score = (overlapRatio * 0.7 + (1.0 / (i + 1)) * 0.3) * sourceTypeBoost(doc);
@@ -675,10 +1060,12 @@ public class RAGService {
             String parentId = metadata == null ? "" : String.valueOf(metadata.getOrDefault("parent_id", ""));
             String childIndex = metadata == null ? "" : String.valueOf(metadata.getOrDefault("child_index", ""));
             String tags = metadata == null ? "" : String.valueOf(metadata.getOrDefault("knowledge_tags", ""));
-            String text = doc.getText() == null ? "" : doc.getText().replaceAll("\\s+", " ").trim();
-            if (text.length() > 90) {
-                text = text.substring(0, 90);
-            }
+            String text = metadata != null
+                    && metadata.get("evidence_snippet") != null
+                    && !String.valueOf(metadata.get("evidence_snippet")).isBlank()
+                    ? String.valueOf(metadata.get("evidence_snippet"))
+                    : normalizeSnippet(doc.getText());
+            text = truncate(text, 90);
             String parentPart = (parentId == null || parentId.isBlank() || "null".equalsIgnoreCase(parentId)) ? "" : " parent=" + parentId;
             String childPart = (childIndex == null || childIndex.isBlank() || "null".equalsIgnoreCase(childIndex)) ? "" : " child=" + childIndex;
             lines.add((i + 1) + ". [" + sourceType + ":" + path + "] tags=" + tags + parentPart + childPart + " | " + text);
@@ -733,6 +1120,22 @@ public class RAGService {
         public double score() {
             return score;
         }
+    }
+
+    /**
+     * Parent-Child 回填后的结构化载荷。
+     *
+     * @param hydratedText 最终写回文档正文的拼接文本
+     * @param parentContextExcerpt parent 上下文摘要
+     * @param childMatchExcerpt child 命中片段摘要
+     * @param evidenceSnippet 证据目录优先展示的单行摘要
+     */
+    private record ParentChildHydrationPayload(
+            String hydratedText,
+            String parentContextExcerpt,
+            String childMatchExcerpt,
+            String evidenceSnippet
+    ) {
     }
 
     private boolean isTimeout(Throwable throwable) {
@@ -1267,6 +1670,18 @@ public class RAGService {
         return 1.0;
     }
 
+    /**
+     * 检索知识包（RAG 中的“证据载体”）。
+     *
+     * <p>该对象用于在“检索阶段”与“生成/评估阶段”之间传递必要的信息：</p>
+     * <ul>
+     *     <li>retrievalQuery：改写后的检索 query（用于观测与复现）</li>
+     *     <li>retrievedDocs：本地召回的文档片段（用于后续 evidence/trace 细节展示）</li>
+     *     <li>context：最终注入提示词的上下文（可能是本地拼接或 Web fallback 拼接）</li>
+     *     <li>retrievalEvidence：带编号的证据目录（citations/conflicts 只能引用编号）</li>
+     *     <li>webFallbackUsed：是否触发了 Web fallback（用于观测/评测口径区分）</li>
+     * </ul>
+     */
     public record KnowledgePacket(
             String retrievalQuery,
             List<Document> retrievedDocs,

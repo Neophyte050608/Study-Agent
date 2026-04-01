@@ -95,6 +95,16 @@ public class RoutingChatService {
         }, stage + "-first-packet");
     }
 
+    /**
+     * 执行带有统一兜底逻辑的常规模型调用。
+     * 当所有路由候选模型均失败时，不会抛出异常，而是调用 fallbackSupplier 提供降级结果。
+     *
+     * @param fallbackSupplier 降级结果提供者
+     * @param prompt 输入提示词
+     * @param routeType 路由类型
+     * @param stage 业务阶段名称
+     * @return 模型响应文本或降级结果
+     */
     public String callSupplier(Supplier<String> fallbackSupplier, String prompt, ModelRouteType routeType, String stage) {
         try {
             return call(prompt, routeType, stage);
@@ -105,6 +115,16 @@ public class RoutingChatService {
         }
     }
 
+    /**
+     * 执行带首包探测与兜底逻辑的模型调用。
+     * 常用于前端对响应实时性要求极高的场景（如首题生成），超时或失败后返回统一的 fallback 文本。
+     *
+     * @param fallbackSupplier 降级结果提供者
+     * @param prompt 输入提示词
+     * @param routeType 路由类型
+     * @param stage 业务阶段名称
+     * @return 模型响应文本或降级结果
+     */
     public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier, String prompt, ModelRouteType routeType, String stage) {
         try {
             return callWithFirstPacketProbe(prompt, routeType, stage);
@@ -141,6 +161,15 @@ public class RoutingChatService {
 
     public record RoutingResult(String content, int inputTokens, int outputTokens, long costMs) {}
 
+    /**
+     * 调用模型并返回包含 Token 消耗与耗时的完整元数据结果。
+     * 常用于需要精确记录评估消耗或控制成本的场景。
+     *
+     * @param prompt 输入提示词
+     * @param routeType 路由类型
+     * @param stage 业务阶段名称
+     * @return 包含响应内容与元数据的 RoutingResult
+     */
     public RoutingResult callWithMetadata(String prompt, ModelRouteType routeType, String stage) {
         if (!properties.isEnabled()) {
             return callWithModelMetadata(fallbackChatModel, prompt);

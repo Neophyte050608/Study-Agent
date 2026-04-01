@@ -10,6 +10,7 @@ import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
+import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.service.IntentTreeRoutingService;
@@ -78,62 +79,69 @@ public class TaskRouterAgent {
     }
 
     /**
-     * 统一调度入口
+     * 统一调度入口：负责接收任务请求并分发给对应的具体业务 Agent。
+     * 
+     * @param request 任务请求对象，包含任务类型、负载数据和上下文信息。
+     * @return TaskResponse 任务执行的响应结果。
      */
     public TaskResponse dispatch(TaskRequest request) {
         if (request == null) {
             return TaskResponse.fail("请求不能为空");
         }
 
-        // 0. ReAct 模式增强：如果未指定 taskType，使用大模型自主推理
+        // 0. ReAct 模式增强：如果未指定 taskType（如来自 IM 渠道的自然语言输入），则使用大模型进行意图推理和分类
         if (request.taskType() == null) {
             return treeIntentDispatch(request);
         }
         
+        // 1. 解析分布式追踪与消息关联相关的上下文 ID
         String correlationId = resolveCorrelationId(request.context());
         String traceId = resolveTraceId(request.context());
         String parentMessageId = resolveParentMessageId(request.context());
         String replyTo = resolveReplyTo(request.context());
         
-        // 统一 Trace 上下文
+        // 2. 初始化 RAG 观测上下文，用于记录整个调度过程的耗时与状态
         RAGTraceContext.setTraceId(traceId);
         String nodeId = UUID.randomUUID().toString();
         ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + request.taskType());
         
-        // 发布任务状态：PENDING
+        // 3. 发布任务状态：PENDING（通知 A2A 总线任务已接收）
         publish(request, receiverOf(request.taskType()), A2AStatus.PENDING, correlationId, traceId, parentMessageId);
         
         TaskResponse response;
         try {
-            // 发布任务状态：PROCESSING
+            // 4. 发布任务状态：PROCESSING（通知 A2A 总线任务开始处理）
             publish(request, receiverOf(request.taskType()), A2AStatus.PROCESSING, correlationId, traceId, parentMessageId);
             
-            // 使用 Java 21+ 的现代 Switch 表达式进行路由分发
+            // 5. 核心路由逻辑：使用 Java 21+ 的现代 Switch 表达式，根据 TaskType 将请求负载路由给具体的处理方法
             response = switch (request.taskType()) {
-                case INTERVIEW_START -> TaskResponse.ok(routeInterviewStart(request.payload()));
-                case INTERVIEW_ANSWER -> TaskResponse.ok(routeInterviewAnswer(request.payload()));
-                case INTERVIEW_REPORT -> TaskResponse.ok(routeInterviewReport(request.payload()));
-                case LEARNING_PLAN -> TaskResponse.ok(noteMakingAgent.execute(safePayload(request.payload())));
-                case CODING_PRACTICE -> TaskResponse.ok(codingPracticeAgent.execute(enrichCodingPayload(request.payload(), request.context())));
-                case PROFILE_EVENT_UPSERT -> TaskResponse.ok(routeProfileEventUpsert(request.payload(), request.context()));
-                case PROFILE_SNAPSHOT_QUERY -> TaskResponse.ok(routeProfileSnapshot(request.payload(), request.context()));
-                case PROFILE_TRAINING_PLAN_QUERY -> TaskResponse.ok(routeProfileTrainingPlan(request.payload(), request.context()));
+                case INTERVIEW_START -> TaskResponse.ok(routeInterviewStart(request.payload())); // 开始模拟面试
+                case INTERVIEW_ANSWER -> TaskResponse.ok(routeInterviewAnswer(request.payload())); // 提交面试回答
+                case INTERVIEW_REPORT -> TaskResponse.ok(routeInterviewReport(request.payload())); // 生成面试报告
+                case LEARNING_PLAN -> TaskResponse.ok(noteMakingAgent.execute(safePayload(request.payload()))); // 生成学习计划
+                case CODING_PRACTICE -> TaskResponse.ok(codingPracticeAgent.execute(enrichCodingPayload(request.payload(), request.context()))); // 算法/编程刷题
+                case PROFILE_EVENT_UPSERT -> TaskResponse.ok(routeProfileEventUpsert(request.payload(), request.context())); // 更新学习画像事件
+                case PROFILE_SNAPSHOT_QUERY -> TaskResponse.ok(routeProfileSnapshot(request.payload(), request.context())); // 查询学习画像快照
+                case PROFILE_TRAINING_PLAN_QUERY -> TaskResponse.ok(routeProfileTrainingPlan(request.payload(), request.context())); // 查询训练计划
             };
             
-            // 发布任务状态：DONE/FAILED
+            // 6. 发布任务状态：DONE/FAILED（根据响应结果通知 A2A 总线任务结束）
             publish(request, receiverOf(request.taskType()), response.success() ? A2AStatus.DONE : A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             
-            // 处理异步回传请求
+            // 7. 处理异步回传请求（如果请求方要求异步通知结果，例如 Webhook 模式）
             publishReply(response, request.taskType(), replyTo, correlationId, traceId);
             
+            // 8. 结束 RAG 观测节点，记录正常结束状态
             ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), response.message(), null);
             return response;
         } catch (Exception e) {
+            // 异常兜底：发布失败状态、回传失败消息，并记录 RAG 观测节点的错误信息
             publish(request, receiverOf(request.taskType()), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             publishReply(TaskResponse.fail(e.getMessage()), request.taskType(), replyTo, correlationId, traceId);
             ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), null, e.getMessage());
             return TaskResponse.fail("任务路由失败: " + e.getMessage());
         } finally {
+            // 清理当前线程的 Trace 上下文，防止内存泄漏或污染
             RAGTraceContext.clear();
         }
     }
@@ -150,7 +158,7 @@ public class TaskRouterAgent {
         if (intentTreeRoutingService == null || !intentTreeRoutingService.enabled()) {
             return reactDispatch(request);
         }
-        com.example.interview.intent.IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history);
+        IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history);
         if (decision.fallbackToLegacy()) {
             return reactDispatch(request);
         }

@@ -6,10 +6,24 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 入库管道配置（Spring Boot 配置绑定）。
+ *
+ * <p>配置前缀：{@code app.ingestion}。支持为不同 sourceType 配置独立的 stages 顺序与启停开关，
+ * 以便在不改代码的情况下调整入库链路（例如临时关闭图谱同步阶段）。</p>
+ *
+ * <p>当外部未提供 pipelines 配置时，会使用 {@link #defaultPipelines()} 提供的默认管道，
+ * 覆盖本地目录与浏览器上传两种数据源。</p>
+ */
 @Component
 @ConfigurationProperties(prefix = "app.ingestion")
 public class IngestionPipelineProperties {
 
+    /**
+     * 管道列表配置。
+     *
+     * <p>注意：这里初始化为默认管道，确保开发/测试环境在未配置时也能运行入库链路。</p>
+     */
     private List<Pipeline> pipelines = defaultPipelines();
 
     public List<Pipeline> getPipelines() {
@@ -21,9 +35,21 @@ public class IngestionPipelineProperties {
     }
 
     public static class Pipeline {
+        /**
+         * 管道名称（用于展示与观测），可为空；为空时会自动生成 pipeline-{sourceType}。
+         */
         private String name;
+        /**
+         * 数据源类型（例如 LOCAL_VAULT / BROWSER_UPLOAD）。
+         */
         private String sourceType;
+        /**
+         * 是否启用该管道；禁用时不允许执行入库任务。
+         */
         private boolean enabled = true;
+        /**
+         * 阶段列表（串行执行顺序）。
+         */
         private List<IngestionNodeStage> stages = new ArrayList<>();
 
         public String getName() {
@@ -60,6 +86,7 @@ public class IngestionPipelineProperties {
     }
 
     private List<Pipeline> defaultPipelines() {
+        // 默认阶段序列：从源加载 -> 解析/增强/切块 -> 索引写入 -> 图谱同步 -> 增量标记
         List<IngestionNodeStage> defaultStages = List.of(
                 IngestionNodeStage.FETCH,
                 IngestionNodeStage.PARSE,

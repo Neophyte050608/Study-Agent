@@ -19,9 +19,14 @@ export function createPostEventStream(url, payload, handlers = {}, options = {})
   }
 
   const dispatch = (eventName, dataLines) => {
-    if (!dataLines.length) return
-    const payloadData = parseData(dataLines.join('\n'))
-    handlers.onEvent?.(eventName, payloadData)
+      if (!dataLines.length) return
+      const rawText = dataLines.join('\n')
+      // [BUG FIX]: JSON 数据跨越多行时，data: 前缀会被剥离，但有些换行符在 JSON 字符串里必须保留为 \n，
+      // 如果使用纯 join('\n') 对于非 JSON 会多出换行，但如果是 JSON 字符串，我们需要保证解析正确。
+      // 当前 `readStream` 会按行切分 `buffer`，如果是 `data: {...` 然后 `data: }`，合并后是 `{...\n}`，JSON.parse() 可以处理。
+      // 问题出在如果有空行（\n\n），会被当做 SSE 事件结束符。这是 SSE 的标准，所以一个事件内的 JSON 必须单行或由后端的 ObjectMapper 生成不带空行的格式。
+      const payloadData = parseData(rawText)
+      handlers.onEvent?.(eventName, payloadData)
     switch (eventName) {
       case 'meta':
         handlers.onMeta?.(payloadData)
