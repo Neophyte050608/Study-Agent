@@ -16,6 +16,8 @@ public class ChatSessionDO {
     private String sessionId;
     private String userId;
     private String title;
+    private String contextSummary;
+    private Long summaryUpToMsgId;
     @TableLogic
     private Boolean deleted;
     private LocalDateTime createdAt;

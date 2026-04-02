@@ -16,30 +16,30 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class WebChatService {
     private static final Logger log = LoggerFactory.getLogger(WebChatService.class);
-    private static final int MAX_HISTORY_MESSAGES = 20;
     private static final int TITLE_MAX_LENGTH = 30;
 
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
     private final TaskRouterAgent taskRouterAgent;
+    private final ChatContextCompressor chatContextCompressor;
 
     public WebChatService(ChatSessionMapper sessionMapper,
                           ChatMessageMapper messageMapper,
-                          TaskRouterAgent taskRouterAgent) {
+                          TaskRouterAgent taskRouterAgent,
+                          ChatContextCompressor chatContextCompressor) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.taskRouterAgent = taskRouterAgent;
+        this.chatContextCompressor = chatContextCompressor;
     }
 
     // ======== Session CRUD ========
@@ -151,16 +151,7 @@ public class WebChatService {
     // ======== Public helpers (used by ChatStreamingService) ========
 
     public String buildHistoryContext(String sessionId) {
-        List<ChatMessageDO> recent = messageMapper.selectList(
-                new LambdaQueryWrapper<ChatMessageDO>()
-                        .eq(ChatMessageDO::getSessionId, sessionId)
-                        .orderByDesc(ChatMessageDO::getCreatedAt)
-                        .last("LIMIT " + MAX_HISTORY_MESSAGES)
-        );
-        Collections.reverse(recent);
-        return recent.stream()
-                .map(m -> ("user".equals(m.getRole()) ? "User" : "AI") + ": " + m.getContent())
-                .collect(Collectors.joining("\n"));
+        return chatContextCompressor.buildCompressedContext(sessionId);
     }
 
     public String extractReplyText(TaskResponse response) {

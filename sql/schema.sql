@@ -276,6 +276,8 @@ CREATE TABLE IF NOT EXISTS `t_chat_session` (
     `session_id` VARCHAR(128) NOT NULL,
     `user_id` VARCHAR(128) NOT NULL,
     `title` VARCHAR(255) NOT NULL DEFAULT '新对话',
+    `context_summary` TEXT DEFAULT NULL COMMENT '压缩后的上下文摘要',
+    `summary_up_to_msg_id` BIGINT DEFAULT NULL COMMENT '已纳入摘要的最新消息ID（增量压缩标记）',
     `deleted` TINYINT(1) NOT NULL DEFAULT 0,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
