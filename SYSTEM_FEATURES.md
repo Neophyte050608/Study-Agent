@@ -63,6 +63,14 @@
 - 补充 `traceStatus` 缺失场景的节点级兜底推断：当前端收到旧历史数据或缺字段响应时，会基于节点状态与耗时推断 `FAILED/RUNNING/SLOW/SUCCESS`，避免列表批量显示 `UNKNOWN`。
 - 运维页已下线“相似度均值”列（后端未产出 `score`，长期为 `-`），并将 A2A 幂等与危险操作区调整为“高级运维工具”默认收起，降低日常观测噪音。
 
+## 23. 知识库管理前端页面重构（2026-04-03）
+**重构职责**：
+- 知识库管理页面 `NotesView.vue` 从单页表单升级为四标签视图结构：“知识库”、“文档”、“分块”与“同步任务”。
+- 新增 `knowledgeService.js` 前端适配层，将原有 `notes.js` 的接口调用统一封装并映射为前端 ViewModel（如 `totalScanned`、`recentReports`），隔离后端 API 结构。
+- 将“同步目录”与“上传简历”功能抽取至顶部的全局操作区，其中目录同步改为弹窗 `SyncConfigModal.vue` 交互，提升管理台体验。
+- 提取出 `KnowledgeBaseTab.vue`、`DocumentsTab.vue`、`ChunksTab.vue`、`SyncTasksTab.vue` 四个独立子组件。其中“分块”视图提供空态占位，提示“分块级别的前端管理能力待后端接口就绪后开放”。
+- 增强了写操作的交互一致性（Loading 态、禁用态、结果 Toast 提示与失败原因回显）。
+
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)
