@@ -97,6 +97,9 @@ const toSpaPath = (rawUrl) => {
     case '/intent-tree':
     case '/intent-tree.html':
       return '/intent-tree'
+    case '/prompts':
+    case '/prompts.html':
+      return '/prompts'
     case '/chat':
     case '/chat.html':
       return '/chat'

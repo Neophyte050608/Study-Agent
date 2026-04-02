@@ -7,6 +7,7 @@ import CodingView from '../views/CodingView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import OpsView from '../views/OpsView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import PromptsView from '../views/PromptsView.vue'
 import WorkspaceView from '../views/WorkspaceView.vue'
 import McpView from '../views/McpView.vue'
 import IntentTreeView from '../views/IntentTreeView.vue'
@@ -63,6 +64,12 @@ const routes = [
         name: 'settings',
         component: SettingsView,
         alias: ['settings.html']
+      },
+      {
+        path: 'prompts',
+        name: 'prompts',
+        component: PromptsView,
+        alias: ['prompts.html']
       },
       {
         path: 'workspace',
