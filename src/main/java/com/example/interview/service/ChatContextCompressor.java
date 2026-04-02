@@ -10,8 +10,10 @@ import com.example.interview.agent.a2a.A2AStatus;
 import com.example.interview.agent.a2a.A2ATrace;
 import com.example.interview.entity.ChatMessageDO;
 import com.example.interview.entity.ChatSessionDO;
+import com.example.interview.entity.UserChatMemoryDO;
 import com.example.interview.mapper.ChatMessageMapper;
 import com.example.interview.mapper.ChatSessionMapper;
+import com.example.interview.mapper.UserChatMemoryMapper;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import jakarta.annotation.PostConstruct;
@@ -35,17 +37,20 @@ public class ChatContextCompressor {
 
     private final ChatMessageMapper messageMapper;
     private final ChatSessionMapper sessionMapper;
+    private final UserChatMemoryMapper userMemoryMapper;
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
     private final A2ABus a2aBus;
 
     public ChatContextCompressor(ChatMessageMapper messageMapper,
                                  ChatSessionMapper sessionMapper,
+                                 UserChatMemoryMapper userMemoryMapper,
                                  RoutingChatService routingChatService,
                                  PromptManager promptManager,
                                  A2ABus a2aBus) {
         this.messageMapper = messageMapper;
         this.sessionMapper = sessionMapper;
+        this.userMemoryMapper = userMemoryMapper;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.a2aBus = a2aBus;
@@ -57,7 +62,7 @@ public class ChatContextCompressor {
                         .eq(ChatMessageDO::getSessionId, sessionId)
         );
         if (total == null || total <= COMPRESS_TRIGGER_THRESHOLD) {
-            return buildVerbatimHistory(sessionId);
+            return prependUserMemory(sessionId, buildVerbatimHistory(sessionId));
         }
 
         List<ChatMessageDO> recent = messageMapper.selectList(
@@ -81,11 +86,13 @@ public class ChatContextCompressor {
 
         // 首次还没有摘要时，降级为取更多消息（避免上下文断崖）
         if (!hasSummary) {
-            return buildVerbatimHistory(sessionId, COMPRESS_TRIGGER_THRESHOLD + RECENT_VERBATIM_COUNT);
+            return prependUserMemory(sessionId,
+                    buildVerbatimHistory(sessionId, COMPRESS_TRIGGER_THRESHOLD + RECENT_VERBATIM_COUNT));
         }
 
         String recentText = formatMessages(recent);
-        return "【会话摘要】\n" + existingSummary + "\n\n【近期对话】\n" + recentText;
+        String sessionContext = "【会话摘要】\n" + existingSummary + "\n\n【近期对话】\n" + recentText;
+        return prependUserMemory(sessionId, sessionContext);
     }
 
     @PostConstruct
@@ -206,10 +213,56 @@ public class ChatContextCompressor {
                             .set(ChatSessionDO::getContextSummary, newSummary)
                             .set(ChatSessionDO::getSummaryUpToMsgId, newUpToMsgId)
             );
+
+            try {
+                A2AMessage memorizeMsg = new A2AMessage(
+                        "1.0",
+                        UUID.randomUUID().toString(),
+                        UUID.randomUUID().toString(),
+                        "ChatContextCompressor",
+                        "ChatMemoryExtractorAgent",
+                        "",
+                        A2AIntent.CROSS_SESSION_MEMORIZE,
+                        Map.of("sessionId", sessionId),
+                        Map.of(),
+                        A2AStatus.PENDING,
+                        null,
+                        new A2AMetadata("cross-session-memorize", "ChatContextCompressor", Map.of()),
+                        new A2ATrace(UUID.randomUUID().toString(), null),
+                        Instant.now()
+                );
+                a2aBus.publish(memorizeMsg);
+            } catch (Exception e) {
+                log.warn("触发跨会话记忆提取失败，不影响主流程: sessionId={}", sessionId, e);
+            }
             log.info("上下文压缩完成: sessionId={}, summaryUpToMsgId={}", sessionId, newUpToMsgId);
         } catch (Exception e) {
             log.error("处理上下文压缩任务失败", e);
             throw new RuntimeException("Chat context compression failed", e);
+        }
+    }
+
+    private String prependUserMemory(String sessionId, String sessionContext) {
+        try {
+            ChatSessionDO session = sessionMapper.selectOne(
+                    new LambdaQueryWrapper<ChatSessionDO>()
+                            .eq(ChatSessionDO::getSessionId, sessionId)
+                            .select(ChatSessionDO::getUserId)
+            );
+            if (session == null || session.getUserId() == null) {
+                return sessionContext;
+            }
+            UserChatMemoryDO memory = userMemoryMapper.selectOne(
+                    new LambdaQueryWrapper<UserChatMemoryDO>()
+                            .eq(UserChatMemoryDO::getUserId, session.getUserId())
+            );
+            if (memory == null || memory.getMemoryText() == null || memory.getMemoryText().isBlank()) {
+                return sessionContext;
+            }
+            return "【用户画像】\n" + memory.getMemoryText() + "\n\n" + sessionContext;
+        } catch (Exception e) {
+            log.warn("加载跨会话记忆失败，降级为不注入: sessionId={}", sessionId, e);
+            return sessionContext;
         }
     }
 

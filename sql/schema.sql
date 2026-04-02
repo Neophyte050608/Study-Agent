@@ -300,3 +300,15 @@ CREATE TABLE IF NOT EXISTS `t_chat_message` (
     UNIQUE KEY `uk_message_id` (`message_id`),
     KEY `idx_session_created` (`session_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Web 聊天消息';
+
+CREATE TABLE IF NOT EXISTS `t_user_chat_memory` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `user_id` VARCHAR(128) NOT NULL COMMENT '用户ID',
+    `memory_text` TEXT DEFAULT NULL COMMENT '累积的跨会话记忆（结构化文本）',
+    `last_session_id` VARCHAR(128) DEFAULT NULL COMMENT '最后纳入记忆的会话ID',
+    `version` INT NOT NULL DEFAULT 1 COMMENT '乐观锁版本号',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户跨会话记忆';
