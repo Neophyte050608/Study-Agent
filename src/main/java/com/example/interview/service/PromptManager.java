@@ -1,6 +1,11 @@
 package com.example.interview.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.interview.entity.PromptTemplateDO;
+import com.example.interview.mapper.PromptTemplateMapper;
 import com.hubspot.jinjava.Jinjava;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
@@ -9,6 +14,7 @@ import org.springframework.util.StreamUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -16,42 +22,28 @@ import java.util.regex.Pattern;
 
 /**
  * 提示词管理器 (PromptManager)
- *
- * 【痛点与优化思考】
- * 1. 为什么不用硬编码或 String.format？
- *    之前提示词散落在各个 Java 类里，改一个错别字或调整一个 Few-shot 样例都要重新编译发版，效率极低。
- *    String.format 无法处理复杂的条件分支（if/else）和循环（for-loop）渲染。
- * 2. 为什么选 Jinjava？
- *    - Jinjava 是 Jinja2 模板引擎的 Java 实现。Jinja2 在 Python (LangChain/LlamaIndex) 生态中是标准。
- *    - 选择它意味着未来如果将 AI 核心逻辑迁移到 Python 侧，提示词可以无缝复用，实现跨语言对齐。
- *
- * 核心职责：
- * 1. 集中管理所有 AI 提示词模板，从单个 prompts.txt 文件中解析所有提示词。
- * 2. 使用 Jinjava 模板引擎进行动态渲染，结合 Few-shot 动态注入缓解模型格式幻觉。
- * 3. 提供缓存机制，避免频繁读取文件。
  */
 @Service
 public class PromptManager {
 
+    private static final Logger log = LoggerFactory.getLogger(PromptManager.class);
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("(?m)^---\\[(.*?)\\]---$\\r?\\n?");
 
     private final Jinjava jinjava;
     private final ResourceLoader resourceLoader;
+    private final PromptTemplateMapper templateMapper;
     private final Map<String, String> templateCache = new ConcurrentHashMap<>();
     private final Map<String, String> systemTemplateCache = new ConcurrentHashMap<>();
     private boolean isLoaded = false;
 
-    public PromptManager(ResourceLoader resourceLoader) {
+    public PromptManager(ResourceLoader resourceLoader, PromptTemplateMapper templateMapper) {
         this.jinjava = new Jinjava();
         this.resourceLoader = resourceLoader;
+        this.templateMapper = templateMapper;
     }
 
     /**
      * 加载并渲染提示词模板。
-     *
-     * @param templateName 模板名称（如 "task-router"）
-     * @param variables 模板变量
-     * @return 渲染后的提示词文本
      */
     public String render(String templateName, Map<String, Object> variables) {
         ensureLoaded();
@@ -100,15 +92,129 @@ public class PromptManager {
     private void loadAllTemplates() {
         templateCache.clear();
         systemTemplateCache.clear();
-        loadTemplateFile("classpath:system-prompts.txt", systemTemplateCache);
-        loadTemplateFile("classpath:prompts.txt", templateCache);
+
+        List<PromptTemplateDO> templates = templateMapper.selectList(
+                new LambdaQueryWrapper<PromptTemplateDO>()
+        );
+
+        if (templates == null || templates.isEmpty()) {
+            seedFromFiles();
+            templates = templateMapper.selectList(
+                    new LambdaQueryWrapper<PromptTemplateDO>()
+            );
+        }
+
+        for (PromptTemplateDO t : templates) {
+            if ("SYSTEM".equals(t.getType())) {
+                systemTemplateCache.put(t.getName(), t.getContent());
+            } else {
+                templateCache.put(t.getName(), t.getContent());
+            }
+        }
+    }
+
+    /**
+     * 从 txt 文件解析并 seed 到 DB（仅在 DB 为空时调用）。
+     */
+    private void seedFromFiles() {
+        log.info("提示词 DB 为空，从文件自动 seed...");
+
+        Map<String, String[]> categoryMap = Map.of(
+                "system", new String[]{"interviewer", "coding-coach", "router", "knowledge-assistant", "context-compressor"},
+                "interview", new String[]{"task-router", "first-question", "evaluation", "final-report", "learning-plan"},
+                "coding", new String[]{"coding-intent", "coding-question", "coding-evaluation", "coding-next-question"},
+                "chat", new String[]{"knowledge-qa", "chat-context-compress", "cross-session-memorize"},
+                "intent", new String[]{"intent-tree-classifier", "intent-clarification", "intent-slot-refine"}
+        );
+        Map<String, String> nameToCat = new HashMap<>();
+        categoryMap.forEach((cat, names) -> {
+            for (String n : names) {
+                nameToCat.put(n, cat);
+            }
+        });
+
+        Map<String, String> titleMap = Map.ofEntries(
+                Map.entry("task-router", "任务路由"),
+                Map.entry("intent-tree-classifier", "意图树分类"),
+                Map.entry("intent-clarification", "意图澄清"),
+                Map.entry("intent-slot-refine", "槽位补全"),
+                Map.entry("first-question", "首题生成"),
+                Map.entry("evaluation", "答案评估"),
+                Map.entry("final-report", "面试总结报告"),
+                Map.entry("coding-question", "编码题生成"),
+                Map.entry("coding-evaluation", "编码题评估"),
+                Map.entry("coding-next-question", "编码追问"),
+                Map.entry("learning-plan", "学习计划"),
+                Map.entry("coding-intent", "编码意图识别"),
+                Map.entry("knowledge-qa", "知识问答"),
+                Map.entry("chat-context-compress", "上下文压缩"),
+                Map.entry("cross-session-memorize", "跨会话记忆"),
+                Map.entry("interviewer", "面试官"),
+                Map.entry("coding-coach", "编码教练"),
+                Map.entry("router", "路由网关"),
+                Map.entry("knowledge-assistant", "知识助手"),
+                Map.entry("context-compressor", "上下文压缩器")
+        );
+
+        seedOneFile("classpath:system-prompts.txt", "SYSTEM", nameToCat, titleMap);
+        seedOneFile("classpath:prompts.txt", "TASK", nameToCat, titleMap);
+        log.info("提示词 seed 完成");
+    }
+
+    private void seedOneFile(String path, String type,
+                             Map<String, String> nameToCat,
+                             Map<String, String> titleMap) {
+        try {
+            Resource resource = resourceLoader.getResource(path);
+            String fileContent = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            Matcher matcher = TEMPLATE_PATTERN.matcher(fileContent);
+
+            int lastEnd = 0;
+            String currentName = null;
+
+            while (matcher.find()) {
+                if (currentName != null) {
+                    String templateContent = fileContent.substring(lastEnd, matcher.start()).trim();
+                    insertTemplate(currentName, type, templateContent, nameToCat, titleMap);
+                }
+                currentName = matcher.group(1).trim();
+                lastEnd = matcher.end();
+            }
+            if (currentName != null && lastEnd < fileContent.length()) {
+                String templateContent = fileContent.substring(lastEnd).trim();
+                insertTemplate(currentName, type, templateContent, nameToCat, titleMap);
+            }
+        } catch (IOException e) {
+            log.warn("Seed 文件加载失败: {}", path, e);
+        }
+    }
+
+    private void insertTemplate(String name, String type, String content,
+                                Map<String, String> nameToCat,
+                                Map<String, String> titleMap) {
+        PromptTemplateDO entity = new PromptTemplateDO();
+        entity.setName(name);
+        entity.setType(type);
+        entity.setContent(content);
+        entity.setCategory(nameToCat.getOrDefault(name, "general"));
+        entity.setTitle(titleMap.getOrDefault(name, name));
+        entity.setIsBuiltin(true);
+        templateMapper.insert(entity);
+    }
+
+    /**
+     * 强制重新加载缓存（从 DB 读取最新数据）。
+     */
+    public void reloadCache() {
+        synchronized (this) {
+            loadAllTemplates();
+            isLoaded = true;
+        }
     }
 
     /**
      * 从模板文件中解析所有模板。
-     * 格式约定：
-     * ---[template-name]---
-     * 模板内容...
+     * 保留该方法用于兼容/调试场景。
      */
     private void loadTemplateFile(String path, Map<String, String> cache) {
         try {
@@ -116,7 +222,6 @@ public class PromptManager {
             String content = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
 
             Matcher matcher = TEMPLATE_PATTERN.matcher(content);
-
             int lastEnd = 0;
             String currentName = null;
 

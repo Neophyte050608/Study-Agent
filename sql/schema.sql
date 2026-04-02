@@ -312,3 +312,19 @@ CREATE TABLE IF NOT EXISTS `t_user_chat_memory` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户跨会话记忆';
+
+CREATE TABLE IF NOT EXISTS `t_prompt_template` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(64) NOT NULL COMMENT '模板标识符（如 task-router）',
+    `category` VARCHAR(32) NOT NULL DEFAULT 'general' COMMENT '分类',
+    `type` VARCHAR(16) NOT NULL DEFAULT 'TASK' COMMENT 'SYSTEM 或 TASK',
+    `title` VARCHAR(128) DEFAULT NULL COMMENT '显示名称',
+    `description` VARCHAR(512) DEFAULT NULL COMMENT '模板用途描述',
+    `content` MEDIUMTEXT NOT NULL COMMENT '模板内容（Jinjava 语法）',
+    `is_builtin` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否内置模板（不可删除）',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提示词模板';
