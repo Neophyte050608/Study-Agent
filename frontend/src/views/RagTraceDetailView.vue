@@ -12,7 +12,7 @@
         </h1>
         <span v-if="trace" class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border"
               :class="statusClass">
-          {{ trace.traceStatus }}
+          {{ displayTraceStatus }}
         </span>
       </div>
       <div class="flex items-center gap-3">
@@ -203,12 +203,48 @@ const traceId = ref(route.params.traceId)
 const loading = ref(false)
 const trace = ref(null)
 const selectedNode = ref(null)
+const SLOW_THRESHOLD_MS = Number(import.meta.env.VITE_RAG_SLOW_THRESHOLD_MS || 20000)
+
+const resolveDisplayTraceStatus = (traceStatus, durationMs, nodes) => {
+  const normalizedTraceStatus = typeof traceStatus === 'string' ? traceStatus.trim().toUpperCase() : ''
+  if (normalizedTraceStatus === 'FAILED' || normalizedTraceStatus === 'ERROR' || normalizedTraceStatus === 'TIMEOUT') {
+    return 'FAILED'
+  }
+  if (normalizedTraceStatus === 'COMPLETED' || normalizedTraceStatus === 'SUCCESS') {
+    return durationMs >= SLOW_THRESHOLD_MS ? 'SLOW' : 'SUCCESS'
+  }
+  if (normalizedTraceStatus === 'RUNNING') {
+    return 'RUNNING'
+  }
+  const safeNodes = Array.isArray(nodes) ? nodes : []
+  const nodeStatuses = safeNodes
+    .map(node => (typeof node?.status === 'string' ? node.status.trim().toUpperCase() : ''))
+    .filter(Boolean)
+  if (nodeStatuses.includes('FAILED') || nodeStatuses.includes('ERROR') || nodeStatuses.includes('TIMEOUT')) {
+    return 'FAILED'
+  }
+  if (nodeStatuses.includes('RUNNING')) {
+    return 'RUNNING'
+  }
+  if (safeNodes.length > 0) {
+    return durationMs >= SLOW_THRESHOLD_MS ? 'SLOW' : 'SUCCESS'
+  }
+  return 'UNKNOWN'
+}
+
+const displayTraceStatus = computed(() => {
+  if (!trace.value) return 'UNKNOWN'
+  const durationMs = typeof trace.value.durationMs === 'number' ? trace.value.durationMs : 0
+  const nodes = Array.isArray(trace.value.nodes) ? trace.value.nodes : []
+  return resolveDisplayTraceStatus(trace.value.traceStatus, durationMs, nodes)
+})
 
 const statusClass = computed(() => {
   if (!trace.value) return ''
-  const s = trace.value.traceStatus
-  if (s === 'FAILED') return 'bg-red-50 text-red-600 border-red-100'
-  if (s === 'RUNNING') return 'bg-amber-50 text-amber-600 border-amber-100'
+  if (displayTraceStatus.value === 'FAILED') return 'bg-red-50 text-red-600 border-red-100'
+  if (displayTraceStatus.value === 'SLOW') return 'bg-amber-50 text-amber-600 border-amber-100'
+  if (displayTraceStatus.value === 'RUNNING') return 'bg-indigo-50 text-indigo-600 border-indigo-100'
+  if (displayTraceStatus.value === 'UNKNOWN') return 'bg-slate-100 text-slate-600 border-slate-200'
   return 'bg-emerald-50 text-emerald-600 border-emerald-100'
 })
 

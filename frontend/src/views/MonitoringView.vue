@@ -12,15 +12,15 @@
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
         <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
           <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Total Throughput</div>
-          <div class="text-xl font-black text-[#111827]">{{ (runtimeHealth?.successCount || 0) + (runtimeHealth?.failureCount || 0) }} <span class="text-xs text-[#4b5563] font-normal">REQ/M</span></div>
+          <div class="text-xl font-black text-[#111827]">{{ runtimeStats.totalRequests || 0 }} <span class="text-xs text-[#4b5563] font-normal">REQ</span></div>
         </div>
         <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#f59e0b]">
           <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Route Fallback</div>
-          <div class="text-xl font-black text-[#111827]">{{ fallbackCount || 0 }} <span class="text-xs text-[#4b5563] font-normal">TIMES</span></div>
+          <div class="text-xl font-black text-[#111827]">{{ runtimeStats.routeFallbackCount || 0 }} <span class="text-xs text-[#4b5563] font-normal">TIMES</span></div>
         </div>
         <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#ef4444]">
           <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Total Failures</div>
-          <div class="text-xl font-black text-[#dc2626]">{{ runtimeHealth?.failureCount || 0 }}</div>
+          <div class="text-xl font-black text-[#dc2626]">{{ runtimeStats.totalFailureCount || 0 }}</div>
         </div>
         <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
           <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Circuit Status</div>
@@ -155,18 +155,13 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { loadModelRoutingStats } from '../api/monitoring'
 
-const runtimeHealth = ref({ successCount: 0, failureCount: 0 })
+const runtimeStats = ref({ totalRequests: 0, totalFailureCount: 0, routeFallbackCount: 0 })
 const rawDetails = ref({})
 const rawStates = ref({})
 const healthLogs = ref([])
 
 const lastUpdate = ref('00:00:00')
 const countdown = ref(5)
-
-const fallbackCount = computed(() => {
-  if (!rawDetails.value) return 0
-  return Object.values(rawDetails.value).reduce((sum, item) => sum + (item.failureCount || 0), 0)
-})
 
 const systemHealthLabel = computed(() => {
   if (!rawStates.value) return '全系统健康'
@@ -180,7 +175,8 @@ const detailCards = computed(() => {
     const state = rawStates.value?.[name] || 'UNKNOWN'
     const isHealthy = state === 'CLOSED' || state === 'HALF_OPEN'
     const successCount = detail.successCount || 0
-    const failureCount = detail.failureCount || 0
+    const failureCount = detail.failureCount || detail.consecutiveFailureCount || 0
+    const requestCount = detail.requestCount || successCount + failureCount
     const total = successCount + failureCount
     const reliabilityPercent = total === 0 ? 100 : ((successCount / total) * 100).toFixed(1)
 
@@ -192,7 +188,7 @@ const detailCards = computed(() => {
       failureCount,
       lastCostMs: detail.lastCostMs || 0,
       reliabilityPercent,
-      capacityPercent: Math.min(100, Math.round((total / 500) * 100) + (isHealthy ? 20 : 80)), // Mocked dynamic capacity for visualization
+      capacityPercent: Math.min(100, Math.round((requestCount / 500) * 100) + (isHealthy ? 20 : 80)),
       lastFailureMessage: !isHealthy ? (detail.lastFailureMessage || '未知降级原因') : null
     }
   })
@@ -205,10 +201,22 @@ const updateStats = async () => {
   try {
     const data = await loadModelRoutingStats()
     if (data.runtime) {
-      runtimeHealth.value = data.runtime.health || { successCount: 0, failureCount: 0 }
+      const runtimeHealth = data.runtime.health || {}
+      runtimeStats.value = {
+        totalRequests: runtimeHealth.totalRequests || 0,
+        totalFailureCount: runtimeHealth.totalFailureCount || 0,
+        routeFallbackCount: data.runtime.routeFallbackCount || 0
+      }
       rawDetails.value = data.runtime.details || {}
       rawStates.value = data.runtime.states || {}
       healthLogs.value = data.healthLogs || []
+      if (import.meta.env.DEV) {
+        const hasRequiredHealthFields = typeof runtimeHealth.totalRequests === 'number'
+          && typeof runtimeHealth.totalFailureCount === 'number'
+        if (!hasRequiredHealthFields) {
+          console.warn('model-routing stats 字段缺失: runtime.health.totalRequests/totalFailureCount')
+        }
+      }
     }
     const now = new Date()
     lastUpdate.value = now.toLocaleTimeString('en-US', { hour12: false })

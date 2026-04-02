@@ -2,6 +2,7 @@ package com.example.interview.modelrouting;
 
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -84,9 +85,15 @@ public class ModelHealthStore {
         }
     }
 
+    public void markRequest(String candidateName) {
+        HealthState state = states.computeIfAbsent(candidateName, ignored -> new HealthState());
+        state.requestCount.incrementAndGet();
+    }
+
     public void markSuccess(String candidateName) {
         HealthState state = states.computeIfAbsent(candidateName, ignored -> new HealthState());
         synchronized (state) {
+            state.successCount.incrementAndGet();
             state.failureCount.set(0);
             state.halfOpenTrialCount.set(0);
             state.circuitState = ModelCircuitState.CLOSED;
@@ -94,9 +101,11 @@ public class ModelHealthStore {
         }
     }
 
-    public void markFailure(String candidateName) {
+    public void markFailure(String candidateName, String failureMessage) {
         HealthState state = states.computeIfAbsent(candidateName, ignored -> new HealthState());
         synchronized (state) {
+            state.totalFailureCount.incrementAndGet();
+            state.lastFailureMessage = failureMessage;
             int threshold = Math.max(1, properties.getCircuitBreaker().getFailureThreshold());
             ModelCircuitState current = stateOf(candidateName);
             if (current == ModelCircuitState.HALF_OPEN) {
@@ -115,9 +124,15 @@ public class ModelHealthStore {
     }
 
     public Map<String, Object> snapshotMetrics() {
+        long totalRequests = states.values().stream().mapToLong(state -> state.requestCount.get()).sum();
+        long totalSuccessCount = states.values().stream().mapToLong(state -> state.successCount.get()).sum();
+        long totalFailureCount = states.values().stream().mapToLong(state -> state.totalFailureCount.get()).sum();
         return Map.of(
                 "openRejectCount", openRejectCount.get(),
-                "openTransitionCount", openTransitionCount.get()
+                "openTransitionCount", openTransitionCount.get(),
+                "totalRequests", totalRequests,
+                "totalSuccessCount", totalSuccessCount,
+                "totalFailureCount", totalFailureCount
         );
     }
 
@@ -126,12 +141,16 @@ public class ModelHealthStore {
         for (Map.Entry<String, HealthState> entry : states.entrySet()) {
             HealthState state = entry.getValue();
             synchronized (state) {
-                result.put(entry.getKey(), Map.of(
-                        "state", stateOf(entry.getKey()).name(),
-                        "failureCount", state.failureCount.get(),
-                        "halfOpenTrialCount", state.halfOpenTrialCount.get(),
-                        "openUntilEpochMs", state.openUntilEpochMs
-                ));
+                Map<String, Object> detail = new LinkedHashMap<>();
+                detail.put("state", stateOf(entry.getKey()).name());
+                detail.put("requestCount", state.requestCount.get());
+                detail.put("successCount", state.successCount.get());
+                detail.put("failureCount", state.totalFailureCount.get());
+                detail.put("consecutiveFailureCount", state.failureCount.get());
+                detail.put("halfOpenTrialCount", state.halfOpenTrialCount.get());
+                detail.put("openUntilEpochMs", state.openUntilEpochMs);
+                detail.put("lastFailureMessage", state.lastFailureMessage == null ? "" : state.lastFailureMessage);
+                result.put(entry.getKey(), detail);
             }
         }
         return result;
@@ -147,8 +166,12 @@ public class ModelHealthStore {
 
     private static class HealthState {
         private ModelCircuitState circuitState = ModelCircuitState.CLOSED;
+        private final AtomicLong requestCount = new AtomicLong(0);
+        private final AtomicLong successCount = new AtomicLong(0);
+        private final AtomicLong totalFailureCount = new AtomicLong(0);
         private final AtomicInteger failureCount = new AtomicInteger(0);
         private final AtomicInteger halfOpenTrialCount = new AtomicInteger(0);
+        private String lastFailureMessage;
         private long openUntilEpochMs = 0;
     }
 }

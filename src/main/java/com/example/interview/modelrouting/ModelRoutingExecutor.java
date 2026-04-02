@@ -40,12 +40,13 @@ public class ModelRoutingExecutor {
             if (modelHealthStore.stateOf(candidate.name()) == ModelCircuitState.HALF_OPEN) {
                 modelHealthStore.markHalfOpenTrial(candidate.name());
             }
+            modelHealthStore.markRequest(candidate.name());
             try {
                 T result = invoker.apply(candidate);
                 modelHealthStore.markSuccess(candidate.name());
                 return result;
             } catch (RuntimeException ex) {
-                modelHealthStore.markFailure(candidate.name());
+                modelHealthStore.markFailure(candidate.name(), ex.getMessage());
                 lastError = ex;
             }
         }

@@ -53,6 +53,16 @@
 - 不破坏既有列表与详情接口，仅追加能力；SSE 推送异常不会影响主链路执行。
 - `successRate` 为字符串百分比（如 `86.5%`），`p95LatencyMs` 与 `failedTraceCount` 为数值型，前端可直接渲染卡片。
 
+## 22. RAG 运维页超时误判口径修复（2026-04-02）
+**修复职责**：
+- 运维页 `OpsView` 已移除 `durationMs > 1000` 即标记 `TIMEOUT` 的前端兜底逻辑，避免将正常慢链路误判为超时失败。
+- RAG 列表状态改为与后端 `traceStatus` 对齐：`COMPLETED -> SUCCESS`、`FAILED -> FAILED`、未知状态回落 `UNKNOWN`；同时引入 `SLOW` 作为独立性能告警态，不计入失败统计。
+- 成功率与 P95 指标改为优先使用后端概览接口（`/api/observability/rag/overview`）返回值，仅在字段缺失时才启用前端兜底计算。
+- 详情页 `RagTraceDetailView` 的链路状态展示已同步对齐列表口径，避免“列表成功/详情完成”或“列表超时/详情完成”这类语义冲突。
+- 新增慢链路阈值环境变量 `VITE_RAG_SLOW_THRESHOLD_MS`（默认 `20000`），用于前端统一判定 `SLOW` 展示。
+- 补充 `traceStatus` 缺失场景的节点级兜底推断：当前端收到旧历史数据或缺字段响应时，会基于节点状态与耗时推断 `FAILED/RUNNING/SLOW/SUCCESS`，避免列表批量显示 `UNKNOWN`。
+- 运维页已下线“相似度均值”列（后端未产出 `score`，长期为 `-`），并将 A2A 幂等与危险操作区调整为“高级运维工具”默认收起，降低日常观测噪音。
+
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)
@@ -133,6 +143,7 @@
 - **模型路由与容错专项规格已落地（2026-03-23）**：新增 `specs/model-routing-failover/spec.md`、`tasks.md`、`checklist.md`，规划引入多模型候选、优先级调度、首包探测、三态熔断器与自动降级能力，作为后续统一模型高可用改造蓝图。
 - **模型路由与容错后端首版已落地（2026-03-23）**：新增 `modelrouting` 组件（`ModelSelector`、`ModelHealthStore`、`ModelRoutingExecutor`、`FirstPacketAwaiter`、`RoutingChatService`）与 `app.model-routing.*` 配置；`RAGService`、`TaskRouterAgent`、`IntentTreeRoutingService` 已接入统一路由，实现多候选调度、三态熔断与自动降级，并在首题生成链路启用首包探测。
 - **模型路由观测与演练能力已落地（2026-03-23）**：新增 `ModelRoutingController` 的 `/api/model-routing/stats` 运行态快照接口，输出熔断状态与降级/超时计数；并补充 `specs/model-routing-failover/fault-drill.ps1` 用于故障演练与回归校验。
+- **模型路由监控指标口径修复已落地（2026-04-02）**：修复监控页与 `/api/model-routing/stats` 的字段契约错位问题；后端 `ModelHealthStore` 新增 `totalRequests/totalSuccessCount/totalFailureCount` 聚合指标与模型级 `requestCount/successCount/failureCount/lastFailureMessage` 明细，前端 `MonitoringView` 改为读取真实字段并直接展示 `routeFallbackCount`，避免右侧卡片因字段缺失长期显示 0。
 - **前端模块化与业务页面迁移已落地（2026-03-24）**：新增 `frontend/` 前端工程（Vue3 + Vite），实现统一壳层与菜单驱动路由；`monitoring`、`notes`、`coding`、`profile` 已迁移为独立模块并分别接入原有后端 API；后端新增 `FrontendRouteController` 支持 `monitoring/knowledge/practice/profile` 旧 `.html` 入口兼容跳转与多路径转发到 `static/spa/index.html`，构建产物可通过 `npm run build:spring` 发布。
 - **前端剩余管理模块迁移已落地（2026-03-24）**：`ops`、`settings`、`workspace`、`mcp`、`intent-tree` 已新增为 SPA 独立页面并接入对应后端接口；`MenuConfigService` 已补充旧路径归一（如 `*.html -> 新路由`）与缺省菜单补齐能力，`FrontendRouteController` 已新增上述页面旧入口重定向，确保历史链接与菜单配置统一指向 SPA 路由。
 - **前端跨域与错误解析容错优化（2026-03-25）**：`app.security.allowed-origins` 已补充 `localhost/127.0.0.1:5173` 以适配 Vite 开发端口；前端 `httpPostJson/httpPostFormData` 已增加非 JSON 响应容错，避免后端返回文本错误（如 CORS 拒绝）时触发 `Unexpected token` 二次异常。

@@ -91,7 +91,6 @@
                   <th class="pb-4 font-bold">Trace ID</th>
                   <th class="pb-4 font-bold">耗时 (Latency)</th>
                   <th class="pb-4 font-bold">召回数量</th>
-                  <th class="pb-4 font-bold">相似度均值</th>
                   <th class="pb-4 font-bold">状态</th>
                   <th class="pb-4 text-right font-bold">操作</th>
                 </tr>
@@ -101,10 +100,9 @@
                   <td class="py-4 text-sm font-mono text-indigo-600">{{ item.traceId || '-' }}</td>
                   <td class="py-4 text-sm font-semibold text-slate-700">{{ item.latencyMs ?? 0 }} ms</td>
                   <td class="py-4 text-sm text-slate-700">{{ item.retrievedCount ?? 0 }}</td>
-                  <td class="py-4 text-sm text-slate-700">{{ item.score?.toFixed ? item.score.toFixed(2) : '-' }}</td>
                   <td class="py-4">
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter"
-                          :class="item.status === 'FAILED' || item.status === 'TIMEOUT' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'">
+                          :class="getTraceStatusClass(item.status)">
                       {{ item.status }}
                     </span>
                   </td>
@@ -125,11 +123,19 @@
         <!-- A2A Idempotency Status -->
         <div id="section-a2a" class="col-span-4 space-y-6">
           <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <span class="material-symbols-outlined text-indigo-700 text-lg" data-icon="rebase_edit">rebase_edit</span>
-              A2A 幂等缓存状态
-            </h3>
-            <div class="space-y-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <span class="material-symbols-outlined text-indigo-700 text-lg" data-icon="rebase_edit">rebase_edit</span>
+                高级运维工具
+              </h3>
+              <button class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors" @click="showAdvancedOps = !showAdvancedOps">
+                {{ showAdvancedOps ? '收起' : '展开' }}
+              </button>
+            </div>
+            <p v-if="!showAdvancedOps" class="text-xs text-slate-500 leading-relaxed">
+              这块主要用于 A2A 消息幂等排障与死信重放，日常看 RAG 链路时可保持收起。
+            </p>
+            <div v-else class="space-y-6">
               <div>
                 <div class="flex justify-between items-end mb-2">
                   <span class="text-xs font-bold text-slate-900">L1 Memory Cache</span>
@@ -154,7 +160,7 @@
           </div>
 
           <!-- Danger Zone -->
-          <div class="rounded-xl border-2 border-dashed border-red-300 p-6 bg-red-50/50 group hover:border-red-400 transition-all">
+          <div v-if="showAdvancedOps" class="rounded-xl border-2 border-dashed border-red-300 p-6 bg-red-50/50 group hover:border-red-400 transition-all">
             <div class="flex items-center gap-3 mb-4">
               <span class="material-symbols-outlined text-red-600" data-icon="dangerous">dangerous</span>
               <h3 class="text-sm font-bold text-red-600 uppercase tracking-widest">危险操作区 (Danger Zone)</h3>
@@ -215,8 +221,13 @@ const overview = ref({})
 const traces = ref([])
 const audits = ref([])
 const idempotency = ref({})
+const showAdvancedOps = ref(false)
+const SLOW_THRESHOLD_MS = Number(import.meta.env.VITE_RAG_SLOW_THRESHOLD_MS || 20000)
 
 const p95Latency = computed(() => {
+  if (typeof overview.value?.p95LatencyMs === 'number') {
+    return overview.value.p95LatencyMs
+  }
   if (!traces.value.length) return 0
   const latencies = traces.value.map(t => t.latencyMs).sort((a, b) => a - b)
   const index = Math.ceil(latencies.length * 0.95) - 1
@@ -224,8 +235,11 @@ const p95Latency = computed(() => {
 })
 
 const successRate = computed(() => {
+  if (typeof overview.value?.successRate === 'string' && overview.value.successRate.trim()) {
+    return overview.value.successRate
+  }
   if (!traces.value.length) return '0%'
-  const successCount = traces.value.filter(t => t.latencyMs <= 1000).length
+  const successCount = traces.value.filter(t => t.status === 'SUCCESS' || t.status === 'SLOW').length
   return ((successCount / traces.value.length) * 100).toFixed(1) + '%'
 })
 
@@ -244,6 +258,49 @@ const formatTime = (value) => {
 
 const viewDetail = (traceId) => {
   router.push({ name: 'rag-trace-detail', params: { traceId } })
+}
+
+const resolveStatus = (traceStatus, durationMs, nodes) => {
+  const normalizedTraceStatus = typeof traceStatus === 'string' ? traceStatus.trim().toUpperCase() : ''
+  if (normalizedTraceStatus === 'FAILED' || normalizedTraceStatus === 'ERROR' || normalizedTraceStatus === 'TIMEOUT') {
+    return 'FAILED'
+  }
+  if (normalizedTraceStatus === 'COMPLETED' || normalizedTraceStatus === 'SUCCESS') {
+    return durationMs >= SLOW_THRESHOLD_MS ? 'SLOW' : 'SUCCESS'
+  }
+  if (normalizedTraceStatus === 'RUNNING') {
+    return 'RUNNING'
+  }
+  const safeNodes = Array.isArray(nodes) ? nodes : []
+  const nodeStatuses = safeNodes
+    .map(node => (typeof node?.status === 'string' ? node.status.trim().toUpperCase() : ''))
+    .filter(Boolean)
+  if (nodeStatuses.includes('FAILED') || nodeStatuses.includes('ERROR') || nodeStatuses.includes('TIMEOUT')) {
+    return 'FAILED'
+  }
+  if (nodeStatuses.includes('RUNNING')) {
+    return 'RUNNING'
+  }
+  if (safeNodes.length > 0) {
+    return durationMs >= SLOW_THRESHOLD_MS ? 'SLOW' : 'SUCCESS'
+  }
+  return 'UNKNOWN'
+}
+
+const getTraceStatusClass = (status) => {
+  if (status === 'FAILED') {
+    return 'bg-red-100 text-red-700'
+  }
+  if (status === 'SLOW') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'RUNNING') {
+    return 'bg-indigo-100 text-indigo-700'
+  }
+  if (status === 'UNKNOWN') {
+    return 'bg-slate-100 text-slate-700'
+  }
+  return 'bg-emerald-100 text-emerald-700'
 }
 
 const reload = async () => {
@@ -270,8 +327,7 @@ const reload = async () => {
             traceId: item?.traceId ?? '-',
             latencyMs: typeof item?.durationMs === 'number' ? item.durationMs : 0,
             retrievedCount,
-            score: item?.score,
-            status: item?.traceStatus || (item?.durationMs > 1000 ? 'TIMEOUT' : 'SUCCESS')
+            status: resolveStatus(item?.traceStatus, typeof item?.durationMs === 'number' ? item.durationMs : 0, nodes)
           }
         })
       : []
