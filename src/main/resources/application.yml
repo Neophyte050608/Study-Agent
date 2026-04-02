@@ -251,6 +251,10 @@ app:
     input:
       max-length: 4000
 
+  dream:
+    interval-hours: ${APP_DREAM_INTERVAL_HOURS:24}
+    recent-sessions-count: ${APP_DREAM_RECENT_SESSIONS_COUNT:10}
+
 im:
   qq:
     # QQ 接入配置

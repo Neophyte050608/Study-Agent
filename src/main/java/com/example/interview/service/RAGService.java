@@ -290,12 +290,11 @@ public class RAGService {
             contextMap.put("question", question);
             contextMap.put("userAnswer", userAnswer);
 
-            String prompt = promptManager.render("evaluation", contextMap);
-            // 使用带首包探测的同步调用，避免长时间等待无效响应
+            PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "evaluation", contextMap);
             RoutingChatService.RoutingResult result = callWithRetryResult(() -> {
                 String content = routingChatService.callWithFirstPacketProbeSupplier(
-                    () -> { throw new RuntimeException("首包探测超时或失败"); },
-                    prompt, ModelRouteType.THINKING, "回答评估"
+                        () -> { throw new RuntimeException("首包探测超时或失败"); },
+                        pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "回答评估"
                 );
                 // 暂时由于 callWithFirstPacketProbeSupplier 只返回 content，这里做一个包装，真正的 metadata 需后续补充或在此忽略
                 return new RoutingChatService.RoutingResult(content, 0, 0, 0);
@@ -1219,33 +1218,17 @@ public class RAGService {
          String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
          try {
             logger.debug("[generateFirstQuestion] Params: topic={}, skipIntro={}", topic, skipIntro);
-            
-            String promptText = skipIntro 
-                ? "{skillBlock}\n" +
-                  "你是一位技术面试官。\n" +
-                  "简历摘要：{resume}\n" +
-                  "用户画像：{profileSnapshot}\n" +
-                  "面试主题：{topic}\n" +
-                  "当前环节：【项目经历与难点挖掘】\n" +
-                  "用户要求跳过自我介绍，直接开始提问。请结合用户的简历内容和用户画像，直接抛出第一道关于 {topic} 或简历项目的深度技术问题。\n" +
-                  "只输出问题本身，必须单行，不要标题、不要策略说明、不要 markdown。"
-                : "{skillBlock}\n" +
-                  "你是一位技术面试官。\n" +
-                  "简历摘要：{resume}\n" +
-                  "面试主题：{topic}\n" +
-                  "当前环节：【自我介绍】\n" +
-                  "请结合用户的简历内容，生成一段破冰的开场白和第一道面试题。第一题必须是让候选人做自我介绍。\n" +
-                  "例如：“你好！看了你的简历，发现你在微服务领域有不少经验。今天我们将进行 {topic} 相关的面试。在正式开始前，能先简单做个自我介绍吗？”\n" +
-                  "只输出开场白本身，必须单行，不要标题、不要策略说明、不要 markdown。";
-
-            String renderedPrompt = promptText
-                    .replace("{skillBlock}", skillBlock)
-                    .replace("{resume}", truncate(resumeContent, 1500))
-                    .replace("{profileSnapshot}", truncate(profileSnapshot, 500))
-                    .replace("{topic}", topic == null ? "" : topic);
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("skillBlock", skillBlock);
+            vars.put("resume", truncate(resumeContent, 1500));
+            vars.put("profileSnapshot", truncate(profileSnapshot, 500));
+            vars.put("topic", topic == null ? "" : topic);
+            vars.put("skipIntro", skipIntro);
+            PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "first-question", vars);
             String rawQuestion = routingChatService.callWithFirstPacketProbeSupplier(
                     () -> buildFallbackFirstQuestion(topic),
-                    renderedPrompt,
+                    pair.systemPrompt(),
+                    pair.userPrompt(),
                     ModelRouteType.GENERAL,
                     "首题生成"
             );
@@ -1288,13 +1271,13 @@ public class RAGService {
         params.put("targetedSuggestion", targetedSuggestion);
         params.put("baseContext", baseContext);
         params.put("history", qaHistory);
-        String prompt = promptManager.render("final-report", params);
+        PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "final-report", params);
 
         try {
-            logger.debug("[generateFinalReport] Prompt length={}", prompt.length());
+            logger.debug("[generateFinalReport] Prompt length={}", pair.userPrompt().length());
             String response = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> buildFallbackReport(history, targetedSuggestion),
-                prompt, ModelRouteType.THINKING, "最终复盘"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "最终复盘"
             ), 1, "最终复盘");
             logger.debug("====== [RAGService - generateFinalReport] Response ======");
             logger.debug("{}", response);
@@ -1317,14 +1300,14 @@ public class RAGService {
         params.put("difficulty", normalizedDifficulty);
         params.put("questionType", normalizedQuestionType);
         params.put("profileSnapshot", truncate(profileSnapshot, 240));
-        String prompt = promptManager.render("coding-question", params);
+        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-question", params);
 
         try {
             logger.debug("====== [RAGService - generateCodingQuestion] Prompt Template ======");
-            logger.debug("{}", prompt);
+            logger.debug("{}", pair.userPrompt());
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
-                prompt, ModelRouteType.GENERAL, "刷题题目生成"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "刷题题目生成"
             ), 1, "刷题题目生成");
             logger.debug("====== [RAGService - generateCodingQuestion] Response ======");
             logger.debug("{}", raw);
@@ -1356,14 +1339,14 @@ public class RAGService {
         params.put("questionType", normalizedQuestionType);
         params.put("question", truncate(safeQuestion, 280));
         params.put("answer", truncate(safeAnswer, 800));
-        String prompt = promptManager.render("coding-evaluation", params);
+        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-evaluation", params);
 
         try {
             logger.debug("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
-            logger.debug("{}", prompt);
+            logger.debug("{}", pair.userPrompt());
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "{\"score\":0,\"feedback\":\"评估超时\"}",
-                prompt, ModelRouteType.THINKING, "刷题答案评估"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "刷题答案评估"
             ), 1, "刷题答案评估");
             logger.debug("====== [RAGService - evaluateCodingAnswer] Response ======");
             logger.debug("{}", raw);
@@ -1395,12 +1378,12 @@ public class RAGService {
         params.put("question", truncate(question, 240));
         params.put("answer", truncate(answer, 500));
         params.put("score", String.valueOf(score));
-        String prompt = promptManager.render("coding-next-question", params);
+        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-next-question", params);
 
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
-                prompt, ModelRouteType.GENERAL, "刷题下一题生成"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "刷题下一题生成"
             ), 1, "刷题下一题生成");
             if (raw == null || raw.isBlank()) {
                 return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
@@ -1422,12 +1405,12 @@ public class RAGService {
         params.put("topic", normalizedTopic);
         params.put("weakPoint", truncate(weakPoint, 200));
         params.put("recentPerformance", truncate(recentPerformance, 300));
-        String prompt = promptManager.render("learning-plan", params);
+        PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "learning-plan", params);
 
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
-                prompt, ModelRouteType.GENERAL, "学习计划生成"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "学习计划生成"
             ), 1, "学习计划生成");
             if (raw == null || raw.isBlank()) {
                 return fallbackLearningPlan(normalizedTopic, weakPoint);

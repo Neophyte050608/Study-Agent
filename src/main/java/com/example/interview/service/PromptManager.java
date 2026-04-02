@@ -36,6 +36,11 @@ public class PromptManager {
     private final Map<String, String> systemTemplateCache = new ConcurrentHashMap<>();
     private boolean isLoaded = false;
 
+    /**
+     * 系统提示词 + 用户提示词的结构化对。
+     */
+    public record PromptPair(String systemPrompt, String userPrompt) {}
+
     public PromptManager(ResourceLoader resourceLoader, PromptTemplateMapper templateMapper) {
         this.jinjava = new Jinjava();
         this.resourceLoader = resourceLoader;
@@ -57,7 +62,9 @@ public class PromptManager {
     /**
      * 渲染系统模板 + 任务模板的组合。
      * 先渲染系统模板，将结果注入到任务模板的 {{ systemBlock }} 变量中，再渲染任务模板。
+     * @deprecated 使用 {@link #renderSplit(String, String, Map)} 代替，配合 RoutingChatService 双消息重载实现 API 级缓存。
      */
+    @Deprecated
     public String renderWithSystem(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
         ensureLoaded();
         String systemTemplate = systemTemplateCache.get(systemTemplateName);
@@ -68,6 +75,25 @@ public class PromptManager {
         Map<String, Object> mergedVars = new HashMap<>(variables);
         mergedVars.put("systemBlock", systemContent);
         return render(taskTemplateName, mergedVars);
+    }
+
+    /**
+     * 分别渲染系统模板和任务模板，返回结构化的 PromptPair。
+     * 用于支持 API 级的 system/user 消息分离缓存。
+     */
+    public PromptPair renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
+        ensureLoaded();
+        String systemTemplate = systemTemplateCache.get(systemTemplateName);
+        String systemContent = "";
+        if (systemTemplate != null) {
+            systemContent = jinjava.render(systemTemplate, variables);
+        }
+        String taskTemplate = templateCache.get(taskTemplateName);
+        if (taskTemplate == null) {
+            throw new RuntimeException("找不到指定的提示词模板: " + taskTemplateName);
+        }
+        String userContent = jinjava.render(taskTemplate, variables);
+        return new PromptPair(systemContent, userContent);
     }
 
     /**
@@ -123,7 +149,7 @@ public class PromptManager {
                 "system", new String[]{"interviewer", "coding-coach", "router", "knowledge-assistant", "context-compressor"},
                 "interview", new String[]{"task-router", "first-question", "evaluation", "final-report", "learning-plan"},
                 "coding", new String[]{"coding-intent", "coding-question", "coding-evaluation", "coding-next-question"},
-                "chat", new String[]{"knowledge-qa", "chat-context-compress", "cross-session-memorize"},
+                "chat", new String[]{"knowledge-qa", "chat-context-compress", "cross-session-memorize", "auto-dream"},
                 "intent", new String[]{"intent-tree-classifier", "intent-clarification", "intent-slot-refine"}
         );
         Map<String, String> nameToCat = new HashMap<>();
@@ -149,6 +175,7 @@ public class PromptManager {
                 Map.entry("knowledge-qa", "知识问答"),
                 Map.entry("chat-context-compress", "上下文压缩"),
                 Map.entry("cross-session-memorize", "跨会话记忆"),
+                Map.entry("auto-dream", "记忆整理"),
                 Map.entry("interviewer", "面试官"),
                 Map.entry("coding-coach", "编码教练"),
                 Map.entry("router", "路由网关"),

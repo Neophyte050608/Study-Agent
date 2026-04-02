@@ -18,6 +18,7 @@ public class UserChatMemoryDO {
     private String lastSessionId;
     @Version
     private Integer version;
+    private LocalDateTime lastDreamAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

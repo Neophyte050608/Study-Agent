@@ -53,9 +53,8 @@ public class KnowledgeQaAgent {
             vars.put("context", packet.context());
             vars.put("evidence", packet.retrievalEvidence());
             vars.put("history", history != null ? history : "");
-            String prompt = promptManager.render("knowledge-qa", vars);
-
-            String answer = routingChatService.call(prompt, ModelRouteType.GENERAL, "知识问答");
+            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
+            String answer = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "知识问答");
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("answer", answer);
@@ -95,9 +94,8 @@ public class KnowledgeQaAgent {
             vars.put("context", packet.context());
             vars.put("evidence", packet.retrievalEvidence());
             vars.put("history", history != null ? history : "");
-            String prompt = promptManager.render("knowledge-qa", vars);
-
-            String answer = routingChatService.callStream(prompt, ModelRouteType.GENERAL,
+            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
+            String answer = routingChatService.callStream(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL,
                     "知识问答-流式", tokenConsumer);
 
             Map<String, Object> result = new LinkedHashMap<>();

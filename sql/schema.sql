@@ -307,6 +307,7 @@ CREATE TABLE IF NOT EXISTS `t_user_chat_memory` (
     `memory_text` TEXT DEFAULT NULL COMMENT '累积的跨会话记忆（结构化文本）',
     `last_session_id` VARCHAR(128) DEFAULT NULL COMMENT '最后纳入记忆的会话ID',
     `version` INT NOT NULL DEFAULT 1 COMMENT '乐观锁版本号',
+    `last_dream_at` DATETIME DEFAULT NULL COMMENT '上次记忆整理时间',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

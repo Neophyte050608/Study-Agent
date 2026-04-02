@@ -77,6 +77,29 @@ public class RoutingChatService {
         }, stage);
     }
 
+    public String call(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage) {
+        if (!properties.isEnabled()) {
+            return callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content();
+        }
+        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
+        if (candidates.isEmpty()) {
+            return callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content();
+        }
+        return modelRoutingExecutor.execute(candidates, candidate -> {
+            ChatModel chatModel = resolveChatModel(candidate);
+            long start = System.currentTimeMillis();
+            String response = callWithModelMetadata(chatModel, systemPrompt, userPrompt).content();
+            long cost = System.currentTimeMillis() - start;
+            logger.info("模型路由命中: stage={}, candidate={}, provider={}, state={}, costMs={}",
+                    stage,
+                    candidate.name(),
+                    candidate.provider(),
+                    modelHealthStore.stateOf(candidate.name()),
+                    cost);
+            return response;
+        }, stage);
+    }
+
     /**
      * 带首包探测的模型调用。
      * 使用 CompletableFuture 异步发起请求，并结合 ModelProbeAwaiter 检查响应时间。
@@ -108,16 +131,16 @@ public class RoutingChatService {
     public String callStream(String prompt, ModelRouteType routeType, String stage,
                              Consumer<String> tokenConsumer) {
         if (!properties.isEnabled()) {
-            return streamWithModel(fallbackChatModel, prompt, tokenConsumer);
+            return streamWithModel(fallbackChatModel, null, prompt, tokenConsumer);
         }
         List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
         if (candidates.isEmpty()) {
-            return streamWithModel(fallbackChatModel, prompt, tokenConsumer);
+            return streamWithModel(fallbackChatModel, null, prompt, tokenConsumer);
         }
         return modelRoutingExecutor.execute(candidates, candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
             long start = System.currentTimeMillis();
-            String response = streamWithModel(chatModel, prompt, tokenConsumer);
+            String response = streamWithModel(chatModel, null, prompt, tokenConsumer);
             long cost = System.currentTimeMillis() - start;
             logger.info("模型路由命中(流式): stage={}, candidate={}, provider={}, state={}, costMs={}",
                     stage, candidate.name(), candidate.provider(),
@@ -126,13 +149,33 @@ public class RoutingChatService {
         }, stage);
     }
 
-    private String streamWithModel(ChatModel chatModel, String prompt, Consumer<String> tokenConsumer) {
-        Flux<String> tokenFlux = ChatClient.builder(chatModel)
-                .build()
-                .prompt()
-                .user(prompt)
-                .stream()
-                .content();
+    public String callStream(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage,
+                             Consumer<String> tokenConsumer) {
+        if (!properties.isEnabled()) {
+            return streamWithModel(fallbackChatModel, systemPrompt, userPrompt, tokenConsumer);
+        }
+        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
+        if (candidates.isEmpty()) {
+            return streamWithModel(fallbackChatModel, systemPrompt, userPrompt, tokenConsumer);
+        }
+        return modelRoutingExecutor.execute(candidates, candidate -> {
+            ChatModel chatModel = resolveChatModel(candidate);
+            long start = System.currentTimeMillis();
+            String response = streamWithModel(chatModel, systemPrompt, userPrompt, tokenConsumer);
+            long cost = System.currentTimeMillis() - start;
+            logger.info("模型路由命中(流式): stage={}, candidate={}, provider={}, state={}, costMs={}",
+                    stage, candidate.name(), candidate.provider(),
+                    modelHealthStore.stateOf(candidate.name()), cost);
+            return response;
+        }, stage);
+    }
+
+    private String streamWithModel(ChatModel chatModel, String systemPrompt, String userPrompt, Consumer<String> tokenConsumer) {
+        var builder = ChatClient.builder(chatModel).build().prompt();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.system(systemPrompt);
+        }
+        Flux<String> tokenFlux = builder.user(userPrompt).stream().content();
 
         List<String> tokens = tokenFlux
                 .doOnNext(token -> {
@@ -194,6 +237,41 @@ public class RoutingChatService {
         }
     }
 
+    public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier,
+                                                   String systemPrompt,
+                                                   String userPrompt,
+                                                   ModelRouteType routeType,
+                                                   String stage) {
+        try {
+            if (!properties.isEnabled()) {
+                return callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content();
+            }
+            List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
+            if (candidates.isEmpty()) {
+                return callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content();
+            }
+            return modelRoutingExecutor.execute(candidates, candidate -> {
+                ChatModel chatModel = resolveChatModel(candidate);
+                CompletableFuture<String> future = CompletableFuture.supplyAsync(
+                        () -> callWithModelMetadata(chatModel, systemPrompt, userPrompt).content(),
+                        ragRetrieveExecutor);
+                String result = modelProbeAwaiter.awaitFirstPacket(future);
+                logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(),
+                        modelHealthStore.stateOf(candidate.name()));
+                return result;
+            }, stage + "-first-packet");
+        } catch (RuntimeException ex) {
+            if (containsTimeout(ex)) {
+                firstPacketTimeoutCount.incrementAndGet();
+            } else {
+                firstPacketFailureCount.incrementAndGet();
+            }
+            routeFallbackCount.incrementAndGet();
+            logger.warn("首包探测失败，执行统一兜底: stage={}, reason={}", stage, ex.getMessage());
+            return fallbackSupplier.get();
+        }
+    }
+
     public Map<String, Object> snapshotStats() {
         return Map.of(
                 "routeFallbackCount", routeFallbackCount.get(),
@@ -226,16 +304,16 @@ public class RoutingChatService {
      */
     public RoutingResult callWithMetadata(String prompt, ModelRouteType routeType, String stage) {
         if (!properties.isEnabled()) {
-            return callWithModelMetadata(fallbackChatModel, prompt);
+            return callWithModelMetadata(fallbackChatModel, null, prompt);
         }
         List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
         if (candidates.isEmpty()) {
-            return callWithModelMetadata(fallbackChatModel, prompt);
+            return callWithModelMetadata(fallbackChatModel, null, prompt);
         }
         return modelRoutingExecutor.execute(candidates, candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
             long start = System.currentTimeMillis();
-            RoutingResult result = callWithModelMetadata(chatModel, prompt);
+            RoutingResult result = callWithModelMetadata(chatModel, null, prompt);
             long cost = System.currentTimeMillis() - start;
             logger.info("模型路由命中: stage={}, candidate={}, provider={}, state={}, costMs={}, tokens={}+{}",
                     stage,
@@ -249,14 +327,13 @@ public class RoutingChatService {
         }, stage);
     }
 
-    private RoutingResult callWithModelMetadata(ChatModel chatModel, String prompt) {
+    private RoutingResult callWithModelMetadata(ChatModel chatModel, String systemPrompt, String userPrompt) {
         long start = System.currentTimeMillis();
-        org.springframework.ai.chat.model.ChatResponse response = ChatClient.builder(chatModel)
-                .build()
-                .prompt()
-                .user(prompt)
-                .call()
-                .chatResponse();
+        var builder = ChatClient.builder(chatModel).build().prompt();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.system(systemPrompt);
+        }
+        org.springframework.ai.chat.model.ChatResponse response = builder.user(userPrompt).call().chatResponse();
         
         long cost = System.currentTimeMillis() - start;
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
@@ -275,7 +352,7 @@ public class RoutingChatService {
     }
 
     private String callWithModel(ChatModel chatModel, String prompt) {
-        return callWithModelMetadata(chatModel, prompt).content();
+        return callWithModelMetadata(chatModel, null, prompt).content();
     }
 
     private boolean containsTimeout(Throwable throwable) {

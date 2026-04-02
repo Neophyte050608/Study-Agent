@@ -203,8 +203,9 @@ public class ChatContextCompressor {
             Map<String, Object> vars = new HashMap<>();
             vars.put("existingSummary", session.getContextSummary() == null ? "" : session.getContextSummary());
             vars.put("newMessages", formatMessages(toCompress));
-            String prompt = promptManager.render("chat-context-compress", vars);
-            String newSummary = routingChatService.call(prompt, ModelRouteType.THINKING, "上下文压缩");
+            PromptManager.PromptPair pair = promptManager.renderSplit("context-compressor", "chat-context-compress", vars);
+            String newSummary = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "上下文压缩");
 
             Long newUpToMsgId = toCompress.get(toCompress.size() - 1).getId();
             sessionMapper.update(null,

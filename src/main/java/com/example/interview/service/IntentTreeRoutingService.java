@@ -81,10 +81,8 @@ public class IntentTreeRoutingService {
             vars.put("confidenceThreshold", properties.getConfidenceThreshold());
             vars.put("minGap", properties.getMinGap());
             vars.put("ambiguityRatio", properties.getAmbiguityRatio());
-            // 使用 Jinjava 渲染提示词，解耦了提示词与代码逻辑
-            String prompt = promptManager.render("intent-tree-classifier", vars);
-            // 调用大模型进行意图分类
-            String response = routingChatService.call(prompt, ModelRouteType.THINKING, "意图树分类");
+            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
+            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "意图树分类");
             // 解析并归一化模型返回结果
             return normalizeDecision(response, query, history);
         } catch (Exception ex) {
@@ -118,8 +116,8 @@ public class IntentTreeRoutingService {
             vars.put("query", query);
             vars.put("history", history == null ? "" : history);
             vars.put("cases", loadSlotRefineCases(taskType));
-            String prompt = promptManager.render("intent-slot-refine", vars);
-            String response = routingChatService.call(prompt, ModelRouteType.THINKING, "意图槽位精炼");
+            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-slot-refine", vars);
+            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "意图槽位精炼");
             if (response == null || response.isBlank()) {
                 return Map.of();
             }
@@ -324,8 +322,8 @@ public class IntentTreeRoutingService {
             vars.put("query", query);
             vars.put("history", history == null ? "" : history);
             vars.put("candidates", candidates.stream().limit(Math.max(1, properties.getMaxCandidates())).toList());
-            String prompt = promptManager.render("intent-clarification", vars);
-            String response = routingChatService.call(prompt, ModelRouteType.GENERAL, "意图澄清");
+            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-clarification", vars);
+            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "意图澄清");
             if (response != null && !response.isBlank()) {
                 return response.trim();
             }

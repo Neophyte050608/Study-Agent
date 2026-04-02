@@ -119,13 +119,14 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             logger.debug("加载 intent_cases.json 失败: {}", e.getMessage());
         }
 
-        String prompt = promptManager.render("coding-intent", Map.of("message", message, "cases", cases));
-        logger.debug("[CodingPracticeAgent - Intent] Prompt length={}", prompt.length());
-        // 使用路由服务进行意图识别
+        com.example.interview.service.PromptManager.PromptPair pair = promptManager.renderSplit(
+                "coding-coach", "coding-intent", Map.of("message", message, "cases", cases));
+        logger.debug("[CodingPracticeAgent - Intent] Prompt length={}", pair.userPrompt().length());
         String jsonStr = routingChatService.call(
-            "你是一个意图识别助手。请从用户的输入中提取刷题意图。\n" + prompt, 
-            ModelRouteType.GENERAL, 
-            "刷题意图识别"
+                pair.systemPrompt(),
+                pair.userPrompt(),
+                ModelRouteType.GENERAL,
+                "刷题意图识别"
         );
         logger.debug("[CodingPracticeAgent - Intent] Response length={}", jsonStr == null ? 0 : jsonStr.length());
         
