@@ -3,6 +3,7 @@ package com.example.interview.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -26,11 +27,25 @@ import java.security.NoSuchAlgorithmException;
 @Component
 public class UserIdentityResolver {
 
+    @Value("${app.security.mode:open}")
+    private String securityMode;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public String resolve(HttpServletRequest request) {
-        // 单用户模式：直接返回默认用户ID，忽略一切请求头
-        return "default-user";
+        if ("open".equalsIgnoreCase(securityMode)) {
+            return "default-user";
+        }
+        String authorization = request.getHeader("Authorization");
+        String fromBearer = resolveFromBearer(authorization);
+        if (!fromBearer.isBlank()) {
+            return fromBearer;
+        }
+        String xUserId = request.getHeader("X-User-Id");
+        if (xUserId != null && !xUserId.isBlank()) {
+            return sanitizePrincipal(xUserId);
+        }
+        return "session:" + request.getSession(true).getId();
     }
 
     private String resolveFromBearer(String authorization) {

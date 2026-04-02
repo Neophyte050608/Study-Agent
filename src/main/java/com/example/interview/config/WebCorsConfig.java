@@ -1,8 +1,10 @@
 package com.example.interview.config;
 
+import com.example.interview.security.RateLimitInterceptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
@@ -20,10 +22,15 @@ import java.util.List;
  */
 @Configuration
 public class WebCorsConfig implements WebMvcConfigurer {
+    private final RateLimitInterceptor rateLimitInterceptor;
 
     /** 允许跨域的源地址列表，支持从属性文件读取，默认为本地开发地址 */
     @Value("${app.security.allowed-origins:http://localhost:8080}")
     private String allowedOrigins;
+
+    public WebCorsConfig(RateLimitInterceptor rateLimitInterceptor) {
+        this.rateLimitInterceptor = rateLimitInterceptor;
+    }
 
     /**
      * 配置跨域映射规则。
@@ -44,5 +51,11 @@ public class WebCorsConfig implements WebMvcConfigurer {
                 .allowedHeaders("*")
                 // 不允许携带认证信息（如 Cookie），增加 API 的安全性
                 .allowCredentials(false);
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/**");
     }
 }

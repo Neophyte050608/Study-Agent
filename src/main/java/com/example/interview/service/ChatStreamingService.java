@@ -2,6 +2,7 @@ package com.example.interview.service;
 
 import com.example.interview.agent.KnowledgeQaAgent;
 import com.example.interview.core.RAGTraceContext;
+import com.example.interview.security.InputSanitizer;
 import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
@@ -24,6 +25,7 @@ public class ChatStreamingService {
     private final WebChatService webChatService;
     private final InterviewStreamTaskManager taskManager;
     private final KnowledgeQaAgent knowledgeQaAgent;
+    private final InputSanitizer inputSanitizer;
     private final Executor streamingExecutor;
     private final long timeoutMillis;
 
@@ -31,16 +33,19 @@ public class ChatStreamingService {
             WebChatService webChatService,
             InterviewStreamTaskManager taskManager,
             KnowledgeQaAgent knowledgeQaAgent,
+            InputSanitizer inputSanitizer,
             @Qualifier("interviewStreamingExecutor") Executor streamingExecutor,
             @Value("${app.chat.streaming.timeout-millis:180000}") long timeoutMillis) {
         this.webChatService = webChatService;
         this.taskManager = taskManager;
         this.knowledgeQaAgent = knowledgeQaAgent;
+        this.inputSanitizer = inputSanitizer;
         this.streamingExecutor = streamingExecutor;
         this.timeoutMillis = timeoutMillis;
     }
 
     public SseEmitter streamChat(String sessionId, String userId, String content) {
+        String sanitizedContent = inputSanitizer.sanitize(content);
         String traceId = UUID.randomUUID().toString();
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         String taskId = taskManager.newTaskId();
@@ -55,7 +60,7 @@ public class ChatStreamingService {
                 "sessionId", sessionId
         ));
 
-        streamingExecutor.execute(() -> runChat(sessionId, userId, content, traceId, taskId, sender));
+        streamingExecutor.execute(() -> runChat(sessionId, userId, sanitizedContent, traceId, taskId, sender));
         return emitter;
     }
 

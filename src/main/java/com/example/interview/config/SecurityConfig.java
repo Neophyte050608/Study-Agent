@@ -34,6 +34,8 @@ import java.util.List;
  */
 @Configuration
 public class SecurityConfig {
+    @Value("${app.security.mode:open}")
+    private String securityMode;
 
     /**
      * 配置安全过滤链。
@@ -50,12 +52,18 @@ public class SecurityConfig {
                 // 禁用 CSRF 防护，因为 API 调用通常不依赖浏览器 Cookie
                 .csrf(AbstractHttpConfigurer::disable)
                 // 设置为无状态会话策略，系统不会在服务器端存储任何用户会话信息
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // 请求授权配置
-                .authorizeHttpRequests(auth -> auth
-                        // 针对单机版，放行所有请求
-                        .anyRequest().permitAll()
-                );
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        if ("jwt".equalsIgnoreCase(securityMode)) {
+            http.authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/", "/index.html", "/spa/**", "/assets/**", "/favicon.ico").permitAll()
+                    .requestMatchers("/api/health", "/api/public/**").permitAll()
+                    .requestMatchers("/api/**").authenticated()
+                    .anyRequest().permitAll()
+            );
+        } else {
+            http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        }
         if (jwtSecret != null && !jwtSecret.isBlank()) {
             http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
         }
