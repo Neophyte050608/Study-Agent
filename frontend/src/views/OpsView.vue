@@ -33,11 +33,21 @@
           <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
             <div class="flex items-center gap-3 mb-4">
               <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="speed">speed</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">平均检索耗时</span>
+              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">平均耗时</span>
             </div>
             <div class="text-2xl font-black text-slate-900">{{ overview.avgLatencyMs ?? 0 }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
-            <div class="mt-2 flex items-center gap-1 text-xs text-red-500 font-medium">
-              <span class="material-symbols-outlined text-xs" data-icon="trending_up">trending_up</span> 实时监控中
+            <div class="mt-2 flex items-center gap-1 text-xs text-indigo-500 font-medium">
+              <span class="material-symbols-outlined text-xs">analytics</span> 统计中
+            </div>
+          </div>
+          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg">timer</span>
+              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">P95 耗时</span>
+            </div>
+            <div class="text-2xl font-black text-slate-900">{{ p95Latency }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
+            <div class="mt-2 flex items-center gap-1 text-xs text-amber-500 font-medium">
+              <span class="material-symbols-outlined text-xs">bolt</span> 性能基准
             </div>
           </div>
           <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
@@ -52,22 +62,12 @@
           </div>
           <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
             <div class="flex items-center gap-3 mb-4">
-              <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="memory">memory</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">缓存命中率</span>
+              <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg">check_circle</span>
+              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">成功率</span>
             </div>
-            <div class="text-2xl font-black text-slate-900">{{ overview.cacheHitRate || '0%' }}</div>
+            <div class="text-2xl font-black text-slate-900">{{ successRate }}</div>
             <div class="mt-2 flex items-center gap-1 text-xs text-indigo-600 font-medium">
-              <span class="material-symbols-outlined text-xs" data-icon="keyboard_double_arrow_up">keyboard_double_arrow_up</span> 优于行业基准
-            </div>
-          </div>
-          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
-            <div class="flex items-center gap-3 mb-4">
-              <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="database">database</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">幂等总键数</span>
-            </div>
-            <div class="text-2xl font-black text-slate-900">{{ idempotencyTotal }}</div>
-            <div class="mt-2 flex items-center gap-1 text-xs text-emerald-600 font-medium">
-              <span class="material-symbols-outlined text-xs" data-icon="cloud_done">cloud_done</span> 负载极低
+              <span class="material-symbols-outlined text-xs">verified</span> 高可用指标
             </div>
           </div>
         </div>
@@ -92,7 +92,8 @@
                   <th class="pb-4 font-bold">耗时 (Latency)</th>
                   <th class="pb-4 font-bold">召回数量</th>
                   <th class="pb-4 font-bold">相似度均值</th>
-                  <th class="pb-4 text-right font-bold">状态</th>
+                  <th class="pb-4 font-bold">状态</th>
+                  <th class="pb-4 text-right font-bold">操作</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
@@ -101,11 +102,16 @@
                   <td class="py-4 text-sm font-semibold text-slate-700">{{ item.latencyMs ?? 0 }} ms</td>
                   <td class="py-4 text-sm text-slate-700">{{ item.retrievedCount ?? 0 }}</td>
                   <td class="py-4 text-sm text-slate-700">{{ item.score?.toFixed ? item.score.toFixed(2) : '-' }}</td>
-                  <td class="py-4 text-right">
+                  <td class="py-4">
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter"
-                          :class="(item.latencyMs ?? 0) > 1000 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'">
-                      {{ (item.latencyMs ?? 0) > 1000 ? 'TIMEOUT' : 'SUCCESS' }}
+                          :class="item.status === 'FAILED' || item.status === 'TIMEOUT' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'">
+                      {{ item.status }}
                     </span>
+                  </td>
+                  <td class="py-4 text-right">
+                    <button @click="viewDetail(item.traceId)" class="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 ml-auto">
+                      查看详情 <span class="material-symbols-outlined text-xs">arrow_forward</span>
+                    </button>
                   </td>
                 </tr>
                 <tr v-if="!traces.length">
@@ -199,14 +205,29 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq } from '../api/admin'
 
+const router = useRouter()
 const loading = ref(false)
 const hint = ref('可执行清理与重放操作')
 const overview = ref({})
 const traces = ref([])
 const audits = ref([])
 const idempotency = ref({})
+
+const p95Latency = computed(() => {
+  if (!traces.value.length) return 0
+  const latencies = traces.value.map(t => t.latencyMs).sort((a, b) => a - b)
+  const index = Math.ceil(latencies.length * 0.95) - 1
+  return latencies[index]
+})
+
+const successRate = computed(() => {
+  if (!traces.value.length) return '0%'
+  const successCount = traces.value.filter(t => t.latencyMs <= 1000).length
+  return ((successCount / traces.value.length) * 100).toFixed(1) + '%'
+})
 
 const idempotencyTotal = computed(() => {
   const inMemory = idempotency.value.inMemorySize || 0
@@ -221,6 +242,10 @@ const formatTime = (value) => {
   return new Date(value).toLocaleString()
 }
 
+const viewDetail = (traceId) => {
+  router.push({ name: 'rag-trace-detail', params: { traceId } })
+}
+
 const reload = async () => {
   loading.value = true
   hint.value = '正在刷新运维数据...'
@@ -233,7 +258,7 @@ const reload = async () => {
     ])
     overview.value = overviewData || {}
     traces.value = Array.isArray(tracesData)
-      ? tracesData.slice(0, 10).map(item => {
+      ? tracesData.map(item => {
           const nodes = Array.isArray(item?.nodes) ? item.nodes : []
           const retrievedCount = nodes
             .filter(n => n?.nodeType === 'RETRIEVAL')
@@ -245,7 +270,8 @@ const reload = async () => {
             traceId: item?.traceId ?? '-',
             latencyMs: typeof item?.durationMs === 'number' ? item.durationMs : 0,
             retrievedCount,
-            score: item?.score
+            score: item?.score,
+            status: item?.traceStatus || (item?.durationMs > 1000 ? 'TIMEOUT' : 'SUCCESS')
           }
         })
       : []

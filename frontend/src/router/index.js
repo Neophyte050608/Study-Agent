@@ -15,6 +15,7 @@ import ChatView from '../views/ChatView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
 import IntentListView from '../views/IntentListView.vue'
 import IntentEditView from '../views/IntentEditView.vue'
+import RagTraceDetailView from '../views/RagTraceDetailView.vue'
 
 const routes = [
   {
@@ -60,6 +61,11 @@ const routes = [
         name: 'ops',
         component: OpsView,
         alias: ['ops.html']
+      },
+      {
+        path: 'ops/:traceId',
+        name: 'rag-trace-detail',
+        component: RagTraceDetailView
       },
       {
         path: 'settings',

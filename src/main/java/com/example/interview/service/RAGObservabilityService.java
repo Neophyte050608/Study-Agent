@@ -59,6 +59,7 @@ public class RAGObservabilityService {
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final RagTraceMapper ragTraceMapper;
     private final RagTraceNodeMapper ragTraceNodeMapper;
+    private final RagTraceEventBus ragTraceEventBus;
 
     /**
      * Spring 正常注入使用的构造器。
@@ -71,11 +72,28 @@ public class RAGObservabilityService {
     public RAGObservabilityService(
             ObservabilitySwitchProperties observabilitySwitchProperties,
             @Nullable RagTraceMapper ragTraceMapper,
-            @Nullable RagTraceNodeMapper ragTraceNodeMapper
+            @Nullable RagTraceNodeMapper ragTraceNodeMapper,
+            @Nullable RagTraceEventBus ragTraceEventBus
     ) {
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.ragTraceMapper = ragTraceMapper;
         this.ragTraceNodeMapper = ragTraceNodeMapper;
+        this.ragTraceEventBus = ragTraceEventBus;
+    }
+
+    /**
+     * 与历史构造器签名兼容，默认不开启实时事件发布。
+     *
+     * @param observabilitySwitchProperties 可观测开关配置
+     * @param ragTraceMapper Trace 汇总表 Mapper
+     * @param ragTraceNodeMapper Trace 节点表 Mapper
+     */
+    public RAGObservabilityService(
+            ObservabilitySwitchProperties observabilitySwitchProperties,
+            @Nullable RagTraceMapper ragTraceMapper,
+            @Nullable RagTraceNodeMapper ragTraceNodeMapper
+    ) {
+        this(observabilitySwitchProperties, ragTraceMapper, ragTraceNodeMapper, null);
     }
 
     /**
@@ -84,7 +102,7 @@ public class RAGObservabilityService {
      * @param observabilitySwitchProperties 可观测开关配置
      */
     public RAGObservabilityService(ObservabilitySwitchProperties observabilitySwitchProperties) {
-        this(observabilitySwitchProperties, null, null);
+        this(observabilitySwitchProperties, null, null, null);
     }
 
     /**
@@ -104,6 +122,7 @@ public class RAGObservabilityService {
         RAGTrace trace = activeTraces.computeIfAbsent(safeTraceId, id -> new RAGTrace(id, Instant.now()));
         RAGTraceNode node = new RAGTraceNode(nodeId, parentNodeId, nodeType, nodeName, Instant.now());
         trace.addNode(node);
+        publishNodeEvent(safeTraceId, "node_started", node, trace);
         RAGTraceContext.pushNode(nodeId);
     }
 
@@ -145,7 +164,9 @@ public class RAGObservabilityService {
                 return;
             }
             node.complete(Instant.now(), inputSummary, outputSummary, errorSummary, metrics);
+            publishNodeEvent(safeTraceId, "node_finished", node, trace);
             if (node.parentNodeId() == null || node.parentNodeId().isBlank()) {
+                publishTraceFinishedEvent(safeTraceId, trace);
                 archiveTrace(safeTraceId, trace);
             }
         } finally {
@@ -165,6 +186,23 @@ public class RAGObservabilityService {
         }
         int safeLimit = limit <= 0 ? 20 : Math.min(limit, 200);
         return resolveCompletedTraces(safeLimit);
+    }
+
+    /**
+     * 获取运行中的 Trace 列表（活动态快照）。
+     *
+     * @param limit 返回条数上限
+     * @return 活动态 Trace 列表
+     */
+    public List<RAGTrace> listActive(int limit) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return List.of();
+        }
+        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 100);
+        return activeTraces.values().stream()
+                .sorted(Comparator.comparing(RAGTrace::startTime).reversed())
+                .limit(safeLimit)
+                .toList();
     }
 
     /**
@@ -206,7 +244,10 @@ public class RAGObservabilityService {
                     "enabled", false,
                     "avgLatencyMs", 0,
                     "avgRetrievedDocs", 0.0,
-                    "cacheHitRate", "0.0%"
+                    "cacheHitRate", "0.0%",
+                    "p95LatencyMs", 0,
+                    "successRate", "0.0%",
+                    "failedTraceCount", 0
             );
         }
         List<RAGTrace> traces = resolveCompletedTraces(MAX_TRACES);
@@ -215,7 +256,10 @@ public class RAGObservabilityService {
                     "enabled", true,
                     "avgLatencyMs", 0,
                     "avgRetrievedDocs", 0.0,
-                    "cacheHitRate", "0.0%"
+                    "cacheHitRate", "0.0%",
+                    "p95LatencyMs", 0,
+                    "successRate", "0.0%",
+                    "failedTraceCount", 0
             );
         }
 
@@ -229,13 +273,80 @@ public class RAGObservabilityService {
                 .mapToInt(this::resolveRetrievedDocs)
                 .average()
                 .orElse(0.0D);
+        List<Long> sortedDurations = traces.stream()
+                .map(RAGTrace::getDurationMs)
+                .sorted()
+                .toList();
+        int p95Index = Math.max(0, (int) Math.ceil(sortedDurations.size() * 0.95D) - 1);
+        long p95Latency = sortedDurations.get(p95Index);
+        long failedTraceCount = traces.stream()
+                .filter(trace -> "FAILED".equals(resolveTraceStatus(trace)))
+                .count();
+        double successRate = ((double) (traces.size() - failedTraceCount) / traces.size()) * 100.0D;
 
         return Map.of(
                 "enabled", true,
                 "avgLatencyMs", (int) avgLatency,
                 "avgRetrievedDocs", String.format(Locale.ROOT, "%.1f", avgDocs),
-                "cacheHitRate", "N/A"
+                "cacheHitRate", "N/A",
+                "p95LatencyMs", p95Latency,
+                "successRate", String.format(Locale.ROOT, "%.1f%%", successRate),
+                "failedTraceCount", failedTraceCount
         );
+    }
+
+    /**
+     * 发布节点级事件到实时事件总线。
+     *
+     * @param traceId Trace ID
+     * @param eventType 事件类型
+     * @param node 节点
+     * @param trace Trace
+     */
+    private void publishNodeEvent(String traceId, String eventType, RAGTraceNode node, RAGTrace trace) {
+        if (ragTraceEventBus == null) {
+            return;
+        }
+        int retrievalNodeCount = (int) trace.nodes().stream().filter(item -> "RETRIEVAL".equals(item.nodeType())).count();
+        ragTraceEventBus.publish(traceId, new RagTraceEventBus.RagTraceStreamEvent(
+                traceId,
+                eventType,
+                LocalDateTime.now(),
+                node,
+                new RagTraceEventBus.TraceSummary(
+                        resolveTraceStatus(trace),
+                        trace.getDurationMs(),
+                        trace.nodes().size(),
+                        retrievalNodeCount
+                )
+        ));
+    }
+
+    /**
+     * 发布链路结束事件（成功/失败）。
+     *
+     * @param traceId Trace ID
+     * @param trace Trace
+     */
+    private void publishTraceFinishedEvent(String traceId, RAGTrace trace) {
+        if (ragTraceEventBus == null) {
+            return;
+        }
+        String traceStatus = resolveTraceStatus(trace);
+        String eventType = "FAILED".equals(traceStatus) ? "trace_failed" : "trace_finished";
+        int retrievalNodeCount = (int) trace.nodes().stream().filter(item -> "RETRIEVAL".equals(item.nodeType())).count();
+        ragTraceEventBus.publish(traceId, new RagTraceEventBus.RagTraceStreamEvent(
+                traceId,
+                eventType,
+                LocalDateTime.now(),
+                null,
+                new RagTraceEventBus.TraceSummary(
+                        traceStatus,
+                        trace.getDurationMs(),
+                        trace.nodes().size(),
+                        retrievalNodeCount
+                )
+        ));
     }
 
     /**

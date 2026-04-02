@@ -8,6 +8,10 @@ export function loadOpsTraces() {
   return httpGet('/api/observability/rag-traces')
 }
 
+export function loadOpsTraceDetail(traceId) {
+  return httpGet(`/api/observability/rag-traces/${traceId}`)
+}
+
 export function loadOpsIdempotency() {
   return httpGet('/api/observability/a2a/idempotency')
 }

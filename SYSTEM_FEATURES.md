@@ -42,6 +42,17 @@
 - 保持后端接口不变（`GET /api/observability/rag-traces`、`GET /api/observability/rag/overview`），仅在 `OpsView.vue` 的 `reload` 映射阶段进行修复。
 - 后续如需展示相似度或 tokens 指标，将在后端补充统一输出字段后再接入前端。
 
+## 21. RAG 实时追踪与活动态接口（2026-04-02）
+**新增职责**：
+- 新增 **SSE 实时追踪接口**：`GET /api/observability/rag-traces/{traceId}/stream`，输出事件流（`trace_started/node_started/node_finished/trace_finished/trace_failed`），用于前端甘特图的实时更新。
+- 新增 **活动态链路接口**：`GET /api/observability/rag-traces/active?limit=20`，返回当前运行中的 Trace 列表与节点快照，便于全局实时面板展示。
+- 增强 **观测概览接口**：`GET /api/observability/rag/overview` 追加 `p95LatencyMs/successRate/failedTraceCount` 字段，统一高阶指标口径。
+- 新增组件 **RagTraceEventBus**（进程内发布订阅）与 **RagTraceStreamController**（SSE 控制器），并在 `RAGObservabilityService` 的节点开始/结束与根节点归档阶段注入事件发布钩子。
+
+**兼容策略**：
+- 不破坏既有列表与详情接口，仅追加能力；SSE 推送异常不会影响主链路执行。
+- `successRate` 为字符串百分比（如 `86.5%`），`p95LatencyMs` 与 `failedTraceCount` 为数值型，前端可直接渲染卡片。
+
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)

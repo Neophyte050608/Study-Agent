@@ -181,6 +181,19 @@ public class InterviewService {
     }
 
     /**
+     * 获取运行中的 RAG Trace 列表（活动态）。
+     *
+     * @param limit 返回条数上限
+     * @return 活动态 Trace 列表
+     */
+    public java.util.List<RAGObservabilityService.RAGTrace> getActiveRagTraces(int limit) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return java.util.List.of();
+        }
+        return ragObservabilityService.listActive(limit);
+    }
+
+    /**
      * 获取单条 RAG Trace 详情。
      *
      * @param traceId Trace ID

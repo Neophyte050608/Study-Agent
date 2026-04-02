@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +46,42 @@ class RAGObservabilityServiceTest {
 
         Map<String, Object> overview = service.getOverview();
         assertEquals("7.0", overview.get("avgRetrievedDocs"));
+        assertNotNull(overview.get("p95LatencyMs"));
+        assertNotNull(overview.get("successRate"));
+        assertNotNull(overview.get("failedTraceCount"));
+    }
+
+    @Test
+    void shouldListActiveTraceWhileRootNotFinished() {
+        ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
+        properties.setRagTraceEnabled(true);
+        RAGObservabilityService service = new RAGObservabilityService(properties);
+
+        service.startNode("trace-active", "root-active", null, "ROOT", "Task Dispatch");
+        service.startNode("trace-active", "child-active", "root-active", "RETRIEVAL", "Hybrid Retrieval");
+        service.endNode("trace-active", "child-active", "input", "3 docs retrieved", null);
+
+        List<RAGObservabilityService.RAGTrace> active = service.listActive(20);
+        assertEquals(1, active.size());
+        assertEquals("trace-active", active.get(0).traceId());
+
+        service.endNode("trace-active", "root-active", "input", "output", null);
+        assertTrue(service.listActive(20).isEmpty());
+    }
+
+    @Test
+    void shouldPublishNodeAndTraceEventsWhenEventBusEnabled() {
+        ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
+        properties.setRagTraceEnabled(true);
+        RagTraceEventBus eventBus = mock(RagTraceEventBus.class);
+        RAGObservabilityService service = new RAGObservabilityService(properties, null, null, eventBus);
+
+        service.startNode("trace-event", "root-event", null, "ROOT", "Task Dispatch");
+        service.startNode("trace-event", "child-event", "root-event", "RETRIEVAL", "Hybrid Retrieval");
+        service.endNode("trace-event", "child-event", "input", "2 docs retrieved", null);
+        service.endNode("trace-event", "root-event", "input", "output", null);
+
+        verify(eventBus, atLeastOnce()).publish(any(), any(RagTraceEventBus.RagTraceStreamEvent.class));
     }
 
     @Test

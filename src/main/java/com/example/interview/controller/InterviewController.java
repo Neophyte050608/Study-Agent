@@ -487,6 +487,18 @@ public class InterviewController {
     }
 
     /**
+     * 获取运行中的 RAG Trace 列表（活动态）。
+     */
+    @GetMapping("/observability/rag-traces/active")
+    public ResponseEntity<?> ragTracesActive(@RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit) {
+        if (!interviewService.isRagTraceEnabled()) {
+            return ResponseEntity.ok(List.of());
+        }
+        int normalizedLimit = limit == null ? 20 : limit;
+        return ResponseEntity.ok(interviewService.getActiveRagTraces(normalizedLimit));
+    }
+
+    /**
      * 获取单条 RAG Trace 的完整节点详情。
      */
     @GetMapping("/observability/rag-traces/{traceId}")
