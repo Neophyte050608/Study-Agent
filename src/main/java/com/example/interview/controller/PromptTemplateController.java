@@ -3,6 +3,8 @@ package com.example.interview.controller;
 import com.example.interview.entity.PromptTemplateDO;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.PromptTemplateService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -73,8 +75,16 @@ public class PromptTemplateController {
     }
 
     @PostMapping("/reload")
-    public Map<String, String> reload() {
-        promptManager.reloadCache();
-        return Map.of("status", "success");
+    public ResponseEntity<Map<String, String>> reload() {
+        try {
+            promptManager.reloadCache();
+            return ResponseEntity.ok(Map.of("status", "success"));
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "status", "failed",
+                            "message", exception.getMessage()
+                    ));
+        }
     }
 }

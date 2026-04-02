@@ -13,6 +13,13 @@
 - 新增内置参数模板能力，后端统一提供 `baseline-rrf`、`high-rerank`、`fallback-observe` 三类实验模板，减少前端硬编码实验参数的成本。
 - 控制层补充 `GET /api/observability/retrieval-eval/trend`、`GET /api/observability/retrieval-eval/runs/{runId}/failure-clusters`、`GET /api/observability/retrieval-eval/templates` 三个接口，形成“历史运行 -> 趋势观察 -> 失败定位 -> 参数复用”的调优闭环。
 
+## 17. Prompt 去文件化与数据库单一数据源（2026-04-02）
+**新增职责**：
+- `PromptManager` 已移除对 `src/main/resources/prompts.txt` 与 `src/main/resources/system-prompts.txt` 的运行时依赖，模板加载改为仅从 `t_prompt_template` 读取并缓存。
+- 新增关键 TASK 模板完整性校验，系统启动阶段会校验 `task-router`、`intent-tree-classifier`、`intent-slot-refine`、`evaluation`、`knowledge-qa` 等主链路模板，缺失时抛出明确错误并输出模板名清单。
+- `POST /api/settings/prompts/reload` 在模板缺失场景下会返回结构化失败响应，便于管理端快速定位并补齐数据库模板。
+- 资源文件 `prompts.txt` 与 `system-prompts.txt` 已删除，后续 Prompt 维护统一通过数据库与提示词管理接口进行，不再执行文件自动迁移。
+
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)
@@ -156,12 +163,12 @@
 5.  **依赖管理规则**：
     -   **Milvus & Protobuf 冲突**：由于 Milvus SDK 版本要求，必须强制指定 `protobuf-java` 版本为 **3.25.x** 或更高以解决 `NoSuchMethodError`。
 6.  **Lombok 编译兜底**：对于关键配置类与核心消息模型（如 `FeishuProperties`、`UnifiedMessage`），允许保留显式 Getter/Setter 与显式日志对象，避免在注解处理异常时出现 `找不到符号` 编译错误。
-7.  **提示词管理规范**：所有 AI 提示词（Prompts）必须通过 **Jinjava** 模板引擎进行渲染，并统一存放在单一资源文件 `src/main/resources/prompts.txt` 中集中管理，严禁在代码中硬编码。
+7.  **提示词管理规范**：所有 AI 提示词（Prompts）必须通过 **Jinjava** 模板引擎进行渲染，并统一存放在数据库表 `t_prompt_template` 中集中管理，严禁在代码中硬编码。
 8.  **Skill 与工具调用规范**：Skill 编写需遵循按需加载原则，不能每次全量加载。需要使用外部能力时，必须优先采用 Function Calling 进行工具调用。
 
 ***
 
-*(最后更新时间：2026-04-01)*
+*(最后更新时间：2026-04-02)*
 
 ## 16. 检索评测趋势、失败聚类与参数模板（2026-03-26）
 **新增职责**：

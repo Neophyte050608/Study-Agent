@@ -4,21 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.interview.entity.PromptTemplateDO;
 import com.example.interview.mapper.PromptTemplateMapper;
 import com.hubspot.jinjava.Jinjava;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StreamUtils;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 提示词管理器 (PromptManager)
@@ -27,10 +24,26 @@ import java.util.regex.Pattern;
 public class PromptManager {
 
     private static final Logger log = LoggerFactory.getLogger(PromptManager.class);
-    private static final Pattern TEMPLATE_PATTERN = Pattern.compile("(?m)^---\\[(.*?)\\]---$\\r?\\n?");
+    private static final Set<String> REQUIRED_TASK_TEMPLATES = Set.of(
+            "task-router",
+            "intent-tree-classifier",
+            "intent-clarification",
+            "intent-slot-refine",
+            "first-question",
+            "evaluation",
+            "final-report",
+            "coding-intent",
+            "coding-question",
+            "coding-evaluation",
+            "coding-next-question",
+            "learning-plan",
+            "knowledge-qa",
+            "chat-context-compress",
+            "cross-session-memorize",
+            "auto-dream"
+    );
 
     private final Jinjava jinjava;
-    private final ResourceLoader resourceLoader;
     private final PromptTemplateMapper templateMapper;
     private final Map<String, String> templateCache = new ConcurrentHashMap<>();
     private final Map<String, String> systemTemplateCache = new ConcurrentHashMap<>();
@@ -41,10 +54,14 @@ public class PromptManager {
      */
     public record PromptPair(String systemPrompt, String userPrompt) {}
 
-    public PromptManager(ResourceLoader resourceLoader, PromptTemplateMapper templateMapper) {
+    public PromptManager(PromptTemplateMapper templateMapper) {
         this.jinjava = new Jinjava();
-        this.resourceLoader = resourceLoader;
         this.templateMapper = templateMapper;
+    }
+
+    @PostConstruct
+    public void initialize() {
+        ensureLoaded();
     }
 
     /**
@@ -123,13 +140,9 @@ public class PromptManager {
                 new LambdaQueryWrapper<PromptTemplateDO>()
         );
 
-        if (templates == null || templates.isEmpty()) {
-            seedFromFiles();
-            templates = templateMapper.selectList(
-                    new LambdaQueryWrapper<PromptTemplateDO>()
-            );
+        if (templates == null) {
+            templates = Collections.emptyList();
         }
-
         for (PromptTemplateDO t : templates) {
             if ("SYSTEM".equals(t.getType())) {
                 systemTemplateCache.put(t.getName(), t.getContent());
@@ -137,96 +150,21 @@ public class PromptManager {
                 templateCache.put(t.getName(), t.getContent());
             }
         }
+        validateRequiredTemplates();
     }
 
-    /**
-     * 从 txt 文件解析并 seed 到 DB（仅在 DB 为空时调用）。
-     */
-    private void seedFromFiles() {
-        log.info("提示词 DB 为空，从文件自动 seed...");
-
-        Map<String, String[]> categoryMap = Map.of(
-                "system", new String[]{"interviewer", "coding-coach", "router", "knowledge-assistant", "context-compressor"},
-                "interview", new String[]{"task-router", "first-question", "evaluation", "final-report", "learning-plan"},
-                "coding", new String[]{"coding-intent", "coding-question", "coding-evaluation", "coding-next-question"},
-                "chat", new String[]{"knowledge-qa", "chat-context-compress", "cross-session-memorize", "auto-dream"},
-                "intent", new String[]{"intent-tree-classifier", "intent-clarification", "intent-slot-refine"}
-        );
-        Map<String, String> nameToCat = new HashMap<>();
-        categoryMap.forEach((cat, names) -> {
-            for (String n : names) {
-                nameToCat.put(n, cat);
+    private void validateRequiredTemplates() {
+        Set<String> missing = new HashSet<>();
+        for (String templateName : REQUIRED_TASK_TEMPLATES) {
+            if (!templateCache.containsKey(templateName)) {
+                missing.add(templateName);
             }
-        });
-
-        Map<String, String> titleMap = Map.ofEntries(
-                Map.entry("task-router", "任务路由"),
-                Map.entry("intent-tree-classifier", "意图树分类"),
-                Map.entry("intent-clarification", "意图澄清"),
-                Map.entry("intent-slot-refine", "槽位补全"),
-                Map.entry("first-question", "首题生成"),
-                Map.entry("evaluation", "答案评估"),
-                Map.entry("final-report", "面试总结报告"),
-                Map.entry("coding-question", "编码题生成"),
-                Map.entry("coding-evaluation", "编码题评估"),
-                Map.entry("coding-next-question", "编码追问"),
-                Map.entry("learning-plan", "学习计划"),
-                Map.entry("coding-intent", "编码意图识别"),
-                Map.entry("knowledge-qa", "知识问答"),
-                Map.entry("chat-context-compress", "上下文压缩"),
-                Map.entry("cross-session-memorize", "跨会话记忆"),
-                Map.entry("auto-dream", "记忆整理"),
-                Map.entry("interviewer", "面试官"),
-                Map.entry("coding-coach", "编码教练"),
-                Map.entry("router", "路由网关"),
-                Map.entry("knowledge-assistant", "知识助手"),
-                Map.entry("context-compressor", "上下文压缩器")
-        );
-
-        seedOneFile("classpath:system-prompts.txt", "SYSTEM", nameToCat, titleMap);
-        seedOneFile("classpath:prompts.txt", "TASK", nameToCat, titleMap);
-        log.info("提示词 seed 完成");
-    }
-
-    private void seedOneFile(String path, String type,
-                             Map<String, String> nameToCat,
-                             Map<String, String> titleMap) {
-        try {
-            Resource resource = resourceLoader.getResource(path);
-            String fileContent = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-            Matcher matcher = TEMPLATE_PATTERN.matcher(fileContent);
-
-            int lastEnd = 0;
-            String currentName = null;
-
-            while (matcher.find()) {
-                if (currentName != null) {
-                    String templateContent = fileContent.substring(lastEnd, matcher.start()).trim();
-                    insertTemplate(currentName, type, templateContent, nameToCat, titleMap);
-                }
-                currentName = matcher.group(1).trim();
-                lastEnd = matcher.end();
-            }
-            if (currentName != null && lastEnd < fileContent.length()) {
-                String templateContent = fileContent.substring(lastEnd).trim();
-                insertTemplate(currentName, type, templateContent, nameToCat, titleMap);
-            }
-        } catch (IOException e) {
-            log.warn("Seed 文件加载失败: {}", path, e);
         }
-    }
-
-    private void insertTemplate(String name, String type, String content,
-                                Map<String, String> nameToCat,
-                                Map<String, String> titleMap) {
-        PromptTemplateDO entity = new PromptTemplateDO();
-        entity.setName(name);
-        entity.setType(type);
-        entity.setContent(content);
-        entity.setCategory(nameToCat.getOrDefault(name, "general"));
-        entity.setTitle(titleMap.getOrDefault(name, name));
-        entity.setIsBuiltin(true);
-        templateMapper.insert(entity);
+        if (!missing.isEmpty()) {
+            String message = "提示词模板缺失，请先在 t_prompt_template 补齐后重试，缺失模板: " + missing;
+            log.error(message);
+            throw new IllegalStateException(message);
+        }
     }
 
     /**
@@ -236,36 +174,6 @@ public class PromptManager {
         synchronized (this) {
             loadAllTemplates();
             isLoaded = true;
-        }
-    }
-
-    /**
-     * 从模板文件中解析所有模板。
-     * 保留该方法用于兼容/调试场景。
-     */
-    private void loadTemplateFile(String path, Map<String, String> cache) {
-        try {
-            Resource resource = resourceLoader.getResource(path);
-            String content = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-
-            Matcher matcher = TEMPLATE_PATTERN.matcher(content);
-            int lastEnd = 0;
-            String currentName = null;
-
-            while (matcher.find()) {
-                if (currentName != null) {
-                    String templateContent = content.substring(lastEnd, matcher.start()).trim();
-                    cache.put(currentName, templateContent);
-                }
-                currentName = matcher.group(1).trim();
-                lastEnd = matcher.end();
-            }
-            if (currentName != null && lastEnd < content.length()) {
-                String templateContent = content.substring(lastEnd).trim();
-                cache.put(currentName, templateContent);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("无法加载提示词模板文件: " + path, e);
         }
     }
 
