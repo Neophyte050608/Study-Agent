@@ -232,7 +232,23 @@ const reload = async () => {
       loadOpsAudits(5)
     ])
     overview.value = overviewData || {}
-    traces.value = Array.isArray(tracesData) ? tracesData.slice(0, 10) : []
+    traces.value = Array.isArray(tracesData)
+      ? tracesData.slice(0, 10).map(item => {
+          const nodes = Array.isArray(item?.nodes) ? item.nodes : []
+          const retrievedCount = nodes
+            .filter(n => n?.nodeType === 'RETRIEVAL')
+            .reduce((sum, n) => {
+              const docs = n?.metrics?.retrievedDocs
+              return sum + (typeof docs === 'number' ? docs : 0)
+            }, 0)
+          return {
+            traceId: item?.traceId ?? '-',
+            latencyMs: typeof item?.durationMs === 'number' ? item.durationMs : 0,
+            retrievedCount,
+            score: item?.score
+          }
+        })
+      : []
     idempotency.value = idempotencyData || {}
     audits.value = Array.isArray(auditsData) ? auditsData : []
     hint.value = '数据已刷新'

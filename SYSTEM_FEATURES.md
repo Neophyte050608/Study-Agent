@@ -35,6 +35,13 @@
 - 新增 `intentTreeAdmin.js`、`useIntentTreeAdmin.js` 与 `intentTreeTransform.js` 等前端适配层，统一处理 `leafIntents` 扁平化、路径分段、`examples/slotHints` 文本数组互转。
 - 在保持后端 `GET/POST /api/intent-tree/config` 与 `GET /api/intent-tree/stats` 不变的前提下，批量启停采用“本地变更 + 全量提交配置”的兼容策略实现。
 
+## 20. RAG 全链路观测字段对齐修复（2026-04-02）
+**修复职责**：
+- 运维页“系统全链路观测”的 RAG 轨迹表出现数值全为 0 的问题，已在前端完成契约对齐与度量派生。
+- 列表项耗时字段由后端的 `durationMs` 对齐为前端展示的 `latencyMs`；召回数量由节点 `metrics.retrievedDocs` 聚合得到。
+- 保持后端接口不变（`GET /api/observability/rag-traces`、`GET /api/observability/rag/overview`），仅在 `OpsView.vue` 的 `reload` 映射阶段进行修复。
+- 后续如需展示相似度或 tokens 指标，将在后端补充统一输出字段后再接入前端。
+
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)
