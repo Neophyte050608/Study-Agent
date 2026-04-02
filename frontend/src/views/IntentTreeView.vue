@@ -1,250 +1,315 @@
 <template>
-  <!-- Header -->
-  <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none">
-    <div class="flex items-center gap-8">
-      <h1 class="text-xl font-bold text-indigo-700 dark:text-indigo-400">意图配置管理</h1>
-      <nav class="flex gap-6 font-['Plus_Jakarta_Sans'] text-sm font-medium">
-        <a href="#" @click.prevent="activeTab = 'params'" :class="activeTab === 'params' ? 'text-[#0057c2] dark:text-blue-400 border-b-2 border-[#0057c2] pb-1' : 'text-slate-500 dark:text-slate-400 hover:text-[#1a1c1c]'">基础参数</a>
-        <a href="#" @click.prevent="activeTab = 'leafs'" :class="activeTab === 'leafs' ? 'text-[#0057c2] dark:text-blue-400 border-b-2 border-[#0057c2] pb-1' : 'text-slate-500 dark:text-slate-400 hover:text-[#1a1c1c]'">叶子意图</a>
-        <a href="#" @click.prevent="activeTab = 'cases'" :class="activeTab === 'cases' ? 'text-[#0057c2] dark:text-blue-400 border-b-2 border-[#0057c2] pb-1' : 'text-slate-500 dark:text-slate-400 hover:text-[#1a1c1c]'">槽位样例</a>
-      </nav>
+  <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm">
+    <div class="flex items-center gap-6">
+      <h1 class="text-xl font-bold text-indigo-700">意图树管理</h1>
+      <p class="text-sm text-slate-500">树结构浏览、节点定位与快捷操作</p>
     </div>
-    <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2">
-        <button @click="reload" :disabled="loading" class="px-4 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded transition-all active:scale-95 disabled:opacity-50">重置</button>
-        <button @click="save" :disabled="loading" class="px-4 py-1.5 text-xs font-semibold bg-[#0057c2] text-white rounded shadow-sm hover:opacity-90 transition-all active:scale-95 disabled:opacity-50">保存配置</button>
-      </div>
+    <div class="flex items-center gap-2">
+      <RouterLink to="/intent-list" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50">
+        切到列表页
+      </RouterLink>
+      <button @click="reload" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+        刷新
+      </button>
+      <button @click="saveAll" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded bg-[#0057c2] text-white hover:opacity-90 disabled:opacity-50">
+        保存全局配置
+      </button>
     </div>
   </header>
 
-  <!-- Main Content Area -->
-  <main class="ml-64 flex flex-col min-w-0 bg-[#f9f9f9] min-h-screen pt-24 pb-12 px-8 space-y-6">
-    <!-- Summary Bar -->
+  <main class="ml-64 min-h-screen bg-slate-50 pt-24 pb-10 px-8 space-y-6">
     <div class="grid grid-cols-4 gap-4">
       <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#0057c2]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">系统状态</div>
-        <div class="text-2xl font-bold font-headline text-[#1a1c1c]">{{ stats.enabled ? '已启用' : '已禁用' }}</div>
+        <div class="text-2xl font-bold text-[#1a1c1c]">{{ stats.enabled ? '已启用' : '已禁用' }}</div>
       </div>
       <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#425d97]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">叶子意图数</div>
-        <div class="text-2xl font-bold font-headline text-[#1a1c1c]">{{ stats.leafIntentCount ?? '--' }}</div>
+        <div class="text-2xl font-bold text-[#1a1c1c]">{{ stats.leafIntentCount ?? flatLeafs.length }}</div>
       </div>
       <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#9e3d00]">
-        <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">槽位精炼用例</div>
-        <div class="text-2xl font-bold font-headline text-[#1a1c1c]">{{ stats.slotRefineCaseCount ?? '--' }}</div>
+        <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">槽位精炼样例</div>
+        <div class="text-2xl font-bold text-[#1a1c1c]">{{ stats.slotRefineCaseCount ?? (config.slotRefineCases || []).length }}</div>
       </div>
       <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#ba1a1a]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">置信度阈值</div>
-        <div class="text-2xl font-bold font-headline text-[#1a1c1c]">{{ stats.confidenceThreshold ? Number(stats.confidenceThreshold).toFixed(2) : '--' }}</div>
+        <div class="text-2xl font-bold text-[#1a1c1c]">{{ Number(config.confidenceThreshold ?? 0.65).toFixed(2) }}</div>
       </div>
     </div>
 
-    <div class="flex gap-6 h-full min-h-0 items-start">
-      <!-- Form Area -->
-      <div v-show="activeTab === 'params'" class="flex-1 space-y-4">
-        <div class="bg-white p-5 rounded shadow-sm">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-sm font-semibold flex items-center gap-2">
-              <span class="material-symbols-outlined text-[#0057c2] text-lg" data-icon="tune">tune</span>
-              核心路由参数
-            </h2>
-          </div>
-          <div class="grid grid-cols-2 gap-x-8 gap-y-4">
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-slate-600 flex items-center gap-1">
-                意图引擎开关
-              </label>
-              <div class="flex items-center h-10">
-                <input v-model="form.enabled" class="w-10 h-5 bg-[#c1c6d7] rounded-full appearance-none checked:bg-[#0057c2] relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer" type="checkbox"/>
-              </div>
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-slate-600">置信度阈值 (Confidence Threshold)</label>
-              <input v-model.number="form.confidenceThreshold" class="w-full accent-[#0057c2] h-1 bg-[#e2e2e2] rounded-lg appearance-none cursor-pointer" type="range" min="0" max="1" step="0.05"/>
-              <div class="flex justify-between text-[10px] text-[#727786]">
-                <span>0.0</span>
-                <span class="text-[#0057c2] font-bold">{{ Number(form.confidenceThreshold || 0).toFixed(2) }}</span>
-                <span>1.0</span>
-              </div>
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-slate-600">最小置信差 (Min Gap)</label>
-              <input v-model.number="form.minGap" class="w-full bg-[#f3f3f3] border-none rounded text-xs py-2 px-3 focus:ring-2 focus:ring-[#0057c2]/20" type="number" step="0.01"/>
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-slate-600">歧义比例 (Ambiguity Ratio)</label>
-              <input v-model.number="form.ambiguityRatio" class="w-full bg-[#f3f3f3] border-none rounded text-xs py-2 px-3 focus:ring-2 focus:ring-[#0057c2]/20" type="number" step="0.01"/>
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-slate-600">澄清 TTL (分钟)</label>
-              <input v-model.number="form.clarificationTtlMinutes" class="w-full bg-[#f3f3f3] border-none rounded text-xs py-2 px-3 focus:ring-2 focus:ring-[#0057c2]/20" type="number"/>
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-slate-600">最大候选数</label>
-              <input v-model.number="form.maxCandidates" class="w-full bg-[#f3f3f3] border-none rounded text-xs py-2 px-3 focus:ring-2 focus:ring-[#0057c2]/20" type="number"/>
-            </div>
-            <div class="col-span-2 space-y-1.5 pt-2 border-t border-slate-100 flex items-center justify-between">
-              <label class="text-[11px] font-medium text-slate-600">意图引擎失败时回退到旧版路由</label>
-              <input v-model="form.fallbackToLegacyTaskRouter" class="w-10 h-5 bg-[#c1c6d7] rounded-full appearance-none checked:bg-[#0057c2] relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer" type="checkbox"/>
-            </div>
-          </div>
+    <div class="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+      <section class="bg-white rounded shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-900">意图路径树</h2>
+          <span class="text-xs text-slate-500">{{ hint }}</span>
         </div>
-      </div>
+        <div class="space-y-1 max-h-[560px] overflow-auto">
+          <template v-if="treeNodes.length === 0">
+            <div class="text-center text-sm text-slate-500 py-10">暂无意图节点，请先新增叶子意图</div>
+          </template>
+          <template v-else>
+            <TreeNode
+              v-for="node in treeNodes"
+              :key="node.key"
+              :node="node"
+              :depth="0"
+              :expanded-map="expandedMap"
+              :selected-key="selectedKey"
+              @toggle="toggleExpand"
+              @select="selectNode"
+            />
+          </template>
+        </div>
+      </section>
 
-      <!-- Tab: Leaf Intents -->
-      <div v-show="activeTab === 'leafs'" class="flex-1 space-y-4">
-        <div class="bg-white p-5 rounded shadow-sm">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-sm font-semibold flex items-center gap-2">
-              <span class="material-symbols-outlined text-[#0057c2] text-lg">list_alt</span>
-              叶子意图配置
-            </h2>
-            <button @click="addLeaf" class="text-xs text-[#0057c2] font-bold hover:underline">+ 新增意图</button>
-          </div>
-          <div class="space-y-3">
-            <div v-for="(leaf, idx) in form.leafIntents" :key="idx" class="p-3 bg-[#f3f3f3] rounded relative group">
-              <button @click="removeLeaf(idx)" class="absolute top-2 right-2 text-[#ba1a1a] hidden group-hover:block material-symbols-outlined text-sm">delete</button>
-              <div class="grid grid-cols-2 gap-2 text-[10px]">
-                <input v-model="leaf.intentId" class="border-none bg-white p-1 rounded focus:ring-1 focus:ring-[#0057c2]/30" placeholder="Intent ID"/>
-                <input v-model="leaf.name" class="border-none bg-white p-1 rounded focus:ring-1 focus:ring-[#0057c2]/30" placeholder="名称"/>
-                <input v-model="leaf.description" class="border-none bg-white p-1 rounded col-span-2 focus:ring-1 focus:ring-[#0057c2]/30" placeholder="描述"/>
-                <input v-model="leaf.taskType" class="border-none bg-white p-1 rounded focus:ring-1 focus:ring-[#0057c2]/30" placeholder="TaskType"/>
-                <input v-model="leaf.path" class="border-none bg-white p-1 rounded focus:ring-1 focus:ring-[#0057c2]/30" placeholder="Path"/>
-              </div>
+      <section class="bg-white rounded shadow-sm p-5">
+        <h2 class="text-sm font-semibold text-slate-900 mb-4">节点详情</h2>
+        <template v-if="!selectedLeaf">
+          <div class="text-center text-sm text-slate-500 py-10">请选择左侧节点</div>
+        </template>
+        <template v-else>
+          <div class="space-y-3 text-sm">
+            <div>
+              <p class="text-xs text-slate-500">Intent ID</p>
+              <p class="font-semibold text-slate-900">{{ selectedLeaf.intentId }}</p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab: Slot Refine Cases -->
-      <div v-show="activeTab === 'cases'" class="flex-1 space-y-4">
-        <div class="bg-white p-5 rounded shadow-sm">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-sm font-semibold flex items-center gap-2">
-              <span class="material-symbols-outlined text-[#0057c2] text-lg">psychology</span>
-              槽位精炼 Few-shot 样例
-            </h2>
-            <button @click="addCase" class="text-xs text-[#0057c2] font-bold hover:underline">+ 新增样例</button>
-          </div>
-          <div class="space-y-3">
-            <div v-for="(c, idx) in form.slotRefineCases" :key="idx" class="p-3 bg-[#f3f3f3] rounded relative group">
-              <button @click="removeCase(idx)" class="absolute top-2 right-2 text-[#ba1a1a] hidden group-hover:block material-symbols-outlined text-sm">delete</button>
-              <div class="space-y-2 text-[10px]">
-                <input v-model="c.taskType" class="w-full border-none bg-white p-1 rounded focus:ring-1 focus:ring-[#0057c2]/30" placeholder="TaskType"/>
-                <textarea v-model="c.userQuery" class="w-full border-none bg-white p-1 rounded resize-none focus:ring-1 focus:ring-[#0057c2]/30" placeholder="用户输入"></textarea>
-                <textarea v-model="c.aiOutput" class="w-full border-none bg-white p-1 rounded resize-none focus:ring-1 focus:ring-[#0057c2]/30" placeholder="AI 输出 (JSON)"></textarea>
-              </div>
+            <div>
+              <p class="text-xs text-slate-500">名称</p>
+              <p class="text-slate-900">{{ selectedLeaf.name || '-' }}</p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sidebar Panel -->
-      <div class="w-80 bg-[#f3f3f3] rounded-lg p-5 flex flex-col gap-4 border border-[#c1c6d7]/20 h-fit shrink-0">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xs font-bold text-[#1a1c1c]">策略配置指南</h3>
-          <span class="material-symbols-outlined text-[#727786] text-sm">lightbulb</span>
-        </div>
-        <div class="text-[11px] leading-relaxed text-slate-600 bg-white p-3 rounded border-l-2 border-[#0057c2]">
-          <p class="font-semibold text-[#0057c2] mb-1">最佳实践：</p>
-          置信度阈值建议设置在 <b>0.6 - 0.7</b>。设置过高会频繁触发澄清，过低可能导致错误路由。
-        </div>
-        <div class="space-y-4 mt-2">
-          <div>
-            <div class="flex items-center gap-2 text-[11px] font-bold text-[#727786]">
-              什么是最小置信差？
+            <div>
+              <p class="text-xs text-slate-500">任务类型</p>
+              <p class="text-slate-900">{{ selectedLeaf.taskType || '-' }}</p>
             </div>
-            <p class="text-[10px] text-[#c1c6d7] mt-1 leading-tight text-slate-500">第一名与第二名意图的分数差距。若差距小于此值，说明存在歧义，系统将触发澄清。</p>
+            <div>
+              <p class="text-xs text-slate-500">路径</p>
+              <p class="text-slate-900">{{ selectedLeaf.pathText }}</p>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-2">
+              <button class="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50" @click="openEditSelected">
+                编辑节点
+              </button>
+              <button class="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50" @click="createChild">
+                新增子节点
+              </button>
+              <button class="px-3 py-1.5 text-xs rounded border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100" @click="offlineSelected">
+                下线节点
+              </button>
+            </div>
+            <p class="text-xs text-slate-400">提示：编辑将跳转独立编辑页；下线会立即保存配置。</p>
           </div>
-        </div>
-      </div>
+        </template>
+      </section>
     </div>
+
+    <section class="bg-white rounded shadow-sm p-5 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-900">路由参数</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs text-slate-600">意图引擎开关</label>
+          <div class="mt-2">
+            <input v-model="config.enabled" type="checkbox" class="w-10 h-5 bg-[#c1c6d7] rounded-full appearance-none checked:bg-[#0057c2] relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer">
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-slate-600">置信度阈值</label>
+          <input v-model.number="config.confidenceThreshold" type="range" min="0" max="1" step="0.05" class="w-full accent-[#0057c2]">
+        </div>
+        <div>
+          <label class="text-xs text-slate-600">最小置信差</label>
+          <input v-model.number="config.minGap" type="number" step="0.01" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-xs">
+        </div>
+        <div>
+          <label class="text-xs text-slate-600">歧义比例</label>
+          <input v-model.number="config.ambiguityRatio" type="number" step="0.01" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-xs">
+        </div>
+      </div>
+    </section>
   </main>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { loadIntentTreeConfig, loadIntentTreeStats, saveIntentTreeConfig } from '../api/admin'
+import { computed, defineComponent, h, onMounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useIntentTreeAdmin } from '../composables/useIntentTreeAdmin'
+import { saveIntentTreeConfig } from '../api/admin'
 
-const loading = ref(false)
-const hint = ref('在线配置意图树核心阈值')
-const stats = ref({})
-const rawConfig = ref({})
-const activeTab = ref('params')
+const route = useRoute()
+const router = useRouter()
+const {
+  loading,
+  saving,
+  hint,
+  config,
+  stats,
+  flatLeafs,
+  reload,
+  toggleBatchEnabled
+} = useIntentTreeAdmin()
 
-const form = ref({
-  enabled: true,
-  confidenceThreshold: 0.65,
-  minGap: 0.12,
-  ambiguityRatio: 0.9,
-  clarificationTtlMinutes: 10,
-  maxCandidates: 3,
-  fallbackToLegacyTaskRouter: false,
-  leafIntents: [],
-  slotRefineCases: []
+const expandedMap = ref({})
+const selectedKey = ref('')
+
+const buildTree = (leafs) => {
+  const roots = []
+  const nodeMap = new Map()
+  leafs.forEach((leaf) => {
+    const segments = leaf.pathSegments.length > 0 ? leaf.pathSegments : [leaf.intentId || leaf.name || `leaf-${leaf.index}`]
+    let parentKey = ''
+    segments.forEach((segment, depth) => {
+      const key = `${parentKey}/${segment}`
+      if (!nodeMap.has(key)) {
+        const node = {
+          key,
+          label: segment,
+          depth,
+          leaf: null,
+          children: []
+        }
+        nodeMap.set(key, node)
+        if (!parentKey) {
+          roots.push(node)
+        } else {
+          const parent = nodeMap.get(parentKey)
+          parent.children.push(node)
+        }
+      }
+      parentKey = key
+    })
+    const leafNode = nodeMap.get(parentKey)
+    leafNode.leaf = leaf
+  })
+  return roots
+}
+
+const treeNodes = computed(() => buildTree(flatLeafs.value))
+
+const selectedLeaf = computed(() => {
+  const findNode = (nodes) => {
+    for (const node of nodes) {
+      if (node.key === selectedKey.value && node.leaf) return node.leaf
+      if (node.children.length > 0) {
+        const found = findNode(node.children)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  return findNode(treeNodes.value)
 })
 
-const reload = async () => {
-  loading.value = true
-  hint.value = '正在加载配置...'
-  try {
-    const [configData, statsData] = await Promise.all([
-      loadIntentTreeConfig(),
-      loadIntentTreeStats()
-    ])
-    rawConfig.value = configData || {}
-    stats.value = statsData || {}
-    form.value = {
-      enabled: !!configData?.enabled,
-      confidenceThreshold: Number(configData?.confidenceThreshold ?? 0.65),
-      minGap: Number(configData?.minGap ?? 0.12),
-      ambiguityRatio: Number(configData?.ambiguityRatio ?? 0.9),
-      clarificationTtlMinutes: Number(configData?.clarificationTtlMinutes ?? 10),
-      maxCandidates: Number(configData?.maxCandidates ?? 3),
-      fallbackToLegacyTaskRouter: !!configData?.fallbackToLegacyTaskRouter,
-      leafIntents: configData?.leafIntents ? JSON.parse(JSON.stringify(configData.leafIntents)) : [],
-      slotRefineCases: configData?.slotRefineCases ? JSON.parse(JSON.stringify(configData.slotRefineCases)) : []
-    }
-    hint.value = '配置已加载'
-  } catch (error) {
-    hint.value = `加载失败: ${error.message || 'unknown'}`
-  } finally {
-    loading.value = false
-  }
+const expandPath = (path) => {
+  if (!path) return
+  const segments = String(path).replace(/>/g, '/').split('/').map((item) => item.trim()).filter(Boolean)
+  let key = ''
+  segments.forEach((segment) => {
+    key = `${key}/${segment}`
+    expandedMap.value[key] = true
+  })
 }
 
-const save = async () => {
-  loading.value = true
-  hint.value = '正在保存配置...'
+const selectNode = (node) => {
+  selectedKey.value = node.key
+}
+
+const toggleExpand = (key) => {
+  expandedMap.value[key] = !expandedMap.value[key]
+}
+
+const saveAll = async () => {
+  saving.value = true
+  hint.value = '正在保存全局配置...'
   try {
-    const payload = {
-      ...rawConfig.value,
-      ...form.value
-    }
-    await saveIntentTreeConfig(payload)
+    await saveIntentTreeConfig(config.value)
     await reload()
-    hint.value = '配置已保存'
-  } catch (error) {
-    hint.value = `保存失败: ${error.message || 'unknown'}`
-    loading.value = false
+  } finally {
+    saving.value = false
   }
 }
 
-const addLeaf = () => {
-  form.value.leafIntents.push({ intentId: '', name: '', description: '', taskType: '', path: '', examples: [], slotHints: [] })
+const openEditSelected = () => {
+  if (!selectedLeaf.value) return
+  router.push(`/intent-list/${selectedLeaf.value.index}/edit?from=${encodeURIComponent(route.fullPath)}`)
 }
 
-const removeLeaf = (idx) => {
-  form.value.leafIntents.splice(idx, 1)
+const createChild = () => {
+  if (!selectedLeaf.value) return
+  router.push(`/intent-list/new/edit?parentIndex=${selectedLeaf.value.index}&from=${encodeURIComponent(route.fullPath)}`)
 }
 
-const addCase = () => {
-  form.value.slotRefineCases.push({ taskType: '', userQuery: '', aiOutput: '' })
+const offlineSelected = async () => {
+  if (!selectedLeaf.value) return
+  const ok = window.confirm(`确认下线节点 [${selectedLeaf.value.intentId || selectedLeaf.value.name}] 吗？`)
+  if (!ok) return
+  await toggleBatchEnabled(false, [selectedLeaf.value.index])
+  await reload()
 }
 
-const removeCase = (idx) => {
-  form.value.slotRefineCases.splice(idx, 1)
-}
+const TreeNode = defineComponent({
+  props: {
+    node: { type: Object, required: true },
+    depth: { type: Number, required: true },
+    expandedMap: { type: Object, required: true },
+    selectedKey: { type: String, required: true }
+  },
+  emits: ['toggle', 'select'],
+  setup(props, { emit }) {
+    return () => {
+      const node = props.node
+      const hasChildren = node.children.length > 0
+      const expanded = props.expandedMap[node.key] !== false
+      const selected = props.selectedKey === node.key
+      const baseClass = selected ? 'bg-slate-100 text-slate-900' : 'hover:bg-slate-50 text-slate-700'
+      return h('div', {}, [
+        h('div', {
+          class: `flex items-center justify-between rounded px-2 py-1 cursor-pointer ${baseClass}`,
+          style: { paddingLeft: `${props.depth * 14 + 8}px` },
+          onClick: () => emit('select', node)
+        }, [
+          h('div', { class: 'flex items-center gap-2' }, [
+            hasChildren
+              ? h('button', {
+                  class: 'text-xs text-slate-500',
+                  onClick: (event) => {
+                    event.stopPropagation()
+                    emit('toggle', node.key)
+                  }
+                }, expanded ? '▾' : '▸')
+              : h('span', { class: 'w-3' }, ''),
+            h('span', { class: 'text-sm' }, node.label)
+          ]),
+          node.leaf
+            ? h('span', { class: `text-[10px] px-2 py-0.5 rounded ${node.leaf.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}` }, node.leaf.enabled ? '启用' : '下线')
+            : null
+        ]),
+        hasChildren && expanded
+          ? h('div', {}, node.children.map((child) =>
+              h(TreeNode, {
+                key: child.key,
+                node: child,
+                depth: props.depth + 1,
+                expandedMap: props.expandedMap,
+                selectedKey: props.selectedKey,
+                onToggle: (key) => emit('toggle', key),
+                onSelect: (selectedNode) => emit('select', selectedNode)
+              })
+            ))
+          : null
+      ])
+    }
+  }
+})
 
-onMounted(reload)
+onMounted(async () => {
+  await reload()
+  const focusIntentCode = route.query.intentCode ? String(route.query.intentCode) : ''
+  if (focusIntentCode) {
+    const matchedLeaf = flatLeafs.value.find((item) => item.intentId === focusIntentCode)
+    if (matchedLeaf) {
+      expandPath(matchedLeaf.path)
+      const focusSegments = matchedLeaf.pathSegments.length > 0 ? matchedLeaf.pathSegments : [matchedLeaf.intentId]
+      selectedKey.value = `/${focusSegments.join('/')}`
+    }
+  }
+})
 </script>

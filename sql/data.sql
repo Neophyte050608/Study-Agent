@@ -50,3 +50,16 @@ examples=VALUES(examples),
 slot_hints=VALUES(slot_hints),
 task_type=VALUES(task_type),
 enabled=VALUES(enabled);
+
+-- 初始槽位精炼 few-shot 样例
+INSERT INTO `t_intent_slot_refine_case` (`task_type`, `user_query`, `ai_output`, `sort_order`, `enabled`, `deleted`)
+VALUES
+('CODING_PRACTICE', '来2道Java选择题，简单点', '{"slots":{"topic":"Java","questionType":"CHOICE","difficulty":"easy","count":2,"skipIntro":null,"mode":""}}', 1, 1, 0),
+('CODING_PRACTICE', '刷一道并发算法题', '{"slots":{"topic":"并发","questionType":"ALGORITHM","difficulty":"","count":1,"skipIntro":null,"mode":""}}', 2, 1, 0),
+('INTERVIEW_START', '来一场Spring Boot面试，跳过自我介绍', '{"slots":{"topic":"Spring Boot","questionType":"","difficulty":"","count":null,"skipIntro":true,"mode":""}}', 3, 1, 0),
+('PROFILE_TRAINING_PLAN_QUERY', '看下学习计划', '{"slots":{"topic":"","questionType":"","difficulty":"","count":null,"skipIntro":null,"mode":"learning"}}', 4, 1, 0)
+ON DUPLICATE KEY UPDATE
+ai_output=VALUES(ai_output),
+sort_order=VALUES(sort_order),
+enabled=VALUES(enabled),
+deleted=VALUES(deleted);

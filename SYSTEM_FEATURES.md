@@ -20,6 +20,21 @@
 - `POST /api/settings/prompts/reload` 在模板缺失场景下会返回结构化失败响应，便于管理端快速定位并补齐数据库模板。
 - 资源文件 `prompts.txt` 与 `system-prompts.txt` 已删除，后续 Prompt 维护统一通过数据库与提示词管理接口进行，不再执行文件自动迁移。
 
+## 18. 意图树 Few-shot 可见化与数据库持久化（2026-04-02）
+**新增职责**：
+- `IntentTreeView` 的“叶子意图”页已补齐 `examples` 与 `slotHints` 可编辑区域，并在保存时按行转数组，读取时自动回填，形成前端可视化编辑闭环。
+- `IntentTreeController` 已补齐 `path` 回填与 `parentCode` 解析逻辑，叶子意图保存由“全量删除重建”改为“差量 upsert + 未提交节点下线”，降低逻辑删除与唯一键冲突风险。
+- 新增 `t_intent_slot_refine_case` 表与 `IntentSlotRefineCaseService`，`slotRefineCases` 改为数据库持久化读写，服务重启后不再丢失。
+- `IntentTreeRoutingService` 的槽位精炼样例加载已接入数据库样例服务，`/api/intent-tree/stats` 的 `slotRefineCaseCount` 也改为数据库口径，确保管理页统计与运行链路一致。
+
+## 19. 意图树前端三页管理对齐（2026-04-02）
+**新增职责**：
+- 前端 `IntentTreeView` 已从“单页 tab 配置”升级为“树结构浏览 + 节点详情 + 快捷操作”形态，支持通过 `intentCode` 查询参数定位节点并展开路径。
+- 新增 `IntentListView` 列表页，支持关键词、任务类型、启用状态筛选，支持分页查看、批量下线与行级“定位树页 / 编辑页”操作。
+- 新增 `IntentEditView` 独立编辑页，支持 `intentId/name/taskType/path/examples/slotHints/enabled` 全字段编辑与唯一性校验，保存后可按来源路由回跳。
+- 新增 `intentTreeAdmin.js`、`useIntentTreeAdmin.js` 与 `intentTreeTransform.js` 等前端适配层，统一处理 `leafIntents` 扁平化、路径分段、`examples/slotHints` 文本数组互转。
+- 在保持后端 `GET/POST /api/intent-tree/config` 与 `GET /api/intent-tree/stats` 不变的前提下，批量启停采用“本地变更 + 全量提交配置”的兼容策略实现。
+
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)

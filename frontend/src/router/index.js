@@ -13,6 +13,8 @@ import McpView from '../views/McpView.vue'
 import IntentTreeView from '../views/IntentTreeView.vue'
 import ChatView from '../views/ChatView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
+import IntentListView from '../views/IntentListView.vue'
+import IntentEditView from '../views/IntentEditView.vue'
 
 const routes = [
   {
@@ -88,6 +90,16 @@ const routes = [
         name: 'intent-tree',
         component: IntentTreeView,
         alias: ['intent-tree.html']
+      },
+      {
+        path: 'intent-list',
+        name: 'intent-list',
+        component: IntentListView
+      },
+      {
+        path: 'intent-list/:index/edit',
+        name: 'intent-edit',
+        component: IntentEditView
       },
       {
         path: 'chat',

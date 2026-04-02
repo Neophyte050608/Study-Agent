@@ -26,6 +26,7 @@ public class IntentTreeRoutingService {
     private final PromptManager promptManager;
     private final IntentTreeProperties properties;
     private final IntentTreeService intentTreeService;
+    private final IntentSlotRefineCaseService intentSlotRefineCaseService;
     private final RoutingChatService routingChatService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -33,11 +34,13 @@ public class IntentTreeRoutingService {
             PromptManager promptManager,
             IntentTreeProperties properties,
             IntentTreeService intentTreeService,
+            IntentSlotRefineCaseService intentSlotRefineCaseService,
             RoutingChatService routingChatService
     ) {
         this.promptManager = promptManager;
         this.properties = properties;
         this.intentTreeService = intentTreeService;
+        this.intentSlotRefineCaseService = intentSlotRefineCaseService;
         this.routingChatService = routingChatService;
     }
 
@@ -151,22 +154,7 @@ public class IntentTreeRoutingService {
      */
     private List<Map<String, String>> loadSlotRefineCases(String taskType) {
         String normalizedTaskType = taskType == null ? "" : taskType.trim().toUpperCase();
-        List<Map<String, String>> configuredCases = new ArrayList<>();
-        for (IntentTreeProperties.SlotRefineCase refineCase : properties.getSlotRefineCases()) {
-            if (refineCase == null) {
-                continue;
-            }
-            String caseTaskType = textOf(refineCase.getTaskType()).toUpperCase();
-            if (!caseTaskType.isBlank() && !caseTaskType.equals(normalizedTaskType)) {
-                continue;
-            }
-            String userQuery = textOf(refineCase.getUserQuery());
-            String aiOutput = textOf(refineCase.getAiOutput());
-            if (userQuery.isBlank() || aiOutput.isBlank()) {
-                continue;
-            }
-            configuredCases.add(Map.of("user_query", userQuery, "ai_response", aiOutput));
-        }
+        List<Map<String, String>> configuredCases = intentSlotRefineCaseService.listEnabledByTaskType(normalizedTaskType);
         if (!configuredCases.isEmpty()) {
             return configuredCases;
         }

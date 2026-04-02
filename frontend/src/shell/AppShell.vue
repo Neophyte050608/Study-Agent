@@ -97,6 +97,9 @@ const toSpaPath = (rawUrl) => {
     case '/intent-tree':
     case '/intent-tree.html':
       return '/intent-tree'
+    case '/intent-list':
+    case '/intent-list.html':
+      return '/intent-list'
     case '/prompts':
     case '/prompts.html':
       return '/prompts'
@@ -108,7 +111,13 @@ const toSpaPath = (rawUrl) => {
   }
 }
 
-const currentSpaPath = computed(() => normalize(toSpaPath(route.path)))
+const currentSpaPath = computed(() => {
+  const normalizedRoutePath = normalize(route.path)
+  if (normalizedRoutePath.startsWith('/intent-list/')) {
+    return '/intent-list'
+  }
+  return normalize(toSpaPath(route.path))
+})
 
 const isActive = (url) => normalize(toSpaPath(url)) === currentSpaPath.value
 const isWorkspaceActive = computed(() => currentSpaPath.value === '/workspace')

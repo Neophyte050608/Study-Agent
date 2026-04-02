@@ -18,6 +18,22 @@ CREATE TABLE IF NOT EXISTS `t_intent_node` (
     KEY `idx_parent_code` (`parent_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='意图节点表';
 
+-- 创建意图槽位精炼样例表
+CREATE TABLE IF NOT EXISTS `t_intent_slot_refine_case` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `task_type` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '任务类型',
+    `user_query` VARCHAR(500) NOT NULL COMMENT '用户输入样例',
+    `ai_output` MEDIUMTEXT NOT NULL COMMENT '模型期望输出(JSON)',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    `deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_intent_slot_refine_case` (`task_type`, `user_query`, `deleted`),
+    KEY `idx_intent_slot_refine_case_sort` (`sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='意图槽位精炼样例表';
+
 -- 创建 Agent 配置表
 CREATE TABLE IF NOT EXISTS `t_agent_config` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
