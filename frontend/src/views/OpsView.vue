@@ -181,6 +181,115 @@
           </div>
         </div>
 
+        <!-- RAG 生成质量评测 -->
+        <div id="section-rag-quality" class="col-span-12 bg-white rounded-xl p-8 shadow-sm border border-slate-200">
+          <!-- 标题栏 + 运行评测按钮 -->
+          <div class="flex items-center justify-between mb-8">
+            <h3 class="text-xl font-bold flex items-center gap-2 text-slate-900">
+              <span class="material-symbols-outlined text-indigo-700">lab_research</span>
+              RAG 生成质量评测
+            </h3>
+            <div class="flex items-center gap-3">
+              <button @click="runQualityEval" :disabled="qualityEvalLoading" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm" :class="qualityEvalLoading ? 'animate-spin' : ''">{{ qualityEvalLoading ? 'progress_activity' : 'play_arrow' }}</span>
+                {{ qualityEvalLoading ? '评测中...' : '运行评测' }}
+              </button>
+              <button @click="loadQualityEvalHistory" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">history</span>
+                历史记录
+              </button>
+            </div>
+          </div>
+
+          <!-- 四指标雷达图 + 指标卡片 -->
+          <div class="grid grid-cols-12 gap-6" v-if="qualityEvalReport">
+            <!-- 雷达图 -->
+            <div class="col-span-5 flex items-center justify-center">
+              <canvas ref="qualityChartRef" class="max-w-[320px] max-h-[320px]"></canvas>
+            </div>
+            <!-- 四指标卡片 -->
+            <div class="col-span-7 grid grid-cols-2 gap-4">
+              <div v-for="metric in qualityMetrics" :key="metric.key" class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{{ metric.label }}</div>
+                <div class="text-2xl font-black text-slate-900">{{ (metric.value * 100).toFixed(1) }}<span class="text-sm font-medium ml-1 opacity-60">%</span></div>
+                <div class="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-500" :class="metric.value >= 0.8 ? 'bg-emerald-500' : metric.value >= 0.5 ? 'bg-amber-500' : 'bg-red-500'" :style="{ width: (metric.value * 100) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 历史趋势表格 -->
+          <div v-if="showQualityHistory && qualityEvalRuns.length" class="mt-8">
+            <h4 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-indigo-600 text-sm">timeline</span>
+              评测历史
+            </h4>
+            <table class="w-full text-left">
+              <thead>
+                <tr class="text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
+                  <th class="pb-3">运行 ID</th>
+                  <th class="pb-3">时间</th>
+                  <th class="pb-3">样本数</th>
+                  <th class="pb-3">忠实度</th>
+                  <th class="pb-3">回答相关性</th>
+                  <th class="pb-3">上下文精准度</th>
+                  <th class="pb-3">上下文召回</th>
+                  <th class="pb-3 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="run in qualityEvalRuns" :key="run.runId" class="hover:bg-slate-50 transition-all">
+                  <td class="py-3 text-sm font-mono text-indigo-600">{{ run.runId?.substring(0, 8) || '-' }}</td>
+                  <td class="py-3 text-sm text-slate-500">{{ formatTime(run.timestamp) }}</td>
+                  <td class="py-3 text-sm">{{ run.totalCases }}</td>
+                  <td class="py-3 text-sm font-semibold">{{ ((run.avgFaithfulness || 0) * 100).toFixed(1) }}%</td>
+                  <td class="py-3 text-sm font-semibold">{{ ((run.avgAnswerRelevancy || 0) * 100).toFixed(1) }}%</td>
+                  <td class="py-3 text-sm font-semibold">{{ ((run.avgContextPrecision || 0) * 100).toFixed(1) }}%</td>
+                  <td class="py-3 text-sm font-semibold">{{ ((run.avgContextRecall || 0) * 100).toFixed(1) }}%</td>
+                  <td class="py-3 text-right">
+                    <button @click="viewQualityEvalDetail(run.runId)" class="text-indigo-600 hover:text-indigo-800 text-xs font-bold">详情</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 逐样本展开 -->
+          <div v-if="qualityEvalDetail" class="mt-8">
+            <h4 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">逐样本详情</h4>
+            <div v-for="(item, idx) in qualityEvalDetail.results" :key="idx" class="mb-3 border border-slate-200 rounded-lg overflow-hidden">
+              <button @click="toggleSample(idx)" class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-all text-left">
+                <div class="flex items-center gap-3">
+                  <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">{{ item.tag || '-' }}</span>
+                  <span class="text-sm font-medium text-slate-700">{{ item.query }}</span>
+                </div>
+                <div class="flex items-center gap-4 text-xs text-slate-500">
+                  <span>忠实度: {{ (item.faithfulness * 100).toFixed(0) }}%</span>
+                  <span>相关性: {{ (item.answerRelevancy * 100).toFixed(0) }}%</span>
+                  <span class="material-symbols-outlined text-sm transition-transform" :class="expandedSamples.includes(idx) ? 'rotate-180' : ''">expand_more</span>
+                </div>
+              </button>
+              <div v-if="expandedSamples.includes(idx)" class="px-4 py-4 space-y-3 text-sm">
+                <div><span class="font-bold text-slate-600">标准答案：</span><span class="text-slate-700">{{ item.groundTruthAnswer }}</span></div>
+                <div><span class="font-bold text-slate-600">生成答案：</span><span class="text-slate-700">{{ item.generatedAnswer }}</span></div>
+                <div class="grid grid-cols-4 gap-3 mt-2">
+                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">忠实度</div><div class="font-bold">{{ (item.faithfulness * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">回答相关性</div><div class="font-bold">{{ (item.answerRelevancy * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">上下文精准度</div><div class="font-bold">{{ (item.contextPrecision * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">上下文召回</div><div class="font-bold">{{ (item.contextRecall * 100).toFixed(1) }}%</div></div>
+                </div>
+                <div v-if="item.rationales" class="mt-2">
+                  <div class="text-xs font-bold text-slate-500 mb-1">LLM 评分理由</div>
+                  <div v-for="(reason, metric) in item.rationales" :key="metric" class="text-xs text-slate-600 mb-1">
+                    <span class="font-semibold">{{ metric }}:</span> {{ reason }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Recent Audit Log (Asymmetric Section) -->
         <div id="section-audit" class="col-span-12 bg-white rounded-xl p-8 border border-slate-200 shadow-sm">
           <div class="flex items-center justify-between mb-6">
@@ -210,9 +319,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import Chart from 'chart.js/auto'
+import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq } from '../api/admin'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq, runRagQualityEval, loadRagQualityEvalRuns, loadRagQualityEvalDetail } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: {
@@ -229,6 +339,113 @@ const traces = ref([])
 const audits = ref([])
 const idempotency = ref({})
 const showAdvancedOps = ref(false)
+
+// ===== RAG 生成质量评测 =====
+const qualityEvalLoading = ref(false)
+const qualityEvalReport = ref(null)
+const qualityEvalRuns = ref([])
+const qualityEvalDetail = ref(null)
+const expandedSamples = ref([])
+const qualityChartRef = ref(null)
+const qualityChartInstance = ref(null)
+const showQualityHistory = ref(false)
+
+const qualityMetrics = computed(() => {
+  if (!qualityEvalReport.value) return []
+  const r = qualityEvalReport.value
+  return [
+    { key: 'faithfulness', label: '忠实度 (Faithfulness)', value: r.avgFaithfulness || 0 },
+    { key: 'answerRelevancy', label: '回答相关性 (Answer Relevancy)', value: r.avgAnswerRelevancy || 0 },
+    { key: 'contextPrecision', label: '上下文精准度 (Context Precision)', value: r.avgContextPrecision || 0 },
+    { key: 'contextRecall', label: '上下文召回 (Context Recall)', value: r.avgContextRecall || 0 }
+  ]
+})
+
+const renderQualityChart = (report) => {
+  if (!qualityChartRef.value) return
+  if (qualityChartInstance.value) {
+    qualityChartInstance.value.destroy()
+  }
+  qualityChartInstance.value = new Chart(qualityChartRef.value, {
+    type: 'radar',
+    data: {
+      labels: ['忠实度', '回答相关性', '上下文精准度', '上下文召回'],
+      datasets: [{
+        label: '当前评测',
+        data: [
+          report.avgFaithfulness || 0,
+          report.avgAnswerRelevancy || 0,
+          report.avgContextPrecision || 0,
+          report.avgContextRecall || 0
+        ],
+        fill: true,
+        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+        borderColor: 'rgba(79, 70, 229, 1)',
+        pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+        pointBorderColor: '#fff'
+      }]
+    },
+    options: {
+      scales: {
+        r: {
+          beginAtZero: true,
+          max: 1.0,
+          ticks: { stepSize: 0.2 }
+        }
+      },
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  })
+}
+
+const runQualityEval = async () => {
+  qualityEvalLoading.value = true
+  try {
+    const data = await runRagQualityEval()
+    qualityEvalReport.value = data
+    qualityEvalDetail.value = data // 默认评测的 detail 就是 report 本身
+    await nextTick()
+    renderQualityChart(data)
+  } catch (error) {
+    hint.value = `评测失败: ${error.message || 'unknown'}`
+  } finally {
+    qualityEvalLoading.value = false
+  }
+}
+
+const loadQualityEvalHistory = async () => {
+  try {
+    qualityEvalRuns.value = await loadRagQualityEvalRuns(20) || []
+    showQualityHistory.value = true
+  } catch (error) {
+    hint.value = `加载历史失败: ${error.message || 'unknown'}`
+  }
+}
+
+const viewQualityEvalDetail = async (runId) => {
+  try {
+    const data = await loadRagQualityEvalDetail(runId)
+    qualityEvalDetail.value = data
+    qualityEvalReport.value = data
+    await nextTick()
+    renderQualityChart(data)
+  } catch (error) {
+    hint.value = `加载详情失败: ${error.message || 'unknown'}`
+  }
+}
+
+const toggleSample = (idx) => {
+  const pos = expandedSamples.value.indexOf(idx)
+  if (pos >= 0) {
+    expandedSamples.value.splice(pos, 1)
+  } else {
+    expandedSamples.value.push(idx)
+  }
+}
+// ===== RAG 生成质量评测 End =====
+
 const SLOW_THRESHOLD_MS = Number(import.meta.env.VITE_RAG_SLOW_THRESHOLD_MS || 20000)
 
 const p95Latency = computed(() => {

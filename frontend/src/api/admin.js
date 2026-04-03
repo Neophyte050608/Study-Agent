@@ -104,3 +104,28 @@ export function previewPromptTemplate(name, variables) {
 export function reloadPromptCache() {
   return httpPostJson('/api/settings/prompts/reload', {})
 }
+
+// ===== RAG 生成质量评测 =====
+export function runRagQualityEval() {
+  return httpGet('/api/observability/rag-quality-eval')
+}
+
+export function runRagQualityEvalCustom(cases, options) {
+  return httpPostJson('/api/observability/rag-quality-eval/run', { cases, options })
+}
+
+export function loadRagQualityEvalRuns(limit = 20) {
+  return httpGet(`/api/observability/rag-quality-eval/runs?limit=${limit}`)
+}
+
+export function loadRagQualityEvalDetail(runId) {
+  return httpGet(`/api/observability/rag-quality-eval/runs/${runId}`)
+}
+
+export function compareRagQualityEvalRuns(baselineRunId, candidateRunId) {
+  return httpGet(`/api/observability/rag-quality-eval/compare?baselineRunId=${baselineRunId}&candidateRunId=${candidateRunId}`)
+}
+
+export function loadRagQualityEvalTrend(limit = 20) {
+  return httpGet(`/api/observability/rag-quality-eval/trend?limit=${limit}`)
+}
