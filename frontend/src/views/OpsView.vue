@@ -1,14 +1,14 @@
 <template>
   <div class="bg-surface text-on-surface antialiased min-h-screen">
     <!-- TopNavBar Shell -->
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">数字叙事 <span class="text-on-surface-variant font-medium">/ 观测与运维</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">观测与运维 <span class="text-slate-500 font-medium text-sm ml-2">/ 实时监控 RAG 检索链路性能与系统高可用状态</span></h1>
       </div>
     </header>
 
     <!-- Main Content Canvas -->
-    <main class="ml-64 pt-24 px-8 pb-12 min-h-screen bg-slate-50">
+    <main class="pt-24 px-8 pb-12 min-h-screen bg-slate-50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Header & Tabs -->
       <div class="mb-8">
         <div class="flex items-end justify-between">
@@ -213,6 +213,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const router = useRouter()
 const loading = ref(false)

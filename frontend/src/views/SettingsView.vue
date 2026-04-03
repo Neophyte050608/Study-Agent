@@ -1,31 +1,20 @@
 <template>
   <div class="bg-surface text-on-surface antialiased min-h-screen">
     <!-- Top Navigation Bar -->
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">数字叙事 <span class="text-slate-500 font-medium">/ 核心配置台</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">模型配置 <span class="text-slate-500 font-medium text-sm ml-2">/ 针对不同业务场景配置专属的 AI 智能代理</span></h1>
       </div>
       <div class="flex items-center gap-6">
-        <div class="relative hidden lg:block">
-          <input class="bg-slate-100 border-none rounded-full px-4 py-1.5 text-sm w-64 focus:ring-2 focus:ring-indigo-500 transition-all outline-none" placeholder="搜索设置..." type="text" />
-          <span class="material-symbols-outlined absolute right-3 top-1.5 text-slate-400 text-sm" data-icon="search">search</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <button class="text-slate-500 hover:text-indigo-600 transition-colors"><span class="material-symbols-outlined" data-icon="notifications">notifications</span></button>
-          <button class="text-slate-500 hover:text-indigo-600 transition-colors"><span class="material-symbols-outlined" data-icon="help">help</span></button>
-        </div>
         <button class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-all active:scale-[0.98] disabled:opacity-60" @click="saveAll" :disabled="loading">
           <span class="material-symbols-outlined text-sm" data-icon="save">save</span>
           全局保存
         </button>
-        <div class="flex items-center gap-2 border-l border-slate-200 pl-6">
-          <img alt="User Avatar" class="w-8 h-8 rounded-full bg-slate-200" data-alt="User profile avatar icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJICT8F-M46NzO_svALnfGZsIDNFiWDT3G2RPnlFEsKcPIF6HABZtiB3ZZcNRXW_C68Ak9KR2NIjhoqKbuUA7TOVpodvPlVFVGxtD-ujb_72DBBlHCdyltKqka7GC2bokCJK4nKiqDBNIuGZB8KA_dsUh3F_KxCJlHqm8f0M5g4goAtEGXBN_aZ4EaT7sUpF0AKJ8HY4GaTUGJ9XUe8eCNWYvQNM5rMZ_o41mVCIUvafloCJxP0RsAwlqXVUyFrNMnh1gF_JT9CbA"/>
-        </div>
       </div>
     </header>
 
     <!-- Content Area -->
-    <main class="ml-64 pt-24 p-8 min-h-screen bg-slate-50">
+    <main class="pt-24 p-8 min-h-screen bg-slate-50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <div class="max-w-7xl mx-auto">
         <header class="mb-10">
           <h3 class="text-3xl font-extrabold text-slate-900 tracking-tight">动态 Agent 设置</h3>
@@ -117,6 +106,13 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { loadAgentSettings, saveAgentSettings } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const loading = ref(false)
 const hint = ref('在此统一管理各 Agent 模型参数')

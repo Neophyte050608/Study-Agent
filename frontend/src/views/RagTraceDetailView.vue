@@ -1,7 +1,7 @@
 <template>
-  <div class="bg-slate-50 min-h-screen antialiased">
+  <div class="bg-slate-50 min-h-screen antialiased relative">
     <!-- Header -->
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-3">
         <router-link to="/ops" class="text-slate-500 hover:text-slate-700 transition-colors">
           <span class="material-symbols-outlined align-middle">arrow_back</span>
@@ -25,7 +25,7 @@
       </div>
     </header>
 
-    <main class="ml-64 pt-24 px-8 pb-12">
+    <main class="pt-24 px-8 pb-12 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <div v-if="loading && !trace" class="flex flex-col items-center justify-center py-32 text-slate-400">
         <span class="material-symbols-outlined animate-spin text-4xl mb-4">refresh</span>
         <p class="text-sm font-medium">正在加载链路时序数据...</p>
@@ -197,6 +197,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { loadOpsTraceDetail } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const route = useRoute()
 const traceId = ref(route.params.traceId)

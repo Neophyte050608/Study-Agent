@@ -1,15 +1,14 @@
 <template>
-  <div class="text-on-surface antialiased min-h-screen">
+  <div class="bg-surface text-on-surface min-h-screen relative">
     <!-- TopNavBar Shell -->
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none">
-      <div class="flex items-center space-x-4">
-        <h1 class="text-xl font-bold tracking-tight text-slate-900">学习画像</h1>
-        <span class="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full">BETA</span>
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+      <div class="flex items-center gap-4">
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">能力画像 <span class="text-slate-500 font-medium text-sm ml-2">/ 基于历史练习数据生成的个性化技能雷达</span></h1>
       </div>
     </header>
 
     <!-- Main Content Area -->
-    <main class="ml-64 mt-16 p-8 min-h-screen bg-slate-50">
+    <main class="pt-24 p-8 min-h-screen bg-slate-50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <div v-if="error" class="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{{ error }}</div>
       
       <!-- Action Header -->
@@ -162,6 +161,13 @@
 import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick, watch } from 'vue'
 import { loadProfileEvents, loadProfileOverview } from '../api/profile'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const loading = ref(false)
 const error = ref('')

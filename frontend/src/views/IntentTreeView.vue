@@ -1,8 +1,8 @@
 <template>
-  <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm">
-    <div class="flex items-center gap-6">
-      <h1 class="text-xl font-bold text-indigo-700">意图树管理</h1>
-      <p class="text-sm text-slate-500">树结构浏览、节点定位与快捷操作</p>
+  <div class="bg-surface text-on-surface min-h-screen relative">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <div class="flex items-center gap-4">
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图树管理 <span class="text-slate-500 font-medium text-sm ml-2">/ 树结构浏览、节点定位与全局路由参数配置</span></h1>
     </div>
     <div class="flex items-center gap-2">
       <RouterLink to="/intent-list" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50">
@@ -17,7 +17,7 @@
     </div>
   </header>
 
-  <main class="ml-64 min-h-screen bg-slate-50 pt-24 pb-10 px-8 space-y-6">
+  <main class="min-h-screen bg-slate-50 pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
     <div class="grid grid-cols-4 gap-4">
       <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#0057c2]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">系统状态</div>
@@ -126,6 +126,7 @@
       </div>
     </section>
   </main>
+  </div>
 </template>
 
 <script setup>
@@ -133,6 +134,13 @@ import { computed, defineComponent, h, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useIntentTreeAdmin } from '../composables/useIntentTreeAdmin'
 import { saveIntentTreeConfig } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const route = useRoute()
 const router = useRouter()

@@ -1,15 +1,14 @@
 <template>
+  <div class="bg-surface text-on-surface min-h-screen relative">
   <!-- TopNavBar Anchor -->
-  <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 border-none shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]">
-    <div class="flex items-center space-x-4">
-      <h1 class="text-xl font-bold text-indigo-700 dark:text-indigo-400 tracking-tight">数字化叙事</h1>
-      <span class="text-slate-300">/</span>
-      <span class="text-sm font-medium text-slate-600">MCP 协议调试控制台</span>
+  <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 border-none shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <div class="flex items-center gap-4">
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">MCP 工具台 <span class="text-slate-500 font-medium text-sm ml-2">/ 接入与管理各类外部工具插件</span></h1>
     </div>
   </header>
 
   <!-- Main Content Canvas -->
-  <main class="ml-64 pt-24 pb-12 px-8 min-h-screen bg-[#f8f9fa]">
+  <main class="pt-24 pb-12 px-8 min-h-screen bg-[#f8f9fa] transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
     <div class="max-w-6xl mx-auto space-y-8">
       <!-- Header Section -->
       <div class="flex flex-col space-y-2">
@@ -164,11 +163,19 @@
       </div>
     </div>
   </main>
+  </div>
 </template>
 
 <script setup>
 import { onMounted, ref, computed } from 'vue'
 import { invokeMcpCapability, loadMcpCapabilities } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const loading = ref(false)
 const hint = ref('加载可用能力后进行调用')

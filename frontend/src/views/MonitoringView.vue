@@ -1,15 +1,23 @@
 <template>
-  <main class="ml-64 pt-24 px-8 pb-12 w-full min-h-screen relative z-10 bg-[#f9fafb]">
-    <!-- Dashboard Header -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12 w-[80%]">
-      <div>
-        <h1 class="font-headline text-4xl font-bold tracking-tighter text-[#111827] mb-2">模型路由与健康分析</h1>
-        <p class="text-[#4b5563] text-sm flex items-center gap-2">
-          <span class="material-symbols-outlined text-sm">update</span>
-          数据刷新于: <span class="text-[#059669] font-mono font-bold">{{ lastUpdate }}</span> | 下次更新 <span class="text-[#059669] font-mono underline decoration-dotted underline-offset-4">{{ countdown }}s</span>
-        </p>
+  <div class="bg-surface text-on-surface antialiased min-h-screen">
+    <!-- Top Navigation Bar -->
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+      <div class="flex items-center gap-4">
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">系统监控 <span class="text-slate-500 font-medium text-sm ml-2">/ 实时追踪模型路由状态与健康指标</span></h1>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
+    </header>
+
+    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-[#f9fafb] transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+      <!-- Dashboard Header -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12 w-full lg:w-[80%]">
+        <div>
+          <h2 class="font-headline text-3xl font-bold tracking-tighter text-[#111827] mb-2">模型路由与健康分析</h2>
+          <p class="text-[#4b5563] text-sm flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">update</span>
+            数据刷新于: <span class="text-[#059669] font-mono font-bold">{{ lastUpdate }}</span> | 下次更新 <span class="text-[#059669] font-mono underline decoration-dotted underline-offset-4">{{ countdown }}s</span>
+          </p>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
         <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
           <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Total Throughput</div>
           <div class="text-xl font-black text-[#111827]">{{ runtimeStats.totalRequests || 0 }} <span class="text-xs text-[#4b5563] font-normal">REQ</span></div>
@@ -147,13 +155,21 @@
           </button>
         </div>
       </div>
-    </div>
-  </main>
+      </div>
+    </main>
+  </div>
 </template>
 
 <script setup>
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { loadModelRoutingStats } from '../api/monitoring'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const runtimeStats = ref({ totalRequests: 0, totalFailureCount: 0, routeFallbackCount: 0 })
 const rawDetails = ref({})

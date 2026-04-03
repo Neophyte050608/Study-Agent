@@ -1,8 +1,8 @@
 <template>
-  <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm">
-    <div>
-      <h1 class="text-xl font-bold text-indigo-700">{{ isCreateMode ? '新增意图节点' : '编辑意图节点' }}</h1>
-      <p class="text-sm text-slate-500">{{ currentTitle }}</p>
+  <div class="bg-surface text-on-surface min-h-screen relative">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <div class="flex items-center gap-4">
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700">{{ isCreateMode ? '新增意图节点' : '编辑意图节点' }} <span class="text-slate-500 font-medium text-sm ml-2">/ {{ currentTitle }}</span></h1>
     </div>
     <div class="flex items-center gap-2">
       <button @click="goBack" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50">返回</button>
@@ -12,7 +12,7 @@
     </div>
   </header>
 
-  <main class="ml-64 min-h-screen bg-slate-50 pt-24 pb-10 px-8">
+  <main class="min-h-screen bg-slate-50 pt-24 pb-10 px-8 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
     <section v-if="loading" class="bg-white rounded shadow-sm p-10 text-center text-slate-500">加载中...</section>
     <section v-else-if="!form" class="bg-white rounded shadow-sm p-10 text-center text-slate-500">未找到对应意图节点</section>
     <section v-else class="bg-white rounded shadow-sm p-6 space-y-4 max-w-4xl">
@@ -64,6 +64,7 @@
       </p>
     </section>
   </main>
+  </div>
 </template>
 
 <script setup>
@@ -73,6 +74,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { saveIntentTreeConfig } from '../api/admin'
 import { useIntentTreeAdmin } from '../composables/useIntentTreeAdmin'
 import { editorFormToLeaf } from '../utils/intentTreeTransform'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const route = useRoute()
 const router = useRouter()

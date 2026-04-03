@@ -1,33 +1,14 @@
 <template>
-  <main class="ml-64 relative flex flex-col bg-slate-50 overflow-hidden h-screen">
+  <div class="bg-surface text-on-surface min-h-screen relative">
     <!-- Header -->
-    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-xl shadow-sm flex justify-between items-center px-8 py-4 w-full">
+    <header class="fixed top-0 right-0 z-40 bg-white/80 backdrop-blur-xl shadow-sm border-b border-slate-100 flex justify-between items-center px-8 h-16 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
         <div class="flex items-center gap-4">
-            <h2 class="text-xl font-bold text-indigo-900 font-headline">智能对话式刷题</h2>
-            <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
-            <div class="flex items-center gap-2 text-indigo-600 font-bold px-1 py-1 text-sm border-b-2 border-indigo-600">
-                <span class="material-symbols-outlined text-sm" data-icon="record_voice_over">record_voice_over</span>
-                <span>进行中的会话</span>
-            </div>
-        </div>
-        <div class="flex items-center gap-6">
-            <div class="hidden md:flex items-center bg-slate-100 rounded-full px-4 py-1.5 gap-2 border border-slate-200/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                <span class="material-symbols-outlined text-slate-400 text-lg" data-icon="search">search</span>
-                <input class="bg-transparent border-none text-sm focus:ring-0 p-0 w-48 text-slate-600 placeholder:text-slate-400 outline-none" placeholder="搜索知识库..." type="text"/>
-            </div>
-            <div class="flex items-center gap-3">
-                <button class="p-2 text-slate-500 hover:bg-indigo-50 transition-colors rounded-full relative">
-                    <span class="material-symbols-outlined" data-icon="notifications">notifications</span>
-                    <span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
-                </button>
-                <button class="p-2 text-slate-500 hover:bg-indigo-50 transition-colors rounded-full">
-                    <span class="material-symbols-outlined" data-icon="help">help</span>
-                </button>
-            </div>
+            <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">算法刷题 <span class="text-slate-500 font-medium text-sm ml-2">/ 针对性生成并评测各类算法及场景题目</span></h1>
         </div>
     </header>
 
-    <!-- Status Drawer -->
+    <main class="flex-1 flex flex-col pt-16 transition-all duration-300 h-screen overflow-hidden" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+      <!-- Status Drawer -->
     <div v-show="sessionId" class="absolute top-24 right-8 z-30">
         <div class="glass-effect p-5 rounded-2xl shadow-xl border border-white/50 w-72">
             <div class="flex justify-between items-center mb-5">
@@ -55,7 +36,7 @@
     </div>
 
     <!-- Chat Container -->
-    <section class="flex-1 overflow-y-auto chat-scroll px-8 py-12 pb-56 flex flex-col gap-10" ref="chatContainer">
+    <section class="flex-1 overflow-y-auto chat-scroll px-8 py-12 pb-10 flex flex-col gap-10" ref="chatContainer">
         <!-- AI Initial Message -->
         <div class="flex gap-4 max-w-3xl">
             <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
@@ -111,7 +92,7 @@
         </template>
 
         <!-- Thinking -->
-        <div v-if="loading" class="flex gap-4 max-w-3xl">
+        <div v-if="loading" class="flex gap-4 max-w-3xl mb-8">
             <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600/40 flex items-center justify-center">
                 <span class="material-symbols-outlined text-white text-xl" data-icon="smart_toy">smart_toy</span>
             </div>
@@ -127,8 +108,8 @@
     </section>
 
     <!-- Bottom Input Area -->
-    <section class="absolute bottom-0 left-0 w-full px-8 pb-10 pt-4 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent z-40">
-        <div class="max-w-4xl mx-auto relative">
+    <section class="w-full px-8 pb-6 pt-4 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent shrink-0">
+        <div class="max-w-7xl mx-auto relative">
             <!-- Quick Action Pills -->
             <div v-show="!sessionId" class="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
                 <button class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors flex items-center gap-2" @click="applyQuickAction('我要刷3道Spring Boot的场景题')">
@@ -164,7 +145,8 @@
             </p>
         </div>
     </section>
-  </main>
+    </main>
+  </div>
 </template>
 
 <script setup>
@@ -172,6 +154,13 @@ import { ref, nextTick } from 'vue'
 import { dispatchCodingChat } from '../api/coding'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 let serial = 0
 const loading = ref(false)

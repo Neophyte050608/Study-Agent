@@ -1,16 +1,14 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen">
+  <div class="bg-surface text-on-surface min-h-screen relative">
     <!-- Top Navigation Bar -->
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <span class="text-xl font-bold font-headline text-indigo-700 dark:text-indigo-400">数字化叙事</span>
-        <div class="h-4 w-[1px] bg-slate-300 mx-2"></div>
-        <span class="text-sm font-medium text-on-surface-variant">知识库管理</span>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">知识库管理 <span class="text-slate-500 font-medium text-sm ml-2">/ 管理与同步您的专属语料知识库</span></h1>
       </div>
     </header>
 
     <!-- Main Content Canvas -->
-    <main class="ml-64 pt-24 px-10 pb-12 min-h-screen">
+    <main class="pt-24 px-10 pb-12 min-h-screen transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Header Section -->
       <div class="flex justify-between items-end mb-8">
         <section>
@@ -95,6 +93,13 @@ import DocumentsTab from './knowledge/DocumentsTab.vue'
 import ChunksTab from './knowledge/ChunksTab.vue'
 import SyncTasksTab from './knowledge/SyncTasksTab.vue'
 import SyncConfigModal from './knowledge/SyncConfigModal.vue'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const activeTab = ref('kb')
 const selectedDocId = ref(null)

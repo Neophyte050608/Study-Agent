@@ -1,8 +1,8 @@
 <template>
-  <div class="bg-surface text-on-surface antialiased min-h-screen">
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
+  <div class="bg-surface text-on-surface antialiased min-h-screen relative">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">数字叙事 <span class="text-slate-500 font-medium">/ 提示词管理</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">提示词管理 <span class="text-slate-500 font-medium text-sm ml-2">/ 集中管理各业务场景下的系统提示词</span></h1>
       </div>
       <div class="flex items-center gap-6">
         <button class="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-slate-50 transition-all active:scale-[0.98] disabled:opacity-60" @click="handleReloadCache" :disabled="loading">
@@ -13,13 +13,10 @@
           <span class="material-symbols-outlined text-sm">add</span>
           新建模板
         </button>
-        <div class="flex items-center gap-2 border-l border-slate-200 pl-6">
-          <img alt="User Avatar" class="w-8 h-8 rounded-full bg-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJICT8F-M46NzO_svALnfGZsIDNFiWDT3G2RPnlFEsKcPIF6HABZtiB3ZZcNRXW_C68Ak9KR2NIjhoqKbuUA7TOVpodvPlVFVGxtD-ujb_72DBBlHCdyltKqka7GC2bokCJK4nKiqDBNIuGZB8KA_dsUh3F_KxCJlHqm8f0M5g4goAtEGXBN_aZ4EaT7sUpF0AKJ8HY4GaTUGJ9XUe8eCNWYvQNM5rMZ_o41mVCIUvafloCJxP0RsAwlqXVUyFrNMnh1gF_JT9CbA"/>
-        </div>
       </div>
     </header>
 
-    <main class="ml-64 pt-24 p-8 min-h-screen bg-slate-50">
+    <main class="pt-24 p-8 min-h-screen bg-slate-50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <div class="max-w-7xl mx-auto">
         <header class="mb-8">
           <h3 class="text-3xl font-extrabold text-slate-900 tracking-tight">提示词管理</h3>
@@ -182,6 +179,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { loadPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate, previewPromptTemplate, reloadPromptCache } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const prompts = ref([])
 const loading = ref(false)

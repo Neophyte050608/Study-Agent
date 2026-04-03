@@ -1,14 +1,14 @@
 <template>
   <div class="bg-surface text-on-surface antialiased min-h-screen">
     <!-- Top Navigation Bar -->
-    <header class="fixed top-0 right-0 left-64 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none">
-      <h1 class="text-xl font-bold text-indigo-700 dark:text-indigo-400">面试练习看板</h1>
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">面试控制台 <span class="text-slate-500 font-medium text-sm ml-2">/ 沉浸式模拟真实面试场景与反馈</span></h1>
     </header>
 
     <!-- Main Content Canvas -->
-    <main class="ml-64 pt-24 pb-12 px-8 min-h-screen relative z-10">
+    <main class="pt-24 pb-12 px-8 min-h-screen relative z-10 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Case 1: Initial State (Configuration) -->
-      <section v-if="!sessionId" class="max-w-4xl mx-auto mb-12">
+      <section v-if="!sessionId" class="max-w-7xl mx-auto mb-12">
         <div class="mb-8">
           <h2 class="text-3xl font-extrabold tracking-tight text-on-surface mb-2">开启新的叙事篇章</h2>
           <p class="text-on-surface-variant max-w-2xl">通过 AI 模拟真实面试场景，基于您的简历与目标职位生成针对性问题。通过深度反馈提升职业竞争力。</p>
@@ -57,7 +57,7 @@
       </section>
 
       <!-- Case 2: Interview State (Active Task) -->
-      <section v-else class="max-w-5xl mx-auto mb-12">
+      <section v-else class="max-w-10xl mx-auto mb-12">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <!-- Question Column -->
           <div class="lg:col-span-2 space-y-6">
@@ -133,6 +133,13 @@
 <script setup>
 import { computed, ref, onUnmounted } from 'vue'
 import { generateInterviewReportStream, startInterviewStream, stopInterviewStream, submitInterviewAnswerStream } from '../api/interview'
+
+defineProps({
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const loading = ref(false)
 const topic = ref('高级后端开发工程师')
