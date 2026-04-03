@@ -44,6 +44,15 @@ public class RagasEvalClient {
     @Value("${app.eval.ragas.llm-base-url:https://api.deepseek.com/v1}")
     private String llmBaseUrl;
 
+    @Value("${app.eval.ragas.embedding-api-key:}")
+    private String embeddingApiKey;
+
+    @Value("${app.eval.ragas.embedding-model:embedding-3}")
+    private String embeddingModel;
+
+    @Value("${app.eval.ragas.embedding-base-url:https://open.bigmodel.cn/api/paas/v4}")
+    private String embeddingBaseUrl;
+
     public RagasEvalClient(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -102,6 +111,19 @@ public class RagasEvalClient {
         llmConfig.put("base_url", llmBaseUrl);
         llmConfig.put("api_key", llmApiKey);
         requestBody.put("llm_config", llmConfig);
+
+        // embedding 配置
+        String effectiveEmbeddingApiKey = (embeddingApiKey != null && !embeddingApiKey.isEmpty()) ? embeddingApiKey : llmApiKey;
+        if (effectiveEmbeddingApiKey != null && !effectiveEmbeddingApiKey.isEmpty()) {
+            Map<String, String> embeddingConfig = new LinkedHashMap<>();
+            embeddingConfig.put("model", embeddingModel);
+            embeddingConfig.put("base_url", embeddingBaseUrl);
+            embeddingConfig.put("api_key", effectiveEmbeddingApiKey);
+            requestBody.put("embedding_config", embeddingConfig);
+        }
+
+        // 默认中文适配
+        requestBody.put("language", "chinese");
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

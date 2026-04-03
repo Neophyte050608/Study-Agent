@@ -190,6 +190,14 @@
               RAG 生成质量评测
             </h3>
             <div class="flex items-center gap-3">
+              <select v-model="selectedEngine" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">自动（默认配置）</option>
+                <option value="java">Java 原生引擎</option>
+                <option value="ragas">Ragas 框架</option>
+              </select>
+              <span v-if="engineStatus" class="text-xs px-2 py-1 rounded-full" :class="engineStatus.ragasEngineAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+                Ragas: {{ engineStatus.ragasEngineAvailable ? '可用' : '不可用' }}
+              </span>
               <button @click="runQualityEval" :disabled="qualityEvalLoading" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm" :class="qualityEvalLoading ? 'animate-spin' : ''">{{ qualityEvalLoading ? 'progress_activity' : 'play_arrow' }}</span>
                 {{ qualityEvalLoading ? '评测中...' : '运行评测' }}
@@ -230,6 +238,7 @@
                 <tr class="text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
                   <th class="pb-3">运行 ID</th>
                   <th class="pb-3">时间</th>
+                  <th class="pb-3">引擎</th>
                   <th class="pb-3">样本数</th>
                   <th class="pb-3">忠实度</th>
                   <th class="pb-3">回答相关性</th>
@@ -242,6 +251,11 @@
                 <tr v-for="run in qualityEvalRuns" :key="run.runId" class="hover:bg-slate-50 transition-all">
                   <td class="py-3 text-sm font-mono text-indigo-600">{{ run.runId?.substring(0, 8) || '-' }}</td>
                   <td class="py-3 text-sm text-slate-500">{{ formatTime(run.timestamp) }}</td>
+                  <td class="py-3 text-sm">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold" :class="run.engine === 'ragas' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'">
+                      {{ run.engine === 'ragas' ? 'Ragas' : 'Java' }}
+                    </span>
+                  </td>
                   <td class="py-3 text-sm">{{ run.totalCases }}</td>
                   <td class="py-3 text-sm font-semibold">{{ ((run.avgFaithfulness || 0) * 100).toFixed(1) }}%</td>
                   <td class="py-3 text-sm font-semibold">{{ ((run.avgAnswerRelevancy || 0) * 100).toFixed(1) }}%</td>
@@ -322,7 +336,7 @@
 import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq, runRagQualityEval, loadRagQualityEvalRuns, loadRagQualityEvalDetail } from '../api/admin'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq, runRagQualityEval, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: {
@@ -341,6 +355,9 @@ const idempotency = ref({})
 const showAdvancedOps = ref(false)
 
 // ===== RAG 生成质量评测 =====
+const selectedEngine = ref('')
+const engineStatus = ref(null)
+const comparisonReport = ref(null)
 const qualityEvalLoading = ref(false)
 const qualityEvalReport = ref(null)
 const qualityEvalRuns = ref([])
@@ -366,24 +383,48 @@ const renderQualityChart = (report) => {
   if (qualityChartInstance.value) {
     qualityChartInstance.value.destroy()
   }
+
+  const isRagas = report.engine === 'ragas'
+  const datasets = [{
+    label: isRagas ? 'Ragas 框架' : 'Java 原生',
+    data: [
+      report.avgFaithfulness || 0,
+      report.avgAnswerRelevancy || 0,
+      report.avgContextPrecision || 0,
+      report.avgContextRecall || 0
+    ],
+    fill: true,
+    backgroundColor: isRagas ? 'rgba(147, 51, 234, 0.2)' : 'rgba(79, 70, 229, 0.2)',
+    borderColor: isRagas ? 'rgba(147, 51, 234, 1)' : 'rgba(79, 70, 229, 1)',
+    pointBackgroundColor: isRagas ? 'rgba(147, 51, 234, 1)' : 'rgba(79, 70, 229, 1)',
+    pointBorderColor: '#fff'
+  }]
+
+  // 如果有对比数据（之前加载的另一个引擎的结果），叠加显示
+  if (comparisonReport.value && comparisonReport.value.engine !== report.engine) {
+    const comp = comparisonReport.value
+    const isCompRagas = comp.engine === 'ragas'
+    datasets.push({
+      label: isCompRagas ? 'Ragas 框架' : 'Java 原生',
+      data: [
+        comp.avgFaithfulness || 0,
+        comp.avgAnswerRelevancy || 0,
+        comp.avgContextPrecision || 0,
+        comp.avgContextRecall || 0
+      ],
+      fill: true,
+      backgroundColor: isCompRagas ? 'rgba(147, 51, 234, 0.2)' : 'rgba(79, 70, 229, 0.2)',
+      borderColor: isCompRagas ? 'rgba(147, 51, 234, 1)' : 'rgba(79, 70, 229, 1)',
+      pointBackgroundColor: isCompRagas ? 'rgba(147, 51, 234, 1)' : 'rgba(79, 70, 229, 1)',
+      pointBorderColor: '#fff'
+    })
+  }
+
   qualityChartInstance.value = new Chart(qualityChartRef.value, {
     type: 'radar',
     data: {
       labels: ['忠实度', '回答相关性', '上下文精准度', '上下文召回'],
-      datasets: [{
-        label: '当前评测',
-        data: [
-          report.avgFaithfulness || 0,
-          report.avgAnswerRelevancy || 0,
-          report.avgContextPrecision || 0,
-          report.avgContextRecall || 0
-        ],
-        fill: true,
-        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-        borderColor: 'rgba(79, 70, 229, 1)',
-        pointBackgroundColor: 'rgba(79, 70, 229, 1)',
-        pointBorderColor: '#fff'
-      }]
+      datasets
     },
     options: {
       scales: {
@@ -403,7 +444,8 @@ const renderQualityChart = (report) => {
 const runQualityEval = async () => {
   qualityEvalLoading.value = true
   try {
-    const data = await runRagQualityEval()
+    const engine = selectedEngine.value || undefined
+    const data = await runRagQualityEval(engine)
     qualityEvalReport.value = data
     qualityEvalDetail.value = data // 默认评测的 detail 就是 report 本身
     await nextTick()
@@ -417,7 +459,8 @@ const runQualityEval = async () => {
 
 const loadQualityEvalHistory = async () => {
   try {
-    qualityEvalRuns.value = await loadRagQualityEvalRuns(20) || []
+    const resp = await loadRagQualityEvalRuns(20)
+    qualityEvalRuns.value = Array.isArray(resp) ? resp : (resp?.records || [])
     showQualityHistory.value = true
   } catch (error) {
     hint.value = `加载历史失败: ${error.message || 'unknown'}`
@@ -427,12 +470,23 @@ const loadQualityEvalHistory = async () => {
 const viewQualityEvalDetail = async (runId) => {
   try {
     const data = await loadRagQualityEvalDetail(runId)
+    if (qualityEvalReport.value && qualityEvalReport.value.engine !== data.engine) {
+      comparisonReport.value = qualityEvalReport.value
+    }
     qualityEvalDetail.value = data
     qualityEvalReport.value = data
     await nextTick()
     renderQualityChart(data)
   } catch (error) {
     hint.value = `加载详情失败: ${error.message || 'unknown'}`
+  }
+}
+
+const loadEngineStatus = async () => {
+  try {
+    engineStatus.value = await loadRagasEngineStatus()
+  } catch (e) {
+    // 静默失败，引擎状态不影响主流程
   }
 }
 
@@ -591,5 +645,8 @@ const replay = async () => {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  loadEngineStatus()
+})
 </script>

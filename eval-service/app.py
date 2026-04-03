@@ -4,12 +4,17 @@ from datasets import Dataset
 from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
 from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 
 import inspect
 import os
 import time
 import traceback
 import ragas
+import asyncio
+import nest_asyncio
+
+nest_asyncio.apply()
 
 app = FastAPI(title="Ragas Evaluation Service")
 
@@ -19,6 +24,10 @@ class LLMConfig(BaseModel):
     base_url: str = "https://api.deepseek.com/v1"
     api_key: str = ""
 
+class EmbeddingConfig(BaseModel):
+    model: str = "embedding-3"
+    base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    api_key: str = ""
 
 class EvalCase(BaseModel):
     query: str
@@ -31,11 +40,19 @@ class EvalRequest(BaseModel):
     cases: list[EvalCase]
     metrics: list[str] = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
     llm_config: LLMConfig | None = None
+    embedding_config: EmbeddingConfig | None = None
+    language: str = "chinese"
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "ragas_version": ragas.__version__}
+    embedding_available = bool(os.environ.get("EMBEDDING_API_KEY", "") or os.environ.get("LLM_API_KEY", ""))
+    return {
+        "status": "ok",
+        "ragas_version": ragas.__version__,
+        "embedding_available": embedding_available,
+        "default_language": "chinese"
+    }
 
 
 def _build_llm(req: EvalRequest) -> ChatOpenAI:
@@ -53,6 +70,17 @@ def _build_llm(req: EvalRequest) -> ChatOpenAI:
 
     return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
 
+def _build_embeddings(req: EvalRequest) -> OpenAIEmbeddings | None:
+    emb_config = req.embedding_config or EmbeddingConfig()
+    api_key = emb_config.api_key or os.environ.get("EMBEDDING_API_KEY", "") or os.environ.get("LLM_API_KEY", "")
+    model = emb_config.model or os.environ.get("EMBEDDING_MODEL", "embedding-3")
+    base_url = emb_config.base_url or os.environ.get("EMBEDDING_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+
+    if not api_key:
+        return None
+
+    return OpenAIEmbeddings(model=model, api_key=api_key, base_url=base_url)
+
 
 def _resolve_metrics(metric_names: list[str]) -> list:
     metric_map = {
@@ -66,12 +94,47 @@ def _resolve_metrics(metric_names: list[str]) -> list:
         selected = [faithfulness, answer_relevancy, context_precision, context_recall]
     return selected
 
+async def _adapt_metrics_language(metrics: list, language: str, llm) -> list:
+    """使用 Ragas adapt API 将指标的内部 prompt 适配为目标语言。"""
+    if not language or language == "english":
+        return metrics
+
+    adapted = []
+    for metric in metrics:
+        try:
+            # 尝试使用 Ragas 的 adapt 方法
+            # Ragas 0.2.x 的每个 metric 有多个 prompt 属性
+            prompt_attrs = [attr for attr in dir(metric) if 'prompt' in attr.lower() and not attr.startswith('_')]
+            for attr_name in prompt_attrs:
+                prompt_obj = getattr(metric, attr_name, None)
+                if prompt_obj is not None and hasattr(prompt_obj, 'adapt'):
+                    try:
+                        adapted_prompt = await prompt_obj.adapt(target_language=language, llm=llm)
+                        setattr(metric, attr_name, adapted_prompt)
+                    except Exception:
+                        pass  # 部分 prompt 可能不支持 adapt，静默跳过
+            adapted.append(metric)
+        except Exception:
+            adapted.append(metric)  # 适配失败时保留原始 metric
+
+    return adapted
+
+def _adapt_metrics_sync(metrics: list, language: str, llm) -> list:
+    """同步包装 adapt 调用。nest_asyncio 已在模块初始化时 apply，可直接 asyncio.run。"""
+    try:
+        return asyncio.run(_adapt_metrics_language(metrics, language, llm))
+    except Exception as e:
+        print(f"Metric language adaptation failed, using original metrics: {e}")
+        return metrics
+
 
 @app.post("/evaluate")
 def run_evaluate(req: EvalRequest) -> dict:
     start_time = time.time()
     try:
         llm = _build_llm(req)
+        embeddings = _build_embeddings(req)
+
         dataset = Dataset.from_dict(
             {
                 "question": [c.query for c in req.cases],
@@ -83,13 +146,19 @@ def run_evaluate(req: EvalRequest) -> dict:
 
         selected_metrics = _resolve_metrics(req.metrics)
 
-        # ragas 版本差异兼容：优先尝试 llm 参数；若不支持则回退到环境变量路径。
+        # 中文语言适配
+        if req.language and req.language != "english":
+            selected_metrics = _adapt_metrics_sync(selected_metrics, req.language, llm)
+
+        # ragas 版本差异兼容
         try:
             sig = inspect.signature(evaluate)
+            kwargs = {"metrics": selected_metrics}
             if "llm" in sig.parameters:
-                result = evaluate(dataset, metrics=selected_metrics, llm=llm)
-            else:
-                result = evaluate(dataset, metrics=selected_metrics)
+                kwargs["llm"] = llm
+            if embeddings and "embeddings" in sig.parameters:
+                kwargs["embeddings"] = embeddings
+            result = evaluate(dataset, **kwargs)
         except TypeError:
             result = evaluate(dataset, metrics=selected_metrics)
 
@@ -116,6 +185,7 @@ def run_evaluate(req: EvalRequest) -> dict:
             "avg": avg,
             "ragas_version": ragas.__version__,
             "eval_duration_ms": elapsed_ms,
+            "language": req.language,
         }
     except HTTPException:
         raise

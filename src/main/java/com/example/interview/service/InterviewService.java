@@ -327,16 +327,28 @@ public class InterviewService {
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval() {
+        return runRAGQualityEval(null);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval(String engine) {
         ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.runDefaultEval();
+        return ragQualityEvaluationService.runDefaultEval(engine);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
             List<RAGQualityEvaluationService.QualityEvalCase> cases,
             RAGQualityEvaluationService.EvalRunOptions options
     ) {
+        return runRAGQualityEvalWithCases(cases, options, null);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
+            List<RAGQualityEvaluationService.QualityEvalCase> cases,
+            RAGQualityEvaluationService.EvalRunOptions options,
+            String engine
+    ) {
         ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.runCustomEval(cases, options);
+        return ragQualityEvaluationService.runCustomEval(cases, options, engine);
     }
 
     public List<RAGQualityEvaluationService.QualityEvalRunSummary> listRecentRAGQualityEvalRuns(int limit) {
@@ -357,6 +369,11 @@ public class InterviewService {
     public RAGQualityEvaluationService.QualityEvalTrend getRAGQualityEvalTrend(int limit) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.getTrend(limit);
+    }
+
+    public Map<String, Object> getRAGQualityEvalEngineStatus() {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.getEngineStatus();
     }
 
     public boolean isRagTraceEnabled() {

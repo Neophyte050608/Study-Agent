@@ -693,9 +693,11 @@ public class InterviewController {
      * 运行 RAG 生成质量评测（默认数据集）。
      */
     @GetMapping("/observability/rag-quality-eval")
-    public ResponseEntity<?> runRagQualityEval() {
+    public ResponseEntity<?> runRagQualityEval(
+            @RequestParam(value = "engine", required = false) String engine
+    ) {
         try {
-            return ResponseEntity.ok(interviewService.runRAGQualityEval());
+            return ResponseEntity.ok(interviewService.runRAGQualityEval(engine));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }
@@ -733,7 +735,8 @@ public class InterviewController {
                     parameterSnapshot,
                     notes
             );
-            return ResponseEntity.ok(interviewService.runRAGQualityEvalWithCases(cases, options));
+            String engine = stringifyValue(payload.get("engine"));
+            return ResponseEntity.ok(interviewService.runRAGQualityEvalWithCases(cases, options, engine));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }
@@ -803,6 +806,18 @@ public class InterviewController {
         try {
             int normalizedLimit = limit == null ? 20 : limit;
             return ResponseEntity.ok(interviewService.getRAGQualityEvalTrend(normalizedLimit));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取 RAG 生成质量评测引擎状态。
+     */
+    @GetMapping("/observability/rag-quality-eval/engine-status")
+    public ResponseEntity<?> getRagQualityEvalEngineStatus() {
+        try {
+            return ResponseEntity.ok(interviewService.getRAGQualityEvalEngineStatus());
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }

@@ -106,12 +106,13 @@ export function reloadPromptCache() {
 }
 
 // ===== RAG 生成质量评测 =====
-export function runRagQualityEval() {
-  return httpGet('/api/observability/rag-quality-eval')
+export function runRagQualityEval(engine) {
+  const params = engine ? `?engine=${engine}` : ''
+  return httpGet(`/api/observability/rag-quality-eval${params}`)
 }
 
-export function runRagQualityEvalCustom(cases, options) {
-  return httpPostJson('/api/observability/rag-quality-eval/run', { cases, options })
+export function runRagQualityEvalCustom(cases, options, engine) {
+  return httpPostJson('/api/observability/rag-quality-eval/run', { cases, options, engine })
 }
 
 export function loadRagQualityEvalRuns(limit = 20) {
@@ -128,4 +129,8 @@ export function compareRagQualityEvalRuns(baselineRunId, candidateRunId) {
 
 export function loadRagQualityEvalTrend(limit = 20) {
   return httpGet(`/api/observability/rag-quality-eval/trend?limit=${limit}`)
+}
+
+export function loadRagasEngineStatus() {
+  return httpGet('/api/observability/rag-quality-eval/engine-status')
 }
