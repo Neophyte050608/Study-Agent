@@ -25,6 +25,7 @@ public class InterviewService {
     private final McpGatewayService mcpGatewayService;
     private final RAGObservabilityService ragObservabilityService;
     private final RetrievalEvaluationService retrievalEvaluationService;
+    private final RAGQualityEvaluationService ragQualityEvaluationService;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
 
     public InterviewService(
@@ -34,6 +35,7 @@ public class InterviewService {
             McpGatewayService mcpGatewayService,
             RAGObservabilityService ragObservabilityService,
             RetrievalEvaluationService retrievalEvaluationService,
+            RAGQualityEvaluationService ragQualityEvaluationService,
             ObservabilitySwitchProperties observabilitySwitchProperties
     ) {
         this.orchestratorAgent = orchestratorAgent;
@@ -42,6 +44,7 @@ public class InterviewService {
         this.mcpGatewayService = mcpGatewayService;
         this.ragObservabilityService = ragObservabilityService;
         this.retrievalEvaluationService = retrievalEvaluationService;
+        this.ragQualityEvaluationService = ragQualityEvaluationService;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
     }
 
@@ -323,6 +326,39 @@ public class InterviewService {
         return retrievalEvaluationService.parseCasesFromCsv(csvText);
     }
 
+    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval() {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.runDefaultEval();
+    }
+
+    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
+            List<RAGQualityEvaluationService.QualityEvalCase> cases,
+            RAGQualityEvaluationService.EvalRunOptions options
+    ) {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.runCustomEval(cases, options);
+    }
+
+    public List<RAGQualityEvaluationService.QualityEvalRunSummary> listRecentRAGQualityEvalRuns(int limit) {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.listRecentRuns(limit);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalReport getRAGQualityEvalRunDetail(String runId) {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.getRunDetail(runId);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalComparison compareRAGQualityEvalRuns(String baselineId, String candidateId) {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.compareRuns(baselineId, candidateId);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalTrend getRAGQualityEvalTrend(int limit) {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.getTrend(limit);
+    }
+
     public boolean isRagTraceEnabled() {
         return observabilitySwitchProperties.isRagTraceEnabled();
     }
@@ -331,19 +367,27 @@ public class InterviewService {
         return observabilitySwitchProperties.isRetrievalEvalEnabled();
     }
 
+    public boolean isRagQualityEvalEnabled() {
+        return observabilitySwitchProperties.isRagQualityEvalEnabled();
+    }
+
     public java.util.Map<String, Object> getObservabilitySwitches() {
         return java.util.Map.of(
                 "ragTraceEnabled", observabilitySwitchProperties.isRagTraceEnabled(),
-                "retrievalEvalEnabled", observabilitySwitchProperties.isRetrievalEvalEnabled()
+                "retrievalEvalEnabled", observabilitySwitchProperties.isRetrievalEvalEnabled(),
+                "ragQualityEvalEnabled", observabilitySwitchProperties.isRagQualityEvalEnabled()
         );
     }
 
-    public java.util.Map<String, Object> updateObservabilitySwitches(Boolean ragTraceEnabled, Boolean retrievalEvalEnabled) {
+    public java.util.Map<String, Object> updateObservabilitySwitches(Boolean ragTraceEnabled, Boolean retrievalEvalEnabled, Boolean ragQualityEvalEnabled) {
         if (ragTraceEnabled != null) {
             observabilitySwitchProperties.setRagTraceEnabled(ragTraceEnabled);
         }
         if (retrievalEvalEnabled != null) {
             observabilitySwitchProperties.setRetrievalEvalEnabled(retrievalEvalEnabled);
+        }
+        if (ragQualityEvalEnabled != null) {
+            observabilitySwitchProperties.setRagQualityEvalEnabled(ragQualityEvalEnabled);
         }
         return getObservabilitySwitches();
     }
@@ -351,6 +395,12 @@ public class InterviewService {
     private void ensureRetrievalEvalEnabled() {
         if (!observabilitySwitchProperties.isRetrievalEvalEnabled()) {
             throw new IllegalStateException("召回率评测已关闭，请设置 app.observability.retrieval-eval-enabled=true 后重试");
+        }
+    }
+
+    private void ensureRagQualityEvalEnabled() {
+        if (!observabilitySwitchProperties.isRagQualityEvalEnabled()) {
+            throw new IllegalStateException("RAG 生成质量评测已关闭，请设置 app.observability.rag-quality-eval-enabled=true 后重试");
         }
     }
 

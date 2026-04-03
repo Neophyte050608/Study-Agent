@@ -405,3 +405,45 @@ CREATE TABLE IF NOT EXISTS `t_knowledge_chunk_ctrl` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_chunk_ctrl` (`doc_id`, `chunk_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识分块启停控制表';
+
+-- 创建 RAG 生成质量评测运行汇总表
+CREATE TABLE IF NOT EXISTS `t_rag_quality_eval_run` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `run_id` VARCHAR(128) NOT NULL COMMENT '评测运行唯一标识',
+    `dataset_source` VARCHAR(64) DEFAULT '' COMMENT '数据集来源',
+    `run_label` VARCHAR(255) DEFAULT '' COMMENT '展示标签',
+    `experiment_tag` VARCHAR(128) DEFAULT '' COMMENT '实验标签',
+    `parameter_snapshot` JSON COMMENT '参数快照',
+    `notes` VARCHAR(1000) DEFAULT '' COMMENT '备注',
+    `total_cases` INT DEFAULT 0,
+    `avg_faithfulness` DOUBLE DEFAULT 0.0 COMMENT '平均忠实度',
+    `avg_answer_relevancy` DOUBLE DEFAULT 0.0 COMMENT '平均回答相关性',
+    `avg_context_precision` DOUBLE DEFAULT 0.0 COMMENT '平均上下文精准度',
+    `avg_context_recall` DOUBLE DEFAULT 0.0 COMMENT '平均上下文召回',
+    `report_timestamp` VARCHAR(64) DEFAULT '',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_run_id` (`run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG生成质量评测运行汇总';
+
+-- 创建 RAG 生成质量评测单样本结果表
+CREATE TABLE IF NOT EXISTS `t_rag_quality_eval_case` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `run_id` VARCHAR(128) NOT NULL,
+    `case_index` INT DEFAULT 0,
+    `query` VARCHAR(500) DEFAULT '',
+    `ground_truth_answer` TEXT COMMENT '标准答案',
+    `generated_answer` TEXT COMMENT 'LLM生成答案',
+    `retrieved_context` MEDIUMTEXT COMMENT '检索上下文',
+    `tag` VARCHAR(64) DEFAULT '',
+    `faithfulness` DOUBLE DEFAULT 0.0,
+    `answer_relevancy` DOUBLE DEFAULT 0.0,
+    `context_precision` DOUBLE DEFAULT 0.0,
+    `context_recall` DOUBLE DEFAULT 0.0,
+    `metric_rationales` JSON COMMENT '各指标评分理由',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_run_id` (`run_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG生成质量评测样本结果';

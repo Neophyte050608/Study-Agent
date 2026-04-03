@@ -14,6 +14,7 @@ import com.example.interview.service.IngestConfigService;
 import com.example.interview.service.IngestionService;
 import com.example.interview.service.InterviewService;
 import com.example.interview.service.OpsAuditService;
+import com.example.interview.service.RAGQualityEvaluationService;
 import com.example.interview.service.RetrievalEvaluationService;
 import com.example.interview.service.UserIdentityResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +36,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -522,10 +524,11 @@ public class InterviewController {
     public ResponseEntity<?> updateObservabilitySwitches(@RequestBody Map<String, Object> payload) {
         Boolean ragTraceEnabled = parseBooleanFlag(payload.get("ragTraceEnabled"));
         Boolean retrievalEvalEnabled = parseBooleanFlag(payload.get("retrievalEvalEnabled"));
-        if (ragTraceEnabled == null && retrievalEvalEnabled == null) {
+        Boolean ragQualityEvalEnabled = parseBooleanFlag(payload.get("ragQualityEvalEnabled"));
+        if (ragTraceEnabled == null && retrievalEvalEnabled == null && ragQualityEvalEnabled == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "请至少提供一个开关字段"));
         }
-        return ResponseEntity.ok(interviewService.updateObservabilitySwitches(ragTraceEnabled, retrievalEvalEnabled));
+        return ResponseEntity.ok(interviewService.updateObservabilitySwitches(ragTraceEnabled, retrievalEvalEnabled, ragQualityEvalEnabled));
     }
 
     /**
@@ -683,6 +686,125 @@ public class InterviewController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测集文件读取失败"));
+        }
+    }
+
+    /**
+     * 运行 RAG 生成质量评测（默认数据集）。
+     */
+    @GetMapping("/observability/rag-quality-eval")
+    public ResponseEntity<?> runRagQualityEval() {
+        try {
+            return ResponseEntity.ok(interviewService.runRAGQualityEval());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 运行自定义数据集 RAG 生成质量评测。
+     */
+    @PostMapping("/observability/rag-quality-eval/run")
+    public ResponseEntity<?> runRagQualityEvalWithCases(@RequestBody Map<String, Object> payload) {
+        try {
+            List<RAGQualityEvaluationService.QualityEvalCase> cases = parseQualityEvalCases(payload.get("cases"));
+            if (cases.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测用例为空，请提供 cases"));
+            }
+
+            Object rawOptions = payload.get("options");
+            String datasetSource = stringifyValue(payload.get("datasetSource"));
+            String runLabel = stringifyValue(payload.get("runLabel"));
+            String experimentTag = stringifyValue(payload.get("experimentTag"));
+            Map<String, Object> parameterSnapshot = extractParameterSnapshot(payload.get("parameterSnapshot"));
+            String notes = stringifyValue(payload.get("notes"));
+            if (rawOptions instanceof Map<?, ?> map) {
+                datasetSource = stringifyValue(map.get("datasetSource"));
+                runLabel = stringifyValue(map.get("runLabel"));
+                experimentTag = stringifyValue(map.get("experimentTag"));
+                parameterSnapshot = extractParameterSnapshot(map.get("parameterSnapshot"));
+                notes = stringifyValue(map.get("notes"));
+            }
+
+            RAGQualityEvaluationService.EvalRunOptions options = new RAGQualityEvaluationService.EvalRunOptions(
+                    datasetSource,
+                    runLabel,
+                    experimentTag,
+                    parameterSnapshot,
+                    notes
+            );
+            return ResponseEntity.ok(interviewService.runRAGQualityEvalWithCases(cases, options));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 查询 RAG 生成质量评测历史列表。
+     */
+    @GetMapping("/observability/rag-quality-eval/runs")
+    public ResponseEntity<?> listRagQualityEvalRuns(
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit
+    ) {
+        try {
+            int normalizedLimit = limit == null ? 20 : limit;
+            return ResponseEntity.ok(Map.of(
+                    "limit", normalizedLimit,
+                    "records", interviewService.listRecentRAGQualityEvalRuns(normalizedLimit)
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 查询单次 RAG 生成质量评测详情。
+     */
+    @GetMapping("/observability/rag-quality-eval/runs/{runId}")
+    public ResponseEntity<?> getRagQualityEvalRunDetail(@PathVariable("runId") String runId) {
+        try {
+            RAGQualityEvaluationService.QualityEvalReport report = interviewService.getRAGQualityEvalRunDetail(runId);
+            if (report == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的RAG生成质量评测运行"));
+            }
+            return ResponseEntity.ok(report);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 对比两次 RAG 生成质量评测运行结果。
+     */
+    @GetMapping("/observability/rag-quality-eval/compare")
+    public ResponseEntity<?> compareRagQualityEvalRuns(
+            @RequestParam("baselineRunId") String baselineRunId,
+            @RequestParam("candidateRunId") String candidateRunId
+    ) {
+        try {
+            RAGQualityEvaluationService.QualityEvalComparison comparison =
+                    interviewService.compareRAGQualityEvalRuns(baselineRunId, candidateRunId);
+            if (comparison == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到可对比的RAG生成质量评测运行"));
+            }
+            return ResponseEntity.ok(comparison);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 查询 RAG 生成质量评测趋势摘要。
+     */
+    @GetMapping("/observability/rag-quality-eval/trend")
+    public ResponseEntity<?> getRagQualityEvalTrend(
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit
+    ) {
+        try {
+            int normalizedLimit = limit == null ? 20 : limit;
+            return ResponseEntity.ok(interviewService.getRAGQualityEvalTrend(normalizedLimit));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }
     }
 
@@ -1001,6 +1123,46 @@ public class InterviewController {
                     return new RetrievalEvaluationService.EvalCase(query, keywords, tag.isBlank() ? "manual" : tag);
                 })
                 .filter(item -> item != null)
+                .toList();
+    }
+
+    /**
+     * 解析 RAG 生成质量评测用例对象。
+     */
+    private List<RAGQualityEvaluationService.QualityEvalCase> parseQualityEvalCases(Object rawCases) {
+        if (!(rawCases instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .map(item -> {
+                    if (!(item instanceof Map<?, ?> map)) {
+                        return null;
+                    }
+                    String query = stringifyValue(map.get("query"));
+                    if (query == null || query.isBlank()) {
+                        return null;
+                    }
+                    String groundTruthAnswer = stringifyValue(map.get("groundTruthAnswer"));
+                    Object rawConcepts = map.get("groundTruthKeyConcepts");
+                    List<String> concepts;
+                    if (rawConcepts instanceof List<?> conceptList) {
+                        concepts = conceptList.stream()
+                                .map(Object::toString)
+                                .map(String::trim)
+                                .filter(word -> !word.isBlank())
+                                .toList();
+                    } else {
+                        concepts = List.of();
+                    }
+                    String tag = stringifyValue(map.get("tag"));
+                    return new RAGQualityEvaluationService.QualityEvalCase(
+                            query.trim(),
+                            groundTruthAnswer == null ? "" : groundTruthAnswer,
+                            concepts,
+                            tag == null || tag.isBlank() ? "manual" : tag
+                    );
+                })
+                .filter(Objects::nonNull)
                 .toList();
     }
 

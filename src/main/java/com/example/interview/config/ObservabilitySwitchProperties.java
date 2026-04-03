@@ -12,6 +12,7 @@ public class ObservabilitySwitchProperties {
 
     private boolean ragTraceEnabled = true;
     private boolean retrievalEvalEnabled = true;
+    private boolean ragQualityEvalEnabled = true;
 
     public boolean isRagTraceEnabled() {
         return ragTraceEnabled;
@@ -27,5 +28,13 @@ public class ObservabilitySwitchProperties {
 
     public void setRetrievalEvalEnabled(boolean retrievalEvalEnabled) {
         this.retrievalEvalEnabled = retrievalEvalEnabled;
+    }
+
+    public boolean isRagQualityEvalEnabled() {
+        return ragQualityEvalEnabled;
+    }
+
+    public void setRagQualityEvalEnabled(boolean ragQualityEvalEnabled) {
+        this.ragQualityEvalEnabled = ragQualityEvalEnabled;
     }
 }

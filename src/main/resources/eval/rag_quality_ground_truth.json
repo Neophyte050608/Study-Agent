@@ -1,0 +1,98 @@
+[
+  {
+    "query": "Spring事务传播行为有哪些",
+    "groundTruthAnswer": "Spring定义了7种事务传播行为：REQUIRED在有事务时加入、无事务时新建；SUPPORTS有则加入无则非事务；MANDATORY要求必须存在事务；REQUIRES_NEW总是开启新事务并挂起外层；NOT_SUPPORTED以非事务执行并挂起外层；NEVER要求必须无事务；NESTED在外层事务内创建保存点，失败时可局部回滚。",
+    "groundTruthKeyConcepts": ["REQUIRED", "SUPPORTS", "MANDATORY", "REQUIRES_NEW", "NOT_SUPPORTED", "NEVER", "NESTED"],
+    "tag": "spring"
+  },
+  {
+    "query": "Spring Boot自动配置原理",
+    "groundTruthAnswer": "Spring Boot启动时通过@EnableAutoConfiguration触发自动装配，核心由AutoConfigurationImportSelector读取自动配置候选类。候选来源在spring.factories或AutoConfiguration.imports中声明，最终按条件注解决定是否生效，例如@ConditionalOnClass、@ConditionalOnMissingBean和@ConditionalOnProperty，实现按需装配与覆盖。",
+    "groundTruthKeyConcepts": ["EnableAutoConfiguration", "AutoConfigurationImportSelector", "ConditionalOnClass", "ConditionalOnMissingBean", "spring.factories"],
+    "tag": "spring"
+  },
+  {
+    "query": "Redis缓存雪崩怎么处理",
+    "groundTruthAnswer": "缓存雪崩是大量key在同一时间失效或Redis整体不可用，导致请求集中打到数据库。常见治理手段是过期时间随机打散、热点数据永不过期并异步刷新、多级缓存与本地缓存兜底、服务降级限流熔断、数据库读写隔离与扩容，同时提升Redis高可用能力如主从+哨兵或集群，避免单点故障。",
+    "groundTruthKeyConcepts": ["过期时间打散", "多级缓存", "降级限流", "熔断", "高可用"],
+    "tag": "redis"
+  },
+  {
+    "query": "Redis持久化机制有哪些",
+    "groundTruthAnswer": "Redis主要有RDB和AOF两类持久化。RDB按快照方式在指定时机将内存数据写入磁盘，恢复速度快但可能丢失最后一次快照后的数据。AOF记录写命令追加日志，数据更完整，可配置每秒刷盘平衡性能与可靠性。生产中常采用RDB+AOF组合，并定期重写AOF减少文件体积。",
+    "groundTruthKeyConcepts": ["RDB", "AOF", "appendfsync", "AOF重写", "数据恢复"],
+    "tag": "redis"
+  },
+  {
+    "query": "JVM内存模型有哪些区域",
+    "groundTruthAnswer": "JVM运行时数据区通常包括：线程私有的程序计数器、虚拟机栈和本地方法栈；线程共享的堆与方法区。堆是对象实例与数组主要存放区域，方法区保存类元数据、常量与静态变量。JDK8后永久代被元空间替代，元空间使用本地内存。理解各区域有助于定位OOM、栈溢出和GC问题。",
+    "groundTruthKeyConcepts": ["程序计数器", "虚拟机栈", "堆", "方法区", "元空间"],
+    "tag": "jvm"
+  },
+  {
+    "query": "G1垃圾回收器的特点",
+    "groundTruthAnswer": "G1将堆划分为多个Region，按收益优先回收垃圾最多的Region，目标是可预测停顿。它同时具备并行与并发能力，包含Young GC、Mixed GC等阶段，并通过Remembered Set跟踪跨Region引用。相比CMS，G1在大堆下更易控制停顿时间，但需要合理设置堆大小、暂停目标与触发阈值。",
+    "groundTruthKeyConcepts": ["Region", "停顿可预测", "Mixed GC", "Remembered Set", "并发回收"],
+    "tag": "jvm"
+  },
+  {
+    "query": "MySQL隔离级别有哪些",
+    "groundTruthAnswer": "MySQL InnoDB支持4种隔离级别：Read Uncommitted、Read Committed、Repeatable Read、Serializable。隔离级别越高并发能力通常越低。Read Committed可避免脏读；Repeatable Read在MySQL中结合MVCC和间隙锁可避免不可重复读并尽量抑制幻读；Serializable通过强加锁实现最强隔离，适合低并发高一致场景。",
+    "groundTruthKeyConcepts": ["Read Uncommitted", "Read Committed", "Repeatable Read", "Serializable", "MVCC"],
+    "tag": "mysql"
+  },
+  {
+    "query": "MySQL索引失效的常见场景",
+    "groundTruthAnswer": "索引失效常见于：未满足最左前缀、对索引列做函数或表达式计算、隐式类型转换、前导模糊查询如like '%x'、不等于或范围条件后继续使用联合索引列、选择性过低导致优化器放弃索引，以及统计信息失真。排查应结合explain观察type、key、rows并按SQL与索引设计联动优化。",
+    "groundTruthKeyConcepts": ["最左前缀", "隐式转换", "like前导通配", "范围查询", "explain"],
+    "tag": "mysql"
+  },
+  {
+    "query": "volatile关键字的作用",
+    "groundTruthAnswer": "volatile保证变量的可见性与一定的有序性：一个线程写入volatile变量后，其他线程能立即看到最新值；同时通过内存屏障禁止特定重排序。但volatile不保证复合操作的原子性，例如i++仍可能并发冲突。它适用于状态标志、一次性发布和双重检查锁中防止指令重排，不适合高竞争计数场景。",
+    "groundTruthKeyConcepts": ["可见性", "有序性", "内存屏障", "非原子性", "指令重排"],
+    "tag": "concurrent"
+  },
+  {
+    "query": "synchronized和Lock的区别",
+    "groundTruthAnswer": "synchronized是JVM内置监视器锁，语法简单且自动释放锁；Lock是显式锁接口，需手动加解锁，通常放在try-finally中。Lock提供更丰富能力，如可中断获取锁、尝试加锁、超时和公平策略，还可配合Condition实现多条件队列。高并发复杂协作场景常用ReentrantLock，简单互斥优先synchronized。",
+    "groundTruthKeyConcepts": ["自动释放", "手动解锁", "可中断", "tryLock", "Condition"],
+    "tag": "concurrent"
+  },
+  {
+    "query": "TCP三次握手和四次挥手",
+    "groundTruthAnswer": "三次握手用于建立连接：客户端发送SYN，服务端返回SYN+ACK，客户端再回ACK，双方确认收发能力与初始序列号。四次挥手用于断开全双工连接：主动方发FIN，被动方回ACK；被动方数据发完再发FIN，主动方回ACK并进入TIME_WAIT。TIME_WAIT用于确保最后ACK可重传并清理旧连接报文。",
+    "groundTruthKeyConcepts": ["SYN", "ACK", "FIN", "序列号", "TIME_WAIT"],
+    "tag": "network"
+  },
+  {
+    "query": "HTTPS握手流程",
+    "groundTruthAnswer": "HTTPS基于TLS建立安全通道。客户端发起ClientHello携带支持的协议与密码套件，服务端返回ServerHello及证书。客户端校验证书链与域名后，协商会话密钥（RSA或ECDHE），双方发送Finished确认握手完成。后续应用数据用对称加密传输，并通过MAC或AEAD保证完整性，从而实现机密性与防篡改。",
+    "groundTruthKeyConcepts": ["TLS", "ClientHello", "证书校验", "密钥协商", "对称加密"],
+    "tag": "network"
+  },
+  {
+    "query": "单例模式实现要点",
+    "groundTruthAnswer": "单例模式目标是确保一个类在进程内只有一个实例并提供全局访问点。常见实现有饿汉式、懒汉式加同步、静态内部类和枚举单例。线程安全与延迟加载需要权衡，双重检查锁需配合volatile防止指令重排。还要考虑反射与反序列化破坏单例的问题，枚举方式在这两点上更稳妥。",
+    "groundTruthKeyConcepts": ["饿汉式", "懒汉式", "双重检查锁", "volatile", "枚举单例"],
+    "tag": "design-pattern"
+  },
+  {
+    "query": "策略模式和工厂模式区别",
+    "groundTruthAnswer": "策略模式强调算法可互换，通常在运行期根据上下文选择具体策略，实现行为切换；工厂模式强调对象创建封装，将实例化逻辑与使用方解耦。策略关注“做什么算法”，工厂关注“怎么创建对象”。二者可组合：先由工厂创建不同策略，再由上下文按条件调度，以减少if-else并提升扩展性。",
+    "groundTruthKeyConcepts": ["行为切换", "对象创建", "解耦", "运行期选择", "组合使用"],
+    "tag": "design-pattern"
+  },
+  {
+    "query": "Kafka为什么吞吐高",
+    "groundTruthAnswer": "Kafka高吞吐来自多方面：顺序写磁盘减少随机IO开销；利用操作系统页缓存与批量发送降低系统调用；零拷贝技术减少用户态与内核态数据复制；分区机制支持多生产者和多消费者并行；拉取模型与压缩机制进一步提高网络利用率。同时通过副本与ISR在性能和可靠性间平衡。",
+    "groundTruthKeyConcepts": ["顺序写", "页缓存", "零拷贝", "分区并行", "ISR"],
+    "tag": "mq"
+  },
+  {
+    "query": "消息队列如何保证不丢消息",
+    "groundTruthAnswer": "保证不丢消息需端到端设计：生产端开启发送确认并处理重试与回调；Broker侧启用持久化、副本同步和高可用部署；消费端采用手动提交位点，先处理业务再ack，并结合幂等机制应对重复投递。关键链路增加监控告警与死信队列，确保异常可追踪、可补偿，最终达到至少一次或恰好一次语义目标。",
+    "groundTruthKeyConcepts": ["发送确认", "持久化", "副本同步", "手动提交", "幂等"],
+    "tag": "mq"
+  }
+]
