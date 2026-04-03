@@ -345,3 +345,63 @@ CREATE TABLE IF NOT EXISTS `t_prompt_template` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提示词模板';
+
+-- ==================== 知识库管理 Phase A ====================
+-- 知识库表
+CREATE TABLE IF NOT EXISTS `t_knowledge_base` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `name` VARCHAR(128) NOT NULL COMMENT '知识库名称',
+    `status` VARCHAR(32) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE/INACTIVE',
+    `source_type` VARCHAR(64) DEFAULT 'LOCAL_VAULT' COMMENT '来源类型：LOCAL_VAULT/BROWSER_UPLOAD/OTHER',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_kb_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识库实体表';
+
+-- 文档表（Phase A 允许为空；查询可按 RAG Parent 视图兜底）
+CREATE TABLE IF NOT EXISTS `t_knowledge_document` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `kb_id` BIGINT NOT NULL COMMENT '所属知识库ID',
+    `doc_name` VARCHAR(255) NOT NULL COMMENT '文档名称',
+    `status` VARCHAR(32) NOT NULL DEFAULT 'READY' COMMENT '状态：READY/PROCESSING/FAILED',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    `source_type` VARCHAR(64) DEFAULT 'LOCAL_VAULT' COMMENT '来源类型',
+    `source_location` VARCHAR(1024) COMMENT '源位置路径或URL',
+    `chunk_count` INT NOT NULL DEFAULT 0 COMMENT '分块数量',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_kb_id` (`kb_id`),
+    KEY `idx_doc_name` (`doc_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识库文档表';
+
+-- 入库任务历史（Phase A 留档）
+CREATE TABLE IF NOT EXISTS `t_ingestion_task_history` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `task_id` VARCHAR(128) NOT NULL COMMENT '任务ID',
+    `pipeline_name` VARCHAR(128) NOT NULL COMMENT '管道名称',
+    `source_type` VARCHAR(64) NOT NULL COMMENT '数据源类型',
+    `status` VARCHAR(32) NOT NULL COMMENT '任务状态',
+    `started_at` BIGINT NOT NULL COMMENT '开始时间(ms)',
+    `ended_at` BIGINT NOT NULL COMMENT '结束时间(ms)',
+    `duration_ms` BIGINT NOT NULL DEFAULT 0 COMMENT '耗时',
+    `summary` JSON COMMENT '摘要(Map结构)',
+    `error_message` TEXT COMMENT '错误信息',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_task_id` (`task_id`),
+    KEY `idx_source_type` (`source_type`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库任务历史表';
+
+-- 分块启停控制表（Phase B 轻量控制，覆盖 t_rag_child 的展示启停）
+CREATE TABLE IF NOT EXISTS `t_knowledge_chunk_ctrl` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `doc_id` VARCHAR(128) NOT NULL COMMENT '父文档ID（对应 parent_id）',
+    `chunk_id` VARCHAR(128) NOT NULL COMMENT '子块ID（对应 child_id 或向量ID）',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用（仅前端展示控制）',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_chunk_ctrl` (`doc_id`, `chunk_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识分块启停控制表';

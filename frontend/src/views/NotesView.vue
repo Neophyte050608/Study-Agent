@@ -76,8 +76,8 @@
       <!-- Tab Contents -->
       <div class="min-h-[400px]">
         <KnowledgeBaseTab v-if="activeTab === 'kb'" :config="config" />
-        <DocumentsTab v-else-if="activeTab === 'docs'" :reports="stats.recentReports" />
-        <ChunksTab v-else-if="activeTab === 'chunks'" />
+        <DocumentsTab v-else-if="activeTab === 'docs'" @view-chunks="handleViewChunks" />
+        <ChunksTab v-else-if="activeTab === 'chunks'" :docId="selectedDocId" @back="activeTab = 'docs'" />
         <SyncTasksTab v-else-if="activeTab === 'tasks'" :reports="stats.recentReports" :lastSyncTime="lastSyncTime" />
       </div>
     </main>
@@ -97,12 +97,19 @@ import SyncTasksTab from './knowledge/SyncTasksTab.vue'
 import SyncConfigModal from './knowledge/SyncConfigModal.vue'
 
 const activeTab = ref('kb')
+const selectedDocId = ref(null)
+
 const tabs = [
   { id: 'kb', name: '知识库', icon: 'database' },
   { id: 'docs', name: '文档', icon: 'description' },
   { id: 'chunks', name: '分块', icon: 'view_timeline' },
   { id: 'tasks', name: '同步任务', icon: 'task' }
 ]
+
+const handleViewChunks = (docId) => {
+  selectedDocId.value = docId
+  activeTab.value = 'chunks'
+}
 
 const config = ref({ paths: '', ignoreDirs: '' })
 const stats = ref({ recentReports: [] })

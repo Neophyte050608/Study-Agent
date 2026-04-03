@@ -1,4 +1,17 @@
-import { loadIngestConfig, saveIngestConfig, runIngest, uploadResumePdf, loadIngestStats } from '../api/notes'
+import { 
+  loadIngestConfig, 
+  saveIngestConfig, 
+  runIngest, 
+  uploadResumePdf, 
+  loadIngestStats,
+  getKnowledgeBases,
+  getDocuments,
+  getChunks,
+  setDocumentEnabled,
+  removeDocument,
+  rechunkDocument,
+  setChunkEnabled
+} from '../api/notes'
 
 export const knowledgeService = {
   async getConfig() {
@@ -25,11 +38,32 @@ export const knowledgeService = {
       successRate: res?.successRate || '0%',
       failedFiles: res?.failedFiles || 0,
       recentReports: (res?.recentReports || []).map(r => ({
-        fileName: r.fileName,
-        status: r.status,
-        message: r.message,
-        timestamp: r.timestamp || Date.now()
+        fileName: r.fileName || r.sourceType,
+        status: r.status === 'SUCCESS' ? 'success' : 'failed',
+        message: r.errorMessage || '任务处理完毕',
+        timestamp: r.startedAt || Date.now()
       }))
     }
+  },
+  async getKnowledgeBases() {
+    return await getKnowledgeBases()
+  },
+  async getDocuments(kbId, params) {
+    return await getDocuments(kbId, params)
+  },
+  async getChunks(docId, params) {
+    return await getChunks(docId, params)
+  },
+  async setDocumentEnabled(docId, enabled) {
+    return await setDocumentEnabled(docId, enabled)
+  },
+  async deleteDocument(docId) {
+    return await removeDocument(docId)
+  },
+  async rechunkDocument(docId) {
+    return await rechunkDocument(docId)
+  },
+  async setChunkEnabled(docId, chunkId, enabled) {
+    return await setChunkEnabled(docId, chunkId, enabled)
   }
 }

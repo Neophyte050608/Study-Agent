@@ -1,4 +1,4 @@
-﻿function getAuthHeaders() {
+function getAuthHeaders() {
   const headers = {}
   const token = localStorage.getItem('auth_token')
   if (token) {
@@ -61,6 +61,27 @@ export async function httpPostFormData(url, formData) {
 export async function httpPut(url, payload = {}) {
   const response = await fetch(url, {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload)
+  })
+  const raw = await response.text()
+  let data = {}
+  if (raw) {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { message: raw }
+    }
+  }
+  if (!response.ok) {
+    throw new Error(data.message || `请求失败: ${response.status}`)
+  }
+  return data
+}
+
+export async function httpPatch(url, payload = {}) {
+  const response = await fetch(url, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload)
   })

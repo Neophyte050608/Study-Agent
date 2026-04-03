@@ -1,5 +1,9 @@
 package com.example.interview.ingestion;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.interview.entity.IngestionTaskHistoryDO;
+import com.example.interview.mapper.IngestionTaskHistoryMapper;
 import com.example.interview.rag.DocumentSplitter;
 import com.example.interview.rag.NoteLoader;
 import com.example.interview.rag.ObsidianKnowledgeExtractor;
@@ -63,6 +67,7 @@ public class IngestionTaskService {
     private final NoteLoader noteLoader;
     private final ObsidianKnowledgeExtractor knowledgeExtractor;
     private final DocumentSplitter documentSplitter;
+    private final IngestionTaskHistoryMapper ingestionTaskHistoryMapper;
     /**
      * 任务历史顺序队列：最近任务在前（addFirst），用于 listTasks 按时间倒序返回。
      */
@@ -78,7 +83,8 @@ public class IngestionTaskService {
             IngestionStageNodeRegistry stageNodeRegistry,
             NoteLoader noteLoader,
             ObsidianKnowledgeExtractor knowledgeExtractor,
-            DocumentSplitter documentSplitter
+            DocumentSplitter documentSplitter,
+            IngestionTaskHistoryMapper ingestionTaskHistoryMapper
     ) {
         this.ingestionService = ingestionService;
         this.pipelineRegistry = pipelineRegistry;
@@ -86,6 +92,7 @@ public class IngestionTaskService {
         this.noteLoader = noteLoader;
         this.knowledgeExtractor = knowledgeExtractor;
         this.documentSplitter = documentSplitter;
+        this.ingestionTaskHistoryMapper = ingestionTaskHistoryMapper;
     }
 
     /**
@@ -214,18 +221,7 @@ public class IngestionTaskService {
      * @return 任务快照列表
      */
     public List<IngestionTaskSnapshot> listTasks(int limit) {
-        int safeLimit = Math.max(1, Math.min(limit, MAX_HISTORY));
-        List<IngestionTaskSnapshot> result = new ArrayList<>();
-        for (String taskId : historyOrder) {
-            IngestionTaskSnapshot snapshot = snapshots.get(taskId);
-            if (snapshot != null) {
-                result.add(snapshot);
-            }
-            if (result.size() >= safeLimit) {
-                break;
-            }
-        }
-        return result;
+        return listTasks(limit, null, null);
     }
 
     /**
@@ -239,12 +235,31 @@ public class IngestionTaskService {
      * @return 过滤后的任务快照列表
      */
     public List<IngestionTaskSnapshot> listTasks(int limit, String sourceType, String status) {
-        List<IngestionTaskSnapshot> snapshots = listTasks(limit);
+        int safeLimit = Math.max(1, Math.min(limit, MAX_HISTORY));
         String normalizedSourceType = normalizeOptional(sourceType);
         String normalizedStatus = normalizeOptional(status);
-        return snapshots.stream()
-                .filter(item -> normalizedSourceType == null || item.sourceType().equalsIgnoreCase(normalizedSourceType))
-                .filter(item -> normalizedStatus == null || item.status().name().equalsIgnoreCase(normalizedStatus))
+        Map<String, IngestionTaskSnapshot> merged = new LinkedHashMap<>();
+        List<IngestionTaskHistoryDO> historyList = queryHistory(safeLimit * 2, normalizedSourceType, normalizedStatus);
+        for (IngestionTaskHistoryDO history : historyList) {
+            IngestionTaskSnapshot snapshot = toSnapshot(history);
+            merged.put(snapshot.taskId(), snapshot);
+        }
+        for (String taskId : historyOrder) {
+            IngestionTaskSnapshot snapshot = snapshots.get(taskId);
+            if (snapshot == null) {
+                continue;
+            }
+            if (normalizedSourceType != null && !snapshot.sourceType().equalsIgnoreCase(normalizedSourceType)) {
+                continue;
+            }
+            if (normalizedStatus != null && !snapshot.status().name().equalsIgnoreCase(normalizedStatus)) {
+                continue;
+            }
+            merged.put(snapshot.taskId(), snapshot);
+        }
+        return merged.values().stream()
+                .sorted(Comparator.comparingLong(IngestionTaskSnapshot::startedAt).reversed())
+                .limit(safeLimit)
                 .toList();
     }
 
@@ -273,7 +288,17 @@ public class IngestionTaskService {
      * @return 快照（可能不存在）
      */
     public Optional<IngestionTaskSnapshot> findTaskById(String taskId) {
-        return Optional.ofNullable(snapshots.get(taskId));
+        IngestionTaskSnapshot inMemory = snapshots.get(taskId);
+        if (inMemory != null) {
+            return Optional.of(inMemory);
+        }
+        IngestionTaskHistoryDO history = ingestionTaskHistoryMapper.selectOne(
+                new LambdaQueryWrapper<IngestionTaskHistoryDO>().eq(IngestionTaskHistoryDO::getTaskId, taskId).last("LIMIT 1")
+        );
+        if (history == null) {
+            return Optional.empty();
+        }
+        return Optional.of(toSnapshot(history));
     }
 
     /**
@@ -285,6 +310,15 @@ public class IngestionTaskService {
      */
     public Optional<Map<String, Object>> findTaskViewById(String taskId, boolean includeNodeLogs) {
         return findTaskById(taskId).map(item -> toTaskView(item, includeNodeLogs));
+    }
+
+    public boolean hasRunningTasks() {
+        for (IngestionTaskSnapshot snapshot : snapshots.values()) {
+            if (snapshot.status() == IngestionTaskStatus.RUNNING || snapshot.status() == IngestionTaskStatus.PENDING) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -489,12 +523,68 @@ public class IngestionTaskService {
         snapshots.put(snapshot.taskId(), snapshot);
         historyOrder.remove(snapshot.taskId());
         historyOrder.addFirst(snapshot.taskId());
+        persistHistory(snapshot);
         while (historyOrder.size() > MAX_HISTORY) {
             String removedTaskId = historyOrder.pollLast();
             if (removedTaskId != null) {
                 snapshots.remove(removedTaskId);
             }
         }
+    }
+
+    private void persistHistory(IngestionTaskSnapshot snapshot) {
+        IngestionTaskHistoryDO existing = ingestionTaskHistoryMapper.selectOne(
+                new LambdaQueryWrapper<IngestionTaskHistoryDO>().eq(IngestionTaskHistoryDO::getTaskId, snapshot.taskId()).last("LIMIT 1")
+        );
+        IngestionTaskHistoryDO target = existing == null ? new IngestionTaskHistoryDO() : existing;
+        target.setTaskId(snapshot.taskId());
+        target.setPipelineName(snapshot.pipelineName());
+        target.setSourceType(snapshot.sourceType());
+        target.setStatus(snapshot.status().name());
+        target.setStartedAt(snapshot.startedAt());
+        target.setEndedAt(snapshot.endedAt());
+        target.setDurationMs(Math.max(0, snapshot.endedAt() - snapshot.startedAt()));
+        target.setSummary(snapshot.summary());
+        target.setErrorMessage(snapshot.errorMessage());
+        if (existing == null) {
+            ingestionTaskHistoryMapper.insert(target);
+        } else {
+            ingestionTaskHistoryMapper.updateById(target);
+        }
+    }
+
+    private IngestionTaskSnapshot toSnapshot(IngestionTaskHistoryDO history) {
+        IngestionTaskStatus status;
+        try {
+            status = IngestionTaskStatus.valueOf(history.getStatus());
+        } catch (Exception e) {
+            status = IngestionTaskStatus.FAILED;
+        }
+        return new IngestionTaskSnapshot(
+                history.getTaskId(),
+                history.getPipelineName(),
+                history.getSourceType(),
+                status,
+                history.getStartedAt() == null ? 0L : history.getStartedAt(),
+                history.getEndedAt() == null ? 0L : history.getEndedAt(),
+                history.getSummary() == null ? Map.of() : history.getSummary(),
+                List.of(),
+                history.getErrorMessage()
+        );
+    }
+
+    private List<IngestionTaskHistoryDO> queryHistory(int limit, String sourceType, String status) {
+        int safeLimit = Math.max(1, Math.min(limit, MAX_HISTORY));
+        LambdaQueryWrapper<IngestionTaskHistoryDO> wrapper = new LambdaQueryWrapper<>();
+        if (sourceType != null) {
+            wrapper.eq(IngestionTaskHistoryDO::getSourceType, sourceType);
+        }
+        if (status != null) {
+            wrapper.eq(IngestionTaskHistoryDO::getStatus, status.toUpperCase(Locale.ROOT));
+        }
+        wrapper.orderByDesc(IngestionTaskHistoryDO::getStartedAt);
+        Page<IngestionTaskHistoryDO> page = new Page<>(1, safeLimit);
+        return ingestionTaskHistoryMapper.selectPage(page, wrapper).getRecords();
     }
 
     /**

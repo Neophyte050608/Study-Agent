@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
@@ -312,6 +313,45 @@ public class IngestionService {
         result.put("storagePercent", Math.min(100, totalIndexed));
         result.put("recentReports", List.of());
         return result;
+    }
+
+    public boolean deleteByFilePath(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return false;
+        }
+        SyncIndexDO existing = syncIndexMapper.selectOne(
+                new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath).last("LIMIT 1")
+        );
+        if (existing == null) {
+            return false;
+        }
+        removeFile(filePath, existing.getDocIds());
+        return true;
+    }
+
+    public boolean rechunkByFilePath(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return false;
+        }
+        if (filePath.startsWith("browser://")) {
+            return false;
+        }
+        File file = new File(filePath);
+        if (!file.exists() || !file.isFile()) {
+            return false;
+        }
+        SyncIndexDO existing = syncIndexMapper.selectOne(
+                new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath).last("LIMIT 1")
+        );
+        try {
+            Resource resource = new FileSystemResource(file);
+            String hash = calculateHash(resource);
+            AddStatus status = updateFile(resource, filePath, hash, existing == null ? List.of() : existing.getDocIds());
+            return status == AddStatus.ADDED || status == AddStatus.SKIPPED_EMPTY;
+        } catch (Exception e) {
+            logger.warn("Rechunk failed for filePath={}", filePath, e);
+            return false;
+        }
     }
 
     public Map<String, Object> getParentChildReport() {

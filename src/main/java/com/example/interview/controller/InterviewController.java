@@ -1056,9 +1056,31 @@ public class InterviewController {
             @RequestParam(value = "sourceType", required = false) String sourceType,
             @RequestParam(value = "groupBySourceType", required = false, defaultValue = "true") boolean groupBySourceType
     ) {
-        Map<String, Object> result = new LinkedHashMap<>(ingestionService.getStats());
-        result.putAll(ingestionTaskService.buildOverview(10, windowMinutes, sourceType, groupBySourceType));
-        return result;
+        Map<String, Object> base = new LinkedHashMap<>(ingestionService.getStats());
+        Map<String, Object> overview = ingestionTaskService.buildOverview(10, windowMinutes, sourceType, groupBySourceType);
+        base.putAll(overview);
+        Object recentTasksObj = overview.get("recentTasks");
+        if (recentTasksObj instanceof List<?> recentTasks) {
+            List<Map<String, Object>> reports = new ArrayList<>();
+            for (Object obj : recentTasks) {
+                if (!(obj instanceof Map<?, ?> map)) {
+                    continue;
+                }
+                Map<String, Object> item = new LinkedHashMap<>();
+                Object fileName = map.get("pipelineName");
+                Object taskStatus = map.get("status");
+                Object message = map.get("errorMessage");
+                Object endedAt = map.get("endedAt");
+                Object startedAt = map.get("startedAt");
+                item.put("fileName", fileName == null ? "" : String.valueOf(fileName));
+                item.put("status", taskStatus == null ? "" : String.valueOf(taskStatus));
+                item.put("message", message == null ? "" : String.valueOf(message));
+                item.put("timestamp", endedAt == null ? (startedAt == null ? System.currentTimeMillis() : startedAt) : endedAt);
+                reports.add(item);
+            }
+            base.put("recentReports", reports);
+        }
+        return base;
     }
 
     @GetMapping("/ingestion/tasks")

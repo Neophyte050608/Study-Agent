@@ -71,6 +71,31 @@
 - 提取出 `KnowledgeBaseTab.vue`、`DocumentsTab.vue`、`ChunksTab.vue`、`SyncTasksTab.vue` 四个独立子组件。其中“分块”视图提供空态占位，提示“分块级别的前端管理能力待后端接口就绪后开放”。
 - 增强了写操作的交互一致性（Loading 态、禁用态、结果 Toast 提示与失败原因回显）。
 
+## 24. 知识库管理后端 Phase A 落地（2026-04-03）
+**新增职责**：
+- 新增知识库列表只读接口 `GET /api/knowledge-bases`，首次访问自动初始化“默认知识库”，用于前端知识库视图的读能力闭环。
+- 新增文档分页查询接口 `GET /api/knowledge-bases/{kbId}/documents?pageNo=&pageSize=&status=&keyword=`，当前以 `t_rag_parent` 视图为数据源映射文档列表，支持关键词与状态兜底。
+- 新增文档详情接口 `GET /api/knowledge-documents/{docId}` 与分块分页接口 `GET /api/knowledge-documents/{docId}/chunks?current=&size=&enabled=`，以 `t_rag_child` 为数据源，满足分块视图只读需求。
+- 完成任务历史留档：新增 `t_ingestion_task_history` 表与持久化写入逻辑，`/api/observability/ingest/stats` 追加 `recentReports` 字段（来源于最近任务概览），实现跨重启的任务追溯与管理台展示。
+
+**数据层补充**：
+- 新增 `t_knowledge_base`、`t_knowledge_document` 表（Phase A 文档表允许为空，查询优先按 RAG 视图兜底）。
+- 兼容策略：现有 `/api/ingest*` 与 `/api/ingestion/*` 保持不变；新接口仅服务 SPA 管理页，不影响旧路径。
+
+**验收口径**：
+- 前端四视图的“知识库/文档/分块/任务”均具备只读能力；`recentReports` 展示与任务概览一致。
+- 编译与基础测试通过，文档已同步。
+
+## 25. 知识库管理后端 Phase B 落地（2026-04-03）
+**新增职责**：
+- 文档写操作接口已补齐：`PATCH /api/knowledge-documents/{docId}/enabled`、`DELETE /api/knowledge-documents/{docId}`、`POST /api/knowledge-documents/{docId}/rechunk`。
+- 分块写操作接口已补齐：`PATCH /api/knowledge-documents/{docId}/chunks/{chunkId}/enabled`、`POST /api/knowledge-documents/{docId}/chunks/batch-enabled`。
+- 新增轻量分块启停控制表 `t_knowledge_chunk_ctrl`，用于持久化分块启停状态，避免仅内存态导致重启丢失。
+- `KnowledgeDocumentService` 已接入运行态保护：当入库任务处于 `RUNNING/PENDING` 时，拒绝文档删除与重建操作，降低并发冲突风险。
+- 文档删除与重建已复用 `IngestionService` 的 `deleteByFilePath/rechunkByFilePath`，保持向量索引、词法索引与父子索引的一致删除/重建路径。
+
+**兼容策略**：
+- 维持既有 `/api/ingest*` 与 `/api/ingestion/*` 接口不变；新增写接口仅增强知识库管理页能力，不影响现有链路。
 ## 1. 核心业务功能
 
 ### 1.1 智能面试编排与评估 (Interview System)
