@@ -106,6 +106,15 @@ app:
   observability:
     rag-trace-enabled: ${APP_OBSERVABILITY_RAG_TRACE_ENABLED:true}
     retrieval-eval-enabled: ${APP_OBSERVABILITY_RETRIEVAL_EVAL_ENABLED:true}
+  eval:
+    rag-quality:
+      engine: ${APP_EVAL_RAG_QUALITY_ENGINE:java}
+    ragas:
+      service-url: ${APP_EVAL_RAGAS_SERVICE_URL:http://localhost:8100}
+      timeout-seconds: ${APP_EVAL_RAGAS_TIMEOUT_SECONDS:300}
+      llm-api-key: ${APP_EVAL_RAGAS_LLM_API_KEY:}
+      llm-model: ${APP_EVAL_RAGAS_LLM_MODEL:deepseek-chat}
+      llm-base-url: ${APP_EVAL_RAGAS_LLM_BASE_URL:https://api.deepseek.com/v1}
 
   a2a:
     bus:

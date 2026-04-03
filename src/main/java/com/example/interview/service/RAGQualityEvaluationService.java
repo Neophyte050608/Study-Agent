@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,11 @@ public class RAGQualityEvaluationService {
     private final RagQualityEvalRunMapper ragQualityEvalRunMapper;
     private final RagQualityEvalCaseMapper ragQualityEvalCaseMapper;
     private final Executor ragRetrieveExecutor;
+    @Autowired(required = false)
+    private RagasEvalClient ragasEvalClient;
+
+    @Value("${app.eval.rag-quality.engine:java}")
+    private String evaluationEngine;
 
     private final Deque<QualityEvalReport> reportHistory = new ConcurrentLinkedDeque<>();
     private final Map<String, QualityEvalReport> reportDetailHistory = new ConcurrentHashMap<>();
@@ -86,13 +92,13 @@ public class RAGQualityEvaluationService {
         this(ragService, routingChatService, observabilitySwitchProperties, resourceLoader, objectMapper, null, null, ragRetrieveExecutor);
     }
 
-    public QualityEvalReport runDefaultEval() {
+    public QualityEvalReport runDefaultEval(String engine) {
         ensureEvalEnabled();
         try {
             InputStream inputStream = resourceLoader.getResource("classpath:eval/rag_quality_ground_truth.json").getInputStream();
             List<QualityEvalCase> cases = objectMapper.readValue(inputStream, new TypeReference<List<QualityEvalCase>>() {
             });
-            return runCustomEval(cases, new EvalRunOptions("default", "rag-quality-default", "default-benchmark", Map.of(), "RAG生成质量默认评测集"));
+            return runCustomEval(cases, new EvalRunOptions("default", "rag-quality-default", "default-benchmark", Map.of(), "RAG生成质量默认评测集"), engine);
         } catch (Exception ignored) {
             List<QualityEvalCase> cases = List.of(
                     new QualityEvalCase(
@@ -114,8 +120,12 @@ public class RAGQualityEvaluationService {
                             "mysql"
                     )
             );
-            return runCustomEval(cases, new EvalRunOptions("default", "rag-quality-fallback", "default-benchmark", Map.of(), "默认评测集缺失时的兜底样本"));
+            return runCustomEval(cases, new EvalRunOptions("default", "rag-quality-fallback", "default-benchmark", Map.of(), "默认评测集缺失时的兜底样本"), engine);
         }
+    }
+
+    public QualityEvalReport runDefaultEval() {
+        return runDefaultEval(null);
     }
 
     public QualityEvalReport runCustomEval(List<QualityEvalCase> cases) {
@@ -123,6 +133,10 @@ public class RAGQualityEvaluationService {
     }
 
     public QualityEvalReport runCustomEval(List<QualityEvalCase> cases, EvalRunOptions options) {
+        return runCustomEval(cases, options, null);
+    }
+
+    public QualityEvalReport runCustomEval(List<QualityEvalCase> cases, EvalRunOptions options, String engine) {
         ensureEvalEnabled();
         List<QualityEvalCase> normalizedCases = normalizeCases(cases);
         String runId = UUID.randomUUID().toString();
@@ -157,9 +171,15 @@ public class RAGQualityEvaluationService {
             return emptyReport;
         }
 
-        List<QualityEvalCaseResult> results = new ArrayList<>();
-        for (QualityEvalCase evalCase : normalizedCases) {
-            results.add(evaluateSingleCase(evalCase));
+        List<QualityEvalCaseResult> results;
+        String resolvedEngine = resolveEngine(engine);
+        if ("ragas".equalsIgnoreCase(resolvedEngine) && ragasEvalClient != null && ragasEvalClient.isAvailable()) {
+            results = evaluateWithRagas(normalizedCases);
+        } else {
+            results = new ArrayList<>();
+            for (QualityEvalCase evalCase : normalizedCases) {
+                results.add(evaluateSingleCase(evalCase));
+            }
         }
 
         int total = results.size();
@@ -330,6 +350,88 @@ public class RAGQualityEvaluationService {
 
     public boolean isEvalEnabled() {
         return observabilitySwitchProperties.isRagQualityEvalEnabled();
+    }
+
+    /**
+     * 解析评测引擎，优先使用传入值，其次使用配置值。
+     */
+    public String resolveEngine(String requestedEngine) {
+        if (requestedEngine != null && !requestedEngine.isBlank()) {
+            return requestedEngine.trim();
+        }
+        return evaluationEngine == null || evaluationEngine.isBlank() ? "java" : evaluationEngine;
+    }
+
+    /**
+     * 获取引擎可用状态。
+     */
+    public Map<String, Object> getEngineStatus() {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("currentEngine", resolveEngine(null));
+        status.put("javaEngineAvailable", true);
+        boolean ragasAvailable = ragasEvalClient != null && ragasEvalClient.isAvailable();
+        status.put("ragasEngineAvailable", ragasAvailable);
+        if (ragasEvalClient != null) {
+            status.put("ragasServiceInfo", ragasEvalClient.getHealthInfo());
+        }
+        return status;
+    }
+
+    /**
+     * 使用 Ragas Python 服务批量评测所有用例。
+     */
+    private List<QualityEvalCaseResult> evaluateWithRagas(List<QualityEvalCase> cases) {
+        List<Map<String, Object>> preparedCases = new ArrayList<>();
+        List<String> generatedAnswers = new ArrayList<>();
+        List<String> retrievedContexts = new ArrayList<>();
+
+        for (QualityEvalCase evalCase : cases) {
+            RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(evalCase.query(), "", false);
+            String retrievedContext = packet == null || packet.context() == null ? "" : packet.context();
+            String generatedAnswer = generateAnswer(evalCase.query(), retrievedContext);
+
+            generatedAnswers.add(generatedAnswer);
+            retrievedContexts.add(retrievedContext);
+
+            Map<String, Object> caseMap = new LinkedHashMap<>();
+            caseMap.put("query", evalCase.query());
+            caseMap.put("answer", generatedAnswer);
+            caseMap.put("contexts", List.of(retrievedContext));
+            caseMap.put("ground_truth", evalCase.groundTruthAnswer());
+            preparedCases.add(caseMap);
+        }
+
+        List<Map<String, Object>> ragasResults = ragasEvalClient.evaluateWithPreparedData(preparedCases);
+
+        List<QualityEvalCaseResult> results = new ArrayList<>();
+        for (int i = 0; i < cases.size(); i++) {
+            QualityEvalCase evalCase = cases.get(i);
+            Map<String, Object> ragasResult = i < ragasResults.size() ? ragasResults.get(i) : Map.of();
+
+            double faith = toDoubleMetric(ragasResult.get("faithfulness"));
+            double relevancy = toDoubleMetric(ragasResult.get("answer_relevancy"));
+            double precision = toDoubleMetric(ragasResult.get("context_precision"));
+            double recall = toDoubleMetric(ragasResult.get("context_recall"));
+
+            @SuppressWarnings("unchecked")
+            Map<String, String> rationales = ragasResult.containsKey("rationales")
+                    ? (Map<String, String>) ragasResult.get("rationales")
+                    : Map.of("engine", "ragas");
+
+            results.add(new QualityEvalCaseResult(
+                    evalCase.query(),
+                    evalCase.tag(),
+                    evalCase.groundTruthAnswer(),
+                    generatedAnswers.get(i),
+                    retrievedContexts.get(i),
+                    faith,
+                    relevancy,
+                    precision,
+                    recall,
+                    rationales
+            ));
+        }
+        return results;
     }
 
     private String generateAnswer(String query, String context) {
@@ -742,6 +844,20 @@ public class RAGQualityEvaluationService {
 
     private double safeDouble(Double value) {
         return value == null ? 0.0D : value;
+    }
+
+    private double toDoubleMetric(Object val) {
+        if (val == null) {
+            return 0.0D;
+        }
+        if (val instanceof Number number) {
+            return clamp01(number.doubleValue());
+        }
+        try {
+            return clamp01(Double.parseDouble(val.toString()));
+        } catch (Exception ignored) {
+            return 0.0D;
+        }
     }
 
     private double clamp01(double score) {
