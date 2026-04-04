@@ -130,11 +130,17 @@ public class IntentTreeRoutingService {
             Map<String, Object> slots = readSlots(slotsNode);
             String questionType = textOf(slots.get("questionType"));
             if (!questionType.isBlank()) {
-                String type = switch (questionType.toUpperCase()) {
-                    case "CHOICE" -> "选择题";
-                    case "FILL" -> "填空题";
-                    default -> "算法题";
-                };
+                String qt = questionType.toUpperCase();
+                String type;
+                if ("CHOICE".equals(qt) || qt.contains("选择") || qt.contains("单选") || qt.contains("多选")) {
+                    type = "选择题";
+                } else if ("FILL".equals(qt) || qt.contains("填空") || qt.contains("补全")) {
+                    type = "填空题";
+                } else if ("SCENARIO".equals(qt) || qt.contains("场景")) {
+                    type = "场景题";
+                } else {
+                    type = "算法题";
+                }
                 slots.put("type", type);
             }
             return slots;
@@ -417,8 +423,16 @@ public class IntentTreeRoutingService {
         putSlot(slots, "topic", readText(slotsNode, "topic"));
         putSlot(slots, "questionType", readText(slotsNode, "questionType").toUpperCase());
         putSlot(slots, "difficulty", readText(slotsNode, "difficulty").toLowerCase());
-        if (slotsNode.has("count") && slotsNode.get("count").isInt()) {
-            slots.put("count", slotsNode.get("count").asInt());
+        if (slotsNode.has("count") && !slotsNode.get("count").isNull()) {
+            JsonNode countNode = slotsNode.get("count");
+            if (countNode.isNumber()) {
+                slots.put("count", countNode.asInt());
+            } else if (countNode.isTextual()) {
+                try {
+                    int c = Integer.parseInt(countNode.asText().trim());
+                    if (c > 0) slots.put("count", c);
+                } catch (NumberFormatException ignored) {}
+            }
         }
         if (slotsNode.has("skipIntro") && !slotsNode.get("skipIntro").isNull()) {
             slots.put("skipIntro", slotsNode.get("skipIntro").asBoolean());

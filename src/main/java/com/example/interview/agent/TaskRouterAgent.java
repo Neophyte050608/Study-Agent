@@ -209,6 +209,22 @@ public class TaskRouterAgent {
         }
 
         normalizeQuestionType(newPayload);
+
+        // 兜底：如果 LLM 未提取 count，从原始 query 中通过正则提取中文/阿拉伯数字
+        if (!newPayload.containsKey("count") || newPayload.get("count") == null) {
+            int extracted = extractCountFromQuery(naturalLanguageQuery);
+            if (extracted > 0) {
+                newPayload.put("count", extracted);
+            }
+        }
+
+        // 兜底：如果 LLM 未提取 type/questionType，从原始 query 中推断题型
+        if (!newPayload.containsKey("type") || String.valueOf(newPayload.get("type")).isBlank()) {
+            if (naturalLanguageQuery.contains("选择") || naturalLanguageQuery.contains("单选") || naturalLanguageQuery.contains("多选")) {
+                newPayload.put("type", "选择题");
+            }
+        }
+
         if (naturalLanguageQuery.contains("跳过自我介绍") || naturalLanguageQuery.contains("直接出题") || naturalLanguageQuery.contains("跳过介绍")) {
             newPayload.put("skipIntro", true);
         }
@@ -383,17 +399,52 @@ public class TaskRouterAgent {
         return merged;
     }
 
+    /**
+     * 从用户原始 query 中提取数量（支持中文数字和阿拉伯数字）。
+     * 匹配模式："来N道"、"出N道"、"做N道"、"N道"、"N题" 等。
+     */
+    private int extractCountFromQuery(String query) {
+        if (query == null || query.isBlank()) return 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("([一二三四五六七八九十两\\d]+)\\s*[道题个]")
+                .matcher(query);
+        if (m.find()) {
+            String num = m.group(1);
+            return parseChineseNumber(num);
+        }
+        return 0;
+    }
+
+    private int parseChineseNumber(String s) {
+        if (s == null || s.isBlank()) return 0;
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException ignored) {}
+        return switch (s) {
+            case "一" -> 1; case "两", "二" -> 2; case "三" -> 3;
+            case "四" -> 4; case "五" -> 5; case "六" -> 6;
+            case "七" -> 7; case "八" -> 8; case "九" -> 9;
+            case "十" -> 10;
+            default -> 0;
+        };
+    }
+
     private void normalizeQuestionType(Map<String, Object> payload) {
         String questionType = readText(payload, "questionType");
         if (questionType.isBlank()) {
             return;
         }
-        String typeName = switch (questionType.toUpperCase()) {
-            case "CHOICE" -> "选择题";
-            case "FILL" -> "填空题";
-            case "SCENARIO" -> "场景题";
-            default -> "算法题";
-        };
+        String qt = questionType.toUpperCase();
+        String typeName;
+        if ("CHOICE".equals(qt) || qt.contains("选择") || qt.contains("单选") || qt.contains("多选")) {
+            typeName = "选择题";
+        } else if ("FILL".equals(qt) || qt.contains("填空") || qt.contains("补全")) {
+            typeName = "填空题";
+        } else if ("SCENARIO".equals(qt) || qt.contains("场景")) {
+            typeName = "场景题";
+        } else {
+            typeName = "算法题";
+        }
         payload.put("type", typeName);
     }
 

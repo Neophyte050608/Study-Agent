@@ -161,7 +161,10 @@
                   :class="msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-sm shadow-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-tl-sm text-slate-800 dark:text-slate-200'"
                 >
                   <div v-if="msg.role === 'user'" class="whitespace-pre-wrap leading-relaxed">{{ msg.content }}</div>
-                  <div v-else class="markdown-body text-[15px] leading-relaxed" v-html="renderMarkdown(msg.content)"></div>
+                  <div v-else class="markdown-body text-[15px] leading-relaxed">
+                    <div v-html="renderMarkdown(msg.content)"></div>
+                    <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
+                  </div>
                 </div>
               </div>
               
@@ -228,6 +231,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import QuizCard from './chat/QuizCard.vue'
 import {
   createChatSession,
   listChatSessions,
@@ -256,6 +260,7 @@ const messages = ref([])
 const inputContent = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
+const currentQuizPayload = ref(null)
 const streamTaskId = ref(null)
 const streamHandle = ref(null)
 const messagesContainer = ref(null)
@@ -309,7 +314,19 @@ const selectSession = async (id) => {
   messagesLoading.value = true
   try {
     const data = await listChatMessages(id, 200)
-    messages.value = Array.isArray(data) ? data : (data.content || [])
+    const rawMessages = Array.isArray(data) ? data : (data.content || [])
+    // 检测 contentType=quiz 的历史消息，解析 content 为 quizPayload
+    messages.value = rawMessages.map(msg => {
+      if (msg.contentType === 'quiz' && msg.content) {
+        try {
+          const quizPayload = JSON.parse(msg.content)
+          return { ...msg, quizPayload, content: '' }
+        } catch (e) {
+          // JSON 解析失败，保持原样
+        }
+      }
+      return msg
+    })
     scrollToBottom()
   } catch (err) {
     console.error('Failed to load messages', err)
@@ -429,6 +446,7 @@ const handleSend = async () => {
 
   isStreaming.value = true
   streamingContent.value = ''
+  currentQuizPayload.value = null
   streamTaskId.value = null
 
   const targetSessionId = currentSessionId.value
@@ -439,6 +457,9 @@ const handleSend = async () => {
         if (meta && meta.taskId) streamTaskId.value = meta.taskId
         else if (meta && meta.streamTaskId) streamTaskId.value = meta.streamTaskId
         else if (typeof meta === 'string') streamTaskId.value = meta
+      },
+      onQuiz: (payload) => {
+        currentQuizPayload.value = payload
       },
       onMessage: (msg) => {
         if (typeof msg === 'object' && msg !== null) {
@@ -455,8 +476,13 @@ const handleSend = async () => {
         scrollToBottom()
       },
       onFinish: () => {
-        messages.value.push({ role: 'assistant', content: streamingContent.value })
+        messages.value.push({ 
+          role: 'assistant', 
+          content: streamingContent.value,
+          quizPayload: currentQuizPayload.value 
+        })
         streamingContent.value = ''
+        currentQuizPayload.value = null
         isStreaming.value = false
         streamHandle.value = null
         loadSessions() // Title might have been updated

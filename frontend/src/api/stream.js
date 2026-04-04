@@ -37,6 +37,9 @@ export function createPostEventStream(url, payload, handlers = {}, options = {})
       case 'message':
         handlers.onMessage?.(payloadData)
         break
+      case 'quiz':
+        handlers.onQuiz?.(payloadData)
+        break
       case 'finish':
         handlers.onFinish?.(payloadData)
         break

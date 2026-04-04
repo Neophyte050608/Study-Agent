@@ -202,3 +202,16 @@ ai_output=VALUES(ai_output),
 sort_order=VALUES(sort_order),
 enabled=VALUES(enabled),
 deleted=VALUES(deleted);
+
+-- ==================== 提示词模板 ====================
+INSERT INTO `t_prompt_template` (`name`, `category`, `type`, `title`, `description`, `content`, `is_builtin`)
+VALUES
+('batch-quiz-question', 'coding-coach', 'TASK', '批量选择题生成',
+ '根据指定主题、难度和数量，一次性生成多道结构化选择题（JSON 数组）',
+ '请生成 {{count}} 道关于「{{topic}}」的{{difficulty}}难度选择题。\n\n严格按以下 JSON 格式输出（不要输出任何其他内容，不要使用 markdown 标记包裹 JSON）：\n[\n  {\n    \"index\": 1,\n    \"stem\": \"题目描述\",\n    \"options\": [\"A. 选项1\", \"B. 选项2\", \"C. 选项3\", \"D. 选项4\"],\n    \"correctAnswer\": \"B\",\n    \"explanation\": \"详细解析\"\n  }\n]\n\n要求：\n1. 每题必须有且仅有4个选项（A/B/C/D）\n2. correctAnswer 只能是 A/B/C/D 中的一个大写字母\n3. explanation 要详细解释为什么选择该答案\n4. 题目要有区分度，难度符合 {{difficulty}} 级别\n5. 确保 JSON 格式合法可用\n{% if profileSnapshot %}\n候选人画像参考：{{profileSnapshot}}\n{% endif %}',
+ 1)
+ON DUPLICATE KEY UPDATE
+content=VALUES(content),
+title=VALUES(title),
+description=VALUES(description),
+category=VALUES(category);

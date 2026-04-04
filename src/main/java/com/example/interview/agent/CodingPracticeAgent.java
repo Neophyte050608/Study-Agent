@@ -68,6 +68,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if ("submit".equals(action)) {
             return submitPractice(input);
         }
+        if ("batch-quiz-submit".equals(action)) {
+            return submitBatchQuizResults(input);
+        }
         if ("state".equals(action)) {
             return statePractice(input);
         }
@@ -150,6 +153,14 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             // 解析失败使用默认值
         }
         type = normalizePracticeType(type, message + " " + topic);
+        // 兜底：从用户原始消息中正则提取数量
+        if (count <= 1) {
+            int extracted = extractCountFromText(message);
+            if (extracted > 1) {
+                count = Math.min(extracted, 10);
+            }
+        }
+        logger.info("[startNewChatSession] message='{}', type='{}', count={}", message, type, count);
 
         if (topic.isBlank()) {
             List<String> recommended = learningProfileAgent.snapshot(userId).recommendedNextCodingTopics();
@@ -163,6 +174,12 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String sessionId = UUID.randomUUID().toString();
         CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", 0, 0, Instant.now());
         
+        // 选择题 + 多题 → 走批量交互式模式
+        if (type.contains("选择") && count > 1) {
+            return handleBatchQuiz(userId, topic, difficulty, count,
+                learningProfileAgent.snapshotForPrompt(userId, topic));
+        }
+
         return generateNextChatQuestion(session);
     }
 
@@ -195,6 +212,87 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         result.put("question", question);
         result.put("progress", updatedSession.currentQuestionIndex() + "/" + updatedSession.totalQuestions());
         return result;
+    }
+
+    /**
+     * 批量选择题模式：一次生成所有题目，前端交互式答题。
+     */
+    private Map<String, Object> handleBatchQuiz(String userId, String topic,
+            String difficulty, int count, String profileSnapshot) {
+        List<QuizQuestion> questions = ragService.generateBatchQuiz(topic, difficulty, count, profileSnapshot);
+
+        String sessionId = UUID.randomUUID().toString();
+        // 创建 session 记录（currentQuestion 留空，批量模式不逐题跟踪）
+        sessions.put(sessionId, new CodingSession(
+            sessionId, userId, topic, difficulty, "选择题",
+            questions.size(), 0, "", 0, 0, Instant.now()));
+
+        QuizPayload payload = new QuizPayload(sessionId, topic, difficulty, questions.size(), questions);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("agent", "CodingPracticeAgent");
+        result.put("status", "batch_quiz");
+        result.put("sessionId", sessionId);
+        result.put("quizPayload", payload);
+        return result;
+    }
+
+    /**
+     * 批量提交选择题结果，计算总分并异步更新学习画像。
+     */
+    public Map<String, Object> submitBatchQuizResults(Map<String, Object> input) {
+        String sessionId = text(input, "sessionId");
+        CodingSession session = sessions.get(sessionId);
+        if (session == null) {
+            return Map.of("agent", "CodingPracticeAgent", "status", "not_found", "message", "Session已失效");
+        }
+
+        Object resultsObj = input.get("results");
+        if (!(resultsObj instanceof List<?> resultsList)) {
+            return Map.of("agent", "CodingPracticeAgent", "status", "bad_request", "message", "results 不能为空");
+        }
+
+        int totalCorrect = 0;
+        int totalCount = resultsList.size();
+        for (Object item : resultsList) {
+            if (item instanceof Map<?, ?> m && Boolean.TRUE.equals(m.get("isCorrect"))) {
+                totalCorrect++;
+            }
+        }
+
+        int score = totalCount > 0 ? (totalCorrect * 100 / totalCount) : 0;
+
+        // 异步更新学习画像
+        final int finalScore = score;
+        final int finalTotalCorrect = totalCorrect;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                learningProfileAgent.upsertEvent(new com.example.interview.service.LearningEvent(
+                    "batch-quiz-" + sessionId,
+                    session.userId(),
+                    com.example.interview.service.LearningSource.CODING,
+                    session.topic(),
+                    finalScore,
+                    finalScore < 60 ? List.of("选择题正确率偏低", "需加强" + session.topic()) : List.of(),
+                    finalScore >= 80 ? List.of(session.topic() + "选择题掌握良好") : List.of(),
+                    "批量选择题: " + finalTotalCorrect + "/" + totalCount + " 正确",
+                    Instant.now()
+                ));
+            } catch (Exception e) {
+                logger.warn("批量选择题画像更新失败: {}", e.getMessage());
+            }
+        }, profileUpdateExecutor);
+
+        // 清理 session
+        sessions.remove(sessionId);
+
+        return Map.of(
+            "agent", "CodingPracticeAgent",
+            "status", "batch_quiz_submitted",
+            "score", score,
+            "totalCorrect", totalCorrect,
+            "totalQuestions", totalCount
+        );
     }
 
     private Map<String, Object> evaluateChatAnswer(CodingSession session, String answer) {
@@ -259,8 +357,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String difficulty = text(input, "difficulty");
         String type = text(input, "type");
         String profileSnapshot = text(input, "profileSnapshot");
+        String query = text(input, "query"); // 用户原始输入
         String recommendedTopic = "";
-        
+
         // 如果没有传入主题，尝试从画像推荐
         if (topic.isBlank()) {
             List<String> recommended = learningProfileAgent.snapshot(userId).recommendedNextCodingTopics();
@@ -268,16 +367,41 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 recommendedTopic = recommended.getFirst();
             }
         }
-        
+
         // 归一化主题、难度、类型和画像快照
         String normalizedTopic = topic.isBlank() ? (recommendedTopic.isBlank() ? "数组与字符串" : recommendedTopic) : topic;
         String normalizedDifficulty = difficulty.isBlank() ? "medium" : difficulty.toLowerCase();
-        String normalizedType = normalizePracticeType(type, normalizedTopic);
-        
+        // 把原始 query 也传给 normalizePracticeType，确保"来三道选择题"中的"选择"能被检测到
+        String normalizedType = normalizePracticeType(type, normalizedTopic + " " + query);
+
         String resolvedProfileSnapshot = profileSnapshot.isBlank()
                 ? learningProfileAgent.snapshotForPrompt(userId, normalizedTopic)
                 : profileSnapshot;
-        
+
+        // 从 payload 读取题目数量
+        int totalQuestions = 1;
+        Object countVal = input.get("count");
+        if (countVal instanceof Number n && n.intValue() > 0) {
+            totalQuestions = Math.min(n.intValue(), 10);
+        } else if (countVal instanceof String s && !s.isBlank()) {
+            try { totalQuestions = Math.min(Integer.parseInt(s.trim()), 10); } catch (NumberFormatException ignored) {}
+        }
+        // 兜底：如果上游未提取 count，从用户原始输入中正则提取
+        if (totalQuestions <= 1 && !query.isBlank()) {
+            int extracted = extractCountFromText(query);
+            if (extracted > 1) {
+                totalQuestions = Math.min(extracted, 10);
+            }
+        }
+
+        logger.info("[startPractice] query='{}', type='{}', normalizedType='{}', count={}, totalQuestions={}",
+                query, type, normalizedType, countVal, totalQuestions);
+
+        // 选择题 + 多题 → 走批量交互式模式（提前判断，避免浪费单题 LLM 调用）
+        if (normalizedType.contains("选择") && totalQuestions > 1) {
+            return handleBatchQuiz(userId, normalizedTopic, normalizedDifficulty, totalQuestions, resolvedProfileSnapshot);
+        }
+
         String sessionId = UUID.randomUUID().toString();
         // 调用 RAG 生成题目，将类型融入主题描述中以获得更准确的题目生成
         String ragTopic = buildTopicWithType(normalizedTopic, normalizedType);
@@ -285,9 +409,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if (question == null || question.isBlank()) {
             question = buildQuestion(normalizedTopic, normalizedDifficulty, normalizedType) + " (" + normalizedType + ")";
         }
-        
+
         // 保存会话并返回结果
-        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, 1, 1, question, 0, 0, Instant.now()));
+        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, totalQuestions, 1, question, 0, 0, Instant.now()));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("agent", "CodingPracticeAgent");
         result.put("status", "started");
@@ -535,6 +659,59 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     }
 
     /**
+     * 从用户原始文本中提取题目数量。
+     * 支持阿拉伯数字（"来3道"）和常见中文数字（"来三道"）。
+     */
+    private static final java.util.regex.Pattern COUNT_PATTERN =
+            java.util.regex.Pattern.compile("([\\d零一二两三四五六七八九十百千]+)\\s*[道题个]");
+
+    static int extractCountFromText(String text) {
+        if (text == null || text.isBlank()) return 0;
+        java.util.regex.Matcher m = COUNT_PATTERN.matcher(text);
+        if (!m.find()) return 0;
+        String raw = m.group(1);
+        // 先尝试阿拉伯数字
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException ignored) {}
+        // 中文数字转换
+        return chineseToInt(raw);
+    }
+
+    private static int chineseToInt(String cn) {
+        if (cn == null || cn.isEmpty()) return 0;
+        // 单字快速路径
+        if (cn.length() == 1) return singleCnDigit(cn.charAt(0));
+        // 组合数字: "十二"=12, "二十"=20, "二十三"=23, "一百"=100 ...
+        int result = 0, current = 0;
+        for (char c : cn.toCharArray()) {
+            int digit = singleCnDigit(c);
+            if (c == '十') {
+                result += (current == 0 ? 1 : current) * 10;
+                current = 0;
+            } else if (c == '百') {
+                result += (current == 0 ? 1 : current) * 100;
+                current = 0;
+            } else if (c == '千') {
+                result += (current == 0 ? 1 : current) * 1000;
+                current = 0;
+            } else {
+                current = digit;
+            }
+        }
+        return result + current;
+    }
+
+    private static int singleCnDigit(char c) {
+        return switch (c) {
+            case '零' -> 0; case '一' -> 1; case '二', '两' -> 2; case '三' -> 3;
+            case '四' -> 4; case '五' -> 5; case '六' -> 6; case '七' -> 7;
+            case '八' -> 8; case '九' -> 9; case '十' -> 10;
+            default -> 0;
+        };
+    }
+
+    /**
      * 安全地从 Map 中获取字符串值。
      */
     private String text(Map<String, Object> map, String key) {
@@ -580,6 +757,28 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
         return points.stream().map(String::trim).filter(item -> !item.isBlank()).distinct().limit(6).toList();
     }
+
+    /**
+     * 批量选择题数据契约。
+     */
+    public record QuizPayload(
+            String sessionId,
+            String topic,
+            String difficulty,
+            int totalQuestions,
+            List<QuizQuestion> questions
+    ) {}
+
+    /**
+     * 单个选择题数据。
+     */
+    public record QuizQuestion(
+            int index,
+            String stem,
+            List<String> options,     // ["A. xxx", "B. xxx", "C. xxx", "D. xxx"]
+            String correctAnswer,     // "A"/"B"/"C"/"D"
+            String explanation
+    ) {}
 
     /**
      * 编程练习会话的内部记录类。

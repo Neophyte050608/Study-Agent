@@ -7,6 +7,7 @@ public enum InterviewStreamEventType {
     FINISH("finish"),
     CANCEL("cancel"),
     ERROR("error"),
+    QUIZ("quiz"),
     DONE("done");
 
     private final String value;

@@ -12,6 +12,7 @@ import com.example.interview.security.InputSanitizer;
 import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,6 +29,7 @@ import java.util.concurrent.Executor;
 @Service
 public class ChatStreamingService {
     private static final Logger log = LoggerFactory.getLogger(ChatStreamingService.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final WebChatService webChatService;
     private final InterviewStreamTaskManager taskManager;
@@ -92,9 +94,9 @@ public class ChatStreamingService {
 
             String history = webChatService.buildHistoryContext(sessionId);
 
-            // 活跃面试会话检测：如果当前聊天中有进行中的面试，直接路由为面试答题
+            // 活跃面试会话检测：如果当前聊天中有进行中的面试，且用户消息不是新指令，路由为面试答题
             String activeInterviewId = webChatService.findActiveInterviewSessionId(sessionId);
-            if (activeInterviewId != null && !activeInterviewId.isBlank()) {
+            if (activeInterviewId != null && !activeInterviewId.isBlank() && !looksLikeNewIntent(content)) {
                 InterviewSession interviewSession = interviewOrchestratorAgent.getSession(activeInterviewId);
                 if (interviewSession != null && interviewSession.getHistory().size() < interviewSession.getTotalQuestions()) {
                     // 面试仍在进行中，强制路由为 INTERVIEW_ANSWER
@@ -134,6 +136,67 @@ public class ChatStreamingService {
                 }
             }
 
+            // 活跃编码练习会话检测：如果当前聊天中有进行中的编码练习，且用户消息不是新指令，路由为编码答题
+            String activeCodingId = webChatService.findActiveCodingSessionId(sessionId);
+            if (activeCodingId != null && !activeCodingId.isBlank() && !looksLikeNewIntent(content)) {
+                Map<String, Object> codingPayload = new HashMap<>();
+                codingPayload.put("action", "chat");
+                codingPayload.put("sessionId", activeCodingId);
+                codingPayload.put("message", content);
+                codingPayload.put("userId", userId);
+                TaskRequest codingRequest = new TaskRequest(TaskType.CODING_PRACTICE, codingPayload, Map.of(
+                        "sessionId", sessionId, "userId", userId, "history", history, "traceId", traceId));
+                TaskResponse codingResponse = webChatService.getTaskRouterAgent().dispatch(codingRequest);
+
+                if (taskManager.isCancelled(taskId)) return;
+
+                String replyText = webChatService.extractReplyText(codingResponse);
+
+                // 评估完如果还有下一题，自动追加生成
+                boolean isLast = true;
+                if (codingResponse.data() instanceof Map<?, ?> evalMap
+                        && "evaluated".equals(evalMap.get("status"))) {
+                    isLast = Boolean.TRUE.equals(evalMap.get("isLast"));
+                    if (!isLast) {
+                        // 再调一次 handleChat 生成下一题
+                        Map<String, Object> nextPayload = new HashMap<>();
+                        nextPayload.put("action", "chat");
+                        nextPayload.put("sessionId", activeCodingId);
+                        nextPayload.put("message", "");
+                        nextPayload.put("userId", userId);
+                        TaskRequest nextRequest = new TaskRequest(TaskType.CODING_PRACTICE, nextPayload, Map.of(
+                                "sessionId", sessionId, "userId", userId, "history", history, "traceId", traceId));
+                        TaskResponse nextResponse = webChatService.getTaskRouterAgent().dispatch(nextRequest);
+                        if (nextResponse.success()) {
+                            String nextText = webChatService.extractReplyText(nextResponse);
+                            replyText = replyText + "\n\n---\n\n" + nextText;
+                        }
+                    }
+                }
+
+                sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+                        "stage", "GENERATING", "label", "正在评估答案", "status", "running", "percent", 70));
+                sendChunkedText(sender, replyText, taskId);
+
+                if (taskManager.isCancelled(taskId)) return;
+
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                metadata.put("traceId", traceId);
+                metadata.put("type", "coding_practice");
+                if (!isLast) {
+                    metadata.put("codingSessionId", activeCodingId);
+                }
+                webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+
+                sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+                        "action", "chat",
+                        "result", Map.of("content", replyText, "traceId", traceId)));
+                sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
+                taskManager.unregister(taskId);
+                sender.complete();
+                return;
+            }
+
             // 先走意图路由，判断是否为面试/编码等结构化意图
             Map<String, Object> payload = new HashMap<>();
             payload.put("query", content);
@@ -154,6 +217,42 @@ public class ChatStreamingService {
                 runKnowledgeQaStream(sessionId, content, history, traceId, taskId, sender);
             } else {
                 // 非知识问答意图（面试、编码练习等），结果已计算完成，分块流式发送
+                
+                // --- 新增：拦截 batch_quiz 分支 ---
+                if (response.data() instanceof Map<?, ?> dataMap
+                        && "batch_quiz".equals(dataMap.get("status"))
+                        && dataMap.containsKey("quizPayload")) {
+                    
+                    sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+                            "stage", "GENERATING", "label", "正在生成题目", "status", "running", "percent", 100));
+
+                    // 下发专门的 quiz 事件
+                    sender.sendEvent(InterviewStreamEventType.QUIZ.value(), dataMap.get("quizPayload"));
+
+                    // 将 QuizPayload 序列化为 JSON 存入 DB，contentType 设为 "quiz"
+                    String quizJson;
+                    try {
+                        quizJson = objectMapper.writeValueAsString(dataMap.get("quizPayload"));
+                    } catch (Exception e) {
+                        quizJson = "已为您生成批量选择题，请在答题卡中作答。";
+                    }
+                    Map<String, Object> metadata = new LinkedHashMap<>();
+                    metadata.put("traceId", traceId);
+                    metadata.put("type", "coding_practice_batch");
+                    metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
+
+                    webChatService.saveAssistantMessage(sessionId, quizJson, metadata, "quiz");
+
+                    sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+                            "action", "chat",
+                            "result", Map.of("content", quizJson, "traceId", traceId)));
+                    sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
+                    taskManager.unregister(taskId);
+                    sender.complete();
+                    return;
+                }
+                // --- 新增结束 ---
+
                 String replyText = webChatService.extractReplyText(response);
 
                 sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
@@ -170,8 +269,14 @@ public class ChatStreamingService {
                     metadata.put("interviewSessionId", session.getId());
                     metadata.put("type", "interview_start");
                 } else if (response.data() instanceof InterviewOrchestratorAgent.AnswerResult ar) {
-                    // AnswerResult 也可能通过意图路由返回（非活跃面试检测路径）
                     metadata.put("type", ar.finished() ? "interview_finished" : "interview_answer");
+                } else if (response.data() instanceof Map<?, ?> dataMap
+                        && "CodingPracticeAgent".equals(dataMap.get("agent"))) {
+                    Object codingSid = dataMap.get("sessionId");
+                    if (codingSid != null) {
+                        metadata.put("codingSessionId", String.valueOf(codingSid));
+                    }
+                    metadata.put("type", "coding_practice");
                 }
                 webChatService.saveAssistantMessage(sessionId, replyText, metadata);
                 webChatService.autoTitleIfNeeded(sessionId, content);
@@ -272,6 +377,23 @@ public class ChatStreamingService {
                     "channel", "answer",
                     "delta", text.substring(index, end)));
             index = end;
+            try { Thread.sleep(20); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
         }
+    }
+
+    /**
+     * 判断用户消息是否像是一个新意图指令（而非对当前面试题的回答）。
+     * 用于在活跃面试会话中区分"回答当前题目"和"发起新操作"。
+     */
+    private static boolean looksLikeNewIntent(String content) {
+        if (content == null || content.isBlank()) return false;
+        String s = content.trim();
+        return s.contains("来一") || s.contains("来两") || s.contains("来几")
+                || s.contains("来道") || s.contains("出一") || s.contains("出道")
+                || s.contains("刷题") || s.contains("选择题") || s.contains("填空题") || s.contains("算法题") || s.contains("场景题")
+                || s.contains("开始面试") || s.contains("开启面试") || s.contains("模拟面试")
+                || s.contains("来一场") || s.contains("换个") || s.contains("结束面试")
+                || s.contains("生成报告") || s.contains("学习计划") || s.contains("学习画像")
+                || s.contains("编码练习") || s.contains("停止");
     }
 }

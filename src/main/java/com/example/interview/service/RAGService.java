@@ -1,5 +1,6 @@
 package com.example.interview.service;
 
+import com.example.interview.agent.CodingPracticeAgent;
 import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.config.ParentChildRetrievalProperties;
 import com.example.interview.config.RagRetrievalProperties;
@@ -1308,11 +1309,125 @@ public class RAGService {
             if (raw == null || raw.isBlank()) {
                 return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
             }
-            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 280);
+            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 1200);
         } catch (RuntimeException e) {
             logger.warn("刷题题目生成失败，返回降级题目。原因: {}", summarizeError(e));
             return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
         }
+    }
+
+    /**
+     * 批量生成选择题，返回结构化 QuizQuestion 列表。
+     * 使用单次 LLM 调用生成 N 道题目。
+     */
+    public List<CodingPracticeAgent.QuizQuestion> generateBatchQuiz(
+            String topic, String difficulty, int count, String profileSnapshot) {
+        String normalizedTopic = topic == null || topic.isBlank() ? "Java基础" : topic.trim();
+        String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
+        String skillBlock = resolveCodingSkillBlock("选择题");
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("skillBlock", skillBlock);
+        params.put("topic", normalizedTopic);
+        params.put("difficulty", normalizedDifficulty);
+        params.put("count", String.valueOf(Math.min(count, 10)));
+        params.put("questionType", "选择题");
+        params.put("profileSnapshot", truncate(profileSnapshot, 240));
+
+        // 使用 batch-quiz-question 模板；如果不存在则用内联 prompt
+        String sp;
+        String up;
+        try {
+            PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "batch-quiz-question", params);
+            sp = pair.systemPrompt();
+            up = pair.userPrompt();
+        } catch (Exception e) {
+            // 模板不存在时使用内联 prompt
+            sp = "你是一位专业的技术面试出题官。";
+            up = buildInlineBatchQuizPrompt(normalizedTopic, normalizedDifficulty, count);
+        }
+
+        final String finalSystemPrompt = sp;
+        final String finalUserPrompt = up;
+
+        try {
+            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
+                () -> "[]",
+                finalSystemPrompt, finalUserPrompt, ModelRouteType.GENERAL, "批量选择题生成"
+            ), 1, "批量选择题生成");
+
+            if (raw == null || raw.isBlank()) {
+                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+            }
+
+            // 清理 markdown 代码块标记
+            String clean = raw.replaceAll("```json", "").replaceAll("```", "").trim();
+            // 如果包含 [ 则定位到 JSON 数组
+            int arrayStart = clean.indexOf('[');
+            int arrayEnd = clean.lastIndexOf(']');
+            if (arrayStart >= 0 && arrayEnd > arrayStart) {
+                clean = clean.substring(arrayStart, arrayEnd + 1);
+            }
+
+            List<CodingPracticeAgent.QuizQuestion> questions = objectMapper.readValue(clean,
+                objectMapper.getTypeFactory().constructCollectionType(List.class, CodingPracticeAgent.QuizQuestion.class));
+
+            if (questions == null || questions.isEmpty()) {
+                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+            }
+
+            // 确保 index 正确
+            List<CodingPracticeAgent.QuizQuestion> result = new java.util.ArrayList<>();
+            for (int i = 0; i < questions.size(); i++) {
+                CodingPracticeAgent.QuizQuestion q = questions.get(i);
+                result.add(new CodingPracticeAgent.QuizQuestion(
+                    i + 1, q.stem(), q.options(), q.correctAnswer(), q.explanation()));
+            }
+            return result;
+        } catch (Exception e) {
+            logger.warn("批量选择题生成失败，降级逐题生成。原因: {}", summarizeError(e));
+            return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+        }
+    }
+
+    /**
+     * 降级方案：逐题调用 generateCodingQuestion 生成（无正确答案和解析）。
+     */
+    private List<CodingPracticeAgent.QuizQuestion> fallbackBatchQuiz(
+            String topic, String difficulty, int count, String profileSnapshot) {
+        List<CodingPracticeAgent.QuizQuestion> result = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String questionText = generateCodingQuestion(topic + "（选择题）", difficulty, profileSnapshot);
+            result.add(new CodingPracticeAgent.QuizQuestion(
+                i + 1, questionText, List.of("A. 请参考题目", "B. 请参考题目", "C. 请参考题目", "D. 请参考题目"),
+                "A", "该题目由降级方案生成，暂无解析。请根据题干自行判断。"));
+        }
+        return result;
+    }
+
+    /**
+     * 内联 prompt（当 batch-quiz-question 模板不存在时使用）。
+     */
+    private String buildInlineBatchQuizPrompt(String topic, String difficulty, int count) {
+        return "请生成 " + count + " 道关于「" + topic + "」的" + difficulty + "难度选择题。\n\n"
+            + "严格按以下 JSON 格式输出（不要输出其他内容）：\n"
+            + "```json\n"
+            + "[\n"
+            + "  {\n"
+            + "    \"index\": 1,\n"
+            + "    \"stem\": \"题目描述\",\n"
+            + "    \"options\": [\"A. 选项1\", \"B. 选项2\", \"C. 选项3\", \"D. 选项4\"],\n"
+            + "    \"correctAnswer\": \"B\",\n"
+            + "    \"explanation\": \"详细解析\"\n"
+            + "  }\n"
+            + "]\n"
+            + "```\n"
+            + "要求：\n"
+            + "1. 每题必须有4个选项（A/B/C/D）\n"
+            + "2. correctAnswer 只能是 A/B/C/D 中的一个字母\n"
+            + "3. explanation 要详细解释为什么选择该答案\n"
+            + "4. 题目要有区分度，难度符合 " + difficulty + " 级别\n"
+            + "5. 只输出 JSON 数组，不要有多余文字";
     }
 
     public CodingAssessment evaluateCodingAnswer(String topic, String difficulty, String question, String answer) {
@@ -1331,7 +1446,7 @@ public class RAGService {
         params.put("topic", normalizedTopic);
         params.put("difficulty", normalizedDifficulty);
         params.put("questionType", normalizedQuestionType);
-        params.put("question", truncate(safeQuestion, 280));
+        params.put("question", truncate(safeQuestion, 1200));
         params.put("answer", truncate(safeAnswer, 800));
         PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-evaluation", params);
 
@@ -1353,7 +1468,7 @@ public class RAGService {
             if (nextQuestion == null || nextQuestion.isBlank()) {
                 nextQuestion = generateNextCodingQuestion(normalizedTopic, normalizedDifficulty, safeQuestion, safeAnswer, score);
             }
-            return new CodingAssessment(Math.max(0, Math.min(score, 100)), feedback, nextHint, truncate(nextQuestion, 220));
+            return new CodingAssessment(Math.max(0, Math.min(score, 100)), feedback, nextHint, nextQuestion == null ? "" : nextQuestion);
         } catch (Exception e) {
             logger.warn("刷题答案评估失败，返回降级评分。原因: {}", summarizeError(e));
             return fallbackCodingAssessment(safeAnswer, normalizedQuestionType, normalizedTopic);
@@ -1382,7 +1497,7 @@ public class RAGService {
             if (raw == null || raw.isBlank()) {
                 return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
             }
-            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 220);
+            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 1200);
         } catch (RuntimeException e) {
             logger.warn("刷题下一题生成失败，返回降级问题。原因: {}", summarizeError(e));
             return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
