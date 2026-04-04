@@ -97,6 +97,7 @@ logging:
     org.springframework.ai: DEBUG
     org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: ERROR
     org.springframework.data.neo4j.cypher.deprecation: ERROR
+    org.apache.ibatis: OFF  # 关掉所有MyBatis日志
 
 rocketmq:
   producer:

@@ -291,14 +291,9 @@ public class RAGService {
             contextMap.put("userAnswer", userAnswer);
 
             PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "evaluation", contextMap);
-            RoutingChatService.RoutingResult result = callWithRetryResult(() -> {
-                String content = routingChatService.callWithFirstPacketProbeSupplier(
-                        () -> { throw new RuntimeException("首包探测超时或失败"); },
-                        pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "回答评估"
-                );
-                // 暂时由于 callWithFirstPacketProbeSupplier 只返回 content，这里做一个包装，真正的 metadata 需后续补充或在此忽略
-                return new RoutingChatService.RoutingResult(content, 0, 0, 0);
-            }, 1, "回答评估");
+            RoutingChatService.RoutingResult result = callWithRetryResult(() ->
+                routingChatService.callWithMetadata(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "回答评估"),
+                1, "回答评估");
             
             observabilityService.endNode(traceId, nodeId, "Q: " + question, "Score: " + result.content().substring(0, Math.min(20, result.content().length())), null);
             return result;
@@ -1275,8 +1270,7 @@ public class RAGService {
 
         try {
             logger.debug("[generateFinalReport] Prompt length={}", pair.userPrompt().length());
-            String response = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
-                () -> buildFallbackReport(history, targetedSuggestion),
+            String response = callWithRetry(() -> routingChatService.call(
                 pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "最终复盘"
             ), 1, "最终复盘");
             logger.debug("====== [RAGService - generateFinalReport] Response ======");
@@ -1545,11 +1539,38 @@ public class RAGService {
         if (raw == null || raw.isBlank()) {
             return buildFallbackFirstQuestion(topic);
         }
+
+        // 尝试 JSON 解析：如果 LLM 返回了 JSON 格式，直接提取 question 字段
+        String trimmed = raw.trim();
+        String jsonCandidate = trimmed;
+        if (jsonCandidate.startsWith("```json")) {
+            jsonCandidate = jsonCandidate.substring(7);
+        } else if (jsonCandidate.startsWith("```")) {
+            jsonCandidate = jsonCandidate.substring(3);
+        }
+        if (jsonCandidate.endsWith("```")) {
+            jsonCandidate = jsonCandidate.substring(0, jsonCandidate.length() - 3);
+        }
+        jsonCandidate = jsonCandidate.trim();
+        if (jsonCandidate.startsWith("{")) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(jsonCandidate);
+                String q = node.path("question").asText("");
+                if (!q.isBlank()) {
+                    return truncate(q.trim(), 200);
+                }
+            } catch (Exception ignored) {
+                // JSON 解析失败，继续走文本提取逻辑
+            }
+        }
+
         String normalized = raw.replace("\r\n", "\n")
                 .replace("**", "")
                 .replace("`", "")
                 .trim();
         String[] lines = normalized.split("\\n");
+
+        // 第一轮：找含问号的行（排除答案/解析/元信息行）
         for (String line : lines) {
             String candidate = line == null ? "" : line.trim();
             if (candidate.isBlank()) {
@@ -1560,13 +1581,15 @@ public class RAGService {
                     .replaceAll("^题目[：:]", "")
                     .replaceAll("^第一题[：:]", "")
                     .trim();
-            if (candidate.startsWith("出题依据") || candidate.startsWith("策略提示") || candidate.startsWith("后续建议")) {
+            if (isMetaOrAnswerLine(candidate)) {
                 continue;
             }
             if (candidate.contains("？") || candidate.contains("?")) {
                 return truncateToQuestion(candidate);
             }
         }
+
+        // 第二轮：取第一个非元信息、非答案的非空行
         for (String line : lines) {
             String candidate = line == null ? "" : line.trim();
             if (candidate.isBlank()) {
@@ -1577,7 +1600,7 @@ public class RAGService {
                     .replaceAll("^题目[：:]", "")
                     .replaceAll("^第一题[：:]", "")
                     .trim();
-            if (candidate.startsWith("出题依据") || candidate.startsWith("策略提示") || candidate.startsWith("后续建议")) {
+            if (isMetaOrAnswerLine(candidate)) {
                 continue;
             }
             if (!candidate.isBlank()) {
@@ -1585,6 +1608,40 @@ public class RAGService {
             }
         }
         return buildFallbackFirstQuestion(topic);
+    }
+
+    /**
+     * 判断是否为元信息行或答案/解析行，应从首题输出中过滤掉。
+     */
+    private boolean isMetaOrAnswerLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        // 元信息前缀
+        if (line.startsWith("出题依据") || line.startsWith("策略提示") || line.startsWith("后续建议")) {
+            return true;
+        }
+        // 答案/解析关键词（行首或包含）
+        String[] answerKeywords = {"答案", "解答", "参考答案", "解析", "正确答案", "答：", "答:",
+                "分析：", "分析:", "解题", "思路", "要点", "考察", "知识点"};
+        for (String keyword : answerKeywords) {
+            if (line.startsWith(keyword)) {
+                return true;
+            }
+        }
+        // 模拟对话格式：候选人/面试者/应聘者的回答行
+        String[] roleKeywords = {"候选人：", "候选人:", "面试者：", "面试者:", "应聘者：", "应聘者:",
+                "求职者：", "求职者:", "回答：", "回答:", "A：", "A:"};
+        for (String keyword : roleKeywords) {
+            if (line.startsWith(keyword)) {
+                return true;
+            }
+        }
+        // 模拟的后续题目标记（第二题、第三题、Q2、Q3 等）
+        if (line.matches("^第[二三四五六七八九十\\d]+题[：:].*") || line.matches("^Q[2-9]\\d*[：:.].*")) {
+            return true;
+        }
+        return false;
     }
 
     private String truncateToQuestion(String text) {

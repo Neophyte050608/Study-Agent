@@ -8,6 +8,7 @@ import com.example.interview.core.statemachine.InterviewContext;
 import com.example.interview.core.statemachine.InterviewEvent;
 import com.example.interview.core.statemachine.InterviewStateMachineConfig;
 import com.example.interview.rag.ResumeLoader;
+import com.example.interview.security.InputSanitizer;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
@@ -29,12 +30,12 @@ import java.util.stream.Collectors;
 /**
  * 面试编排中枢（InterviewOrchestratorAgent）。
  * 
- * 核心职责：作为面试流程的“总导演”，协调多个专业智能体（Agent）完成一次完整的面试。
+ * 核心职责：作为面试流程的"总导演"，协调多个专业智能体（Agent）完成一次完整的面试。
  * 
  * 职责边界（按一次答题回合）：
  * <ul>
  *   <li>1. 决策层 (DecisionLayerAgent)：根据会话状态（难度、追问阶段、掌握度、历史轮次）生成本轮出题策略。</li>
- *   <li>2. 知识层 (KnowledgeLayerAgent)：对“题目 + 回答”进行检索增强（RAG），产出支撑评估的专业证据包。</li>
+ *   <li>2. 知识层 (KnowledgeLayerAgent)：对"题目 + 回答"进行检索增强（RAG），产出支撑评估的专业证据包。</li>
  *   <li>3. 评估层 (EvaluationLayerAgent)：将策略、证据包及上下文输入模型，产出结构化评分与下一题。</li>
  *   <li>4. 成长层 (GrowthLayerAgent)：将评估结果加工为可解释的成长反馈，并在报告阶段生成训练重点。</li>
  * </ul>
@@ -54,12 +55,13 @@ public class InterviewOrchestratorAgent {
     private final ResumeLoader resumeLoader;
     private final SessionRepository sessionRepository;
     private final LearningProfileAgent learningProfileAgent;
+    private final InputSanitizer inputSanitizer;
     /** Agent-to-Agent 消息总线，用于跨 Agent 异步发送滚动总结任务 */
     private final com.example.interview.agent.a2a.A2ABus a2aBus;
     /** 自定义画像异步更新线程池 */
     private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileAgent learningProfileAgent, com.example.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
+    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileAgent learningProfileAgent, InputSanitizer inputSanitizer, com.example.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.evaluationAgent = evaluationAgent;
         this.knowledgeLayerAgent = knowledgeLayerAgent;
         this.decisionLayerAgent = decisionLayerAgent;
@@ -68,6 +70,7 @@ public class InterviewOrchestratorAgent {
         this.resumeLoader = resumeLoader;
         this.sessionRepository = sessionRepository;
         this.learningProfileAgent = learningProfileAgent;
+        this.inputSanitizer = inputSanitizer;
         this.a2aBus = a2aBus;
         this.profileUpdateExecutor = profileUpdateExecutor;
     }
@@ -90,7 +93,7 @@ public class InterviewOrchestratorAgent {
                     .collect(Collectors.joining("\n"));
         }
 
-        // 2) 绑定用户画像快照：把“历史学习记录/训练偏好”压缩为可直接拼进提示词的文本
+        // 2) 绑定用户画像快照：把"历史学习记录/训练偏好"压缩为可直接拼进提示词的文本
         int normalizedTotal = (totalQuestions == null || totalQuestions < 1) ? 5 : Math.min(totalQuestions, 20);
         InterviewSession session = new InterviewSession(topic, resumeContent, normalizedTotal);
         String normalizedUserId = learningProfileAgent.normalizeUserId(userId);
@@ -127,6 +130,35 @@ public class InterviewOrchestratorAgent {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
+        // Phase 3.1: 已结束面试拒绝再答
+        if (session.getHistory().size() >= session.getTotalQuestions()) {
+            throw new IllegalStateException("面试已结束，请调用 /api/report 获取总结报告");
+        }
+
+        // Phase 1.1: 输入净化 + 边界包装
+        String sanitizedAnswer = inputSanitizer.sanitize(userAnswer);
+
+        // Phase 2.3: 垃圾回答快速拦截（不走 LLM）
+        if (isGarbageAnswer(sanitizedAnswer)) {
+            String currentQ = session.getCurrentQuestion();
+            session.addHistory(new Question(
+                    currentQ, sanitizedAnswer, 5, 0, 0, 0, 0,
+                    "回答过于简短或无实质内容", "", "", "回答过于简短或无实质内容，请认真思考后再作答。"));
+            session.updateAdaptiveState(session.getTopic(), 5);
+            session.setCurrentQuestion(currentQ); // 保留原题，让用户重答
+            sessionRepository.save(session);
+            return new AnswerResult(
+                    5, "回答过于简短或无实质内容，请重新作答。", currentQ,
+                    session.getAverageScore(), false,
+                    session.getHistory().size(), session.getTotalQuestions(),
+                    session.getDifficultyLevel().name(), session.getFollowUpState().name(),
+                    session.getTopicMastery(session.getTopic()),
+                    0, 0, 0, 0, "", List.of(), List.of());
+        }
+
+        // 传给 LLM 评估的使用边界包装版本（防注入）
+        String wrappedAnswer = inputSanitizer.wrapWithBoundary(sanitizedAnswer);
+
         String currentQ = session.getCurrentQuestion();
         
         // 1. 预判下一题的阶段 (因为当前轮结束也就是 history.size() + 1)
@@ -157,14 +189,14 @@ public class InterviewOrchestratorAgent {
                 expectedNextStage
         );
 
-        // 2. 知识层：针对问答进行检索增强
-        RAGService.KnowledgePacket packet = knowledgeLayerAgent.gatherKnowledge(currentQ, userAnswer);
+        // 2. 知识层：针对问答进行检索增强（用净化后的原文检索，非包装版本）
+        RAGService.KnowledgePacket packet = knowledgeLayerAgent.gatherKnowledge(currentQ, sanitizedAnswer);
 
-        // 3. 评估层：产出结构化打分（总分+各维度）与下一题
+        // 3. 评估层：产出结构化打分（总分+各维度）与下一题（传入边界包装版本防注入）
         EvaluationAgent.LayeredEvaluation layeredEvaluation = evaluationLayerAgent.evaluate(
                 session.getTopic(),
                 currentQ,
-                userAnswer,
+                wrappedAnswer,
                 session.getDifficultyLevel().name(),
                 session.getFollowUpState().name(),
                 session.getTopicMastery(session.getTopic()),
@@ -177,10 +209,10 @@ public class InterviewOrchestratorAgent {
         // 4. 成长层：加工生成更具指导性的成长反馈
         String growthFeedback = growthLayerAgent.composeRoundFeedback(evaluation.feedback(), decisionPlan, layeredEvaluation.trace());
         
-        // 5. 记录历史并更新状态
+        // 5. 记录历史并更新状态（存历史用净化后原文，不带边界标记）
         session.addHistory(new Question(
                 currentQ,
-                userAnswer,
+                sanitizedAnswer,
                 evaluation.score(),
                 evaluation.accuracy(),
                 evaluation.logic(),
@@ -196,7 +228,7 @@ public class InterviewOrchestratorAgent {
         StateMachine<com.example.interview.core.InterviewStage, InterviewEvent, InterviewContext> stateMachine = 
                 StateMachineFactory.get(InterviewStateMachineConfig.MACHINE_ID);
         
-        InterviewContext context = new InterviewContext(session, userAnswer, evaluation.score());
+        InterviewContext context = new InterviewContext(session, sanitizedAnswer, evaluation.score());
         com.example.interview.core.InterviewStage previousStage = session.getCurrentStage();
         
         // 尝试触发多个阶段流转事件（COLA 状态机会根据 Condition 自动决定是否流转）
@@ -366,7 +398,7 @@ public class InterviewOrchestratorAgent {
     }
 
     /**
-     * 把多段文本（weak/incomplete/wrong）合并为“要点列表”。
+     * 把多段文本（weak/incomplete/wrong）合并为"要点列表"。
      *
      * <p>规则：按换行/分号切分、去掉开头的序号/项目符号、每段最多取 8 条、整体去重后最多保留 8 条。</p>
      */
@@ -390,7 +422,22 @@ public class InterviewOrchestratorAgent {
     }
 
     /**
-     * 从历史中提取“相对熟练点”，用于画像里的正向样本。
+     * 判断回答是否为垃圾内容(过短、纯标点、纯数字等),避免浪费 LLM 调用。
+     */
+    private boolean isGarbageAnswer(String answer) {
+        if (answer == null) return true;
+        String trimmed = answer.trim();
+        if (trimmed.length() < 2) return true;
+        // 去除所有空白和标点（含中文标点）后检查是否有实质内容
+        String contentOnly = trimmed.replaceAll("[\\s\\p{P}\\p{S}]+", "");
+        if (contentOnly.length() < 2) return true;
+        // 纯数字
+        if (contentOnly.matches("\\d+")) return true;
+        return false;
+    }
+
+    /**
+     * 从历史中提取"相对熟练点"，用于画像里的正向样本。
      *
      * <p>当前定义：分数 >= 80 的题干（最多 5 条）。这里是启发式规则，目的是为后续训练推荐提供种子。</p>
      */

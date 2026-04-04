@@ -224,6 +224,27 @@ public class WebChatService {
         return taskRouterAgent;
     }
 
+    /**
+     * 查找当前聊天会话中最近一条包含 interviewSessionId 的 assistant 消息，
+     * 用于判断用户是否正在进行面试（活跃面试会话检测）。
+     */
+    public String findActiveInterviewSessionId(String chatSessionId) {
+        List<ChatMessageDO> recentMessages = messageMapper.selectList(
+                new LambdaQueryWrapper<ChatMessageDO>()
+                        .eq(ChatMessageDO::getSessionId, chatSessionId)
+                        .eq(ChatMessageDO::getRole, "assistant")
+                        .orderByDesc(ChatMessageDO::getCreatedAt)
+                        .last("LIMIT 5")
+        );
+        for (ChatMessageDO msg : recentMessages) {
+            Map<String, Object> meta = msg.getMetadata();
+            if (meta != null && meta.containsKey("interviewSessionId")) {
+                return String.valueOf(meta.get("interviewSessionId"));
+            }
+        }
+        return null;
+    }
+
     private void touchSession(String sessionId) {
         sessionMapper.update(null,
                 new LambdaUpdateWrapper<ChatSessionDO>()

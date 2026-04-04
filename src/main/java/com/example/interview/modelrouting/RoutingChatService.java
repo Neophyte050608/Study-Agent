@@ -327,6 +327,31 @@ public class RoutingChatService {
         }, stage);
     }
 
+    public RoutingResult callWithMetadata(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage) {
+        if (!properties.isEnabled()) {
+            return callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt);
+        }
+        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
+        if (candidates.isEmpty()) {
+            return callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt);
+        }
+        return modelRoutingExecutor.execute(candidates, candidate -> {
+            ChatModel chatModel = resolveChatModel(candidate);
+            long start = System.currentTimeMillis();
+            RoutingResult result = callWithModelMetadata(chatModel, systemPrompt, userPrompt);
+            long cost = System.currentTimeMillis() - start;
+            logger.info("模型路由命中: stage={}, candidate={}, provider={}, state={}, costMs={}, tokens={}+{}",
+                    stage,
+                    candidate.name(),
+                    candidate.provider(),
+                    modelHealthStore.stateOf(candidate.name()),
+                    cost,
+                    result.inputTokens(),
+                    result.outputTokens());
+            return result;
+        }, stage);
+    }
+
     private RoutingResult callWithModelMetadata(ChatModel chatModel, String systemPrompt, String userPrompt) {
         long start = System.currentTimeMillis();
         var builder = ChatClient.builder(chatModel).build().prompt();
