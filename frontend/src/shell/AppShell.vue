@@ -54,6 +54,17 @@
         <span class="material-symbols-outlined shrink-0" :class="sidebarCollapsed && isWorkspaceActive ? 'text-indigo-600' : ''" :style="isWorkspaceActive ? 'font-variation-settings: \'FILL\' 1;' : ''">dashboard_customize</span>
         <span class="overflow-hidden whitespace-nowrap transition-all duration-300" :class="sidebarCollapsed ? 'w-0 opacity-0 hidden' : 'w-full opacity-100 block'">扩展空间</span>
       </router-link>
+
+      <!-- 主题切换按钮 -->
+      <button
+        @click="toggleTheme"
+        class="w-full flex items-center gap-3 py-3 mt-2 font-sans text-sm font-medium tracking-tight transition-all rounded-lg group text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800"
+        :class="[sidebarCollapsed ? 'px-0 justify-center' : 'px-4']"
+        :title="sidebarCollapsed ? (isDark ? '切换到浅色模式' : '切换到深色模式') : ''"
+      >
+        <span class="material-symbols-outlined shrink-0 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{{ isDark ? 'light_mode' : 'dark_mode' }}</span>
+        <span class="overflow-hidden whitespace-nowrap transition-all duration-300 text-left group-hover:text-indigo-600 dark:group-hover:text-indigo-400" :class="sidebarCollapsed ? 'w-0 opacity-0 hidden' : 'w-full opacity-100 block'">{{ isDark ? '浅色模式' : '深色模式' }}</span>
+      </button>
     </div>
   </aside>
 
@@ -70,10 +81,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { loadSidebarMenus } from '../api/menu'
+import { useTheme } from '../composables/useTheme'
 
 const route = useRoute()
 const menus = ref([])
 const sidebarCollapsed = ref(false)
+
+// 引入主题管理
+const { isDark, toggleTheme } = useTheme()
 
 const normalize = (path) => {
   if (!path) {

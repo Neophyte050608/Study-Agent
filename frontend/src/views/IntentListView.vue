@@ -1,25 +1,25 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen relative">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
     <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图列表 <span class="text-slate-500 font-medium text-sm ml-2">/ 筛选、分页与批量下线意图节点</span></h1>
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图列表 <span class="text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium text-sm ml-2">/ 筛选、分页与批量下线意图节点</span></h1>
     </div>
     <div class="flex items-center gap-2">
-      <RouterLink to="/intent-tree" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50">
+      <RouterLink to="/intent-tree" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-800/50">
         回到树页
       </RouterLink>
-      <button @click="reload" :disabled="loading" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+      <button @click="reload" :disabled="loading" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-800/50 disabled:opacity-50">
         刷新
       </button>
     </div>
   </header>
 
-  <main class="min-h-screen bg-slate-50 pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
-    <section class="rounded-xl border border-slate-200 bg-white p-4">
+  <main class="min-h-screen bg-slate-50 dark:bg-slate-800/50 pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <section class="rounded-xl border border-slate-200 bg-white dark:bg-slate-900 p-4">
       <div class="flex flex-wrap items-center gap-2">
         <div class="relative w-full md:w-[420px]">
           <input v-model="keyword" placeholder="搜索意图名称/ID/路径..." class="h-10 w-full border-slate-200 pl-9 text-sm rounded focus-visible:ring-0 focus-visible:border-slate-200" />
-          <span class="material-symbols-outlined absolute left-2 top-[10px] text-slate-400 text-base">search</span>
+          <span class="material-symbols-outlined absolute left-2 top-[10px] text-slate-400 dark:text-slate-500 text-base">search</span>
         </div>
         <select v-model="taskTypeFilter" class="h-10 rounded border-slate-200 text-sm px-2">
           <option value="ALL">全部任务类型</option>
@@ -34,16 +34,16 @@
       </div>
     </section>
 
-    <section class="bg-white rounded shadow-sm p-4">
-      <div v-if="selectedIndexes.length > 0" class="flex items-center justify-between border-y border-slate-200 bg-slate-50 px-4 py-2 -mx-4 mb-3">
-        <span class="text-sm text-slate-700">已选 {{ selectedIndexes.length }} 项</span>
+    <section class="bg-white dark:bg-slate-900 rounded shadow-sm p-4">
+      <div v-if="selectedIndexes.length > 0" class="flex items-center justify-between border-y border-slate-200 bg-slate-50 dark:bg-slate-800/50 px-4 py-2 -mx-4 mb-3">
+        <span class="text-sm text-slate-700 dark:text-slate-300">已选 {{ selectedIndexes.length }} 项</span>
         <div class="flex items-center gap-2">
           <button class="h-8 rounded border text-xs px-3" @click="runBatchOffline" :disabled="loading">批量下线</button>
         </div>
       </div>
 
-      <div v-if="loading" class="py-10 text-center text-slate-500">加载中...</div>
-      <div v-else-if="pageRows.length === 0" class="py-10 text-center text-slate-500">
+      <div v-if="loading" class="py-10 text-center text-slate-500 dark:text-slate-400 dark:text-slate-500">加载中...</div>
+      <div v-else-if="pageRows.length === 0" class="py-10 text-center text-slate-500 dark:text-slate-400 dark:text-slate-500">
         {{ filteredLeafs.length === 0 ? '暂无意图节点，请在树页新增' : '没有匹配结果，请调整筛选条件' }}
       </div>
 
@@ -69,8 +69,8 @@
             <td>
               <div class="space-y-0.5">
                 <div class="flex items-center gap-2">
-                  <span class="font-semibold text-slate-900">{{ row.name || '-' }}</span>
-                  <span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-600">
+                  <span class="font-semibold text-slate-900 dark:text-slate-100">{{ row.name || '-' }}</span>
+                  <span class="rounded-full border border-slate-200 bg-slate-50 dark:bg-slate-800/50 px-2 py-0.5 font-mono text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">
                     {{ row.intentId }}
                   </span>
                 </div>
@@ -89,7 +89,7 @@
             <td>{{ row.taskType || '-' }}</td>
             <td>{{ row.exampleCount }}</td>
             <td>
-              <span :class="row.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'" class="px-2 py-0.5 rounded text-[12px]">
+              <span :class="row.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500'" class="px-2 py-0.5 rounded text-[12px]">
                 {{ row.enabled ? '启用' : '下线' }}
               </span>
             </td>
@@ -104,7 +104,7 @@
         </tbody>
       </table>
 
-      <div v-if="showPagination" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+      <div v-if="showPagination" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
         <span>共 {{ total }} 条，显示 {{ rangeStart }}-{{ rangeEnd }}</span>
         <div class="flex flex-wrap items-center gap-2">
           <span>每页</span>

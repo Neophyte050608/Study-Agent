@@ -24,16 +24,16 @@
     </div>
 
     <div>
-      <h4 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+      <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
          <span class="material-symbols-outlined text-slate-400">receipt_long</span>
          同步日志详情
       </h4>
-      <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
-         <div v-for="(item, idx) in reports" :key="idx" class="p-4 border-b border-slate-50 flex items-start gap-4 hover:bg-slate-50 transition-colors last:border-0">
+      <div class="bg-white dark:bg-slate-900 border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+         <div v-for="(item, idx) in reports" :key="idx" class="p-4 border-b border-slate-50 flex items-start gap-4 hover:bg-slate-50 dark:bg-slate-800/50 transition-colors last:border-0">
            <div class="mt-1.5 w-2 h-2 rounded-full flex-shrink-0" :class="item.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'"></div>
            <div class="flex-1 min-w-0">
-             <h5 class="text-sm font-bold text-slate-900 mb-1 truncate">{{ item.fileName }}</h5>
-             <p class="text-xs text-slate-500 leading-relaxed">{{ item.message }}</p>
+             <h5 class="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 truncate">{{ item.fileName }}</h5>
+             <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{{ item.message }}</p>
            </div>
            <div class="text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-1 rounded-full flex-shrink-0" :class="item.status === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'">
              {{ item.status }}

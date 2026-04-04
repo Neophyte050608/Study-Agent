@@ -1,65 +1,65 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen relative">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
     <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700">{{ isCreateMode ? '新增意图节点' : '编辑意图节点' }} <span class="text-slate-500 font-medium text-sm ml-2">/ {{ currentTitle }}</span></h1>
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700">{{ isCreateMode ? '新增意图节点' : '编辑意图节点' }} <span class="text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium text-sm ml-2">/ {{ currentTitle }}</span></h1>
     </div>
     <div class="flex items-center gap-2">
-      <button @click="goBack" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50">返回</button>
+      <button @click="goBack" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-800/50">返回</button>
       <button @click="save" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded bg-[#0057c2] text-white hover:opacity-90 disabled:opacity-50">
         {{ saving ? '保存中...' : '保存' }}
       </button>
     </div>
   </header>
 
-  <main class="min-h-screen bg-slate-50 pt-24 pb-10 px-8 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
-    <section v-if="loading" class="bg-white rounded shadow-sm p-10 text-center text-slate-500">加载中...</section>
-    <section v-else-if="!form" class="bg-white rounded shadow-sm p-10 text-center text-slate-500">未找到对应意图节点</section>
-    <section v-else class="bg-white rounded shadow-sm p-6 space-y-4 max-w-4xl">
+  <main class="min-h-screen bg-slate-50 dark:bg-slate-800/50 pt-24 pb-10 px-8 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <section v-if="loading" class="bg-white dark:bg-slate-900 rounded shadow-sm p-10 text-center text-slate-500 dark:text-slate-400 dark:text-slate-500">加载中...</section>
+    <section v-else-if="!form" class="bg-white dark:bg-slate-900 rounded shadow-sm p-10 text-center text-slate-500 dark:text-slate-400 dark:text-slate-500">未找到对应意图节点</section>
+    <section v-else class="bg-white dark:bg-slate-900 rounded shadow-sm p-6 space-y-4 max-w-4xl">
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="text-xs text-slate-600">Intent ID *</label>
-          <input v-model.trim="form.intentId" :disabled="!isCreateMode" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm disabled:opacity-70" placeholder="例如：CODING.PRACTICE.ALGORITHM" />
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">Intent ID *</label>
+          <input v-model.trim="form.intentId" :disabled="!isCreateMode" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm disabled:opacity-70" placeholder="例如：CODING.PRACTICE.ALGORITHM" />
         </div>
         <div>
-          <label class="text-xs text-slate-600">名称 *</label>
-          <input v-model.trim="form.name" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm" placeholder="例如：算法题训练" />
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">名称 *</label>
+          <input v-model.trim="form.name" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm" placeholder="例如：算法题训练" />
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="text-xs text-slate-600">TaskType *</label>
-          <input v-model.trim="form.taskType" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm" placeholder="例如：CODING_PRACTICE" />
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">TaskType *</label>
+          <input v-model.trim="form.taskType" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm" placeholder="例如：CODING_PRACTICE" />
         </div>
         <div>
-          <label class="text-xs text-slate-600">Path *</label>
-          <input v-model.trim="form.path" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm" placeholder="例如：coding/practice/algorithm" />
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">Path *</label>
+          <input v-model.trim="form.path" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm" placeholder="例如：coding/practice/algorithm" />
         </div>
       </div>
 
       <div>
-        <label class="text-xs text-slate-600">描述</label>
-        <textarea v-model.trim="form.description" rows="3" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm resize-y" />
+        <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">描述</label>
+        <textarea v-model.trim="form.description" rows="3" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm resize-y" />
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="text-xs text-slate-600">examples（每行一条）</label>
-          <textarea v-model="form.examplesText" rows="6" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm resize-y" />
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">examples（每行一条）</label>
+          <textarea v-model="form.examplesText" rows="6" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm resize-y" />
         </div>
         <div>
-          <label class="text-xs text-slate-600">slotHints（每行一条）</label>
-          <textarea v-model="form.slotHintsText" rows="6" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-sm resize-y" />
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">slotHints（每行一条）</label>
+          <textarea v-model="form.slotHintsText" rows="6" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-sm resize-y" />
         </div>
       </div>
 
       <div class="flex items-center gap-2">
         <input id="enabled" v-model="form.enabled" type="checkbox" />
-        <label for="enabled" class="text-sm text-slate-700">启用节点</label>
+        <label for="enabled" class="text-sm text-slate-700 dark:text-slate-300">启用节点</label>
       </div>
 
-      <p class="text-xs" :class="errorText ? 'text-rose-600' : 'text-slate-500'">
+      <p class="text-xs" :class="errorText ? 'text-rose-600' : 'text-slate-500 dark:text-slate-400 dark:text-slate-500'">
         {{ errorText || hint }}
       </p>
     </section>

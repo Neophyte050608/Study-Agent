@@ -1,23 +1,23 @@
 <template>
-  <div class="bg-surface text-on-surface antialiased min-h-screen">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased min-h-screen">
     <!-- TopNavBar Shell -->
-    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">观测与运维 <span class="text-slate-500 font-medium text-sm ml-2">/ 实时监控 RAG 检索链路性能与系统高可用状态</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">观测与运维 <span class="text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium text-sm ml-2">/ 实时监控 RAG 检索链路性能与系统高可用状态</span></h1>
       </div>
     </header>
 
     <!-- Main Content Canvas -->
-    <main class="pt-24 px-8 pb-12 min-h-screen bg-slate-50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <main class="pt-24 px-8 pb-12 min-h-screen bg-slate-50 dark:bg-slate-800/50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Header & Tabs -->
       <div class="mb-8">
         <div class="flex items-end justify-between">
           <div>
-            <h2 class="text-3xl font-extrabold tracking-tight text-slate-900 mb-2">系统全链路观测</h2>
-            <p class="text-slate-500 max-w-2xl leading-relaxed">监控 RAG 检索链路性能、A2A 通信状态及核心运维审计日志，确保数字化叙事引擎的高可用运行。</p>
+            <h2 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mb-2">系统全链路观测</h2>
+            <p class="text-slate-500 dark:text-slate-400 dark:text-slate-500 max-w-2xl leading-relaxed">监控 RAG 检索链路性能、A2A 通信状态及核心运维审计日志，确保数字化叙事引擎的高可用运行。</p>
           </div>
-          <div class="flex bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
-            <button class="px-6 py-2 rounded-lg text-sm font-bold bg-slate-100 text-indigo-700 shadow-sm transition-all" @click="reload" :disabled="loading">
+          <div class="flex bg-white dark:bg-slate-900 border border-slate-200 p-1 rounded-xl shadow-sm">
+            <button class="px-6 py-2 rounded-lg text-sm font-bold bg-slate-100 dark:bg-slate-800 text-indigo-700 shadow-sm transition-all" @click="reload" :disabled="loading">
               <span class="material-symbols-outlined align-middle mr-1 text-[18px]" :class="loading ? 'animate-spin' : ''">refresh</span>
               刷新数据
             </button>
@@ -30,42 +30,42 @@
       <div class="grid grid-cols-12 gap-6">
         <!-- Key Metrics Summary -->
         <div class="col-span-12 grid grid-cols-4 gap-6">
-          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
             <div class="flex items-center gap-3 mb-4">
               <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="speed">speed</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">平均耗时</span>
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">平均耗时</span>
             </div>
-            <div class="text-2xl font-black text-slate-900">{{ overview.avgLatencyMs ?? 0 }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
+            <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ overview.avgLatencyMs ?? 0 }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
             <div class="mt-2 flex items-center gap-1 text-xs text-indigo-500 font-medium">
               <span class="material-symbols-outlined text-xs">analytics</span> 统计中
             </div>
           </div>
-          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
             <div class="flex items-center gap-3 mb-4">
               <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg">timer</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">P95 耗时</span>
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">P95 耗时</span>
             </div>
-            <div class="text-2xl font-black text-slate-900">{{ p95Latency }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
+            <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ p95Latency }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
             <div class="mt-2 flex items-center gap-1 text-xs text-amber-500 font-medium">
               <span class="material-symbols-outlined text-xs">bolt</span> 性能基准
             </div>
           </div>
-          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
             <div class="flex items-center gap-3 mb-4">
               <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg" data-icon="find_in_page">find_in_page</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">平均召回文档</span>
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">平均召回文档</span>
             </div>
-            <div class="text-2xl font-black text-slate-900">{{ overview.avgRetrievedDocs ?? 0 }}<span class="text-sm font-medium ml-1 opacity-60">docs</span></div>
+            <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ overview.avgRetrievedDocs ?? 0 }}<span class="text-sm font-medium ml-1 opacity-60">docs</span></div>
             <div class="mt-2 flex items-center gap-1 text-xs text-emerald-600 font-medium">
               <span class="material-symbols-outlined text-xs" data-icon="stable">video_stable</span> 稳定运行中
             </div>
           </div>
-          <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
             <div class="flex items-center gap-3 mb-4">
               <span class="material-symbols-outlined text-indigo-600 bg-indigo-50 p-2 rounded-lg">check_circle</span>
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">成功率</span>
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">成功率</span>
             </div>
-            <div class="text-2xl font-black text-slate-900">{{ successRate }}</div>
+            <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ successRate }}</div>
             <div class="mt-2 flex items-center gap-1 text-xs text-indigo-600 font-medium">
               <span class="material-symbols-outlined text-xs">verified</span> 高可用指标
             </div>
@@ -73,21 +73,27 @@
         </div>
 
         <!-- RAG Trace Table -->
-        <div id="section-rag" class="col-span-8 bg-white rounded-xl p-8 shadow-sm border border-slate-200">
+        <div id="section-rag" class="col-span-8 bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm border border-slate-200">
           <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xl font-bold flex items-center gap-2 text-slate-900">
+            <h3 class="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
               <span class="material-symbols-outlined text-indigo-700" data-icon="route">route</span>
               RAG 链路实时追踪
             </h3>
-            <div class="flex items-center gap-2">
-              <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span class="text-xs text-slate-500 font-medium">实时监听中...</span>
+            <div class="flex items-center gap-4">
+              <button class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1" @click="showFullTraces = !showFullTraces" v-if="traces.length > 5">
+                {{ showFullTraces ? '收起' : '展开全部' }}
+                <span class="material-symbols-outlined text-[14px] transition-transform duration-300" :class="showFullTraces ? 'rotate-180' : ''">expand_more</span>
+              </button>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium">实时监听中...</span>
+              </div>
             </div>
           </div>
           <div class="overflow-hidden">
             <table class="w-full text-left">
               <thead>
-                <tr class="text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
+                <tr class="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
                   <th class="pb-4 font-bold">Trace ID</th>
                   <th class="pb-4 font-bold">耗时 (Latency)</th>
                   <th class="pb-4 font-bold">召回数量</th>
@@ -96,10 +102,10 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <tr v-for="item in traces" :key="item.traceId" class="group hover:bg-slate-50 transition-all">
+                <tr v-for="item in displayedTraces" :key="item.traceId" class="group hover:bg-slate-50 dark:bg-slate-800/50 transition-all">
                   <td class="py-4 text-sm font-mono text-indigo-600">{{ item.traceId || '-' }}</td>
-                  <td class="py-4 text-sm font-semibold text-slate-700">{{ item.latencyMs ?? 0 }} ms</td>
-                  <td class="py-4 text-sm text-slate-700">{{ item.retrievedCount ?? 0 }}</td>
+                  <td class="py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">{{ item.latencyMs ?? 0 }} ms</td>
+                  <td class="py-4 text-sm text-slate-700 dark:text-slate-300">{{ item.retrievedCount ?? 0 }}</td>
                   <td class="py-4">
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter"
                           :class="getTraceStatusClass(item.status)">
@@ -113,7 +119,7 @@
                   </td>
                 </tr>
                 <tr v-if="!traces.length">
-                  <td colspan="5" class="py-8 text-center text-sm text-slate-500">暂无轨迹数据</td>
+                  <td colspan="5" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">暂无轨迹数据</td>
                 </tr>
               </tbody>
             </table>
@@ -122,9 +128,9 @@
 
         <!-- A2A Idempotency Status -->
         <div id="section-a2a" class="col-span-4 space-y-6">
-          <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+          <div class="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <h3 class="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <span class="material-symbols-outlined text-indigo-700 text-lg" data-icon="rebase_edit">rebase_edit</span>
                 高级运维工具
               </h3>
@@ -132,29 +138,29 @@
                 {{ showAdvancedOps ? '收起' : '展开' }}
               </button>
             </div>
-            <p v-if="!showAdvancedOps" class="text-xs text-slate-500 leading-relaxed">
+            <p v-if="!showAdvancedOps" class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 leading-relaxed">
               这块主要用于 A2A 消息幂等排障与死信重放，日常看 RAG 链路时可保持收起。
             </p>
             <div v-else class="space-y-6">
               <div>
                 <div class="flex justify-between items-end mb-2">
-                  <span class="text-xs font-bold text-slate-900">L1 Memory Cache</span>
+                  <span class="text-xs font-bold text-slate-900 dark:text-slate-100">L1 Memory Cache</span>
                   <span class="text-xs text-indigo-600 font-mono">{{ idempotency.inMemorySize || 0 }} keys</span>
                 </div>
-                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div class="h-full bg-indigo-500 rounded-full" :style="{ width: Math.min(100, ((idempotency.inMemorySize || 0) / 1000) * 100) + '%' }"></div>
                 </div>
-                <p class="text-[10px] mt-2 text-slate-500">清理策略：LRU (Least Recently Used)</p>
+                <p class="text-[10px] mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">清理策略：LRU (Least Recently Used)</p>
               </div>
               <div>
                 <div class="flex justify-between items-end mb-2">
-                  <span class="text-xs font-bold text-slate-900">L2 Redis Dist. Cache</span>
+                  <span class="text-xs font-bold text-slate-900 dark:text-slate-100">L2 Redis Dist. Cache</span>
                   <span class="text-xs text-indigo-600 font-mono">{{ idempotency.redisSize || 0 }} keys</span>
                 </div>
-                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div class="h-full bg-indigo-400 rounded-full" :style="{ width: Math.min(100, ((idempotency.redisSize || 0) / 10000) * 100) + '%' }"></div>
                 </div>
-                <p class="text-[10px] mt-2 text-slate-500">持久化：AOF + RDB Enabled</p>
+                <p class="text-[10px] mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">持久化：AOF + RDB Enabled</p>
               </div>
             </div>
           </div>
@@ -169,11 +175,11 @@
               执行以下操作可能会导致部分正在进行的业务中断或数据不一致，请在确保备份的情况下谨慎操作。
             </p>
             <div class="grid grid-cols-1 gap-3">
-              <button class="w-full flex items-center justify-center gap-2 py-3 bg-white text-red-600 border border-red-200 rounded-lg text-xs font-bold hover:bg-red-600 hover:text-white transition-all active:scale-95 disabled:opacity-50" @click="purge" :disabled="loading">
+              <button class="w-full flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-900 text-red-600 border border-red-200 rounded-lg text-xs font-bold hover:bg-red-600 hover:text-white transition-all active:scale-95 disabled:opacity-50" @click="purge" :disabled="loading">
                 <span class="material-symbols-outlined text-sm" data-icon="delete_sweep">delete_sweep</span>
                 清理幂等缓存 (Force Purge)
               </button>
-              <button class="w-full flex items-center justify-center gap-2 py-3 bg-white text-slate-700 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-100 transition-all active:scale-95 disabled:opacity-50" @click="replay" :disabled="loading">
+              <button class="w-full flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 rounded-lg text-xs font-bold hover:bg-slate-100 dark:bg-slate-800 transition-all active:scale-95 disabled:opacity-50" @click="replay" :disabled="loading">
                 <span class="material-symbols-outlined text-sm" data-icon="replay">replay</span>
                 死信队列重放 (DLQ Replay)
               </button>
@@ -182,27 +188,27 @@
         </div>
 
         <!-- RAG 生成质量评测 -->
-        <div id="section-rag-quality" class="col-span-12 bg-white rounded-xl p-8 shadow-sm border border-slate-200">
+        <div id="section-rag-quality" class="col-span-12 bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm border border-slate-200">
           <!-- 标题栏 + 运行评测按钮 -->
           <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xl font-bold flex items-center gap-2 text-slate-900">
+            <h3 class="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
               <span class="material-symbols-outlined text-indigo-700">lab_research</span>
               RAG 生成质量评测
             </h3>
             <div class="flex items-center gap-3">
-              <select v-model="selectedEngine" class="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <select v-model="selectedEngine" class="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">自动（默认配置）</option>
                 <option value="java">Java 原生引擎</option>
                 <option value="ragas">Ragas 框架</option>
               </select>
-              <span v-if="engineStatus" class="text-xs px-2 py-1 rounded-full" :class="engineStatus.ragasEngineAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+              <span v-if="engineStatus" class="text-xs px-2 py-1 rounded-full" :class="engineStatus.ragasEngineAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500'">
                 Ragas: {{ engineStatus.ragasEngineAvailable ? '可用' : '不可用' }}
               </span>
               <button @click="runQualityEval" :disabled="qualityEvalLoading" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm" :class="qualityEvalLoading ? 'animate-spin' : ''">{{ qualityEvalLoading ? 'progress_activity' : 'play_arrow' }}</span>
                 {{ qualityEvalLoading ? '评测中...' : '运行评测' }}
               </button>
-              <button @click="loadQualityEvalHistory" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
+              <button @click="loadQualityEvalHistory" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm">history</span>
                 历史记录
               </button>
@@ -217,9 +223,9 @@
             </div>
             <!-- 四指标卡片 -->
             <div class="col-span-7 grid grid-cols-2 gap-4">
-              <div v-for="metric in qualityMetrics" :key="metric.key" class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{{ metric.label }}</div>
-                <div class="text-2xl font-black text-slate-900">{{ (metric.value * 100).toFixed(1) }}<span class="text-sm font-medium ml-1 opacity-60">%</span></div>
+              <div v-for="metric in qualityMetrics" :key="metric.key" class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200">
+                <div class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">{{ metric.label }}</div>
+                <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ (metric.value * 100).toFixed(1) }}<span class="text-sm font-medium ml-1 opacity-60">%</span></div>
                 <div class="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
                   <div class="h-full rounded-full transition-all duration-500" :class="metric.value >= 0.8 ? 'bg-emerald-500' : metric.value >= 0.5 ? 'bg-amber-500' : 'bg-red-500'" :style="{ width: (metric.value * 100) + '%' }"></div>
                 </div>
@@ -229,13 +235,13 @@
 
           <!-- 历史趋势表格 -->
           <div v-if="showQualityHistory && qualityEvalRuns.length" class="mt-8">
-            <h4 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <h4 class="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
               <span class="material-symbols-outlined text-indigo-600 text-sm">timeline</span>
               评测历史
             </h4>
             <table class="w-full text-left">
               <thead>
-                <tr class="text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
+                <tr class="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
                   <th class="pb-3">运行 ID</th>
                   <th class="pb-3">时间</th>
                   <th class="pb-3">引擎</th>
@@ -248,9 +254,9 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <tr v-for="run in qualityEvalRuns" :key="run.runId" class="hover:bg-slate-50 transition-all">
+                <tr v-for="run in qualityEvalRuns" :key="run.runId" class="hover:bg-slate-50 dark:bg-slate-800/50 transition-all">
                   <td class="py-3 text-sm font-mono text-indigo-600">{{ run.runId?.substring(0, 8) || '-' }}</td>
-                  <td class="py-3 text-sm text-slate-500">{{ formatTime(run.timestamp) }}</td>
+                  <td class="py-3 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ formatTime(run.timestamp) }}</td>
                   <td class="py-3 text-sm">
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold" :class="run.engine === 'ragas' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'">
                       {{ run.engine === 'ragas' ? 'Ragas' : 'Java' }}
@@ -271,31 +277,31 @@
 
           <!-- 逐样本展开 -->
           <div v-if="qualityEvalDetail" class="mt-8">
-            <h4 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">逐样本详情</h4>
+            <h4 class="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">逐样本详情</h4>
             <div v-for="(item, idx) in qualityEvalDetail.results" :key="idx" class="mb-3 border border-slate-200 rounded-lg overflow-hidden">
-              <button @click="toggleSample(idx)" class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-all text-left">
+              <button @click="toggleSample(idx)" class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:bg-slate-800 transition-all text-left">
                 <div class="flex items-center gap-3">
                   <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">{{ item.tag || '-' }}</span>
-                  <span class="text-sm font-medium text-slate-700">{{ item.query }}</span>
+                  <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ item.query }}</span>
                 </div>
-                <div class="flex items-center gap-4 text-xs text-slate-500">
+                <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   <span>忠实度: {{ (item.faithfulness * 100).toFixed(0) }}%</span>
                   <span>相关性: {{ (item.answerRelevancy * 100).toFixed(0) }}%</span>
                   <span class="material-symbols-outlined text-sm transition-transform" :class="expandedSamples.includes(idx) ? 'rotate-180' : ''">expand_more</span>
                 </div>
               </button>
               <div v-if="expandedSamples.includes(idx)" class="px-4 py-4 space-y-3 text-sm">
-                <div><span class="font-bold text-slate-600">标准答案：</span><span class="text-slate-700">{{ item.groundTruthAnswer }}</span></div>
-                <div><span class="font-bold text-slate-600">生成答案：</span><span class="text-slate-700">{{ item.generatedAnswer }}</span></div>
+                <div><span class="font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">标准答案：</span><span class="text-slate-700 dark:text-slate-300">{{ item.groundTruthAnswer }}</span></div>
+                <div><span class="font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">生成答案：</span><span class="text-slate-700 dark:text-slate-300">{{ item.generatedAnswer }}</span></div>
                 <div class="grid grid-cols-4 gap-3 mt-2">
-                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">忠实度</div><div class="font-bold">{{ (item.faithfulness * 100).toFixed(1) }}%</div></div>
-                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">回答相关性</div><div class="font-bold">{{ (item.answerRelevancy * 100).toFixed(1) }}%</div></div>
-                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">上下文精准度</div><div class="font-bold">{{ (item.contextPrecision * 100).toFixed(1) }}%</div></div>
-                  <div class="bg-slate-50 p-3 rounded"><div class="text-xs text-slate-500 mb-1">上下文召回</div><div class="font-bold">{{ (item.contextRecall * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded"><div class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mb-1">忠实度</div><div class="font-bold">{{ (item.faithfulness * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded"><div class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mb-1">回答相关性</div><div class="font-bold">{{ (item.answerRelevancy * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded"><div class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mb-1">上下文精准度</div><div class="font-bold">{{ (item.contextPrecision * 100).toFixed(1) }}%</div></div>
+                  <div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded"><div class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mb-1">上下文召回</div><div class="font-bold">{{ (item.contextRecall * 100).toFixed(1) }}%</div></div>
                 </div>
                 <div v-if="item.rationales" class="mt-2">
-                  <div class="text-xs font-bold text-slate-500 mb-1">LLM 评分理由</div>
-                  <div v-for="(reason, metric) in item.rationales" :key="metric" class="text-xs text-slate-600 mb-1">
+                  <div class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 mb-1">LLM 评分理由</div>
+                  <div v-for="(reason, metric) in item.rationales" :key="metric" class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
                     <span class="font-semibold">{{ metric }}:</span> {{ reason }}
                   </div>
                 </div>
@@ -305,26 +311,26 @@
         </div>
 
         <!-- Recent Audit Log (Asymmetric Section) -->
-        <div id="section-audit" class="col-span-12 bg-white rounded-xl p-8 border border-slate-200 shadow-sm">
+        <div id="section-audit" class="col-span-12 bg-white dark:bg-slate-900 rounded-xl p-8 border border-slate-200 shadow-sm">
           <div class="flex items-center justify-between mb-6">
             <div>
-              <h3 class="text-lg font-bold text-slate-900">最近运维审计</h3>
-              <p class="text-xs text-slate-500">记录所有特权用户的写操作指令</p>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">最近运维审计</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">记录所有特权用户的写操作指令</p>
             </div>
             <button class="text-indigo-600 text-xs font-bold flex items-center gap-1 hover:underline">
               查看完整日志 <span class="material-symbols-outlined text-xs" data-icon="arrow_forward">arrow_forward</span>
             </button>
           </div>
           <div class="space-y-4">
-            <div v-for="item in audits" :key="`${item.timestamp}-${item.operator}-${item.action}`" class="flex items-center justify-between bg-slate-50 px-4 py-3 rounded-lg border-l-4 border-indigo-500 hover:bg-slate-100 transition-colors">
+            <div v-for="item in audits" :key="`${item.timestamp}-${item.operator}-${item.action}`" class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-4 py-3 rounded-lg border-l-4 border-indigo-500 hover:bg-slate-100 dark:bg-slate-800 transition-colors">
               <div class="flex items-center gap-4">
-                <span class="text-xs font-mono text-slate-500 w-36">{{ formatTime(item.timestamp) }}</span>
+                <span class="text-xs font-mono text-slate-500 dark:text-slate-400 dark:text-slate-500 w-36">{{ formatTime(item.timestamp) }}</span>
                 <span class="px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] font-black rounded-full uppercase w-16 text-center">{{ item.action || 'OP' }}</span>
-                <span class="text-sm font-medium text-slate-700">用户 <span class="font-bold text-slate-900">{{ item.operator || 'system' }}</span> {{ item.message || '-' }}</span>
+                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">用户 <span class="font-bold text-slate-900 dark:text-slate-100">{{ item.operator || 'system' }}</span> {{ item.message || '-' }}</span>
               </div>
-              <span class="text-xs text-slate-400 font-mono">System</span>
+              <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">System</span>
             </div>
-            <div v-if="!audits.length" class="py-4 text-sm text-slate-500 text-center">暂无审计日志</div>
+            <div v-if="!audits.length" class="py-4 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500 text-center">暂无审计日志</div>
           </div>
         </div>
       </div>
@@ -350,6 +356,11 @@ const loading = ref(false)
 const hint = ref('可执行清理与重放操作')
 const overview = ref({})
 const traces = ref([])
+const showFullTraces = ref(false)
+const displayedTraces = computed(() => {
+  if (showFullTraces.value) return traces.value
+  return traces.value.slice(0, 5)
+})
 const audits = ref([])
 const idempotency = ref({})
 const showAdvancedOps = ref(false)
@@ -576,7 +587,7 @@ const getTraceStatusClass = (status) => {
     return 'bg-indigo-100 text-indigo-700'
   }
   if (status === 'UNKNOWN') {
-    return 'bg-slate-100 text-slate-700'
+    return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
   }
   return 'bg-emerald-100 text-emerald-700'
 }

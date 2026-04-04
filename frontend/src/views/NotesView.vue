@@ -1,9 +1,9 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen relative">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen relative">
     <!-- Top Navigation Bar -->
-    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">知识库管理 <span class="text-slate-500 font-medium text-sm ml-2">/ 管理与同步您的专属语料知识库</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">知识库管理 <span class="text-slate-500 dark:text-slate-400 font-medium text-sm ml-2">/ 管理与同步您的专属语料知识库</span></h1>
       </div>
     </header>
 
@@ -12,11 +12,11 @@
       <!-- Header Section -->
       <div class="flex justify-between items-end mb-8">
         <section>
-          <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 mb-2">知识库管理</h1>
-          <p class="text-slate-500 max-w-2xl leading-relaxed">管理您的本地非结构化数据源、文档与分块。</p>
+          <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mb-2">知识库管理</h1>
+          <p class="text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">管理您的本地非结构化数据源、文档与分块。</p>
         </section>
         <div class="flex gap-3">
-          <button @click="showSyncModal = true" class="bg-white border border-slate-200 text-slate-700 py-2.5 px-5 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+          <button @click="showSyncModal = true" class="bg-white dark:bg-slate-900 border border-slate-200 text-slate-700 dark:text-slate-300 py-2.5 px-5 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-50 dark:bg-slate-800/50 transition-all active:scale-95 shadow-sm">
             <span class="material-symbols-outlined text-[18px]">sync</span>
             配置与同步
           </button>
@@ -42,20 +42,20 @@
 
       <!-- Stats Overview -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
-          <span class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">总扫描文件</span>
-          <span class="text-2xl font-bold text-slate-900">{{ stats.totalScanned || 0 }}</span>
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+          <span class="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">总扫描文件</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ stats.totalScanned || 0 }}</span>
         </div>
-        <div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
-          <span class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">已索引文档</span>
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+          <span class="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">已索引文档</span>
           <span class="text-2xl font-bold text-indigo-600">{{ stats.totalIndexed || 0 }}</span>
         </div>
-        <div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
-          <span class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">索引成功率</span>
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+          <span class="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">索引成功率</span>
           <span class="text-2xl font-bold text-emerald-600">{{ stats.successRate || '0%' }}</span>
         </div>
-        <div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
-          <span class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">同步失败数</span>
+        <div class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 shadow-sm flex flex-col">
+          <span class="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">同步失败数</span>
           <span class="text-2xl font-bold text-red-500">{{ stats.failedFiles || 0 }}</span>
         </div>
       </div>
@@ -64,7 +64,7 @@
       <div class="border-b border-slate-200 mb-6">
         <nav class="-mb-px flex space-x-8">
           <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
-            :class="[activeTab === tab.id ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300', 'whitespace-nowrap py-3 px-1 border-b-2 font-bold text-sm transition-colors flex items-center gap-2']">
+            :class="[activeTab === tab.id ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 hover:border-slate-300', 'whitespace-nowrap py-3 px-1 border-b-2 font-bold text-sm transition-colors flex items-center gap-2']">
             <span class="material-symbols-outlined text-[18px]">{{ tab.icon }}</span>
             {{ tab.name }}
           </button>

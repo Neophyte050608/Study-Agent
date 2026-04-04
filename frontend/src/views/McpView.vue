@@ -1,19 +1,19 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen relative">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen relative">
   <!-- TopNavBar Anchor -->
   <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 border-none shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
     <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">MCP 工具台 <span class="text-slate-500 font-medium text-sm ml-2">/ 接入与管理各类外部工具插件</span></h1>
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">MCP 工具台 <span class="text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium text-sm ml-2">/ 接入与管理各类外部工具插件</span></h1>
     </div>
   </header>
 
   <!-- Main Content Canvas -->
-  <main class="pt-24 pb-12 px-8 min-h-screen bg-[#f8f9fa] transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <main class="pt-24 pb-12 px-8 min-h-screen bg-[#f8f9fa] dark:bg-slate-950 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
     <div class="max-w-6xl mx-auto space-y-8">
       <!-- Header Section -->
       <div class="flex flex-col space-y-2">
-        <h2 class="text-3xl font-extrabold tracking-tight text-[#191c1d]">MCP 调试工作台</h2>
-        <p class="text-slate-600 max-w-2xl leading-relaxed">
+        <h2 class="text-3xl font-extrabold tracking-tight text-[#191c1d] dark:text-slate-100">MCP 调试工作台</h2>
+        <p class="text-slate-600 dark:text-slate-400 dark:text-slate-500 max-w-2xl leading-relaxed">
           大模型上下文协议 (Model Context Protocol) 实时调试环境。在此发现已注册的工具能力，模拟调用参数，并实时观测协议响应。
         </p>
       </div>
@@ -23,29 +23,29 @@
         <!-- Left Column: Config & Input -->
         <div class="col-span-12 lg:col-span-7 space-y-6">
           <!-- Step 1: Discovery -->
-          <div class="bg-white p-6 rounded-xl shadow-sm border border-transparent hover:shadow-md transition-shadow duration-300">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-transparent hover:shadow-md transition-shadow duration-300">
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[#2a14b4]">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[#2a14b4] dark:text-indigo-400">
                   <span class="text-sm font-bold">01</span>
                 </div>
-                <h3 class="text-lg font-bold text-[#191c1d]">能力发现 (Discovery)</h3>
+                <h3 class="text-lg font-bold text-[#191c1d] dark:text-slate-100">能力发现 (Discovery)</h3>
               </div>
-              <button @click="reload" :disabled="loading" class="flex items-center space-x-2 text-[#2a14b4] font-semibold text-sm hover:underline disabled:opacity-50">
+              <button @click="reload" :disabled="loading" class="flex items-center space-x-2 text-[#2a14b4] dark:text-indigo-400 font-semibold text-sm hover:underline disabled:opacity-50">
                 <span class="material-symbols-outlined text-sm">refresh</span>
                 <span>重新发现能力</span>
               </button>
             </div>
             <div class="space-y-4">
-              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">选择已发现的能力</label>
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">选择已发现的能力</label>
               <div class="relative">
-                <select v-model="selectedCapability" @change="onCapabilityChange" class="w-full bg-[#f3f4f5] border-none rounded-xl py-3 pl-4 pr-10 text-sm focus:ring-2 focus:ring-indigo-300 appearance-none text-[#191c1d]">
+                <select v-model="selectedCapability" @change="onCapabilityChange" class="w-full bg-[#f3f4f5] dark:bg-slate-800 border-none rounded-xl py-3 pl-4 pr-10 text-sm focus:ring-2 focus:ring-indigo-300 appearance-none text-[#191c1d] dark:text-slate-100">
                   <option value="" disabled>请选择工具能力...</option>
                   <option v-for="cap in capabilities" :key="cap.name" :value="cap.name">
                     {{ cap.name }}{{ cap.description ? ` - ${cap.description}` : '' }}
                   </option>
                 </select>
-                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   <span class="material-symbols-outlined">unfold_more</span>
                 </div>
               </div>
@@ -53,24 +53,24 @@
           </div>
 
           <!-- Step 2: Params Editor -->
-          <div class="bg-white p-6 rounded-xl shadow-sm border border-transparent">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-transparent">
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center space-x-3">
-                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[#2a14b4]">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[#2a14b4] dark:text-indigo-400">
                   <span class="text-sm font-bold">02</span>
                 </div>
-                <h3 class="text-lg font-bold text-[#191c1d]">输入参数 (Params)</h3>
+                <h3 class="text-lg font-bold text-[#191c1d] dark:text-slate-100">输入参数 (Params)</h3>
               </div>
-              <span class="text-[10px] font-mono bg-indigo-100/50 text-[#5a5893] px-2 py-1 rounded">application/json</span>
+              <span class="text-[10px] font-mono bg-indigo-100/50 text-[#5a5893] dark:text-indigo-300 px-2 py-1 rounded">application/json</span>
             </div>
             <div class="relative">
               <textarea v-model="paramsText" class="w-full h-64 bg-slate-900 text-indigo-100 font-mono text-sm p-6 rounded-xl border-none focus:ring-2 focus:ring-indigo-300 resize-none shadow-inner" spellcheck="false"></textarea>
-              <div class="absolute top-4 right-4 opacity-50 text-slate-400">
+              <div class="absolute top-4 right-4 opacity-50 text-slate-400 dark:text-slate-500">
                 <span class="material-symbols-outlined">code</span>
               </div>
             </div>
             <div class="mt-6 flex justify-end">
-              <button @click="invoke" :disabled="loading || !selectedCapability" class="bg-[#4338ca] text-white px-8 py-3 rounded-xl font-bold flex items-center space-x-3 hover:shadow-lg active:scale-95 transition-all group disabled:opacity-60 disabled:active:scale-100 disabled:hover:shadow-none">
+              <button @click="invoke" :disabled="loading || !selectedCapability" class="bg-[#4338ca] dark:bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold flex items-center space-x-3 hover:shadow-lg active:scale-95 transition-all group disabled:opacity-60 disabled:active:scale-100 disabled:hover:shadow-none">
                 <span class="material-symbols-outlined group-hover:rotate-12 transition-transform">play_arrow</span>
                 <span>执行调用 (Invoke)</span>
               </button>
@@ -81,14 +81,14 @@
         <!-- Right Column: Results & Context -->
         <div class="col-span-12 lg:col-span-5 space-y-6">
           <!-- Step 3: Result Section -->
-          <div class="bg-white rounded-xl shadow-sm border border-transparent flex flex-col h-full overflow-hidden">
-            <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+          <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-transparent flex flex-col h-full overflow-hidden">
+            <div class="p-6 border-b border-slate-200 bg-slate-50/50 dark:bg-slate-800/50">
               <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                  <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[#2a14b4]">
+                  <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[#2a14b4] dark:text-indigo-400">
                     <span class="text-sm font-bold">03</span>
                   </div>
-                  <h3 class="text-lg font-bold text-[#191c1d]">执行结果</h3>
+                  <h3 class="text-lg font-bold text-[#191c1d] dark:text-slate-100">执行结果</h3>
                 </div>
                 <div class="flex items-center space-x-2">
                   <span :class="['flex h-2 w-2 rounded-full', statusColorDot]"></span>
@@ -99,21 +99,21 @@
             <!-- Result Display Area -->
             <div class="p-6 space-y-6 flex-1">
               <div class="grid grid-cols-2 gap-4">
-                <div class="p-3 bg-[#edeeef] rounded-lg">
-                  <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">重试状态</p>
-                  <p class="text-sm font-semibold text-[#191c1d]">{{ retryCount }} 次重试</p>
+                <div class="p-3 bg-[#edeeef] dark:bg-slate-800 rounded-lg">
+                  <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase mb-1">重试状态</p>
+                  <p class="text-sm font-semibold text-[#191c1d] dark:text-slate-100">{{ retryCount }} 次重试</p>
                 </div>
-                <div class="p-3 bg-[#edeeef] rounded-lg">
-                  <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">状态码</p>
+                <div class="p-3 bg-[#edeeef] dark:bg-slate-800 rounded-lg">
+                  <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase mb-1">状态码</p>
                   <p :class="['text-sm font-semibold font-mono', statusCodeColor]">{{ statusCode }}</p>
                 </div>
               </div>
               <div class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <label class="text-xs font-bold text-slate-500 uppercase">Response Body</label>
-                  <button @click="copyResult" class="text-[#2a14b4] text-[11px] hover:underline transition-all">{{ copyText }}</button>
+                  <label class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase">Response Body</label>
+                  <button @click="copyResult" class="text-[#2a14b4] dark:text-indigo-400 text-[11px] hover:underline transition-all">{{ copyText }}</button>
                 </div>
-                <pre class="w-full p-4 bg-slate-50 rounded-xl overflow-x-auto border border-slate-200 min-h-[160px]"><code class="text-xs font-mono text-slate-700 leading-relaxed">{{ resultText }}</code></pre>
+                <pre class="w-full !p-4 !bg-slate-50 dark:bg-slate-800/50 rounded-xl overflow-x-auto !border !border-slate-200 min-h-[160px] !m-0"><code class="text-xs font-mono text-slate-700 dark:text-slate-300 leading-relaxed">{{ resultText }}</code></pre>
               </div>
             </div>
           </div>
@@ -140,23 +140,23 @@
       </div>
 
       <!-- Additional Contextual Stats -->
-      <div class="bg-white rounded-xl p-8 shadow-sm flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 mt-8">
+      <div class="bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 mt-8">
         <div class="flex items-center space-x-6">
           <div class="space-y-1">
-            <p class="text-xs font-bold text-slate-500 uppercase">当前协议版本</p>
-            <p class="text-2xl font-black text-[#2a14b4]">v1.0.0</p>
+            <p class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase">当前协议版本</p>
+            <p class="text-2xl font-black text-[#2a14b4] dark:text-indigo-400">v1.0.0</p>
           </div>
           <div class="h-10 w-px bg-slate-200"></div>
           <div class="space-y-1">
-            <p class="text-xs font-bold text-slate-500 uppercase">已连接工具</p>
-            <p class="text-2xl font-black text-[#5a5893]">{{ capabilities.length }} 个实例</p>
+            <p class="text-xs font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase">已连接工具</p>
+            <p class="text-2xl font-black text-[#5a5893] dark:text-indigo-300">{{ capabilities.length }} 个实例</p>
           </div>
         </div>
         <div class="flex items-center -space-x-3">
           <div v-for="(cap, i) in displayedIcons" :key="i" :class="`w-10 h-10 rounded-full border-4 border-white bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700 z-${30-i*10}`">
             {{ cap }}
           </div>
-          <div v-if="capabilities.length > 3" class="w-10 h-10 rounded-full border-4 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 z-0">
+          <div v-if="capabilities.length > 3" class="w-10 h-10 rounded-full border-4 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500 z-0">
             +{{ capabilities.length - 3 }}
           </div>
         </div>
@@ -187,9 +187,9 @@ const resultText = ref('等待调用...')
 // New reactive state for detailed status
 const statusText = ref('Waiting')
 const statusColorDot = ref('bg-slate-300')
-const statusColorText = ref('text-slate-500')
+const statusColorText = ref('text-slate-500 dark:text-slate-400 dark:text-slate-500')
 const statusCode = ref('---')
-const statusCodeColor = ref('text-slate-500')
+const statusCodeColor = ref('text-slate-500 dark:text-slate-400 dark:text-slate-500')
 const retryCount = ref(0)
 const copyText = ref('复制结果')
 
@@ -248,9 +248,9 @@ const invoke = async () => {
   
   statusText.value = 'Invoking'
   statusColorDot.value = 'bg-slate-300 animate-pulse'
-  statusColorText.value = 'text-slate-500'
+  statusColorText.value = 'text-slate-500 dark:text-slate-400 dark:text-slate-500'
   statusCode.value = 'Pending'
-  statusCodeColor.value = 'text-slate-500'
+  statusCodeColor.value = 'text-slate-500 dark:text-slate-400 dark:text-slate-500'
   resultText.value = 'Loading...'
   
   try {
@@ -271,10 +271,10 @@ const invoke = async () => {
     hint.value = `调用失败: ${error.message || 'unknown'}`
     
     statusText.value = 'Failed'
-    statusColorDot.value = 'bg-[#ba1a1a]'
-    statusColorText.value = 'text-[#ba1a1a]'
+    statusColorDot.value = 'bg-[#ba1a1a] dark:bg-red-600'
+    statusColorText.value = 'text-[#ba1a1a] dark:text-red-400'
     statusCode.value = 'Error'
-    statusCodeColor.value = 'text-[#ba1a1a]'
+    statusCodeColor.value = 'text-[#ba1a1a] dark:text-red-400'
   } finally {
     loading.value = false
   }

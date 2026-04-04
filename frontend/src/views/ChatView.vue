@@ -6,6 +6,31 @@
       {{ errorMsg }}
     </div>
 
+    <!-- 自定义删除确认弹窗 -->
+    <div v-if="sessionToDelete" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm transition-all">
+      <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100 dark:border-slate-800">
+        <div class="p-7 relative">
+          <button @click="cancelDelete" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <span class="material-symbols-outlined text-xl">close</span>
+          </button>
+          
+          <div class="flex items-center gap-3 mb-3">
+            <span class="material-symbols-outlined text-3xl text-orange-500 drop-shadow-sm" style="font-variation-settings: 'FILL' 1;">warning</span>
+            <h3 class="text-[21px] font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">确认删除吗？</h3>
+          </div>
+          <p class="text-[19px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">删除后不可以恢复哦 🥺</p>
+        </div>
+        <div class="px-6 py-5 flex justify-end gap-3 mt-2">
+          <button @click="cancelDelete" class="px-6 py-2 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">
+            取消
+          </button>
+          <button @click="confirmDelete" class="px-6 py-2 rounded-xl text-sm font-bold text-white bg-[#ff4d4f] hover:bg-[#ef4444] transition-all shadow-md shadow-red-500/20 active:scale-[0.97]">
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+
     <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">AI 助手 <span class="text-slate-500 font-medium text-sm ml-2">/ 随时随地为您提供智能对话与解答</span></h1>
     </header>
@@ -273,6 +298,35 @@ const sessionsLoading = ref(false)
 const messagesLoading = ref(false)
 const errorMsg = ref('')
 
+const sessionToDelete = ref(null)
+
+const handleDeleteSession = (id) => {
+  sessionToDelete.value = id
+}
+
+const cancelDelete = () => {
+  sessionToDelete.value = null
+}
+
+const confirmDelete = async () => {
+  const id = sessionToDelete.value
+  if (!id) return
+  
+  sessionToDelete.value = null
+  
+  try {
+    await deleteChatSession(id)
+    await loadSessions()
+    if (currentSessionId.value === id) {
+      currentSessionId.value = null
+      messages.value = []
+    }
+  } catch (err) {
+    console.error('Failed to delete session', err)
+    showError('删除会话失败')
+  }
+}
+
 let errorTimeout = null
 const showError = (msg) => {
   if (errorTimeout) clearTimeout(errorTimeout)
@@ -375,21 +429,6 @@ const saveRename = async (id) => {
   } finally {
     editingId.value = null
     editTitle.value = ''
-  }
-}
-
-const handleDeleteSession = async (id) => {
-  if (!confirm('确定要删除这个对话吗？')) return
-  try {
-    await deleteChatSession(id)
-    await loadSessions()
-    if (currentSessionId.value === id) {
-      currentSessionId.value = null
-      messages.value = []
-    }
-  } catch (err) {
-    console.error('Failed to delete session', err)
-    showError('删除会话失败')
   }
 }
 

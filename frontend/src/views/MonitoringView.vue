@@ -1,38 +1,38 @@
 <template>
-  <div class="bg-surface text-on-surface antialiased min-h-screen">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased min-h-screen">
     <!-- Top Navigation Bar -->
     <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">系统监控 <span class="text-slate-500 font-medium text-sm ml-2">/ 实时追踪模型路由状态与健康指标</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">系统监控 <span class="text-slate-500 dark:text-slate-400 font-medium text-sm ml-2">/ 实时追踪模型路由状态与健康指标</span></h1>
       </div>
     </header>
 
-    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-[#f9fafb] transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-[#f9fafb] dark:bg-slate-950 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Dashboard Header -->
       <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12 w-full lg:w-[80%]">
         <div>
-          <h2 class="font-headline text-3xl font-bold tracking-tighter text-[#111827] mb-2">模型路由与健康分析</h2>
-          <p class="text-[#4b5563] text-sm flex items-center gap-2">
+          <h2 class="font-headline text-3xl font-bold tracking-tighter text-[#111827] dark:text-slate-100 mb-2">模型路由与健康分析</h2>
+          <p class="text-[#4b5563] dark:text-slate-400 text-sm flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">update</span>
-            数据刷新于: <span class="text-[#059669] font-mono font-bold">{{ lastUpdate }}</span> | 下次更新 <span class="text-[#059669] font-mono underline decoration-dotted underline-offset-4">{{ countdown }}s</span>
+            数据刷新于: <span class="text-[#059669] dark:text-emerald-400 font-mono font-bold">{{ lastUpdate }}</span> | 下次更新 <span class="text-[#059669] dark:text-emerald-400 font-mono underline decoration-dotted underline-offset-4">{{ countdown }}s</span>
           </p>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
-        <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
-          <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Total Throughput</div>
-          <div class="text-xl font-black text-[#111827]">{{ runtimeStats.totalRequests || 0 }} <span class="text-xs text-[#4b5563] font-normal">REQ</span></div>
+        <div class="bg-white dark:bg-slate-900 p-4 border border-[#e5e7eb] dark:border-slate-700 shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
+          <div class="text-[10px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Total Throughput</div>
+          <div class="text-xl font-black text-[#111827] dark:text-slate-100">{{ runtimeStats.totalRequests || 0 }} <span class="text-xs text-[#4b5563] dark:text-slate-400 font-normal">REQ</span></div>
         </div>
-        <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#f59e0b]">
-          <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Route Fallback</div>
-          <div class="text-xl font-black text-[#111827]">{{ runtimeStats.routeFallbackCount || 0 }} <span class="text-xs text-[#4b5563] font-normal">TIMES</span></div>
+        <div class="bg-white dark:bg-slate-900 p-4 border border-[#e5e7eb] dark:border-slate-700 shadow-sm rounded-lg border-l-4 border-l-[#f59e0b]">
+          <div class="text-[10px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Route Fallback</div>
+          <div class="text-xl font-black text-[#111827] dark:text-slate-100">{{ runtimeStats.routeFallbackCount || 0 }} <span class="text-xs text-[#4b5563] dark:text-slate-400 font-normal">TIMES</span></div>
         </div>
-        <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#ef4444]">
-          <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Total Failures</div>
-          <div class="text-xl font-black text-[#dc2626]">{{ runtimeStats.totalFailureCount || 0 }}</div>
+        <div class="bg-white dark:bg-slate-900 p-4 border border-[#e5e7eb] dark:border-slate-700 shadow-sm rounded-lg border-l-4 border-l-[#ef4444]">
+          <div class="text-[10px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Total Failures</div>
+          <div class="text-xl font-black text-[#dc2626] dark:text-red-400">{{ runtimeStats.totalFailureCount || 0 }}</div>
         </div>
-        <div class="bg-white p-4 border border-[#e5e7eb] shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
-          <div class="text-[10px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Circuit Status</div>
-          <div class="text-xl font-black" :class="systemHealthLabel === '系统降级中' ? 'text-[#d97706]' : 'text-[#059669]'">{{ systemHealthLabel === '系统降级中' ? 'DEGRADED' : 'OPTIMAL' }}</div>
+        <div class="bg-white dark:bg-slate-900 p-4 border border-[#e5e7eb] dark:border-slate-700 shadow-sm rounded-lg border-l-4 border-l-[#10b981]">
+          <div class="text-[10px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Circuit Status</div>
+          <div class="text-xl font-black" :class="systemHealthLabel === '系统降级中' ? 'text-[#d97706] dark:text-amber-400' : 'text-[#059669] dark:text-emerald-400'">{{ systemHealthLabel === '系统降级中' ? 'DEGRADED' : 'OPTIMAL' }}</div>
         </div>
       </div>
     </div>
@@ -40,8 +40,8 @@
     <!-- Model Routing Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
       <div v-for="item in detailCards" :key="item.name" 
-           class="bg-white border p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg"
-           :class="item.statusClass === 'safe' ? 'border-[#e5e7eb] shadow-[0_4px_20px_-2px_rgba(5,150,105,0.1)]' : 'border-[#fee2e2] shadow-[0_4px_20px_-2px_rgba(220,38,38,0.1)]'">
+           class="bg-white dark:bg-slate-900 border p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg"
+           :class="item.statusClass === 'safe' ? 'border-[#e5e7eb] dark:border-slate-700 shadow-[0_4px_20px_-2px_rgba(5,150,105,0.1)]' : 'border-[#fee2e2] shadow-[0_4px_20px_-2px_rgba(220,38,38,0.1)]'">
         <div class="flex justify-between items-start mb-8">
           <div class="flex items-center gap-4">
             <div class="relative">
@@ -49,29 +49,29 @@
               <div class="absolute -inset-1 border opacity-20 scale-150" :class="item.statusClass === 'safe' ? 'border-[#059669]' : 'border-[#dc2626]'"></div>
             </div>
             <div>
-              <h3 class="font-headline text-lg font-bold tracking-tight text-[#111827]">{{ item.name }}</h3>
-              <div class="font-bold text-[10px] text-[#4b5563] uppercase tracking-widest mt-1">STATE: {{ item.state }}</div>
+              <h3 class="font-headline text-lg font-bold tracking-tight text-[#111827] dark:text-slate-100">{{ item.name }}</h3>
+              <div class="font-bold text-[10px] text-[#4b5563] dark:text-slate-400 uppercase tracking-widest mt-1">STATE: {{ item.state }}</div>
             </div>
           </div>
           <div class="flex flex-col items-end">
             <div class="font-mono text-xs font-bold px-2 py-0.5 border uppercase rounded"
-                 :class="item.statusClass === 'safe' ? 'text-[#047857] border-[#a7f3d0] bg-[#ecfdf5]' : 'text-[#b91c1c] border-[#fecaca] bg-[#fef2f2]'">
+                 :class="item.statusClass === 'safe' ? 'text-[#047857] dark:text-emerald-300 border-[#a7f3d0] dark:border-emerald-800 bg-[#ecfdf5] dark:bg-emerald-950/30' : 'text-[#b91c1c] dark:text-red-300 border-[#fecaca] dark:border-red-800 bg-[#fef2f2] dark:bg-red-950/30'">
               Status: {{ item.statusClass === 'safe' ? 'Closed' : 'Open' }}
             </div>
           </div>
         </div>
         <div class="grid grid-cols-3 gap-4 mb-8">
           <div>
-            <div class="text-[9px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Success</div>
-            <div class="text-xl font-black text-[#111827]">{{ item.successCount }}</div>
+            <div class="text-[9px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Success</div>
+            <div class="text-xl font-black text-[#111827] dark:text-slate-100">{{ item.successCount }}</div>
           </div>
           <div>
-            <div class="text-[9px] font-bold uppercase mb-1 tracking-widest" :class="item.failureCount > 0 ? 'text-[#dc2626]' : 'text-[#4b5563]'">Failures</div>
-            <div class="text-xl font-black" :class="item.failureCount > 0 ? 'text-[#dc2626]' : 'text-[#111827]'">{{ item.failureCount }}</div>
+            <div class="text-[9px] font-bold uppercase mb-1 tracking-widest" :class="item.failureCount > 0 ? 'text-[#dc2626] dark:text-red-400' : 'text-[#4b5563] dark:text-slate-400'">Failures</div>
+            <div class="text-xl font-black" :class="item.failureCount > 0 ? 'text-[#dc2626] dark:text-red-400' : 'text-[#111827] dark:text-slate-100'">{{ item.failureCount }}</div>
           </div>
           <div>
-            <div class="text-[9px] font-bold text-[#4b5563] uppercase mb-1 tracking-widest">Reliability</div>
-            <div class="text-xl font-black" :class="item.statusClass === 'safe' ? 'text-[#059669]' : 'text-[#dc2626]'">
+            <div class="text-[9px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Reliability</div>
+            <div class="text-xl font-black" :class="item.statusClass === 'safe' ? 'text-[#059669] dark:text-emerald-400' : 'text-[#dc2626] dark:text-red-400'">
               {{ item.reliabilityPercent }}%
             </div>
           </div>
@@ -79,11 +79,11 @@
 
         <!-- Progress Bar: Traffic Flow / Capacity (Restored Module) -->
         <div class="space-y-2 mb-6">
-          <div class="flex justify-between text-[10px] font-mono text-[#4b5563] uppercase font-bold">
+          <div class="flex justify-between text-[10px] font-mono text-[#4b5563] dark:text-slate-400 uppercase font-bold">
             <span>Traffic Flow</span>
             <span>Capacity {{ item.capacityPercent }}%</span>
           </div>
-          <div class="h-2 bg-[#f3f4f6] rounded-full overflow-hidden">
+          <div class="h-2 bg-[#f3f4f6] dark:bg-slate-800 rounded-full overflow-hidden">
             <div class="h-full rounded-full transition-all duration-500" 
                  :class="item.statusClass === 'safe' ? 'bg-[#10b981]' : 'bg-[#ef4444]'"
                  :style="{ width: item.capacityPercent + '%' }"></div>
@@ -91,35 +91,35 @@
         </div>
         
         <!-- Last Error Block -->
-        <div v-if="item.lastFailureMessage" class="bg-[#fef2f2] p-4 mb-6 border-l-4 border-[#dc2626] rounded">
-          <div class="text-[9px] font-bold text-[#b91c1c] uppercase mb-1 tracking-widest">Critical Alert: Last Error Message</div>
-          <div class="text-xs font-mono text-[#991b1b] font-medium">{{ item.lastFailureMessage }}</div>
+        <div v-if="item.lastFailureMessage" class="bg-[#fef2f2] dark:bg-red-950/30 p-4 mb-6 border-l-4 border-[#dc2626] rounded">
+          <div class="text-[9px] font-bold text-[#b91c1c] dark:text-red-300 uppercase mb-1 tracking-widest">Critical Alert: Last Error Message</div>
+          <div class="text-xs font-mono text-[#991b1b] dark:text-red-300 font-medium">{{ item.lastFailureMessage }}</div>
         </div>
         
-        <div class="flex justify-between items-center pt-4 border-t border-[#e5e7eb]">
-          <span class="text-[9px] font-mono font-bold" :class="item.statusClass === 'safe' ? 'text-[#6b7280]' : 'text-[#dc2626] animate-pulse tracking-tighter'">
+        <div class="flex justify-between items-center pt-4 border-t border-[#e5e7eb] dark:border-slate-700">
+          <span class="text-[9px] font-mono font-bold" :class="item.statusClass === 'safe' ? 'text-[#6b7280] dark:text-slate-400' : 'text-[#dc2626] dark:text-red-400 animate-pulse tracking-tighter'">
             {{ item.statusClass === 'safe' ? '_MODEL_STABLE' : '// CIRCUIT_BREAKER_TRIPPED' }}
           </span>
-          <button v-if="item.statusClass === 'safe'" class="text-[10px] font-bold text-[#111827] uppercase hover:text-[#059669] transition-colors flex items-center gap-1 group/btn">
+          <button v-if="item.statusClass === 'safe'" class="text-[10px] font-bold text-[#111827] dark:text-slate-100 uppercase hover:text-[#059669] dark:text-emerald-400 transition-colors flex items-center gap-1 group/btn">
             <span>_ DETAILS</span>
             <span class="material-symbols-outlined text-xs group-hover/btn:translate-x-1 transition-transform">chevron_right</span>
           </button>
-          <button v-else class="text-[10px] font-bold text-[#dc2626] uppercase border border-[#fecaca] px-3 py-1 rounded bg-white hover:bg-[#dc2626] hover:text-white transition-all active:scale-95 shadow-sm">
+          <button v-else class="text-[10px] font-bold text-[#dc2626] dark:text-red-400 uppercase border border-[#fecaca] dark:border-red-800 px-3 py-1 rounded bg-white dark:bg-slate-900 hover:bg-[#dc2626] hover:text-white transition-all active:scale-95 shadow-sm">
             _ FORCE_RESET
           </button>
         </div>
       </div>
 
       <!-- Bento Card: Traffic Distribution Map -->
-      <div class="lg:col-span-2 bg-white border border-[#e5e7eb] p-6 rounded-xl flex flex-col md:flex-row gap-8 shadow-sm w-[60%]">
+      <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-[#e5e7eb] dark:border-slate-700 p-6 rounded-xl flex flex-col md:flex-row gap-8 shadow-sm w-[60%]">
         <div class="flex-1">
-          <h4 class="font-headline text-sm font-bold tracking-tight text-[#111827] mb-6 uppercase">实时流量路由拓扑</h4>
-          <div class="relative w-full h-48 bg-[#f8fafc] border border-[#e5e7eb] rounded-lg flex items-center justify-center overflow-hidden">
+          <h4 class="font-headline text-sm font-bold tracking-tight text-[#111827] dark:text-slate-100 mb-6 uppercase">实时流量路由拓扑</h4>
+          <div class="relative w-full h-48 bg-[#f8fafc] dark:bg-slate-900/50 border border-[#e5e7eb] dark:border-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
             <img class="absolute inset-0 w-full h-full object-cover opacity-5 grayscale" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3XZAfKOSqa_iRlzaQkfeVWMm1ChoeidnmF2SgmUQ-UWgaHNt2ZERlbCVctKX5U2i3WDNCc9_snAl4jGSSrb4zWhFFZBsilhj3exD8mNTWURtPG0eM6qKlE2w36NXEAO_bAqFpcGlvf87ETlJ4httolgcHFzIGO0YL3ygEPiC_kHIm22kJRE3rNpzP4WZx_CAv06KCXuVNmGGka9htocU4zfe9-jA57LvvqClkng6k25DykaxEkx-kNpgCWbvnR8WeUlEWN35IEmxr"/>
             <div class="relative z-10 w-full h-full p-4 flex flex-col justify-between">
               <div class="flex justify-between items-start">
                 <div class="bg-[#059669] text-white text-[10px] font-bold px-2 py-1 uppercase tracking-widest rounded shadow-sm">Source: Edge_Shanghai_01</div>
-                <div class="bg-white border border-[#e5e7eb] text-[#6b7280] text-[10px] px-2 py-1 font-mono font-bold rounded">LAT: 31.2304 / LON: 121.4737</div>
+                <div class="bg-white dark:bg-slate-900 border border-[#e5e7eb] dark:border-slate-700 text-[#6b7280] dark:text-slate-400 text-[10px] px-2 py-1 font-mono font-bold rounded">LAT: 31.2304 / LON: 121.4737</div>
               </div>
               <div class="flex justify-center items-center h-full py-4">
                 <div class="relative w-full max-w-lg h-1 bg-[#e2e8f0] rounded-full overflow-hidden">
@@ -130,27 +130,27 @@
               </div>
               <div class="flex justify-between items-end">
                 <div class="flex flex-col gap-1">
-                  <div class="text-[8px] text-[#6b7280] font-mono font-bold uppercase">ROUTING_TO_INSTANCE:</div>
-                  <div class="text-xs font-bold text-[#059669] font-mono tracking-tight">internal-cluster-0x02ff</div>
+                  <div class="text-[8px] text-[#6b7280] dark:text-slate-400 font-mono font-bold uppercase">ROUTING_TO_INSTANCE:</div>
+                  <div class="text-xs font-bold text-[#059669] dark:text-emerald-400 font-mono tracking-tight">internal-cluster-0x02ff</div>
                 </div>
-                <div class="text-[8px] text-[#6b7280] font-mono font-bold">PING: 24ms</div>
+                <div class="text-[8px] text-[#6b7280] dark:text-slate-400 font-mono font-bold">PING: 24ms</div>
               </div>
             </div>
           </div>
         </div>
         <div class="md:w-64 flex flex-col gap-4">
-          <h4 class="font-headline text-sm font-bold tracking-tight text-[#111827] uppercase">系统健康日志</h4>
+          <h4 class="font-headline text-sm font-bold tracking-tight text-[#111827] dark:text-slate-100 uppercase">系统健康日志</h4>
           <div class="flex-1 space-y-3 font-mono text-[10px]">
-            <div v-for="(line, index) in healthLogs" :key="index" class="flex gap-2 font-bold" :class="line.includes('OPEN') || line.includes('fail=') ? 'text-[#dc2626]' : 'text-[#047857]'">
+            <div v-for="(line, index) in healthLogs" :key="index" class="flex gap-2 font-bold" :class="line.includes('OPEN') || line.includes('fail=') ? 'text-[#dc2626] dark:text-red-400' : 'text-[#047857] dark:text-emerald-300'">
               <span class="opacity-50">[{{ lastUpdate }}]</span>
               <span>{{ line.replace(`[${lastUpdate}]`, '') }}</span>
             </div>
-            <div v-if="healthLogs.length === 0" class="flex gap-2 text-[#6b7280] font-medium">
+            <div v-if="healthLogs.length === 0" class="flex gap-2 text-[#6b7280] dark:text-slate-400 font-medium">
               <span class="opacity-50">[{{ lastUpdate }}]</span>
               <span>WAITING_FOR_LOGS...</span>
             </div>
           </div>
-          <button class="w-full bg-[#f1f5f9] text-[#4b5563] py-3 rounded font-bold text-[10px] tracking-widest border border-[#e2e8f0] hover:text-[#111827] hover:bg-[#e2e8f0] transition-all uppercase shadow-sm">
+          <button class="w-full bg-[#f1f5f9] dark:bg-slate-800 text-[#4b5563] dark:text-slate-400 py-3 rounded font-bold text-[10px] tracking-widest border border-[#e2e8f0] dark:border-slate-700 hover:text-[#111827] dark:hover:text-white dark:text-slate-100 hover:bg-[#e2e8f0] dark:hover:bg-slate-700 transition-all uppercase shadow-sm">
             View_Full_Logs
           </button>
         </div>

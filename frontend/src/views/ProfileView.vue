@@ -1,32 +1,32 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen relative">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen relative">
     <!-- TopNavBar Shell -->
     <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">能力画像 <span class="text-slate-500 font-medium text-sm ml-2">/ 基于历史练习数据生成的个性化技能雷达</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">能力画像 <span class="text-slate-500 dark:text-slate-400 font-medium text-sm ml-2">/ 基于历史练习数据生成的个性化技能雷达</span></h1>
       </div>
     </header>
 
     <!-- Main Content Area -->
-    <main class="pt-24 p-8 min-h-screen bg-slate-50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <main class="pt-24 p-8 min-h-screen bg-slate-50 dark:bg-slate-800/50 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <div v-if="error" class="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{{ error }}</div>
       
       <!-- Action Header -->
       <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
-          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">能力成长概览</h2>
-          <p class="text-slate-500 text-sm mt-1">基于最近 30 天的练习数据生成的深度分析</p>
+          <h2 class="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">能力成长概览</h2>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">基于最近 30 天的练习数据生成的深度分析</p>
         </div>
         <div class="flex items-center space-x-3">
           <div class="relative">
-            <select class="appearance-none bg-white border-none text-sm font-medium rounded-xl py-2.5 pl-4 pr-10 focus:ring-2 focus:ring-indigo-500/20 text-slate-600 cursor-pointer shadow-sm">
+            <select class="appearance-none bg-white dark:bg-slate-900 border-none text-sm font-medium rounded-xl py-2.5 pl-4 pr-10 focus:ring-2 focus:ring-indigo-500/20 text-slate-600 dark:text-slate-400 cursor-pointer shadow-sm">
               <option>推荐模式：平衡提升</option>
               <option>侧重：攻克弱项</option>
               <option>侧重：深度钻研</option>
             </select>
-            <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">expand_more</span>
+            <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 dark:text-slate-400">expand_more</span>
           </div>
-          <button @click="reload" :disabled="loading" class="flex items-center justify-center p-2.5 bg-white text-slate-600 rounded-xl hover:bg-slate-50 transition-colors active:scale-95 shadow-sm disabled:opacity-60">
+          <button @click="reload" :disabled="loading" class="flex items-center justify-center p-2.5 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-50 dark:bg-slate-800/50 transition-colors active:scale-95 shadow-sm disabled:opacity-60">
             <span class="material-symbols-outlined" :class="loading ? 'animate-spin' : ''">refresh</span>
           </button>
         </div>
@@ -35,11 +35,11 @@
       <!-- Bento Grid Analysis Sections -->
       <div class="grid grid-cols-12 gap-6 mb-10">
         <!-- Radar Chart / Skills Profile -->
-        <div class="col-span-12 lg:col-span-8 bg-white p-8 rounded-xl shadow-sm relative overflow-hidden border border-slate-100">
+        <div class="col-span-12 lg:col-span-8 bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm relative overflow-hidden border border-slate-100">
           <div class="flex justify-between items-start mb-6">
             <div>
-              <h3 class="text-lg font-bold text-slate-900">核心竞争力图谱</h3>
-              <p class="text-xs text-slate-500">对比行业基准（Top 10%）</p>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">核心竞争力图谱</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">对比行业基准（Top 10%）</p>
             </div>
             <div class="flex space-x-4 text-xs font-semibold">
               <div class="flex items-center"><span class="w-3 h-3 bg-indigo-600 rounded-full mr-2"></span>个人</div>
@@ -69,74 +69,74 @@
               <span class="material-symbols-outlined text-9xl">auto_awesome</span>
             </div>
           </div>
-          <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500">
-            <p class="text-sm font-medium text-slate-500">核心弱项</p>
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border-l-4 border-red-500">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">核心弱项</p>
             <div class="mt-2 flex items-center justify-between">
-              <span class="text-lg font-bold text-slate-900">{{ weakTopic }}</span>
+              <span class="text-lg font-bold text-slate-900 dark:text-slate-100">{{ weakTopic }}</span>
               <span class="text-red-500 font-bold">-{{ Math.round(100 - (weakRank[0]?.averageScore || 0)) }}%</span>
             </div>
-            <p class="text-xs text-slate-500 mt-2">建议加强：{{ weakTopic }} 练习</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">建议加强：{{ weakTopic }} 练习</p>
           </div>
         </div>
       </div>
 
       <!-- Timeline / Event List Area -->
-      <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-100">
+      <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm overflow-hidden border border-slate-100">
         <div class="px-8 py-6 flex items-center justify-between border-b border-slate-100">
-          <h3 class="text-lg font-bold text-slate-900">练习事件流</h3>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">练习事件流</h3>
           <div class="flex space-x-2">
-            <span class="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-semibold rounded-full">全部练习</span>
-            <span class="px-3 py-1 hover:bg-slate-100 text-slate-600 text-xs font-semibold rounded-full cursor-pointer transition-colors">高难度</span>
-            <span class="px-3 py-1 hover:bg-slate-100 text-slate-600 text-xs font-semibold rounded-full cursor-pointer transition-colors">弱项复盘</span>
+            <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-full">全部练习</span>
+            <span class="px-3 py-1 hover:bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-full cursor-pointer transition-colors">高难度</span>
+            <span class="px-3 py-1 hover:bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-full cursor-pointer transition-colors">弱项复盘</span>
           </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
-            <thead class="bg-slate-50">
+            <thead class="bg-slate-50 dark:bg-slate-800/50">
               <tr>
-                <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">时间</th>
-                <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">练习主题 (Topic)</th>
-                <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">得分 (Score)</th>
-                <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">表现评估</th>
+                <th class="px-8 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">时间</th>
+                <th class="px-8 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">练习主题 (Topic)</th>
+                <th class="px-8 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">得分 (Score)</th>
+                <th class="px-8 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">表现评估</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
               <tr v-for="item in events" :key="`${item.timestamp}-${item.topic}-${item.score}`" class="hover:bg-slate-50/50 transition-colors">
-                <td class="px-8 py-4 text-sm text-slate-500">{{ formatTime(item.timestamp) }}</td>
-                <td class="px-8 py-4 text-sm font-semibold text-slate-900">{{ item.topic || '未知主题' }}</td>
+                <td class="px-8 py-4 text-sm text-slate-500 dark:text-slate-400">{{ formatTime(item.timestamp) }}</td>
+                <td class="px-8 py-4 text-sm font-semibold text-slate-900 dark:text-slate-100">{{ item.topic || '未知主题' }}</td>
                 <td class="px-8 py-4">
                   <span class="inline-flex px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs">{{ item.score ?? 0 }}</span>
                 </td>
-                <td class="px-8 py-4 text-sm text-slate-500">
+                <td class="px-8 py-4 text-sm text-slate-500 dark:text-slate-400">
                   {{ (item.score || 0) >= 80 ? '优秀' : (item.score || 0) >= 60 ? '良好' : '需提升' }}
                 </td>
               </tr>
               <tr v-if="!events.length">
-                <td colspan="4" class="px-8 py-8 text-center text-sm text-slate-500">暂无学习事件数据</td>
+                <td colspan="4" class="px-8 py-8 text-center text-sm text-slate-500 dark:text-slate-400">暂无学习事件数据</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="px-8 py-4 bg-slate-50 flex justify-center">
+        <div class="px-8 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-center">
           <button class="text-xs font-bold text-indigo-600 hover:underline transition-all">查看历史全部记录</button>
         </div>
       </div>
 
       <!-- Floating Recommendations -->
       <div class="mt-10 flex flex-col md:flex-row gap-6">
-        <div class="flex-1 bg-white p-8 rounded-xl shadow-sm relative group overflow-hidden border-t-4 border-indigo-600">
+        <div class="flex-1 bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm relative group overflow-hidden border-t-4 border-indigo-600">
           <div class="flex items-center mb-4">
             <span class="material-symbols-outlined text-indigo-600 mr-2">lightbulb</span>
-            <h4 class="font-bold text-slate-900">下一步学习路径</h4>
+            <h4 class="font-bold text-slate-900 dark:text-slate-100">下一步学习路径</h4>
           </div>
           <ul class="space-y-3">
             <li class="flex items-start">
               <span class="w-1.5 h-1.5 bg-indigo-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              <p class="text-sm text-slate-600 leading-relaxed">基于你的弱项，建议练习：<strong class="text-slate-900">《{{ weakTopic }}》</strong></p>
+              <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">基于你的弱项，建议练习：<strong class="text-slate-900 dark:text-slate-100">《{{ weakTopic }}》</strong></p>
             </li>
             <li class="flex items-start">
               <span class="w-1.5 h-1.5 bg-indigo-600 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              <p class="text-sm text-slate-600 leading-relaxed">巩固熟项：<strong class="text-slate-900">《{{ familiarTopic }}》</strong></p>
+              <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">巩固熟项：<strong class="text-slate-900 dark:text-slate-100">《{{ familiarTopic }}》</strong></p>
             </li>
           </ul>
         </div>

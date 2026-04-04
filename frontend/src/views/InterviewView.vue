@@ -1,8 +1,8 @@
 <template>
-  <div class="bg-surface text-on-surface antialiased min-h-screen">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased min-h-screen">
     <!-- Top Navigation Bar -->
     <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">面试控制台 <span class="text-slate-500 font-medium text-sm ml-2">/ 沉浸式模拟真实面试场景与反馈</span></h1>
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">面试控制台 <span class="text-slate-500 dark:text-slate-400 font-medium text-sm ml-2">/ 沉浸式模拟真实面试场景与反馈</span></h1>
     </header>
 
     <!-- Main Content Canvas -->
@@ -10,20 +10,20 @@
       <!-- Case 1: Initial State (Configuration) -->
       <section v-if="!sessionId" class="max-w-7xl mx-auto mb-12">
         <div class="mb-8">
-          <h2 class="text-3xl font-extrabold tracking-tight text-on-surface mb-2">开启新的叙事篇章</h2>
-          <p class="text-on-surface-variant max-w-2xl">通过 AI 模拟真实面试场景，基于您的简历与目标职位生成针对性问题。通过深度反馈提升职业竞争力。</p>
+          <h2 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 mb-2">开启新的叙事篇章</h2>
+          <p class="text-slate-600 dark:text-slate-400 max-w-2xl">通过 AI 模拟真实面试场景，基于您的简历与目标职位生成针对性问题。通过深度反馈提升职业竞争力。</p>
         </div>
-        <div class="bg-white rounded-xl p-8 shadow-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <!-- Form Fields -->
             <div class="space-y-6">
               <div>
-                <label class="block text-sm font-semibold mb-2 text-on-surface-variant">面试主题 (Topic)</label>
-                <input class="w-full px-4 py-3 bg-slate-50 border-none rounded-lg focus:ring-2 focus:ring-primary transition-all text-sm" placeholder="例如：高级架构师, 产品经理" type="text" v-model="topic" :disabled="loading" />
+                <label class="block text-sm font-semibold mb-2 text-slate-600 dark:text-slate-400">面试主题 (Topic)</label>
+                <input class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-none rounded-lg focus:ring-2 focus:ring-primary transition-all text-sm" placeholder="例如：高级架构师, 产品经理" type="text" v-model="topic" :disabled="loading" />
               </div>
               <div>
-                <label class="block text-sm font-semibold mb-2 text-on-surface-variant">题目数量 (Total Questions)</label>
-                <select class="w-full px-4 py-3 bg-slate-50 border-none rounded-lg focus:ring-2 focus:ring-primary transition-all text-sm" v-model.number="totalQuestions" :disabled="loading">
+                <label class="block text-sm font-semibold mb-2 text-slate-600 dark:text-slate-400">题目数量 (Total Questions)</label>
+                <select class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-none rounded-lg focus:ring-2 focus:ring-primary transition-all text-sm" v-model.number="totalQuestions" :disabled="loading">
                   <option :value="5">5 题 (快速模式)</option>
                   <option :value="10">10 题 (标准模式)</option>
                   <option :value="20">20 题 (深度挑战)</option>
@@ -32,8 +32,8 @@
             </div>
             <div class="space-y-6">
               <div>
-                <label class="block text-sm font-semibold mb-2 text-on-surface-variant">简历路径 (Read Only)</label>
-                <div class="flex items-center px-4 py-3 bg-slate-50 text-on-surface-variant rounded-lg cursor-not-allowed italic text-sm">
+                <label class="block text-sm font-semibold mb-2 text-slate-600 dark:text-slate-400">简历路径 (Read Only)</label>
+                <div class="flex items-center px-4 py-3 bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 rounded-lg cursor-not-allowed italic text-sm">
                   <span class="material-symbols-outlined text-sm mr-2" data-icon="attachment">attachment</span>
                   /user/documents/resumes/2024_backend_lead.pdf
                 </div>
@@ -61,7 +61,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <!-- Question Column -->
           <div class="lg:col-span-2 space-y-6">
-            <div class="bg-white rounded-xl p-8 shadow-sm">
+            <div class="bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm">
               <div class="flex items-center justify-between mb-6">
                 <span class="px-3 py-1 bg-indigo-100 text-indigo-800 text-[11px] font-bold rounded-full uppercase tracking-wider">Question {{ String(currentQuestionIndex).padStart(2, '0') }} / {{ totalQuestions }}</span>
                 <div class="flex items-center text-error font-mono font-bold text-xl">
@@ -69,13 +69,13 @@
                   <span>{{ timerDisplay }}</span>
                 </div>
               </div>
-              <h3 class="text-xl font-bold text-on-surface leading-snug mb-8 whitespace-pre-wrap">{{ currentQuestion }}</h3>
+              <h3 class="text-xl font-bold text-slate-900 dark:text-slate-100 leading-snug mb-8 whitespace-pre-wrap">{{ currentQuestion }}</h3>
               <div class="space-y-4">
-                <label class="block text-sm font-semibold text-on-surface-variant">手动输入回答</label>
-                <textarea class="w-full p-6 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all text-sm leading-relaxed" placeholder="请输入您的详细回答，建议包含核心逻辑与边界处理..." rows="10" v-model="answer" :disabled="loading || finished || isStreaming"></textarea>
+                <label class="block text-sm font-semibold text-slate-600 dark:text-slate-400">手动输入回答</label>
+                <textarea class="w-full p-6 bg-slate-50 dark:bg-slate-800/50 border-none rounded-xl focus:ring-2 focus:ring-primary transition-all text-sm leading-relaxed" placeholder="请输入您的详细回答，建议包含核心逻辑与边界处理..." rows="10" v-model="answer" :disabled="loading || finished || isStreaming"></textarea>
               </div>
               <div class="mt-6 flex justify-end">
-                <button type="button" class="mr-4 px-6 py-3 bg-slate-100 text-on-surface font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center space-x-2" :disabled="loading || finished || isStreaming" @click="toggleRecording">
+                <button type="button" class="mr-4 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold rounded-lg hover:bg-slate-200 transition-colors flex items-center space-x-2" :disabled="loading || finished || isStreaming" @click="toggleRecording">
                   <span>{{ isRecording ? '停止录音' : '语音回答' }}</span>
                   <span class="material-symbols-outlined" :class="isRecording ? 'text-error' : ''" data-icon="mic">{{ isRecording ? 'stop_circle' : 'mic' }}</span>
                 </button>
@@ -89,7 +89,7 @@
 
           <!-- Feedback Column -->
           <div class="space-y-6">
-            <div class="bg-white/80 backdrop-blur-md rounded-xl p-6 border border-slate-100 shadow-sm h-full">
+            <div class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md rounded-xl p-6 border border-slate-100 shadow-sm h-full">
               <h4 class="text-sm font-bold text-indigo-700 mb-6 flex items-center">
                 <span class="material-symbols-outlined mr-2" data-icon="insights">insights</span>
                 实时反馈分析
@@ -99,21 +99,21 @@
                 <div class="inline-flex items-center justify-center w-24 h-24 rounded-full border-4 border-indigo-600">
                   <span class="text-3xl font-extrabold text-indigo-700">{{ averageScoreDisplay }}</span>
                 </div>
-                <p class="mt-2 text-xs font-medium text-on-surface-variant uppercase tracking-widest">综合评分</p>
+                <p class="mt-2 text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-widest">综合评分</p>
               </div>
               <!-- Feedback Points -->
               <div class="space-y-6">
                 <div>
-                  <h5 class="text-xs font-bold text-on-surface mb-2 flex items-center">
+                  <h5 class="text-xs font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center">
                     <span class="w-1.5 h-1.5 rounded-full bg-indigo-600 mr-2"></span>
                     核心反馈
                   </h5>
-                  <p class="text-xs text-on-surface-variant leading-relaxed">
+                  <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                     {{ feedbackText }}
                   </p>
                 </div>
                 <div v-if="finished">
-                  <button @click="resetInterview" class="w-full mt-4 px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition-colors text-sm">
+                  <button @click="resetInterview" class="w-full mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-lg hover:bg-slate-200 transition-colors text-sm">
                     返回配置页
                   </button>
                 </div>

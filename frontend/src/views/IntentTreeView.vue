@@ -1,14 +1,14 @@
 <template>
-  <div class="bg-surface text-on-surface min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen relative">
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
     <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图树管理 <span class="text-slate-500 font-medium text-sm ml-2">/ 树结构浏览、节点定位与全局路由参数配置</span></h1>
+      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图树管理 <span class="text-slate-500 dark:text-slate-400 dark:text-slate-500 font-medium text-sm ml-2">/ 树结构浏览、节点定位与全局路由参数配置</span></h1>
     </div>
     <div class="flex items-center gap-2">
-      <RouterLink to="/intent-list" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50">
+      <RouterLink to="/intent-list" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-800/50">
         切到列表页
       </RouterLink>
-      <button @click="reload" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+      <button @click="reload" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-800/50 disabled:opacity-50">
         刷新
       </button>
       <button @click="saveAll" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded bg-[#0057c2] text-white hover:opacity-90 disabled:opacity-50">
@@ -17,35 +17,35 @@
     </div>
   </header>
 
-  <main class="min-h-screen bg-slate-50 pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <main class="min-h-screen bg-slate-50 dark:bg-slate-800/50 pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
     <div class="grid grid-cols-4 gap-4">
-      <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#0057c2]">
+      <div class="bg-white dark:bg-slate-900 p-4 rounded shadow-sm border-l-4 border-[#0057c2]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">系统状态</div>
         <div class="text-2xl font-bold text-[#1a1c1c]">{{ stats.enabled ? '已启用' : '已禁用' }}</div>
       </div>
-      <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#425d97]">
+      <div class="bg-white dark:bg-slate-900 p-4 rounded shadow-sm border-l-4 border-[#425d97]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">叶子意图数</div>
         <div class="text-2xl font-bold text-[#1a1c1c]">{{ stats.leafIntentCount ?? flatLeafs.length }}</div>
       </div>
-      <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#9e3d00]">
+      <div class="bg-white dark:bg-slate-900 p-4 rounded shadow-sm border-l-4 border-[#9e3d00]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">槽位精炼样例</div>
         <div class="text-2xl font-bold text-[#1a1c1c]">{{ stats.slotRefineCaseCount ?? (config.slotRefineCases || []).length }}</div>
       </div>
-      <div class="bg-white p-4 rounded shadow-sm border-l-4 border-[#ba1a1a]">
+      <div class="bg-white dark:bg-slate-900 p-4 rounded shadow-sm border-l-4 border-[#ba1a1a]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">置信度阈值</div>
         <div class="text-2xl font-bold text-[#1a1c1c]">{{ Number(config.confidenceThreshold ?? 0.65).toFixed(2) }}</div>
       </div>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-      <section class="bg-white rounded shadow-sm p-5">
+      <section class="bg-white dark:bg-slate-900 rounded shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-semibold text-slate-900">意图路径树</h2>
-          <span class="text-xs text-slate-500">{{ hint }}</span>
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">意图路径树</h2>
+          <span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ hint }}</span>
         </div>
         <div class="space-y-1 max-h-[560px] overflow-auto">
           <template v-if="treeNodes.length === 0">
-            <div class="text-center text-sm text-slate-500 py-10">暂无意图节点，请先新增叶子意图</div>
+            <div class="text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500 py-10">暂无意图节点，请先新增叶子意图</div>
           </template>
           <template v-else>
             <TreeNode
@@ -62,66 +62,66 @@
         </div>
       </section>
 
-      <section class="bg-white rounded shadow-sm p-5">
-        <h2 class="text-sm font-semibold text-slate-900 mb-4">节点详情</h2>
+      <section class="bg-white dark:bg-slate-900 rounded shadow-sm p-5">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">节点详情</h2>
         <template v-if="!selectedLeaf">
-          <div class="text-center text-sm text-slate-500 py-10">请选择左侧节点</div>
+          <div class="text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500 py-10">请选择左侧节点</div>
         </template>
         <template v-else>
           <div class="space-y-3 text-sm">
             <div>
-              <p class="text-xs text-slate-500">Intent ID</p>
-              <p class="font-semibold text-slate-900">{{ selectedLeaf.intentId }}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">Intent ID</p>
+              <p class="font-semibold text-slate-900 dark:text-slate-100">{{ selectedLeaf.intentId }}</p>
             </div>
             <div>
-              <p class="text-xs text-slate-500">名称</p>
-              <p class="text-slate-900">{{ selectedLeaf.name || '-' }}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">名称</p>
+              <p class="text-slate-900 dark:text-slate-100">{{ selectedLeaf.name || '-' }}</p>
             </div>
             <div>
-              <p class="text-xs text-slate-500">任务类型</p>
-              <p class="text-slate-900">{{ selectedLeaf.taskType || '-' }}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">任务类型</p>
+              <p class="text-slate-900 dark:text-slate-100">{{ selectedLeaf.taskType || '-' }}</p>
             </div>
             <div>
-              <p class="text-xs text-slate-500">路径</p>
-              <p class="text-slate-900">{{ selectedLeaf.pathText }}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">路径</p>
+              <p class="text-slate-900 dark:text-slate-100">{{ selectedLeaf.pathText }}</p>
             </div>
             <div class="flex flex-wrap gap-2 pt-2">
-              <button class="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50" @click="openEditSelected">
+              <button class="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 dark:bg-slate-800/50" @click="openEditSelected">
                 编辑节点
               </button>
-              <button class="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50" @click="createChild">
+              <button class="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-slate-50 dark:bg-slate-800/50" @click="createChild">
                 新增子节点
               </button>
               <button class="px-3 py-1.5 text-xs rounded border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100" @click="offlineSelected">
                 下线节点
               </button>
             </div>
-            <p class="text-xs text-slate-400">提示：编辑将跳转独立编辑页；下线会立即保存配置。</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500">提示：编辑将跳转独立编辑页；下线会立即保存配置。</p>
           </div>
         </template>
       </section>
     </div>
 
-    <section class="bg-white rounded shadow-sm p-5 space-y-4">
-      <h2 class="text-sm font-semibold text-slate-900">路由参数</h2>
+    <section class="bg-white dark:bg-slate-900 rounded shadow-sm p-5 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">路由参数</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="text-xs text-slate-600">意图引擎开关</label>
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">意图引擎开关</label>
           <div class="mt-2">
-            <input v-model="config.enabled" type="checkbox" class="w-10 h-5 bg-[#c1c6d7] rounded-full appearance-none checked:bg-[#0057c2] relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer">
+            <input v-model="config.enabled" type="checkbox" class="w-10 h-5 bg-[#c1c6d7] rounded-full appearance-none checked:bg-[#0057c2] relative before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white dark:bg-slate-900 before:rounded-full before:top-0.5 before:left-0.5 checked:before:translate-x-5 before:transition-all cursor-pointer">
           </div>
         </div>
         <div>
-          <label class="text-xs text-slate-600">置信度阈值</label>
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">置信度阈值</label>
           <input v-model.number="config.confidenceThreshold" type="range" min="0" max="1" step="0.05" class="w-full accent-[#0057c2]">
         </div>
         <div>
-          <label class="text-xs text-slate-600">最小置信差</label>
-          <input v-model.number="config.minGap" type="number" step="0.01" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-xs">
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">最小置信差</label>
+          <input v-model.number="config.minGap" type="number" step="0.01" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-xs">
         </div>
         <div>
-          <label class="text-xs text-slate-600">歧义比例</label>
-          <input v-model.number="config.ambiguityRatio" type="number" step="0.01" class="w-full mt-1 bg-slate-100 rounded px-3 py-2 text-xs">
+          <label class="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500">歧义比例</label>
+          <input v-model.number="config.ambiguityRatio" type="number" step="0.01" class="w-full mt-1 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 text-xs">
         </div>
       </div>
     </section>
@@ -267,7 +267,7 @@ const TreeNode = defineComponent({
       const hasChildren = node.children.length > 0
       const expanded = props.expandedMap[node.key] !== false
       const selected = props.selectedKey === node.key
-      const baseClass = selected ? 'bg-slate-100 text-slate-900' : 'hover:bg-slate-50 text-slate-700'
+      const baseClass = selected ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'hover:bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300'
       return h('div', {}, [
         h('div', {
           class: `flex items-center justify-between rounded px-2 py-1 cursor-pointer ${baseClass}`,
@@ -277,7 +277,7 @@ const TreeNode = defineComponent({
           h('div', { class: 'flex items-center gap-2' }, [
             hasChildren
               ? h('button', {
-                  class: 'text-xs text-slate-500',
+                  class: 'text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500',
                   onClick: (event) => {
                     event.stopPropagation()
                     emit('toggle', node.key)
@@ -287,7 +287,7 @@ const TreeNode = defineComponent({
             h('span', { class: 'text-sm' }, node.label)
           ]),
           node.leaf
-            ? h('span', { class: `text-[10px] px-2 py-0.5 rounded ${node.leaf.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}` }, node.leaf.enabled ? '启用' : '下线')
+            ? h('span', { class: `text-[10px] px-2 py-0.5 rounded ${node.leaf.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600 dark:text-slate-400 dark:text-slate-500'}` }, node.leaf.enabled ? '启用' : '下线')
             : null
         ]),
         hasChildren && expanded
