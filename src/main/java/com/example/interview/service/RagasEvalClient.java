@@ -104,7 +104,7 @@ public class RagasEvalClient {
         updateTimeout();
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("cases", preparedCases == null ? List.of() : preparedCases);
-        requestBody.put("metrics", List.of("faithfulness", "answer_relevancy", "context_precision", "context_recall"));
+        requestBody.put("metrics", List.of("faithfulness", "answer_relevancy", "answer_correctness", "context_precision", "context_recall"));
 
         Map<String, String> llmConfig = new LinkedHashMap<>();
         llmConfig.put("model", llmModel);
@@ -172,6 +172,9 @@ public class RagasEvalClient {
             RAGQualityEvaluationService.QualityEvalCase evalCase = originalCases.get(i);
             double faith = toDouble(r.get("faithfulness"));
             double relevancy = toDouble(r.get("answer_relevancy"));
+            if (relevancy == 0.0D && r.containsKey("answer_correctness")) {
+                relevancy = toDouble(r.get("answer_correctness"));
+            }
             double precision = toDouble(r.get("context_precision"));
             double recall = toDouble(r.get("context_recall"));
             Map<String, String> rationales;

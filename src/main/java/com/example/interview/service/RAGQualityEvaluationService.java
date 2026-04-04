@@ -148,7 +148,9 @@ public class RAGQualityEvaluationService {
         String safeDatasetSource = normalizeText(safeOptions.datasetSource(), "manual");
         String safeRunLabel = normalizeText(safeOptions.runLabel(), safeDatasetSource + "-rag-quality-eval");
         String safeExperimentTag = normalizeText(safeOptions.experimentTag(), "");
-        Map<String, Object> safeParameterSnapshot = safeMap(safeOptions.parameterSnapshot());
+        Map<String, Object> safeParameterSnapshot = new LinkedHashMap<>(safeMap(safeOptions.parameterSnapshot()));
+        String resolvedEngine = resolveEngine(engine);
+        safeParameterSnapshot.put("engine", resolvedEngine);
         String safeNotes = normalizeText(safeOptions.notes(), "");
 
         if (normalizedCases.isEmpty()) {
@@ -158,6 +160,7 @@ public class RAGQualityEvaluationService {
                     safeDatasetSource,
                     safeRunLabel,
                     safeExperimentTag,
+                    resolvedEngine,
                     safeParameterSnapshot,
                     safeNotes,
                     0,
@@ -172,7 +175,6 @@ public class RAGQualityEvaluationService {
         }
 
         List<QualityEvalCaseResult> results;
-        String resolvedEngine = resolveEngine(engine);
         if ("ragas".equalsIgnoreCase(resolvedEngine) && ragasEvalClient != null && ragasEvalClient.isAvailable()) {
             results = evaluateWithRagas(normalizedCases);
         } else {
@@ -194,6 +196,7 @@ public class RAGQualityEvaluationService {
                 safeDatasetSource,
                 safeRunLabel,
                 safeExperimentTag,
+                resolvedEngine,
                 safeParameterSnapshot,
                 safeNotes,
                 total,
@@ -410,6 +413,11 @@ public class RAGQualityEvaluationService {
 
             double faith = toDoubleMetric(ragasResult.get("faithfulness"));
             double relevancy = toDoubleMetric(ragasResult.get("answer_relevancy"));
+            if (relevancy == 0.0D && ragasResult.containsKey("answer_relevancy")) {
+                relevancy = toDoubleMetric(ragasResult.get("answer_relevancy"));
+            } else if (relevancy == 0.0D && ragasResult.containsKey("answer_correctness")) {
+                relevancy = toDoubleMetric(ragasResult.get("answer_correctness"));
+            }
             double precision = toDoubleMetric(ragasResult.get("context_precision"));
             double recall = toDoubleMetric(ragasResult.get("context_recall"));
 
@@ -750,12 +758,15 @@ public class RAGQualityEvaluationService {
     }
 
     private QualityEvalRunSummary toRunSummary(RagQualityEvalRunDO runDO) {
+        Map<String, Object> snapshot = safeMap(runDO.getParameterSnapshot());
+        String engine = snapshot.containsKey("engine") ? String.valueOf(snapshot.get("engine")) : "java";
         return new QualityEvalRunSummary(
                 runDO.getRunId(),
                 runDO.getReportTimestamp(),
                 runDO.getDatasetSource(),
                 runDO.getRunLabel(),
                 runDO.getExperimentTag(),
+                engine,
                 safeInt(runDO.getTotalCases()),
                 safeDouble(runDO.getAvgFaithfulness()),
                 safeDouble(runDO.getAvgAnswerRelevancy()),
@@ -771,6 +782,7 @@ public class RAGQualityEvaluationService {
                 report.datasetSource(),
                 report.runLabel(),
                 report.experimentTag(),
+                report.engine(),
                 report.totalCases(),
                 report.avgFaithfulness(),
                 report.avgAnswerRelevancy(),
@@ -795,13 +807,17 @@ public class RAGQualityEvaluationService {
                 ))
                 .toList();
 
+        Map<String, Object> snapshot = safeMap(runDO.getParameterSnapshot());
+        String engine = snapshot.containsKey("engine") ? String.valueOf(snapshot.get("engine")) : "java";
+
         return new QualityEvalReport(
                 runDO.getRunId(),
                 runDO.getReportTimestamp(),
                 runDO.getDatasetSource(),
                 runDO.getRunLabel(),
                 runDO.getExperimentTag(),
-                safeMap(runDO.getParameterSnapshot()),
+                engine,
+                snapshot,
                 normalizeText(runDO.getNotes(), ""),
                 safeInt(runDO.getTotalCases()),
                 safeDouble(runDO.getAvgFaithfulness()),
@@ -896,6 +912,7 @@ public class RAGQualityEvaluationService {
             String datasetSource,
             String runLabel,
             String experimentTag,
+            String engine,
             Map<String, Object> parameterSnapshot,
             String notes,
             int totalCases,
@@ -913,6 +930,7 @@ public class RAGQualityEvaluationService {
             String datasetSource,
             String runLabel,
             String experimentTag,
+            String engine,
             int totalCases,
             double avgFaithfulness,
             double avgAnswerRelevancy,
