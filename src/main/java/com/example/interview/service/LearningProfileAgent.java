@@ -37,6 +37,8 @@ public class LearningProfileAgent {
     private static final String TREND_UP = "UP";
     private static final String TREND_DOWN = "DOWN";
     private static final String TREND_STABLE = "STABLE";
+    private static final String DECAY_CONFIG_ALL = "ALL";
+    private static final double[] CAPABILITY_THRESHOLDS = {0.2, 0.4, 0.6, 0.8};
     private static final int EVENT_LIMIT_PER_USER = 300;
     private static final int CURVE_WINDOW = 50;
     private static final int RANK_LIMIT = 8;
@@ -510,7 +512,7 @@ public class LearningProfileAgent {
     }
 
     private LearningDecayConfigDO findDecayConfig(String source, Integer difficultyLevel) {
-        String normalizedSource = source == null || source.isBlank() ? "ALL" : source.trim().toUpperCase();
+        String normalizedSource = source == null || source.isBlank() ? DECAY_CONFIG_ALL : source.trim().toUpperCase();
         Integer normalizedDifficulty = normalizeDifficulty(difficultyLevel);
         LearningDecayConfigDO config = learningDecayConfigMapper.selectOne(
                 new LambdaQueryWrapper<LearningDecayConfigDO>()
@@ -524,7 +526,7 @@ public class LearningProfileAgent {
         config = learningDecayConfigMapper.selectOne(
                 new LambdaQueryWrapper<LearningDecayConfigDO>()
                         .eq(LearningDecayConfigDO::getEnabled, Boolean.TRUE)
-                        .eq(LearningDecayConfigDO::getSource, "ALL")
+                        .eq(LearningDecayConfigDO::getSource, DECAY_CONFIG_ALL)
                         .eq(LearningDecayConfigDO::getDifficultyLevel, normalizedDifficulty)
         );
         if (config != null) {
@@ -533,7 +535,7 @@ public class LearningProfileAgent {
         config = learningDecayConfigMapper.selectOne(
                 new LambdaQueryWrapper<LearningDecayConfigDO>()
                         .eq(LearningDecayConfigDO::getEnabled, Boolean.TRUE)
-                        .eq(LearningDecayConfigDO::getSource, "ALL")
+                        .eq(LearningDecayConfigDO::getSource, DECAY_CONFIG_ALL)
                         .isNull(LearningDecayConfigDO::getDifficultyLevel)
                         .last("LIMIT 1")
         );
@@ -542,7 +544,7 @@ public class LearningProfileAgent {
         }
         LearningDecayConfigDO fallback = new LearningDecayConfigDO();
         fallback.setConfigKey("default");
-        fallback.setSource("ALL");
+        fallback.setSource(DECAY_CONFIG_ALL);
         fallback.setHalfLifeDays(14);
         fallback.setMinWeight(0.2);
         fallback.setDecayCurve("EXPONENTIAL");
@@ -584,7 +586,7 @@ public class LearningProfileAgent {
         double masteryPriority = (1.0 - metric.masteryScore) * 0.5;
         double difficultyPriority = (metric.difficultyLevel / (double) MAX_DIFFICULTY) * 0.3;
         double recencyPriority = (daysSinceLastAttempt / (double) MAX_RECOMMEND_DAYS) * 0.2;
-        double modeBias = "coding".equals(mode) ? Math.min(0.08, metric.confidence * 0.08) : Math.min(0.05, metric.weakScore * 0.05);
+        double modeBias = "coding".equals(mode) ? metric.confidence * 0.08 : metric.weakScore * 0.05;
         return masteryPriority + difficultyPriority + recencyPriority + modeBias;
     }
 
@@ -624,19 +626,12 @@ public class LearningProfileAgent {
     }
 
     private int resolveCapabilityLevel(double masteryScore) {
-        if (masteryScore < 0.2) {
-            return 0;
+        for (int i = 0; i < CAPABILITY_THRESHOLDS.length; i++) {
+            if (masteryScore < CAPABILITY_THRESHOLDS[i]) {
+                return i;
+            }
         }
-        if (masteryScore < 0.4) {
-            return 1;
-        }
-        if (masteryScore < 0.6) {
-            return 2;
-        }
-        if (masteryScore < 0.8) {
-            return 3;
-        }
-        return 4;
+        return CAPABILITY_THRESHOLDS.length;
     }
 
     private double calculateTrendStrength(List<Integer> scores) {
