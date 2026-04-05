@@ -97,27 +97,15 @@ CREATE TABLE IF NOT EXISTS `t_interview_session` (
     KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='面试会话表';
 
--- 创建学习画像表
-CREATE TABLE IF NOT EXISTS `t_learning_profile` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `user_id` VARCHAR(128) NOT NULL COMMENT '唯一标识',
-    `total_events` INT NOT NULL DEFAULT 0 COMMENT '参与面试/练习总次数',
-    `topic_metrics` JSON COMMENT '存储各知识点掌握度统计',
-    `reliability_score` DOUBLE NOT NULL DEFAULT 0.0 COMMENT '画像可靠性分数',
-    `last_updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学习画像表';
-
--- 创建学习事件表
-CREATE TABLE IF NOT EXISTS `t_learning_event` (
+-- 创建学习轨迹表（原子化事件表）
+CREATE TABLE IF NOT EXISTS `t_learning_trajectory` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `event_id` VARCHAR(128) NOT NULL COMMENT '唯一事件ID',
     `user_id` VARCHAR(128) NOT NULL COMMENT '用户ID',
-    `source` VARCHAR(64) NOT NULL COMMENT '来源：INTERVIEW/PRACTICE',
-    `topic` VARCHAR(255) COMMENT '知识点',
-    `score` INT NOT NULL DEFAULT 0 COMMENT '得分',
+    `topic` VARCHAR(255) NOT NULL COMMENT '知识点',
+    `event_type` VARCHAR(64) NOT NULL DEFAULT 'ASSESSMENT' COMMENT '事件类型：ASSESSMENT/PRACTICE/REVIEW',
+    `source` VARCHAR(64) NOT NULL COMMENT '来源：INTERVIEW/CODING',
+    `score` INT NOT NULL DEFAULT 0 COMMENT '得分（0-100）',
     `weak_points` JSON COMMENT '薄弱点列表',
     `familiar_points` JSON COMMENT '熟悉点列表',
     `evidence` TEXT COMMENT '反馈报告原文',
@@ -125,8 +113,80 @@ CREATE TABLE IF NOT EXISTS `t_learning_event` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_event_id` (`event_id`),
-    KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学习事件表';
+    KEY `idx_user_id_timestamp` (`user_id`, `timestamp`),
+    KEY `idx_user_topic_timestamp` (`user_id`, `topic`, `timestamp`),
+    KEY `idx_topic` (`topic`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学习轨迹表';
+
+-- 创建用户知识状态表（多维度掌握度快照）
+CREATE TABLE IF NOT EXISTS `t_user_knowledge_state` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(128) NOT NULL COMMENT '用户ID',
+    `topic` VARCHAR(255) NOT NULL COMMENT '知识点',
+    `difficulty_level` INT NOT NULL DEFAULT 1 COMMENT '难度等级（1-5）',
+    `mastery_score` DOUBLE NOT NULL DEFAULT 0.0 COMMENT '掌握度分数（0-1）',
+    `confidence` DOUBLE NOT NULL DEFAULT 0.0 COMMENT '置信度（基于尝试次数）',
+    `attempts` INT NOT NULL DEFAULT 0 COMMENT '尝试次数',
+    `weighted_avg_score` DOUBLE NOT NULL DEFAULT 0.0 COMMENT '加权平均分',
+    `last_assessed_at` DATETIME COMMENT '最后评估时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_topic` (`user_id`, `topic`),
+    KEY `idx_user_mastery` (`user_id`, `mastery_score`),
+    KEY `idx_topic_difficulty` (`topic`, `difficulty_level`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户知识状态表';
+
+-- 创建能力曲线表（时间序列数据）
+CREATE TABLE IF NOT EXISTS `t_capability_curve` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(128) NOT NULL COMMENT '用户ID',
+    `topic` VARCHAR(255) NOT NULL COMMENT '知识点',
+    `event_sequence` INT NOT NULL DEFAULT 0 COMMENT '事件序列号',
+    `scores_array` JSON COMMENT '分数数组（最近50次）',
+    `timestamps_array` JSON COMMENT '时间戳数组',
+    `trend_direction` VARCHAR(32) COMMENT '趋势方向：UP/DOWN/STABLE',
+    `trend_strength` DOUBLE DEFAULT 0.0 COMMENT '趋势强度（-1到1）',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_topic_curve` (`user_id`, `topic`),
+    KEY `idx_user_trend` (`user_id`, `trend_direction`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='能力曲线表';
+
+-- 创建主题难度等级表（全局配置）
+CREATE TABLE IF NOT EXISTS `t_topic_difficulty_level` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `topic` VARCHAR(255) NOT NULL COMMENT '知识点',
+    `difficulty_level` INT NOT NULL DEFAULT 1 COMMENT '难度等级（1-5）',
+    `category` VARCHAR(128) COMMENT '分类',
+    `prerequisites` JSON COMMENT '前置知识点',
+    `avg_mastery_score` DOUBLE DEFAULT 0.0 COMMENT '全局平均掌握度',
+    `total_assessments` INT DEFAULT 0 COMMENT '总评估次数',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_topic` (`topic`),
+    KEY `idx_difficulty_category` (`difficulty_level`, `category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='主题难度等级表';
+
+-- 创建学习衰减配置表（灵活的衰减策略）
+CREATE TABLE IF NOT EXISTS `t_learning_decay_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `config_key` VARCHAR(128) NOT NULL COMMENT '配置唯一键',
+    `source` VARCHAR(64) COMMENT '来源：INTERVIEW/CODING/ALL',
+    `difficulty_level` INT COMMENT '难度等级（NULL表示全部）',
+    `half_life_days` INT NOT NULL DEFAULT 14 COMMENT '半衰期（天）',
+    `min_weight` DOUBLE NOT NULL DEFAULT 0.2 COMMENT '最小权重',
+    `decay_curve` VARCHAR(32) DEFAULT 'EXPONENTIAL' COMMENT '衰减曲线：EXPONENTIAL/LINEAR/SIGMOID',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_config_key` (`config_key`),
+    KEY `idx_source_difficulty` (`source`, `difficulty_level`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学习衰减配置表';
 
 -- 创建词法索引表
 CREATE TABLE IF NOT EXISTS `t_lexical_index` (
