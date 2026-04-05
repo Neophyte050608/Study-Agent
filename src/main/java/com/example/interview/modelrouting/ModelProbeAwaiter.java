@@ -1,9 +1,15 @@
 package com.example.interview.modelrouting;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 首包探测器。
@@ -13,9 +19,12 @@ import java.util.concurrent.TimeUnit;
 public class ModelProbeAwaiter {
 
     private final ModelRoutingProperties properties;
+    private final Executor executor;
 
-    public ModelProbeAwaiter(ModelRoutingProperties properties) {
+    public ModelProbeAwaiter(ModelRoutingProperties properties,
+                             @Qualifier("ragRetrieveExecutor") Executor executor) {
         this.properties = properties;
+        this.executor = executor;
     }
 
     /**
@@ -38,6 +47,71 @@ public class ModelProbeAwaiter {
             return normalized;
         } catch (Exception ex) {
             throw new ModelRoutingException("首包探测失败", ex);
+        }
+    }
+
+    public String awaitFirstToken(Flux<String> tokenFlux, TimeoutHint hint) {
+        long firstTokenMs = hint != null ? hint.getFirstTokenTimeoutMs()
+                : Math.max(500L, properties.getStream().getFirstPacketTimeoutMs());
+        long totalMs = hint != null ? hint.getTotalResponseTimeoutMs()
+                : Math.max(firstTokenMs * 3, properties.getStream().getTotalResponseTimeoutMs());
+
+        CompletableFuture<Void> firstTokenSignal = new CompletableFuture<>();
+        AtomicBoolean firstTokenReceived = new AtomicBoolean(false);
+        StringBuilder fullResponse = new StringBuilder();
+
+        CompletableFuture<String> resultFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                tokenFlux
+                        .doOnNext(token -> {
+                            if (token != null && !token.isEmpty()) {
+                                fullResponse.append(token);
+                                if (firstTokenReceived.compareAndSet(false, true)) {
+                                    firstTokenSignal.complete(null);
+                                }
+                            }
+                        })
+                        .doOnError(firstTokenSignal::completeExceptionally)
+                        .doOnComplete(() -> {
+                            if (!firstTokenReceived.get()) {
+                                firstTokenSignal.completeExceptionally(
+                                        new ModelRoutingException("流式返回为空，未收到任何Token"));
+                            }
+                        })
+                        .blockLast(Duration.ofMillis(totalMs));
+            } catch (Exception e) {
+                if (!firstTokenReceived.get()) {
+                    firstTokenSignal.completeExceptionally(e);
+                }
+                throw e instanceof RuntimeException runtimeException
+                        ? runtimeException
+                        : new RuntimeException(e);
+            }
+            return fullResponse.toString();
+        }, executor);
+
+        try {
+            firstTokenSignal.get(firstTokenMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            resultFuture.cancel(true);
+            throw new ModelRoutingException("首Token探测超时（" + firstTokenMs + "ms）", e);
+        } catch (Exception e) {
+            throw new ModelRoutingException("首Token探测失败", e);
+        }
+
+        try {
+            String result = resultFuture.get(totalMs, TimeUnit.MILLISECONDS);
+            if (result == null || result.trim().isEmpty()) {
+                throw new ModelRoutingException("响应内容为空");
+            }
+            return result.trim();
+        } catch (TimeoutException e) {
+            throw new ModelRoutingException("总响应超时（" + totalMs + "ms）", e);
+        } catch (Exception e) {
+            if (e.getCause() instanceof ModelRoutingException modelRoutingException) {
+                throw modelRoutingException;
+            }
+            throw new ModelRoutingException("模型调用失败", e);
         }
     }
 }

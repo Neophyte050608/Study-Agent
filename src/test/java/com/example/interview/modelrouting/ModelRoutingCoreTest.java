@@ -39,9 +39,9 @@ class ModelRoutingCoreTest {
         properties.getCircuitBreaker().setOpenDurationMs(1000);
         ModelHealthStore store = new ModelHealthStore(properties);
 
-        store.markFailure("m1");
+        store.markFailure("m1", "test failure");
         assertEquals(ModelCircuitState.CLOSED, store.stateOf("m1"));
-        store.markFailure("m1");
+        store.markFailure("m1", "test failure");
         assertEquals(ModelCircuitState.OPEN, store.stateOf("m1"));
         try {
             Thread.sleep(1200L);
@@ -90,7 +90,7 @@ class ModelRoutingCoreTest {
         properties.getCircuitBreaker().setOpenDurationMs(1000);
         ModelHealthStore store = new ModelHealthStore(properties);
 
-        store.markFailure("m1");
+        store.markFailure("m1", "test failure");
         store.canTry("m1");
         Map<String, Object> metrics = store.snapshotMetrics();
         Map<String, Map<String, Object>> details = store.snapshotDetails();

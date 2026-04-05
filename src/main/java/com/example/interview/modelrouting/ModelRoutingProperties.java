@@ -163,6 +163,7 @@ public class ModelRoutingProperties {
 
     public static class Stream {
         private long firstPacketTimeoutMs = 6000;
+        private long totalResponseTimeoutMs = 60000;
         private int firstPacketMinChars = 1;
         private int bufferChunkSize = 32;
 
@@ -172,6 +173,14 @@ public class ModelRoutingProperties {
 
         public void setFirstPacketTimeoutMs(long firstPacketTimeoutMs) {
             this.firstPacketTimeoutMs = firstPacketTimeoutMs;
+        }
+
+        public long getTotalResponseTimeoutMs() {
+            return totalResponseTimeoutMs;
+        }
+
+        public void setTotalResponseTimeoutMs(long totalResponseTimeoutMs) {
+            this.totalResponseTimeoutMs = totalResponseTimeoutMs;
         }
 
         public int getFirstPacketMinChars() {

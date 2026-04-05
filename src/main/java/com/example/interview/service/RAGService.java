@@ -8,6 +8,7 @@ import com.example.interview.core.Question;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.modelrouting.TimeoutHint;
 import com.example.interview.tool.WebSearchTool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1001,7 +1002,7 @@ public class RAGService {
                 "只返回关键词或检索短语，不要返回其他解释。";
         return routingChatService.callWithFirstPacketProbeSupplier(
             () -> question,
-            prompt, ModelRouteType.GENERAL, "关键词提取"
+            prompt, ModelRouteType.GENERAL, TimeoutHint.NORMAL, "关键词提取"
         );
     }
 
@@ -1226,6 +1227,7 @@ public class RAGService {
                     pair.systemPrompt(),
                     pair.userPrompt(),
                     ModelRouteType.GENERAL,
+                    TimeoutHint.NORMAL,
                     "首题生成"
             );
             logger.debug("[generateFirstQuestion] Response length={}", rawQuestion == null ? 0 : rawQuestion.length());
@@ -1302,7 +1304,7 @@ public class RAGService {
             logger.debug("{}", pair.userPrompt());
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "刷题题目生成"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, TimeoutHint.NORMAL, "刷题题目生成"
             ), 1, "刷题题目生成");
             logger.debug("====== [RAGService - generateCodingQuestion] Response ======");
             logger.debug("{}", raw);
@@ -1353,7 +1355,7 @@ public class RAGService {
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "[]",
-                finalSystemPrompt, finalUserPrompt, ModelRouteType.GENERAL, "批量选择题生成"
+                finalSystemPrompt, finalUserPrompt, ModelRouteType.GENERAL, TimeoutHint.NORMAL, "批量选择题生成"
             ), 1, "批量选择题生成");
 
             if (raw == null || raw.isBlank()) {
@@ -1455,7 +1457,7 @@ public class RAGService {
             logger.debug("{}", pair.userPrompt());
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "{\"score\":0,\"feedback\":\"评估超时\"}",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "刷题答案评估"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, TimeoutHint.SLOW, "刷题答案评估"
             ), 1, "刷题答案评估");
             logger.debug("====== [RAGService - evaluateCodingAnswer] Response ======");
             logger.debug("{}", raw);
@@ -1492,7 +1494,7 @@ public class RAGService {
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "刷题下一题生成"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, TimeoutHint.NORMAL, "刷题下一题生成"
             ), 1, "刷题下一题生成");
             if (raw == null || raw.isBlank()) {
                 return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
@@ -1519,7 +1521,7 @@ public class RAGService {
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
                 () -> "",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "学习计划生成"
+                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, TimeoutHint.NORMAL, "学习计划生成"
             ), 1, "学习计划生成");
             if (raw == null || raw.isBlank()) {
                 return fallbackLearningPlan(normalizedTopic, weakPoint);

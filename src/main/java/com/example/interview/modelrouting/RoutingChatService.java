@@ -7,12 +7,10 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import java.util.concurrent.Executor;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -32,10 +30,9 @@ public class RoutingChatService {
     private final AtomicLong routeFallbackCount = new AtomicLong(0);
     private final AtomicLong firstPacketTimeoutCount = new AtomicLong(0);
     private final AtomicLong firstPacketFailureCount = new AtomicLong(0);
-    private final Executor ragRetrieveExecutor;
 
     public RoutingChatService(
-            @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor,
+            @Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor,
             ModelRoutingProperties properties,
             ModelSelector modelSelector,
             ModelRoutingExecutor modelRoutingExecutor,
@@ -50,7 +47,6 @@ public class RoutingChatService {
         this.modelHealthStore = modelHealthStore;
         this.dynamicModelFactory = dynamicModelFactory;
         this.modelProbeAwaiter = modelProbeAwaiter;
-        this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.fallbackChatModel = fallbackChatModel;
     }
 
@@ -105,7 +101,7 @@ public class RoutingChatService {
      * 使用 CompletableFuture 异步发起请求，并结合 ModelProbeAwaiter 检查响应时间。
      * 如果某候选模型响应过慢（未在规定时间内返回首包），将抛出超时异常，触发熔断器状态转换并降级到下一个模型。
      */
-    public String callWithFirstPacketProbe(String prompt, ModelRouteType routeType, String stage) {
+    public String callWithFirstPacketProbe(String prompt, ModelRouteType routeType, TimeoutHint hint, String stage) {
         if (!properties.isEnabled()) {
             return callWithModel(fallbackChatModel, prompt);
         }
@@ -115,13 +111,17 @@ public class RoutingChatService {
         }
         return modelRoutingExecutor.execute(candidates, candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
-            // 异步发起模型调用
-            CompletableFuture<String> firstPacketFuture = CompletableFuture.supplyAsync(() -> callWithModel(chatModel, prompt), ragRetrieveExecutor);
-            // 阻塞等待，如果超时则抛出 TimeoutException，由外层 executor 捕获并记录失败
-            String result = modelProbeAwaiter.awaitFirstPacket(firstPacketFuture);
-            logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(), modelHealthStore.stateOf(candidate.name()));
+            Flux<String> tokenFlux = ChatClient.builder(chatModel).build().prompt()
+                    .user(prompt).stream().content();
+            String result = modelProbeAwaiter.awaitFirstToken(tokenFlux, hint);
+            logger.info("首Token探测通过: stage={}, candidate={}, hint={}, state={}",
+                    stage, candidate.name(), hint, modelHealthStore.stateOf(candidate.name()));
             return result;
-        }, stage + "-first-packet");
+        }, stage + "-first-token");
+    }
+
+    public String callWithFirstPacketProbe(String prompt, ModelRouteType routeType, String stage) {
+        return callWithFirstPacketProbe(prompt, routeType, TimeoutHint.NORMAL, stage);
     }
 
     /**
@@ -223,8 +223,14 @@ public class RoutingChatService {
      * @return 模型响应文本或降级结果
      */
     public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier, String prompt, ModelRouteType routeType, String stage) {
+        return callWithFirstPacketProbeSupplier(fallbackSupplier, prompt, routeType, TimeoutHint.NORMAL, stage);
+    }
+
+    public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier,
+                                                   String prompt, ModelRouteType routeType,
+                                                   TimeoutHint hint, String stage) {
         try {
-            return callWithFirstPacketProbe(prompt, routeType, stage);
+            return callWithFirstPacketProbe(prompt, routeType, hint, stage);
         } catch (RuntimeException ex) {
             if (containsTimeout(ex)) {
                 firstPacketTimeoutCount.incrementAndGet();
@@ -232,7 +238,7 @@ public class RoutingChatService {
                 firstPacketFailureCount.incrementAndGet();
             }
             routeFallbackCount.incrementAndGet();
-            logger.warn("首包探测失败，执行统一兜底: stage={}, reason={}", stage, ex.getMessage());
+            logger.warn("首Token探测失败，执行统一兜底: stage={}, hint={}, reason={}", stage, hint, ex.getMessage());
             return fallbackSupplier.get();
         }
     }
@@ -241,6 +247,15 @@ public class RoutingChatService {
                                                    String systemPrompt,
                                                    String userPrompt,
                                                    ModelRouteType routeType,
+                                                   String stage) {
+        return callWithFirstPacketProbeSupplier(fallbackSupplier, systemPrompt, userPrompt, routeType, TimeoutHint.NORMAL, stage);
+    }
+
+    public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier,
+                                                   String systemPrompt,
+                                                   String userPrompt,
+                                                   ModelRouteType routeType,
+                                                   TimeoutHint hint,
                                                    String stage) {
         try {
             if (!properties.isEnabled()) {
@@ -252,14 +267,16 @@ public class RoutingChatService {
             }
             return modelRoutingExecutor.execute(candidates, candidate -> {
                 ChatModel chatModel = resolveChatModel(candidate);
-                CompletableFuture<String> future = CompletableFuture.supplyAsync(
-                        () -> callWithModelMetadata(chatModel, systemPrompt, userPrompt).content(),
-                        ragRetrieveExecutor);
-                String result = modelProbeAwaiter.awaitFirstPacket(future);
-                logger.info("首包探测通过: stage={}, candidate={}, state={}", stage, candidate.name(),
-                        modelHealthStore.stateOf(candidate.name()));
+                var builder = ChatClient.builder(chatModel).build().prompt();
+                if (systemPrompt != null && !systemPrompt.isBlank()) {
+                    builder.system(systemPrompt);
+                }
+                Flux<String> tokenFlux = builder.user(userPrompt).stream().content();
+                String result = modelProbeAwaiter.awaitFirstToken(tokenFlux, hint);
+                logger.info("首Token探测通过: stage={}, candidate={}, hint={}, state={}",
+                        stage, candidate.name(), hint, modelHealthStore.stateOf(candidate.name()));
                 return result;
-            }, stage + "-first-packet");
+            }, stage + "-first-token");
         } catch (RuntimeException ex) {
             if (containsTimeout(ex)) {
                 firstPacketTimeoutCount.incrementAndGet();
@@ -267,7 +284,7 @@ public class RoutingChatService {
                 firstPacketFailureCount.incrementAndGet();
             }
             routeFallbackCount.incrementAndGet();
-            logger.warn("首包探测失败，执行统一兜底: stage={}, reason={}", stage, ex.getMessage());
+            logger.warn("首Token探测失败，执行统一兜底: stage={}, hint={}, reason={}", stage, hint, ex.getMessage());
             return fallbackSupplier.get();
         }
     }

@@ -28,7 +28,7 @@ class RoutingChatServiceTest {
         ModelSelector selector = new ModelSelector(properties);
         ModelHealthStore healthStore = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(healthStore);
-        ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties);
+        ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties, Runnable::run);
         DynamicModelFactory factory = mock(DynamicModelFactory.class);
         when(factory.getByRoutingCandidate("openai", "")).thenReturn(null);
         ChatModel fallbackModel = mock(ChatModel.class);
@@ -55,13 +55,13 @@ class RoutingChatServiceTest {
         ModelSelector selector = new ModelSelector(properties);
         ModelHealthStore healthStore = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(healthStore);
-        ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties);
+        ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties, Runnable::run);
         DynamicModelFactory factory = mock(DynamicModelFactory.class);
         ChatModel fallbackModel = mock(ChatModel.class);
         Executor asyncExecutor = Runnable::run;
         RoutingChatService service = new RoutingChatService(asyncExecutor, properties, selector, executor, healthStore, factory, awaiter, fallbackModel);
 
-        healthStore.markFailure("m-observe");
+        healthStore.markFailure("m-observe", "test failure");
         Map<String, Object> stats = service.snapshotStats();
 
         assertTrue(stats.containsKey("states"));

@@ -13,6 +13,7 @@ import com.example.interview.core.InterviewSession;
 import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.modelrouting.TimeoutHint;
 import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
@@ -252,6 +253,7 @@ public class TaskRouterAgent {
                 () -> "{\"taskType\":\"UNKNOWN\"}",
                 prompt, 
                 ModelRouteType.THINKING, 
+                TimeoutHint.FAST,
                 "任务路由ReAct"
             );
 

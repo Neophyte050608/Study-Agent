@@ -178,7 +178,8 @@ app:
       open-duration-ms: ${APP_MODEL_ROUTING_OPEN_DURATION_MS:30000}
       half-open-max-trials: ${APP_MODEL_ROUTING_HALF_OPEN_MAX_TRIALS:1}
     stream:
-      first-packet-timeout-ms: ${APP_MODEL_ROUTING_FIRST_PACKET_TIMEOUT_MS:30000}
+      first-packet-timeout-ms: ${APP_MODEL_ROUTING_FIRST_PACKET_TIMEOUT_MS:8000}
+      total-response-timeout-ms: ${APP_MODEL_ROUTING_TOTAL_RESPONSE_TIMEOUT_MS:60000}
       first-packet-min-chars: ${APP_MODEL_ROUTING_FIRST_PACKET_MIN_CHARS:1}
       buffer-chunk-size: ${APP_MODEL_ROUTING_BUFFER_CHUNK_SIZE:32}
 
