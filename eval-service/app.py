@@ -2,10 +2,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall, answer_correctness
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 
+import math
 import inspect
 import os
 import time
@@ -64,13 +66,9 @@ def _build_llm(req: EvalRequest) -> ChatOpenAI:
     if not api_key:
         raise HTTPException(status_code=400, detail="LLM API key is required (via request body or LLM_API_KEY env)")
 
-    # 同步设置 OPENAI 环境变量，兼容 ragas 不同版本下的 LLM 读取路径。
-    os.environ["OPENAI_API_KEY"] = api_key
-    os.environ["OPENAI_BASE_URL"] = base_url
-
     return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
 
-def _build_embeddings(req: EvalRequest) -> OpenAIEmbeddings | None:
+def _build_embeddings(req: EvalRequest) -> LangchainEmbeddingsWrapper | None:
     emb_config = req.embedding_config or EmbeddingConfig()
     api_key = emb_config.api_key or os.environ.get("EMBEDDING_API_KEY", "") or os.environ.get("LLM_API_KEY", "")
     model = emb_config.model or os.environ.get("EMBEDDING_MODEL", "embedding-3")
@@ -79,7 +77,9 @@ def _build_embeddings(req: EvalRequest) -> OpenAIEmbeddings | None:
     if not api_key:
         return None
 
-    return OpenAIEmbeddings(model=model, api_key=api_key, base_url=base_url)
+    print(f"[Ragas] Built embeddings: model={model}, base_url={base_url}, api_key={'***' + api_key[-4:] if api_key else 'NONE'}")
+    langchain_embeddings = OpenAIEmbeddings(model=model, api_key=api_key, base_url=base_url)
+    return LangchainEmbeddingsWrapper(langchain_embeddings)
 
 
 def _resolve_metrics(metric_names: list[str]) -> list:
@@ -88,6 +88,7 @@ def _resolve_metrics(metric_names: list[str]) -> list:
         "answer_relevancy": answer_relevancy,
         "context_precision": context_precision,
         "context_recall": context_recall,
+        "answer_correctness": answer_correctness,
     }
     selected = [metric_map[name] for name in metric_names if name in metric_map]
     if not selected:
@@ -146,9 +147,20 @@ def run_evaluate(req: EvalRequest) -> dict:
 
         selected_metrics = _resolve_metrics(req.metrics)
 
+        # DeepSeek 不支持 n>1，将 answer_relevancy 的 strictness 设为 1
+        for metric in selected_metrics:
+            if hasattr(metric, "strictness"):
+                metric.strictness = 1
+
         # 中文语言适配
         if req.language and req.language != "english":
             selected_metrics = _adapt_metrics_sync(selected_metrics, req.language, llm)
+
+        # 将 embeddings 直接注入到 metric 对象，确保 Ragas 内部能使用正确的 embedding
+        if embeddings:
+            for metric in selected_metrics:
+                if hasattr(metric, "embeddings"):
+                    metric.embeddings = embeddings
 
         # ragas 版本差异兼容
         try:
@@ -169,7 +181,8 @@ def run_evaluate(req: EvalRequest) -> dict:
             for metric_name in req.metrics:
                 value = row.get(metric_name, 0.0)
                 try:
-                    case_result[metric_name] = float(value)
+                    fval = float(value)
+                    case_result[metric_name] = 0.0 if math.isnan(fval) else fval
                 except Exception:
                     case_result[metric_name] = 0.0
             results.append(case_result)
