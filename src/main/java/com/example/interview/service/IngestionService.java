@@ -63,6 +63,7 @@ public class IngestionService {
     public SyncSummary sync(String vaultPath, List<String> ignoredDirs) {
         logger.info("Starting sync for vault: {}", vaultPath);
         List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        String normalizedVaultPath = normalizeLocalPath(vaultPath);
         Set<String> currentFiles = new HashSet<>();
         int newFileCount = 0;
         int modifiedFileCount = 0;
@@ -116,11 +117,8 @@ public class IngestionService {
         List<SyncIndexDO> allIndexes = syncIndexMapper.selectList(null);
         List<SyncIndexDO> deletedFiles = allIndexes.stream()
                 .filter(idx -> !currentFiles.contains(idx.getFilePath()))
-                // Only process files that belong to this vault path logically,
-                // but since we don't have vault path prefix strictly in DB, we'll assume it's safe 
-                // to delete all DB entries not in currentFiles if they are local paths.
-                // Wait, if there are uploaded files, they start with "browser://".
                 .filter(idx -> !idx.getFilePath().startsWith("browser://"))
+                .filter(idx -> belongsToVault(idx.getFilePath(), normalizedVaultPath))
                 .collect(Collectors.toList());
 
         for (SyncIndexDO deletedIndex : deletedFiles) {
@@ -146,6 +144,7 @@ public class IngestionService {
     public SyncSummary forceReindexParentChild(String vaultPath, List<String> ignoredDirs) {
         logger.info("Starting force reindex for vault: {}", vaultPath);
         List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        String normalizedVaultPath = normalizeLocalPath(vaultPath);
         Set<String> currentFiles = new HashSet<>();
         int newFileCount = 0;
         int modifiedFileCount = 0;
@@ -189,6 +188,7 @@ public class IngestionService {
         List<SyncIndexDO> deletedFiles = allIndexes.stream()
                 .filter(idx -> !currentFiles.contains(idx.getFilePath()))
                 .filter(idx -> !idx.getFilePath().startsWith("browser://"))
+                .filter(idx -> belongsToVault(idx.getFilePath(), normalizedVaultPath))
                 .collect(Collectors.toList());
         for (SyncIndexDO deletedIndex : deletedFiles) {
             removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
@@ -303,12 +303,13 @@ public class IngestionService {
 
     public Map<String, Object> getStats() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("totalScanned", lastSummary.totalScanned);
         long totalIndexed = syncIndexMapper.selectCount(null);
+        int totalScanned = lastSummary.totalScanned > 0 ? lastSummary.totalScanned : Math.toIntExact(Math.min(Integer.MAX_VALUE, totalIndexed));
+        result.put("totalScanned", totalScanned);
         result.put("totalIndexed", totalIndexed);
         result.put("failedFiles", lastSummary.failedFiles);
-        int denominator = Math.max(1, lastSummary.totalScanned);
-        int success = Math.max(0, lastSummary.totalScanned - lastSummary.failedFiles);
+        int denominator = Math.max(1, totalScanned);
+        int success = Math.max(0, totalScanned - lastSummary.failedFiles);
         int successRate = Math.max(0, Math.min(100, (success * 100) / denominator));
         result.put("successRate", successRate + "%");
         result.put("lastSyncTime", lastSyncTime == 0L ? null : lastSyncTime);
@@ -563,6 +564,32 @@ public class IngestionService {
         try (InputStream is = file.getInputStream()) {
             return DigestUtils.md5DigestAsHex(is);
         }
+    }
+
+    private String normalizeLocalPath(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        try {
+            return new File(path).getCanonicalPath();
+        } catch (IOException e) {
+            return new File(path).getAbsolutePath();
+        }
+    }
+
+    private boolean belongsToVault(String filePath, String normalizedVaultPath) {
+        if (filePath == null || filePath.isBlank() || normalizedVaultPath == null || normalizedVaultPath.isBlank()) {
+            return false;
+        }
+        String normalizedFilePath = normalizeLocalPath(filePath);
+        if (normalizedFilePath == null) {
+            return false;
+        }
+        if (normalizedFilePath.equals(normalizedVaultPath)) {
+            return true;
+        }
+        String prefix = normalizedVaultPath.endsWith(File.separator) ? normalizedVaultPath : normalizedVaultPath + File.separator;
+        return normalizedFilePath.startsWith(prefix);
     }
 
     public static class SyncSummary {

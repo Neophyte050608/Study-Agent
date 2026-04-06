@@ -18,3 +18,7 @@ learning_profiles_v2.json.tmp
 frontend/node_modules/
 /context/
 /.ccb/
+/docs/
+/context/
+/.claude/
+/.ccb/

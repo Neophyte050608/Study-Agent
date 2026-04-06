@@ -93,6 +93,8 @@
 - 新增轻量分块启停控制表 `t_knowledge_chunk_ctrl`，用于持久化分块启停状态，避免仅内存态导致重启丢失。
 - `KnowledgeDocumentService` 已接入运行态保护：当入库任务处于 `RUNNING/PENDING` 时，拒绝文档删除与重建操作，降低并发冲突风险。
 - 文档删除与重建已复用 `IngestionService` 的 `deleteByFilePath/rechunkByFilePath`，保持向量索引、词法索引与父子索引的一致删除/重建路径。
+- 文档管理查询已修正文档维度口径：列表与详情不再将 `t_rag_parent` 的父块/章节直接当作文档，而是按 `file_path/source_location` 聚合为真实文件级文档；同时合并 `t_knowledge_document` 中已有记录，避免数据库已存在的文档在管理页只显示部分结果。
+- 本地多目录同步已修复“跨目录互删”问题：`IngestionService` 删除缺失文件时，改为仅清理当前同步根目录下缺失的本地文件，不再因为同步目录 A 而误删目录 B 的索引；知识库统计在最近一次同步摘要缺失时会回退到当前索引计数，避免管理页“总扫描文件”长期显示 0。
 
 **兼容策略**：
 - 维持既有 `/api/ingest*` 与 `/api/ingestion/*` 接口不变；新增写接口仅增强知识库管理页能力，不影响现有链路。

@@ -12,7 +12,7 @@ import com.example.interview.mapper.RagChildMapper;
 import com.example.interview.mapper.RagParentMapper;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -45,47 +45,47 @@ public class KnowledgeDocumentService {
     public Map<String, Object> pageDocuments(Long kbId, Integer pageNo, Integer pageSize, String status, String keyword) {
         int p = pageNo == null || pageNo <= 0 ? 1 : pageNo;
         int s = pageSize == null || pageSize <= 0 ? 10 : Math.min(pageSize, 100);
-        List<RagParentDO> all = ragParentMapper.selectList(new LambdaQueryWrapper<>());
-        List<RagParentDO> filtered = all.stream().filter(item -> {
-            if (status != null && !status.isBlank() && !"READY".equalsIgnoreCase(status)) {
-                return false;
-            }
-            if (keyword != null && !keyword.isBlank()) {
-                String k = keyword.toLowerCase(Locale.ROOT);
-                String fp = Optional.ofNullable(item.getFilePath()).orElse("").toLowerCase(Locale.ROOT);
-                String sp = Optional.ofNullable(item.getSectionPath()).orElse("").toLowerCase(Locale.ROOT);
-                String tags = Optional.ofNullable(item.getKnowledgeTags()).orElse("").toLowerCase(Locale.ROOT);
-                return fp.contains(k) || sp.contains(k) || tags.contains(k);
-            }
-            return true;
-        }).collect(Collectors.toList());
-        int total = filtered.size();
+        Map<String, List<RagParentDO>> parentsBySource = ragParentMapper.selectList(new LambdaQueryWrapper<RagParentDO>())
+                .stream()
+                .filter(item -> item.getFilePath() != null && !item.getFilePath().isBlank())
+                .collect(Collectors.groupingBy(RagParentDO::getFilePath, LinkedHashMap::new, Collectors.toList()));
+        Map<String, KnowledgeDocumentDO> docRowsBySource = knowledgeDocumentMapper.selectList(new LambdaQueryWrapper<KnowledgeDocumentDO>())
+                .stream()
+                .filter(item -> item.getSourceLocation() != null && !item.getSourceLocation().isBlank())
+                .collect(Collectors.toMap(
+                        KnowledgeDocumentDO::getSourceLocation,
+                        item -> item,
+                        (left, right) -> right,
+                        LinkedHashMap::new
+                ));
+
+        Set<String> sourceLocations = new LinkedHashSet<>();
+        sourceLocations.addAll(docRowsBySource.keySet());
+        sourceLocations.addAll(parentsBySource.keySet());
+
+        List<Map<String, Object>> allDocuments = sourceLocations.stream()
+                .map(sourceLocation -> buildDocumentItem(
+                        kbId == null ? 1L : kbId,
+                        sourceLocation,
+                        parentsBySource.getOrDefault(sourceLocation, List.of()),
+                        docRowsBySource.get(sourceLocation)
+                ))
+                .filter(Objects::nonNull)
+                .filter(item -> matchesDocumentFilters(item, status, keyword))
+                .sorted(Comparator
+                        .comparing((Map<String, Object> item) -> (LocalDateTime) item.get("_sortTime"),
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(item -> String.valueOf(item.getOrDefault("sourceLocation", "")), String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.toList());
+
+        int total = allDocuments.size();
         int from = Math.max(0, (p - 1) * s);
         int to = Math.min(total, from + s);
-        List<RagParentDO> pageItems = from >= to ? List.of() : filtered.subList(from, to);
-
-        List<Map<String, Object>> records = new ArrayList<>();
-        for (RagParentDO parent : pageItems) {
-            int chunkCount = ragChildMapper.selectCount(new LambdaQueryWrapper<RagChildDO>()
-                    .eq(RagChildDO::getParentId, parent.getParentId())).intValue();
-            KnowledgeDocumentDO docRow = knowledgeDocumentMapper.selectOne(
-                    new LambdaQueryWrapper<KnowledgeDocumentDO>().eq(KnowledgeDocumentDO::getSourceLocation, parent.getFilePath()).last("LIMIT 1")
-            );
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("docId", parent.getParentId());
-            item.put("kbId", kbId == null ? 1L : kbId);
-            item.put("docName", Optional.ofNullable(parent.getSectionPath()).filter(sx -> !sx.isBlank())
-                    .orElseGet(() -> Optional.ofNullable(parent.getFilePath()).map(fp -> {
-                        int idx = fp.lastIndexOf(File.separatorChar);
-                        return idx >= 0 ? fp.substring(idx + 1) : fp;
-                    }).orElse("unknown.md")));
-            item.put("status", "READY");
-            item.put("enabled", docRow == null || Boolean.TRUE.equals(docRow.getEnabled()));
-            item.put("sourceType", Optional.ofNullable(parent.getSourceType()).orElse("LOCAL_VAULT"));
-            item.put("sourceLocation", parent.getFilePath());
-            item.put("chunkCount", chunkCount);
-            records.add(item);
-        }
+        List<Map<String, Object>> records = from >= to ? List.of() : allDocuments.subList(from, to)
+                .stream()
+                .peek(item -> item.remove("_sortTime"))
+                .peek(item -> item.remove("_searchBlob"))
+                .collect(Collectors.toList());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("current", p);
@@ -96,17 +96,34 @@ public class KnowledgeDocumentService {
     }
 
     public Optional<Map<String, Object>> getDocumentDetail(String docId) {
-        List<RagParentDO> list = ragParentMapper.selectList(new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getParentId, docId));
-        if (list.isEmpty()) {
+        DocumentScope scope = resolveDocumentScope(docId);
+        if (scope == null) {
             return Optional.empty();
         }
-        RagParentDO parent = list.get(0);
+        KnowledgeDocumentDO docRow = scope.sourceLocation == null ? null : knowledgeDocumentMapper.selectOne(
+                new LambdaQueryWrapper<KnowledgeDocumentDO>()
+                        .eq(KnowledgeDocumentDO::getSourceLocation, scope.sourceLocation)
+                        .last("LIMIT 1")
+        );
         Map<String, Object> item = new LinkedHashMap<>();
-        item.put("docId", parent.getParentId());
-        item.put("docName", Optional.ofNullable(parent.getSectionPath()).orElse("unknown.md"));
-        item.put("sourceType", Optional.ofNullable(parent.getSourceType()).orElse("LOCAL_VAULT"));
-        item.put("sourceLocation", parent.getFilePath());
-        item.put("knowledgeTags", Optional.ofNullable(parent.getKnowledgeTags()).orElse(""));
+        item.put("docId", scope.canonicalDocId);
+        item.put("docName", resolveDocName(docRow, scope.sourceLocation));
+        item.put("sourceType", Optional.ofNullable(docRow)
+                .map(KnowledgeDocumentDO::getSourceType)
+                .filter(text -> !text.isBlank())
+                .orElseGet(() -> scope.parents.stream()
+                        .map(RagParentDO::getSourceType)
+                        .filter(Objects::nonNull)
+                        .filter(text -> !text.isBlank())
+                        .findFirst()
+                        .orElse("LOCAL_VAULT")));
+        item.put("sourceLocation", scope.sourceLocation);
+        item.put("knowledgeTags", scope.parents.stream()
+                .map(RagParentDO::getKnowledgeTags)
+                .filter(Objects::nonNull)
+                .filter(text -> !text.isBlank())
+                .distinct()
+                .collect(Collectors.joining(", ")));
         return Optional.of(item);
     }
 
@@ -121,7 +138,31 @@ public class KnowledgeDocumentService {
         }
         int p = current == null || current <= 0 ? 1 : current;
         int s = size == null || size <= 0 ? 10 : Math.min(size, 100);
-        List<RagChildDO> all = ragChildMapper.selectList(new LambdaQueryWrapper<RagChildDO>().eq(RagChildDO::getParentId, docId));
+        DocumentScope scope = resolveDocumentScope(docId);
+        if (scope == null || scope.parentIds.isEmpty()) {
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("current", p);
+            empty.put("size", s);
+            empty.put("total", 0);
+            empty.put("records", List.of());
+            return empty;
+        }
+        Map<String, RagParentDO> parentMap = scope.parents.stream().collect(Collectors.toMap(
+                RagParentDO::getParentId,
+                item -> item,
+                (left, right) -> left,
+                LinkedHashMap::new
+        ));
+        List<RagChildDO> all = ragChildMapper.selectList(new LambdaQueryWrapper<RagChildDO>().in(RagChildDO::getParentId, scope.parentIds))
+                .stream()
+                .sorted(Comparator
+                        .comparing((RagChildDO item) -> {
+                            RagParentDO parent = parentMap.get(item.getParentId());
+                            return parent == null ? "" : Optional.ofNullable(parent.getSectionPath()).orElse("");
+                        }, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(item -> Optional.ofNullable(item.getChildIndex()).orElse(Integer.MAX_VALUE))
+                        .thenComparing(item -> Optional.ofNullable(item.getChildId()).orElse("")))
+                .collect(Collectors.toList());
         int total = all.size();
         int from = Math.max(0, (p - 1) * s);
         int to = Math.min(total, from + s);
@@ -130,15 +171,17 @@ public class KnowledgeDocumentService {
         for (RagChildDO child : pageItems) {
             KnowledgeChunkCtrlDO ctrl = knowledgeChunkCtrlMapper.selectOne(
                     new LambdaQueryWrapper<KnowledgeChunkCtrlDO>()
-                            .eq(KnowledgeChunkCtrlDO::getDocId, docId)
+                            .eq(KnowledgeChunkCtrlDO::getDocId, scope.canonicalDocId)
                             .eq(KnowledgeChunkCtrlDO::getChunkId, child.getChildId())
                             .last("LIMIT 1")
             );
+            RagParentDO parent = parentMap.get(child.getParentId());
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("chunkId", child.getChildId());
             item.put("childIndex", child.getChildIndex());
             item.put("enabled", ctrl == null || Boolean.TRUE.equals(ctrl.getEnabled()));
             item.put("snippet", Optional.ofNullable(child.getChildText()).map(txt -> txt.length() > 200 ? txt.substring(0, 200) + "..." : txt).orElse(""));
+            item.put("sectionPath", parent == null ? "" : Optional.ofNullable(parent.getSectionPath()).orElse(""));
             records.add(item);
         }
         Map<String, Object> result = new LinkedHashMap<>();
@@ -150,23 +193,27 @@ public class KnowledgeDocumentService {
     }
 
     public boolean setDocumentEnabled(String docId, boolean enabled) {
-        List<RagParentDO> parents = ragParentMapper.selectList(new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getParentId, docId));
-        if (parents.isEmpty()) {
+        DocumentScope scope = resolveDocumentScope(docId);
+        if (scope == null || scope.sourceLocation == null || scope.sourceLocation.isBlank()) {
             return false;
         }
-        RagParentDO parent = parents.get(0);
         KnowledgeDocumentDO existing = knowledgeDocumentMapper.selectOne(
-                new LambdaQueryWrapper<KnowledgeDocumentDO>().eq(KnowledgeDocumentDO::getSourceLocation, parent.getFilePath()).last("LIMIT 1")
+                new LambdaQueryWrapper<KnowledgeDocumentDO>().eq(KnowledgeDocumentDO::getSourceLocation, scope.sourceLocation).last("LIMIT 1")
         );
         if (existing == null) {
             KnowledgeDocumentDO row = new KnowledgeDocumentDO();
             row.setKbId(1L);
-            row.setDocName(Optional.ofNullable(parent.getSectionPath()).orElse("unknown.md"));
+            row.setDocName(resolveDocName(null, scope.sourceLocation));
             row.setStatus("READY");
             row.setEnabled(enabled);
-            row.setSourceType(Optional.ofNullable(parent.getSourceType()).orElse("LOCAL_VAULT"));
-            row.setSourceLocation(parent.getFilePath());
-            row.setChunkCount(ragChildMapper.selectCount(new LambdaQueryWrapper<RagChildDO>().eq(RagChildDO::getParentId, docId)).intValue());
+            row.setSourceType(scope.parents.stream()
+                    .map(RagParentDO::getSourceType)
+                    .filter(Objects::nonNull)
+                    .filter(text -> !text.isBlank())
+                    .findFirst()
+                    .orElse("LOCAL_VAULT"));
+            row.setSourceLocation(scope.sourceLocation);
+            row.setChunkCount(countChunks(scope.parentIds));
             knowledgeDocumentMapper.insert(row);
         } else {
             existing.setEnabled(enabled);
@@ -179,13 +226,12 @@ public class KnowledgeDocumentService {
         if (ingestionTaskService.hasRunningTasks()) {
             return false;
         }
-        List<RagParentDO> parents = ragParentMapper.selectList(new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getParentId, docId));
-        if (parents.isEmpty()) {
+        DocumentScope scope = resolveDocumentScope(docId);
+        if (scope == null || scope.sourceLocation == null || scope.sourceLocation.isBlank()) {
             return false;
         }
-        String filePath = parents.get(0).getFilePath();
-        boolean ok = ingestionService.deleteByFilePath(filePath);
-        knowledgeDocumentMapper.delete(new LambdaQueryWrapper<KnowledgeDocumentDO>().eq(KnowledgeDocumentDO::getSourceLocation, filePath));
+        boolean ok = ingestionService.deleteByFilePath(scope.sourceLocation);
+        knowledgeDocumentMapper.delete(new LambdaQueryWrapper<KnowledgeDocumentDO>().eq(KnowledgeDocumentDO::getSourceLocation, scope.sourceLocation));
         return ok;
     }
 
@@ -193,24 +239,27 @@ public class KnowledgeDocumentService {
         if (ingestionTaskService.hasRunningTasks()) {
             return false;
         }
-        List<RagParentDO> parents = ragParentMapper.selectList(new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getParentId, docId));
-        if (parents.isEmpty()) {
+        DocumentScope scope = resolveDocumentScope(docId);
+        if (scope == null || scope.sourceLocation == null || scope.sourceLocation.isBlank()) {
             return false;
         }
-        String filePath = parents.get(0).getFilePath();
-        return ingestionService.rechunkByFilePath(filePath);
+        return ingestionService.rechunkByFilePath(scope.sourceLocation);
     }
 
     public boolean setChunkEnabled(String docId, String chunkId, boolean enabled) {
+        DocumentScope scope = resolveDocumentScope(docId);
+        if (scope == null || scope.canonicalDocId == null || scope.canonicalDocId.isBlank()) {
+            return false;
+        }
         KnowledgeChunkCtrlDO existing = knowledgeChunkCtrlMapper.selectOne(
                 new LambdaQueryWrapper<KnowledgeChunkCtrlDO>()
-                        .eq(KnowledgeChunkCtrlDO::getDocId, docId)
+                        .eq(KnowledgeChunkCtrlDO::getDocId, scope.canonicalDocId)
                         .eq(KnowledgeChunkCtrlDO::getChunkId, chunkId)
                         .last("LIMIT 1")
         );
         if (existing == null) {
             KnowledgeChunkCtrlDO row = new KnowledgeChunkCtrlDO();
-            row.setDocId(docId);
+            row.setDocId(scope.canonicalDocId);
             row.setChunkId(chunkId);
             row.setEnabled(enabled);
             knowledgeChunkCtrlMapper.insert(row);
@@ -219,6 +268,178 @@ public class KnowledgeDocumentService {
             knowledgeChunkCtrlMapper.updateById(existing);
         }
         return true;
+    }
+
+    private Map<String, Object> buildDocumentItem(Long kbId, String sourceLocation, List<RagParentDO> parents, KnowledgeDocumentDO docRow) {
+        if ((sourceLocation == null || sourceLocation.isBlank()) && docRow == null) {
+            return null;
+        }
+        String canonicalDocId = resolveCanonicalDocId(parents, docRow);
+        if (canonicalDocId == null || canonicalDocId.isBlank()) {
+            return null;
+        }
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("docId", canonicalDocId);
+        item.put("kbId", kbId);
+        item.put("docName", resolveDocName(docRow, sourceLocation));
+        item.put("status", Optional.ofNullable(docRow).map(KnowledgeDocumentDO::getStatus).filter(text -> !text.isBlank()).orElse("READY"));
+        item.put("enabled", docRow == null || Boolean.TRUE.equals(docRow.getEnabled()));
+        item.put("sourceType", Optional.ofNullable(docRow)
+                .map(KnowledgeDocumentDO::getSourceType)
+                .filter(text -> !text.isBlank())
+                .orElseGet(() -> parents.stream()
+                        .map(RagParentDO::getSourceType)
+                        .filter(Objects::nonNull)
+                        .filter(text -> !text.isBlank())
+                        .findFirst()
+                        .orElse("LOCAL_VAULT")));
+        item.put("sourceLocation", sourceLocation == null ? Optional.ofNullable(docRow).map(KnowledgeDocumentDO::getSourceLocation).orElse("") : sourceLocation);
+        item.put("chunkCount", parents.isEmpty()
+                ? Optional.ofNullable(docRow).map(KnowledgeDocumentDO::getChunkCount).orElse(0)
+                : countChunks(parents.stream().map(RagParentDO::getParentId).filter(Objects::nonNull).toList()));
+        item.put("_sortTime", resolveSortTime(docRow, parents));
+        item.put("_searchBlob", buildSearchBlob(docRow, parents, sourceLocation));
+        return item;
+    }
+
+    private boolean matchesDocumentFilters(Map<String, Object> item, String status, String keyword) {
+        if (status != null && !status.isBlank()) {
+            String docStatus = String.valueOf(item.getOrDefault("status", ""));
+            if (!status.equalsIgnoreCase(docStatus)) {
+                return false;
+            }
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String k = keyword.toLowerCase(Locale.ROOT);
+            String searchBlob = String.valueOf(item.getOrDefault("_searchBlob", "")).toLowerCase(Locale.ROOT);
+            return searchBlob.contains(k);
+        }
+        return true;
+    }
+
+    private String buildSearchBlob(KnowledgeDocumentDO docRow, List<RagParentDO> parents, String sourceLocation) {
+        List<String> parts = new ArrayList<>();
+        if (docRow != null) {
+            parts.add(docRow.getDocName());
+            parts.add(docRow.getStatus());
+            parts.add(docRow.getSourceType());
+        }
+        parts.add(sourceLocation);
+        for (RagParentDO parent : parents) {
+            parts.add(parent.getSectionPath());
+            parts.add(parent.getKnowledgeTags());
+            parts.add(parent.getSourceType());
+        }
+        return parts.stream().filter(Objects::nonNull).collect(Collectors.joining(" "));
+    }
+
+    private String resolveDocName(KnowledgeDocumentDO docRow, String sourceLocation) {
+        if (docRow != null && docRow.getDocName() != null && !docRow.getDocName().isBlank()) {
+            return docRow.getDocName();
+        }
+        if (sourceLocation == null || sourceLocation.isBlank()) {
+            return "unknown.md";
+        }
+        int slash = Math.max(sourceLocation.lastIndexOf('/'), sourceLocation.lastIndexOf('\\'));
+        return slash >= 0 ? sourceLocation.substring(slash + 1) : sourceLocation;
+    }
+
+    private int countChunks(List<String> parentIds) {
+        List<String> validParentIds = parentIds == null ? List.of() : parentIds.stream()
+                .filter(Objects::nonNull)
+                .filter(text -> !text.isBlank())
+                .distinct()
+                .toList();
+        if (validParentIds.isEmpty()) {
+            return 0;
+        }
+        return ragChildMapper.selectCount(new LambdaQueryWrapper<RagChildDO>().in(RagChildDO::getParentId, validParentIds)).intValue();
+    }
+
+    private LocalDateTime resolveSortTime(KnowledgeDocumentDO docRow, List<RagParentDO> parents) {
+        LocalDateTime docTime = docRow == null ? null : Optional.ofNullable(docRow.getUpdatedAt()).orElse(docRow.getCreatedAt());
+        LocalDateTime parentTime = parents.stream()
+                .map(parent -> Optional.ofNullable(parent.getUpdatedAt()).orElse(parent.getCreatedAt()))
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        if (docTime == null) {
+            return parentTime;
+        }
+        if (parentTime == null) {
+            return docTime;
+        }
+        return docTime.isAfter(parentTime) ? docTime : parentTime;
+    }
+
+    private String resolveCanonicalDocId(List<RagParentDO> parents, KnowledgeDocumentDO docRow) {
+        Optional<String> parentId = parents.stream()
+                .map(RagParentDO::getParentId)
+                .filter(Objects::nonNull)
+                .filter(text -> !text.isBlank())
+                .sorted()
+                .findFirst();
+        if (parentId.isPresent()) {
+            return parentId.get();
+        }
+        if (docRow != null && docRow.getId() != null) {
+            return "docrow-" + docRow.getId();
+        }
+        return null;
+    }
+
+    private DocumentScope resolveDocumentScope(String docId) {
+        if (docId == null || docId.isBlank()) {
+            return null;
+        }
+        if (docId.startsWith("docrow-")) {
+            try {
+                Long rowId = Long.parseLong(docId.substring("docrow-".length()));
+                KnowledgeDocumentDO docRow = knowledgeDocumentMapper.selectById(rowId);
+                if (docRow == null || docRow.getSourceLocation() == null || docRow.getSourceLocation().isBlank()) {
+                    return null;
+                }
+                List<RagParentDO> parents = ragParentMapper.selectList(
+                        new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getFilePath, docRow.getSourceLocation())
+                );
+                String canonicalDocId = resolveCanonicalDocId(parents, docRow);
+                if (canonicalDocId == null || canonicalDocId.isBlank()) {
+                    canonicalDocId = docId;
+                }
+                return new DocumentScope(canonicalDocId, docRow.getSourceLocation(), parents);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        RagParentDO parent = ragParentMapper.selectOne(
+                new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getParentId, docId).last("LIMIT 1")
+        );
+        if (parent == null || parent.getFilePath() == null || parent.getFilePath().isBlank()) {
+            return null;
+        }
+        List<RagParentDO> parents = ragParentMapper.selectList(
+                new LambdaQueryWrapper<RagParentDO>().eq(RagParentDO::getFilePath, parent.getFilePath())
+        );
+        return new DocumentScope(resolveCanonicalDocId(parents, null), parent.getFilePath(), parents);
+    }
+
+    private static class DocumentScope {
+        private final String canonicalDocId;
+        private final String sourceLocation;
+        private final List<RagParentDO> parents;
+        private final List<String> parentIds;
+
+        private DocumentScope(String canonicalDocId, String sourceLocation, List<RagParentDO> parents) {
+            this.canonicalDocId = canonicalDocId;
+            this.sourceLocation = sourceLocation;
+            this.parents = parents == null ? List.of() : List.copyOf(parents);
+            this.parentIds = this.parents.stream()
+                    .map(RagParentDO::getParentId)
+                    .filter(Objects::nonNull)
+                    .filter(text -> !text.isBlank())
+                    .distinct()
+                    .toList();
+        }
     }
 
     public boolean batchSetChunkEnabled(String docId, Map<String, Boolean> payload) {
