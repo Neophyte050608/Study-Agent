@@ -116,7 +116,7 @@ const handleViewChunks = (docId) => {
   activeTab.value = 'chunks'
 }
 
-const config = ref({ paths: '', ignoreDirs: '' })
+const config = ref({ paths: '', imagePath: '', ignoreDirs: '' })
 const stats = ref({ recentReports: [] })
 const loading = ref(false)
 const syncLoading = ref(false)
@@ -149,7 +149,7 @@ const loadData = async () => {
   }
 }
 
-const handleSync = async ({ pathsText, ignoreDirs }) => {
+const handleSync = async ({ pathsText, imagePath, ignoreDirs }) => {
   const paths = pathsText.split('\n').map((item) => item.trim()).filter(Boolean)
   if (!paths.length) {
     showMessage('请先输入同步路径', 'error')
@@ -157,8 +157,8 @@ const handleSync = async ({ pathsText, ignoreDirs }) => {
   }
   syncLoading.value = true
   try {
-    await knowledgeService.saveConfig({ paths: pathsText, ignoreDirs })
-    config.value = { paths: pathsText, ignoreDirs }
+    await knowledgeService.saveConfig({ paths: pathsText, imagePath, ignoreDirs })
+    config.value = { paths: pathsText, imagePath, ignoreDirs }
 
     let successCount = 0
     let failCount = 0

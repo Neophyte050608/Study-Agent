@@ -37,13 +37,14 @@ public class IngestionService {
     private final VectorStore vectorStore;
     private final SyncIndexMapper syncIndexMapper;
     private final ParentChildIndexService parentChildIndexService;
+    private final ImageService imageService;
     // 注入图谱持久化组件
     private final com.example.interview.graph.TechConceptRepository techConceptRepository;
 
     private volatile SyncSummary lastSummary = new SyncSummary(0, 0, 0, 0, 0, 0, 0);
     private volatile long lastSyncTime = 0L;
 
-    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, ParentChildIndexService parentChildIndexService, com.example.interview.graph.TechConceptRepository techConceptRepository) {
+    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, ParentChildIndexService parentChildIndexService, ImageService imageService, com.example.interview.graph.TechConceptRepository techConceptRepository) {
         this.noteLoader = noteLoader;
         this.documentSplitter = documentSplitter;
         this.knowledgeExtractor = knowledgeExtractor;
@@ -51,6 +52,7 @@ public class IngestionService {
         this.vectorStore = vectorStore;
         this.syncIndexMapper = syncIndexMapper;
         this.parentChildIndexService = parentChildIndexService;
+        this.imageService = imageService;
         this.techConceptRepository = techConceptRepository;
     }
 
@@ -408,6 +410,7 @@ public class IngestionService {
             vectorStore.add(documents);
             lexicalIndexService.upsertDocuments(documents);
             parentChildIndexService.rebuildByChunks(filePath, documents);
+            imageService.indexImagesForDocument(filePath, content, documents);
             
             // GraphRAG: 提取双向链接并写入 Neo4j
             processGraphRelationships(documents);
@@ -439,6 +442,7 @@ public class IngestionService {
             vectorStore.add(documents);
             lexicalIndexService.upsertDocuments(documents);
             parentChildIndexService.rebuildByChunks(filePath, documents);
+            imageService.indexImagesForDocument(filePath, content, documents);
             
             // GraphRAG: 提取双向链接并写入 Neo4j
             processGraphRelationships(documents);
@@ -475,7 +479,8 @@ public class IngestionService {
     }
 
     private List<Document> splitIntoKnowledgeDocuments(String content, String filePath) {
-        ObsidianKnowledgeExtractor.ExtractionResult extractionResult = knowledgeExtractor.extract(content, filePath);
+        String enrichedContent = imageService.enrichMarkdownWithImageSummaries(content, filePath);
+        ObsidianKnowledgeExtractor.ExtractionResult extractionResult = knowledgeExtractor.extract(enrichedContent, filePath);
         if (extractionResult.isEmpty()) {
             return List.of();
         }

@@ -72,8 +72,9 @@ public class RAGService {
     private final RagRetrievalProperties ragRetrievalProperties;
     private final ParentChildRetrievalProperties parentChildRetrievalProperties;
     private final ParentChildIndexService parentChildIndexService;
+    private final ImageService imageService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -89,6 +90,7 @@ public class RAGService {
         this.ragRetrievalProperties = ragRetrievalProperties;
         this.parentChildRetrievalProperties = parentChildRetrievalProperties;
         this.parentChildIndexService = parentChildIndexService;
+        this.imageService = imageService;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -152,6 +154,10 @@ public class RAGService {
             String context = retrievedDocs.stream()
                     .map(Document::getText)
                     .collect(Collectors.joining("\n\n"));
+            List<ImageService.ImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
+            List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(retrievalQuery, containsVisualIntent(retrievalQuery));
+            List<ImageService.ImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
+            String imageContext = buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
             double bestRetrievalScore = bestRetrievalScore(retrievalQuery, retrievedDocs);
             boolean webFallbackUsed = false;
@@ -171,7 +177,7 @@ public class RAGService {
                     new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), webFallbackUsed)
             );
 
-            return new KnowledgePacket(retrievalQuery, retrievedDocs, context, retrievalEvidence, webFallbackUsed);
+            return new KnowledgePacket(retrievalQuery, retrievedDocs, retrievedImages, context, imageContext, retrievalEvidence, webFallbackUsed);
         });
     }
 
@@ -201,14 +207,16 @@ public class RAGService {
     public EvaluationResult evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
         return executeWithinTraceRoot("KNOWLEDGE_EVAL", "Knowledge Evaluation", "Q: " + question, () -> {
             String originalContext = packet == null ? "" : packet.context();
+            String originalImageContext = packet == null ? "" : packet.imageContext();
             String originalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
             String finalContext = truncate(originalContext, 1400);
+            String finalImageContext = truncate(originalImageContext, 600);
             String finalEvidence = truncate(originalEvidence, 900);
             String safeProfileSnapshot = truncate(profileSnapshot, 480);
             String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info(
-                        "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
+                        "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, imageContextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
                         safeLogText(topic, 40),
                         safeLogText(difficultyLevel, 24),
                         safeLogText(followUpState, 24),
@@ -220,6 +228,8 @@ public class RAGService {
                         safeLength(profileSnapshot),
                         safeLength(finalContext),
                         safeLength(originalContext),
+                        safeLength(finalImageContext),
+                        safeLength(originalImageContext),
                         safeLength(finalEvidence),
                         safeLength(originalEvidence),
                         parseEvidenceCatalog(originalEvidence).size(),
@@ -228,7 +238,7 @@ public class RAGService {
                 );
             }
             try {
-                RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalEvidence, normalizedStrategy), 2, "回答评估");
+                RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalImageContext, finalEvidence, normalizedStrategy), 2, "回答评估");
                 return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
             } catch (RuntimeException e) {
                 logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
@@ -268,7 +278,7 @@ public class RAGService {
         }
     }
 
-    private RoutingChatService.RoutingResult generateEvaluationResult(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String retrievalEvidence, String strategyHint) {
+    private RoutingChatService.RoutingResult generateEvaluationResult(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String imageContext, String retrievalEvidence, String strategyHint) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
         observabilityService.startNode(traceId, nodeId, RAGTraceContext.getCurrentNodeId(), "GENERATION", "LLM Evaluation");
@@ -287,6 +297,7 @@ public class RAGService {
             contextMap.put("strategyHint", strategyHint);
             contextMap.put("profileSnapshot", profileSnapshot);
             contextMap.put("context", context);
+            contextMap.put("imageContext", imageContext);
             contextMap.put("retrievalEvidence", retrievalEvidence);
             contextMap.put("cases", cases);
             contextMap.put("question", question);
@@ -873,12 +884,21 @@ public class RAGService {
             long overlap = queryTokens.stream().filter(docTokens::contains).count();
             double overlapRatio = docTokens.isEmpty() ? 0.0 : (double) overlap / (double) Math.min(queryTokens.size(), Math.max(1, docTokens.size()));
             double score = (overlapRatio * 0.7 + (1.0 / (i + 1)) * 0.3) * sourceTypeBoost(doc);
+            doc.getMetadata().put("retrieval_score", score);
             scoreMap.put(doc, score);
         }
         return docs.stream()
                 .sorted((a, b) -> Double.compare(scoreMap.getOrDefault(b, 0.0), scoreMap.getOrDefault(a, 0.0)))
                 .limit(topK)
                 .collect(Collectors.toList());
+    }
+
+    private boolean containsVisualIntent(String query) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+        String normalized = query.toLowerCase(Locale.ROOT);
+        return normalized.contains("图") || normalized.contains("截图") || normalized.contains("架构") || normalized.contains("流程图");
     }
 
     private List<String> tokenize(String text) {
@@ -1842,10 +1862,54 @@ public class RAGService {
     public record KnowledgePacket(
             String retrievalQuery,
             List<Document> retrievedDocs,
+            List<ImageService.ImageResult> retrievedImages,
             String context,
+            String imageContext,
             String retrievalEvidence,
             boolean webFallbackUsed
     ) {
+        public KnowledgePacket(String retrievalQuery,
+                               List<Document> retrievedDocs,
+                               String context,
+                               String retrievalEvidence,
+                               boolean webFallbackUsed) {
+            this(retrievalQuery, retrievedDocs, List.of(), context, "", retrievalEvidence, webFallbackUsed);
+        }
+    }
+
+    private String buildImageContext(List<ImageService.ImageResult> retrievedImages) {
+        if (retrievedImages == null || retrievedImages.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (ImageService.ImageResult image : retrievedImages) {
+            builder.append("[图").append(index++).append("] ")
+                    .append(image.summaryText() == null ? image.imageName() : image.summaryText())
+                    .append(" - 来源: ").append(image.imageName())
+                    .append("\n");
+        }
+        return builder.toString().trim();
+    }
+
+    private List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,
+                                                             List<ImageService.ImageResult> semanticImages) {
+        Map<String, ImageService.ImageResult> merged = new LinkedHashMap<>();
+        if (semanticImages != null) {
+            for (ImageService.ImageResult image : semanticImages) {
+                merged.put(image.imageId(), image);
+            }
+        }
+        if (associatedImages != null) {
+            for (ImageService.ImageResult image : associatedImages) {
+                merged.compute(image.imageId(), (key, existing) ->
+                        existing == null || image.relevanceScore() > existing.relevanceScore() ? image : existing);
+            }
+        }
+        return merged.values().stream()
+                .sorted((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()))
+                .limit(3)
+                .toList();
     }
 
     public record CodingAssessment(

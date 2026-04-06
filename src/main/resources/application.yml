@@ -139,9 +139,28 @@ app:
     notes:
       dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
   ingestion:
+    vault-path: ${APP_INGESTION_VAULT_PATH:}
+    image-path: ${APP_INGESTION_IMAGE_PATH:}
     config:
       paths: ${APP_INGESTION_CONFIG_PATHS:}
+      image-path: ${APP_INGESTION_CONFIG_IMAGE_PATH:}
       ignore-dirs: ${APP_INGESTION_CONFIG_IGNORE_DIRS:}
+  multimodal:
+    image-search-top-k: ${APP_MULTIMODAL_IMAGE_SEARCH_TOP_K:3}
+    milvus:
+      image-collection: ${APP_MULTIMODAL_MILVUS_IMAGE_COLLECTION:interview_images}
+    clip:
+      service-url: ${APP_MULTIMODAL_CLIP_SERVICE_URL:http://localhost:8200}
+    vlm:
+      enabled: ${APP_MULTIMODAL_VLM_ENABLED:false}
+      api-key: ${APP_MULTIMODAL_VLM_API_KEY:}
+      base-url: ${APP_MULTIMODAL_VLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+      model: ${APP_MULTIMODAL_VLM_MODEL:glm-4v}
+    visual:
+      embedding-dimension: ${APP_MULTIMODAL_VISUAL_EMBEDDING_DIMENSION:512}
+  image:
+    visual-embedding:
+      enabled: ${APP_IMAGE_VISUAL_EMBEDDING_ENABLED:false}
 
   interview:
     streaming:

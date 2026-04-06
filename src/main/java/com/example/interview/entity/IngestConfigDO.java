@@ -23,6 +23,8 @@ public class IngestConfigDO {
 
     private String paths;
 
+    private String imagePath;
+
     private String ignoreDirs;
 
     @TableLogic

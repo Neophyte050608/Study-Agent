@@ -22,6 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -352,15 +353,61 @@ public class ChatStreamingService {
         if (result.containsKey("sources")) {
             metadata.put("sources", result.get("sources"));
         }
-        webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+        Object images = result.get("images");
+        if (images instanceof List<?> imageList && !imageList.isEmpty()) {
+            metadata.put("images", images);
+            sendImageEvents(sender, imageList, taskId);
+            webChatService.saveAssistantMessage(sessionId, buildRichContent(replyText, imageList), metadata, "rich");
+            sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+                    "action", "chat",
+                    "result", Map.of("content", replyText, "traceId", traceId, "images", imageList)));
+        } else {
+            webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+            sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+                    "action", "chat",
+                    "result", Map.of("content", replyText, "traceId", traceId)));
+        }
         webChatService.autoTitleIfNeeded(sessionId, content);
-
-        sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
-                "action", "chat",
-                "result", Map.of("content", replyText, "traceId", traceId)));
         sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
         taskManager.unregister(taskId);
         sender.complete();
+    }
+
+    private void sendImageEvents(InterviewSseEmitterSender sender, List<?> images, String taskId) {
+        for (Object image : images) {
+            if (taskManager.isCancelled(taskId)) {
+                return;
+            }
+            sender.sendEvent(InterviewStreamEventType.IMAGE.value(), image);
+        }
+    }
+
+    private String buildRichContent(String text, List<?> images) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("text", text);
+            List<Map<String, Object>> normalizedImages = new java.util.ArrayList<>();
+            int position = text == null ? 0 : text.length();
+            for (Object image : images) {
+                if (image instanceof Map<?, ?> map) {
+                    Map<String, Object> normalized = new LinkedHashMap<>();
+                    normalized.put("imageId", map.get("imageId"));
+                    normalized.put("imageName", map.get("imageName"));
+                    normalized.put("accessUrl", map.get("accessUrl"));
+                    normalized.put("thumbnailUrl", map.get("thumbnailUrl"));
+                    normalized.put("summaryText", map.get("summaryText"));
+                    normalized.put("retrieveChannel", map.get("retrieveChannel"));
+                    normalized.put("position", position);
+                    normalizedImages.add(normalized);
+                } else {
+                    normalizedImages.add(Map.of("position", position, "value", image));
+                }
+            }
+            payload.put("images", normalizedImages);
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception ignored) {
+            return text;
+        }
     }
 
     /**

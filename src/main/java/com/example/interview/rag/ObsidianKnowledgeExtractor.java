@@ -46,6 +46,10 @@ public class ObsidianKnowledgeExtractor {
      * @return 提取结果 (包含 Document 列表)
      */
     public ExtractionResult extract(String markdown, String filePath) {
+        return extract(markdown, filePath, null);
+    }
+
+    public ExtractionResult extract(String markdown, String filePath, String imagePath) {
         if (markdown == null || markdown.isBlank()) {
             return ExtractionResult.empty();
         }
@@ -85,6 +89,7 @@ public class ObsidianKnowledgeExtractor {
         document.getMetadata().put("source_type", sourceType);
         document.getMetadata().put("knowledge_tags", String.join(",", knowledgeTags));
         document.getMetadata().put("wiki_links", String.join(",", wikiLinks)); // 将双向链接也存入元数据，供后续 GraphRAG 消费
+        document.getMetadata().put("image_base_path", imagePath == null ? "" : imagePath);
         return new ExtractionResult(List.of(document));
     }
 

@@ -16,8 +16,5 @@ learning_profiles.json
 learning_profiles_v2.json
 learning_profiles_v2.json.tmp
 frontend/node_modules/
-/.ccb/.claude-session
-/.ccb/.codex-session
-/.ccb/.gemini-session
-/.ccb/.opencode-session
-/.ccb/ccb.config
+/context/
+/.ccb/

@@ -188,6 +188,7 @@
                   <div v-if="msg.role === 'user'" class="whitespace-pre-wrap leading-relaxed">{{ msg.content }}</div>
                   <div v-else class="markdown-body text-[15px] leading-relaxed">
                     <div v-html="renderMarkdown(msg.content)"></div>
+                    <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${idx}-${imageIdx}`" :image="image" />
                     <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
                   </div>
                 </div>
@@ -205,6 +206,7 @@
                    </div>
                    <div v-else class="markdown-body text-[15px] leading-relaxed">
                      <span v-html="renderMarkdown(streamingContent)"></span>
+                     <ImageCard v-for="(image, imageIdx) in streamingImages" :key="`stream-${imageIdx}`" :image="image" />
                      <span class="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse align-middle"></span>
                    </div>
                 </div>
@@ -257,6 +259,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import QuizCard from './chat/QuizCard.vue'
+import ImageCard from './chat/ImageCard.vue'
 import {
   createChatSession,
   listChatSessions,
@@ -285,6 +288,7 @@ const messages = ref([])
 const inputContent = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
+const streamingImages = ref([])
 const currentQuizPayload = ref(null)
 const streamTaskId = ref(null)
 const streamHandle = ref(null)
@@ -375,6 +379,18 @@ const selectSession = async (id) => {
         try {
           const quizPayload = JSON.parse(msg.content)
           return { ...msg, quizPayload, content: '' }
+        } catch (e) {
+          // JSON 解析失败，保持原样
+        }
+      }
+      if (msg.contentType === 'rich' && msg.content) {
+        try {
+          const richPayload = JSON.parse(msg.content)
+          return {
+            ...msg,
+            content: richPayload?.text || '',
+            images: Array.isArray(richPayload?.images) ? richPayload.images : []
+          }
         } catch (e) {
           // JSON 解析失败，保持原样
         }
@@ -485,6 +501,7 @@ const handleSend = async () => {
 
   isStreaming.value = true
   streamingContent.value = ''
+  streamingImages.value = []
   currentQuizPayload.value = null
   streamTaskId.value = null
 
@@ -499,6 +516,12 @@ const handleSend = async () => {
       },
       onQuiz: (payload) => {
         currentQuizPayload.value = payload
+      },
+      onImage: (payload) => {
+        if (payload) {
+          streamingImages.value.push(payload)
+          scrollToBottom()
+        }
       },
       onMessage: (msg) => {
         if (typeof msg === 'object' && msg !== null) {
@@ -518,9 +541,11 @@ const handleSend = async () => {
         messages.value.push({ 
           role: 'assistant', 
           content: streamingContent.value,
+          images: [...streamingImages.value],
           quizPayload: currentQuizPayload.value 
         })
         streamingContent.value = ''
+        streamingImages.value = []
         currentQuizPayload.value = null
         isStreaming.value = false
         streamHandle.value = null
@@ -531,6 +556,7 @@ const handleSend = async () => {
         console.error('Stream error:', err)
         messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[生成出错]**' })
         streamingContent.value = ''
+        streamingImages.value = []
         isStreaming.value = false
         streamHandle.value = null
         showError('流式生成出错')
@@ -568,10 +594,15 @@ const handleStop = async () => {
   if (isStreaming.value) {
     messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[已停止]**' })
     streamingContent.value = ''
+    streamingImages.value = []
     isStreaming.value = false
   }
   scrollToBottom()
 }
+
+watch(() => messages.value.length, () => {
+  scrollToBottom()
+})
 
 </script>
 

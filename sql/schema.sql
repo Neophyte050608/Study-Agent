@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS `t_ingest_config` (
     `config_key` VARCHAR(128) NOT NULL COMMENT '配置唯一键',
     `paths` TEXT COMMENT '知识库路径配置',
     `ignore_dirs` VARCHAR(1000) COMMENT '忽略目录（逗号分隔）',
+    `image_path` TEXT COMMENT '图片附件目录路径',
     `deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -215,6 +216,7 @@ CREATE TABLE IF NOT EXISTS `t_rag_parent` (
     `section_path` VARCHAR(512) COMMENT '章节路径',
     `source_type` VARCHAR(64) COMMENT '来源类型',
     `knowledge_tags` VARCHAR(255) COMMENT '知识标签',
+    `image_refs` JSON COMMENT '关联图片ID列表',
     `parent_text` MEDIUMTEXT COMMENT '父文档内容',
     `parent_hash` VARCHAR(128) COMMENT '父文档哈希',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -223,6 +225,44 @@ CREATE TABLE IF NOT EXISTS `t_rag_parent` (
     UNIQUE KEY `uk_parent_id` (`parent_id`),
     KEY `idx_parent_file_path` (`file_path`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG父文档索引表';
+
+CREATE TABLE IF NOT EXISTS `t_image_metadata` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `image_id` VARCHAR(128) NOT NULL COMMENT '图片唯一ID (SHA256(file_path))',
+    `image_name` VARCHAR(255) NOT NULL COMMENT '原始文件名',
+    `file_path` VARCHAR(512) NOT NULL COMMENT '文件绝对路径',
+    `relative_path` VARCHAR(512) COMMENT '相对 vault 路径',
+    `summary_text` TEXT COMMENT '图片语义摘要',
+    `summary_status` VARCHAR(32) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/PROCESSING/COMPLETED/FAILED',
+    `mime_type` VARCHAR(64) COMMENT 'MIME 类型',
+    `width` INT COMMENT '图片宽度',
+    `height` INT COMMENT '图片高度',
+    `file_size` BIGINT COMMENT '文件大小',
+    `file_hash` VARCHAR(128) COMMENT '文件内容 MD5',
+    `text_vector_id` VARCHAR(128) COMMENT '文本向量ID',
+    `visual_vector_id` VARCHAR(128) COMMENT '视觉向量ID',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_image_id` (`image_id`),
+    KEY `idx_image_name` (`image_name`),
+    KEY `idx_file_hash` (`file_hash`),
+    KEY `idx_summary_status` (`summary_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图片元数据表';
+
+CREATE TABLE IF NOT EXISTS `t_text_image_relation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `text_chunk_id` VARCHAR(128) NOT NULL COMMENT '文本块ID',
+    `parent_doc_id` VARCHAR(128) NOT NULL COMMENT '父文档ID',
+    `image_id` VARCHAR(128) NOT NULL COMMENT '图片ID',
+    `position_in_text` INT COMMENT '图片引用位置',
+    `ref_syntax` VARCHAR(512) COMMENT '原始引用语法',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_chunk_image` (`text_chunk_id`, `image_id`),
+    KEY `idx_parent_doc` (`parent_doc_id`),
+    KEY `idx_image` (`image_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文本图片关联表';
 
 -- 创建 RAG Child 表
 CREATE TABLE IF NOT EXISTS `t_rag_child` (

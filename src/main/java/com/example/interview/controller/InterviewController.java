@@ -1303,6 +1303,7 @@ public class InterviewController {
         return ResponseEntity.ok(Map.of(
                 "message", "success",
                 "paths", saved.get("paths"),
+                "imagePath", saved.get("imagePath"),
                 "ignoreDirs", saved.get("ignoreDirs")
         ));
     }

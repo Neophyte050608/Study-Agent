@@ -4,6 +4,7 @@ public enum InterviewStreamEventType {
     META("meta"),
     PROGRESS("progress"),
     MESSAGE("message"),
+    IMAGE("image"),
     FINISH("finish"),
     CANCEL("cancel"),
     ERROR("error"),

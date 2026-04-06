@@ -18,6 +18,7 @@ export const knowledgeService = {
     const res = await loadIngestConfig()
     return {
       paths: res?.paths || '',
+      imagePath: res?.imagePath || '',
       ignoreDirs: res?.ignoreDirs || ''
     }
   },

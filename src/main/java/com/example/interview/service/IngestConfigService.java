@@ -19,15 +19,18 @@ public class IngestConfigService {
 
     private final IngestConfigMapper ingestConfigMapper;
     private final String defaultPaths;
+    private final String defaultImagePath;
     private final String defaultIgnoreDirs;
 
     public IngestConfigService(
             IngestConfigMapper ingestConfigMapper,
             @Value("${app.ingestion.config.paths:}") String defaultPaths,
+            @Value("${app.ingestion.config.image-path:}") String defaultImagePath,
             @Value("${app.ingestion.config.ignore-dirs:}") String defaultIgnoreDirs
     ) {
         this.ingestConfigMapper = ingestConfigMapper;
         this.defaultPaths = defaultPaths == null ? "" : defaultPaths;
+        this.defaultImagePath = defaultImagePath == null ? "" : defaultImagePath;
         this.defaultIgnoreDirs = defaultIgnoreDirs == null ? "" : defaultIgnoreDirs;
     }
 
@@ -42,11 +45,13 @@ public class IngestConfigService {
         if (configDO == null) {
             return Map.of(
                     "paths", defaultPaths,
+                    "imagePath", defaultImagePath,
                     "ignoreDirs", defaultIgnoreDirs
             );
         }
         return Map.of(
                 "paths", normalize(configDO.getPaths()),
+                "imagePath", normalize(configDO.getImagePath()),
                 "ignoreDirs", normalize(configDO.getIgnoreDirs())
         );
     }
@@ -57,6 +62,7 @@ public class IngestConfigService {
      */
     public Map<String, String> saveConfig(Map<String, String> payload) {
         String paths = payload == null ? "" : normalize(payload.get("paths"));
+        String imagePath = payload == null ? "" : normalize(payload.get("imagePath"));
         String ignoreDirs = payload == null ? "" : normalize(payload.get("ignoreDirs"));
         IngestConfigDO existing = ingestConfigMapper.selectOne(
                 Wrappers.<IngestConfigDO>lambdaQuery().eq(IngestConfigDO::getConfigKey, DEFAULT_CONFIG_KEY)
@@ -65,15 +71,18 @@ public class IngestConfigService {
             IngestConfigDO created = new IngestConfigDO();
             created.setConfigKey(DEFAULT_CONFIG_KEY);
             created.setPaths(paths);
+            created.setImagePath(imagePath);
             created.setIgnoreDirs(ignoreDirs);
             ingestConfigMapper.insert(created);
         } else {
             existing.setPaths(paths);
+            existing.setImagePath(imagePath);
             existing.setIgnoreDirs(ignoreDirs);
             ingestConfigMapper.updateById(existing);
         }
         return Map.of(
                 "paths", paths,
+                "imagePath", imagePath,
                 "ignoreDirs", ignoreDirs
         );
     }

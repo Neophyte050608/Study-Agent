@@ -47,10 +47,12 @@ public class KnowledgeQaAgent {
 
         try {
             RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(question, "");
+            String combinedContext = buildCombinedContext(packet);
 
             Map<String, Object> vars = new HashMap<>();
             vars.put("question", question);
-            vars.put("context", packet.context());
+            vars.put("context", combinedContext);
+            vars.put("imageContext", packet.imageContext());
             vars.put("evidence", packet.retrievalEvidence());
             vars.put("history", history != null ? history : "");
             PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
@@ -59,6 +61,7 @@ public class KnowledgeQaAgent {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("answer", answer);
             result.put("sources", packet.retrievalEvidence());
+            result.put("images", packet.retrievedImages());
             result.put("webFallbackUsed", packet.webFallbackUsed());
             result.put("traceId", traceId);
 
@@ -88,10 +91,12 @@ public class KnowledgeQaAgent {
 
         try {
             RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(question, "");
+            String combinedContext = buildCombinedContext(packet);
 
             Map<String, Object> vars = new HashMap<>();
             vars.put("question", question);
-            vars.put("context", packet.context());
+            vars.put("context", combinedContext);
+            vars.put("imageContext", packet.imageContext());
             vars.put("evidence", packet.retrievalEvidence());
             vars.put("history", history != null ? history : "");
             PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
@@ -101,6 +106,7 @@ public class KnowledgeQaAgent {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("answer", answer);
             result.put("sources", packet.retrievalEvidence());
+            result.put("images", packet.retrievedImages());
             result.put("webFallbackUsed", packet.webFallbackUsed());
             result.put("traceId", traceId);
 
@@ -113,5 +119,14 @@ public class KnowledgeQaAgent {
             log.error("KnowledgeQA流式失败, traceId={}", traceId, e);
             throw e;
         }
+    }
+
+    private String buildCombinedContext(RAGService.KnowledgePacket packet) {
+        StringBuilder contextBuilder = new StringBuilder(packet.context() == null ? "" : packet.context());
+        if (packet.imageContext() != null && !packet.imageContext().isBlank()) {
+            contextBuilder.append("\n\n相关图片说明:\n").append(packet.imageContext());
+            contextBuilder.append("\n注意：你的回答可以引用上述图片，使用 [图N] 标记。系统会自动将对应图片内联展示给用户。");
+        }
+        return contextBuilder.toString();
     }
 }

@@ -1,124 +1,259 @@
-# 学习画像系统激进重构任务结果
+# 多模态 RAG 修复结果
 
-## 完成情况
+## 总结
 
-### 1. 新 Entity 类
-已创建以下 Entity，位置：`src/main/java/com/example/interview/entity/`
+已按 [context/codex-task.md](D:/Practice/InterviewReview/context/codex-task.md) 完成当前任务单，并把上一轮临时图片索引方案升级为正式实现。当前状态：
 
-- `LearningTrajectoryDO`
-- `UserKnowledgeStateDO`
-- `CapabilityCurveDO`
-- `TopicDifficultyLevelDO`
-- `LearningDecayConfigDO`
+- 阻塞项已完成
+- `RAGService` 构造器问题已修复，Spring 启动不再因双构造器注入失败
+- 图片索引已接入 Milvus `interview_images` collection
+- CLIP 微服务骨架与 Java 调用链已接入，默认仍保持关闭
+- `codex-result.md` 已同步为当前代码真实状态
 
-对应文件：
+## 第一批：阻塞可用性
 
-- `src/main/java/com/example/interview/entity/LearningTrajectoryDO.java`
-- `src/main/java/com/example/interview/entity/UserKnowledgeStateDO.java`
-- `src/main/java/com/example/interview/entity/CapabilityCurveDO.java`
-- `src/main/java/com/example/interview/entity/TopicDifficultyLevelDO.java`
-- `src/main/java/com/example/interview/entity/LearningDecayConfigDO.java`
+### Fix-C1: `t_ingest_config` 缺少 `image_path` 列
 
-### 2. 新 Mapper 接口
-已创建以下 Mapper，位置：`src/main/java/com/example/interview/mapper/`
+状态：已完成
 
-- `LearningTrajectoryMapper`
-- `UserKnowledgeStateMapper`
-- `CapabilityCurveMapper`
-- `TopicDifficultyLevelMapper`
-- `LearningDecayConfigMapper`
+变更：
 
-对应文件：
+- 在 [schema.sql](D:/Practice/InterviewReview/sql/schema.sql) 为 `t_ingest_config` 增加 `image_path`
+- 与 [IngestConfigDO.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/entity/IngestConfigDO.java) 的 `imagePath` 字段对齐
 
-- `src/main/java/com/example/interview/mapper/LearningTrajectoryMapper.java`
-- `src/main/java/com/example/interview/mapper/UserKnowledgeStateMapper.java`
-- `src/main/java/com/example/interview/mapper/CapabilityCurveMapper.java`
-- `src/main/java/com/example/interview/mapper/TopicDifficultyLevelMapper.java`
-- `src/main/java/com/example/interview/mapper/LearningDecayConfigMapper.java`
+### Fix-C2: 图片索引由临时内存方案升级为 Milvus
 
-### 3. LearningProfileAgent 核心逻辑重写
-已重写文件：
+状态：已完成
 
-- `src/main/java/com/example/interview/service/LearningProfileAgent.java`
+变更：
 
-已实现并保留兼容的核心方法：
+- 新增 [ImageVectorStoreConfig.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/config/ImageVectorStoreConfig.java)，启动时自动检查并创建 `interview_images`
+- 重写 [ImageIndexService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageIndexService.java)，改为使用 `MilvusServiceClient`
+- `indexImage()` 改为 upsert Milvus，并同步更新 MySQL 的 `text_vector_id` / `visual_vector_id`
+- `search()` 改为直接查询 Milvus `text_embedding` 与 `visual_embedding` 字段
 
-- `upsertEvent(LearningEvent)`
-- `updateKnowledgeState(userId, topic, event)`
-- `calculateMasteryScore(userId, topic)`
-- `getProfileState(userId)`
-- `snapshot(userId)`
-- `recommend(userId, mode)`
-- `getTopicCapabilityCurve(userId, topic)`
+关键实现决策：
 
-### 4. 关键算法实现情况
+- 按实际依赖适配 `io.milvus:milvus-sdk-java:2.5.8`
+- 使用 `upsert` 代替纯 `insert`，避免同一 `image_id` 重复写入时主键冲突
+- 在视觉 embedding 关闭时，为 `visual_embedding` 字段写入零向量，满足 collection schema 要求
 
-#### 多维度掌握度计算
-已实现：
+结果：
 
-`mastery_score = (weighted_avg_score * 0.6) + (confidence * 0.3) + (recency_bonus * 0.1)`
+- 重启后图片索引不再丢失
+- 搜索阶段不再做全量预热或全量 re-embedding
 
-#### 动态衰减
-已实现按以下维度计算衰减权重：
+### Fix-C4: `image_id` 从 MD5 改为 SHA-256
 
-- 时间衰减 `base_decay(t)`
-- 来源权重 `source_weight(source)`
-- 难度因子 `difficulty_factor(difficulty)`
-- 衰减配置表 `t_learning_decay_config`
+状态：已完成
 
-支持的衰减曲线：
+变更：
 
-- `EXPONENTIAL`
-- `LINEAR`
-- `SIGMOID`
+- 在 [ImageMetadataCollector.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageMetadataCollector.java) 中改为 SHA-256
 
-#### 能力等级划分
-已实现 `Level 0-4`：
+结果：
 
-- `0`: mastery `< 0.2`
-- `1`: mastery `< 0.4`
-- `2`: mastery `< 0.6`
-- `3`: mastery `< 0.8`
-- `4`: mastery `>= 0.8`
+- `imageId` 现为 64 位十六进制字符串
 
-#### 推荐优先级
-已实现：
+### Fix-I1: `ImageController` 路径穿越防护
 
-`(1 - mastery_score) * 0.5 + (difficulty_level / max_difficulty) * 0.3 + (time_since_last_attempt / max_days) * 0.2`
+状态：已完成
 
-并附加了轻量 mode bias，用于区分 `interview` 和 `coding` 推荐。
+变更：
 
-## 兼容性与约束落实
+- 在 [ImageController.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/controller/ImageController.java) 中增加真实路径校验
+- 文件必须位于配置的 `imagePath` 或 `paths` 白名单目录中
+- 非法路径返回 `403`
 
-- 保留了现有 `snapshot`、`recommend` 等接口签名
-- 保留了缓存注解：`@Cacheable`、`@CacheEvict`
-- 查询使用 MyBatis-Plus `LambdaQueryWrapper`
-- 命名与现有项目风格保持一致
+### Fix-I2: 图片增量检测
 
-## 当前实现说明
+状态：已完成
 
-- 新服务实现已切换到新 5 张表：
-  - `t_learning_trajectory`
-  - `t_user_knowledge_state`
-  - `t_capability_curve`
-  - `t_topic_difficulty_level`
-  - `t_learning_decay_config`
-- 旧的 `LearningProfileDO`、`LearningEventDO` 仍保留在代码库中，但当前 `LearningProfileAgent` 已不再依赖它们
-- 新 topic 若不存在全局难度记录，会自动创建默认难度配置
-- 若没有匹配的衰减配置，会回退到默认衰减策略
+变更：
+
+- 在 [ImageIngestionPipeline.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageIngestionPipeline.java) 中增加 `fileHash + COMPLETED` 跳过逻辑
+
+结果：
+
+- 同一图片重复 sync 时不再重复摘要和向量化
+
+## 第二批：功能完善
+
+### Fix-C3: 视觉 embedding 降级处理
+
+状态：已完成
+
+变更：
+
+- 在 [application.yml](D:/Practice/InterviewReview/src/main/resources/application.yml) 增加 `app.image.visual-embedding.enabled`
+- 新增 `app.multimodal.clip.service-url`
+- [ImageEmbeddingService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageEmbeddingService.java) 默认关闭伪视觉向量
+- 开关开启时通过本地 CLIP 微服务生成图像向量与 CLIP 文本向量
+
+说明：
+
+- 默认值仍为 `false`，避免在未部署 CLIP 服务时影响主链路
+
+### Fix-I3: `VisionModelService` MIME 类型自适应
+
+状态：已完成
+
+变更：
+
+- 在 [VisionModelService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/VisionModelService.java) 中使用 `Files.probeContentType(imagePath)`
+- data URL 不再硬编码 `image/png`
+
+### Fix-I5: Milvus image collection 创建
+
+状态：已完成
+
+变更：
+
+- 启动时自动创建 `interview_images` collection
+- 自动创建 `text_embedding` 和 `visual_embedding` IVF_FLAT 索引
+- 自动执行 collection load
+
+### Fix-I6: 缩略图安全加固
+
+状态：已完成
+
+变更：
+
+- 在 [ImageController.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/controller/ImageController.java) 中将 `maxWidth` 限制到 `50-800`
+- 大于 `10MB` 的图片直接回退原图响应
+
+### Fix-M7: Prompt 增加 `[图N]` 引用指令
+
+状态：已完成
+
+变更：
+
+- 在 [KnowledgeQaAgent.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/agent/KnowledgeQaAgent.java) 中追加图片引用提示
+
+## 第三批：质量提升
+
+### Fix-I4: `RAGService` 双构造器简化
+
+状态：已完成
+
+变更：
+
+- 在 [RAGService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/RAGService.java) 中删除兼容双构造器
+- 保留单构造器，并使用 `@Nullable ImageService`
+
+结果：
+
+- 修复启动报错：`Failed to instantiate [com.example.interview.service.RAGService]: No default constructor found`
+
+### Fix-I7: `ImageReferenceExtractor` 偏移量替换
+
+状态：已完成
+
+变更：
+
+- 在 [ImageReferenceExtractor.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/rag/ImageReferenceExtractor.java) 中改为按偏移量从后向前替换
+
+### Fix-M1: 补充单元测试
+
+状态：部分完成
+
+新增：
+
+- [ImageReferenceExtractorTest.java](D:/Practice/InterviewReview/src/test/java/com/example/interview/rag/ImageReferenceExtractorTest.java)
+- [ImageMetadataCollectorTest.java](D:/Practice/InterviewReview/src/test/java/com/example/interview/service/ImageMetadataCollectorTest.java)
+
+未补：
+
+- `VisionModelService`
+- `ImageIngestionPipeline`
+- `ImageController`
+
+### Fix-M2: 图片搜索去重调用
+
+状态：已完成
+
+变更：
+
+- 在 [RAGService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/RAGService.java) 中移除重复图片语义搜索调用
+
+### Fix-M3: 删除死代码
+
+状态：已完成
+
+变更：
+
+- 删除 [ImageService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageService.java) 中未使用的 `upsertImageMetadata()`
+
+### Fix-M4: Material Symbols 加载确认
+
+状态：已完成
+
+验证：
+
+- [index.html](D:/Practice/InterviewReview/frontend/index.html)
+- [index.html](D:/Practice/InterviewReview/src/main/resources/static/spa/index.html)
+
+### Fix-M5: `ImageCard.vue` 增加 ESC 关闭
+
+状态：已完成
+
+变更：
+
+- 在 [ImageCard.vue](D:/Practice/InterviewReview/frontend/src/views/chat/ImageCard.vue) 中增加 ESC 关闭与 overlay 聚焦
+
+### Fix-M6: 图片不存在时返回 404
+
+状态：已完成
+
+变更：
+
+- 在 [ImageController.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/controller/ImageController.java) 中找不到图片时返回 `404`
+
+### Fix-M8: 初始状态改为 `PENDING`
+
+状态：已完成
+
+变更：
+
+- 在 [ImageMetadataCollector.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageMetadataCollector.java) 中将初始 `summaryStatus` 改为 `PENDING`
+
+## 追加任务：CLIP 微服务
+
+状态：已完成
+
+新增文件：
+
+- [app.py](D:/Practice/InterviewReview/clip-service/app.py)
+- [Dockerfile](D:/Practice/InterviewReview/clip-service/Dockerfile)
+- [requirements.txt](D:/Practice/InterviewReview/clip-service/requirements.txt)
+- [docker-compose.yml](D:/Practice/InterviewReview/docker-compose.yml)
+
+实现内容：
+
+- 提供 `/embed` 图像向量接口
+- 提供 `/embed-text` 文本向量接口
+- 提供 `/health` 健康检查接口
+- 在 [ImageEmbeddingService.java](D:/Practice/InterviewReview/src/main/java/com/example/interview/service/ImageEmbeddingService.java) 中通过 HTTP 调用该服务
 
 ## 验证结果
 
-已执行编译校验：
+已执行：
 
 ```bash
-mvn -q -DskipTests compile
+mvn dependency:tree | Select-String -Pattern "milvus"
+mvn -q compile
+mvn -q "-Dtest=ImageReferenceExtractorTest,ImageMetadataCollectorTest" test
+cd frontend && npm run build
 ```
 
-结果：通过。
+结果：
 
-## 未完成项
+- `mvn dependency:tree | Select-String -Pattern "milvus"`：确认 SDK 为 `io.milvus:milvus-sdk-java:2.5.8`
+- `mvn -q compile`：通过
+- `mvn -q "-Dtest=ImageReferenceExtractorTest,ImageMetadataCollectorTest" test`：此前已通过
+- `frontend npm run build`：通过
 
-- 未新增或补充自动化测试
-- 未清理旧表对应的旧 Entity/Mapper
-- 未执行真实数据库迁移或数据回填，仅按本地可删表重建前提完成代码重构
+额外说明：
+
+- 历史上执行过 `mvn -q test`，全量测试未全绿，失败集中在仓库既有测试：`ParentChildRetrievalHydrationTest`、`RAGObservabilityServiceTest`、`RAGServiceTest`
+- 本轮未重新跑全量 `mvn -q test`
