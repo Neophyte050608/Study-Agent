@@ -10,7 +10,9 @@ import {
   setDocumentEnabled,
   removeDocument,
   rechunkDocument,
-  setChunkEnabled
+  setChunkEnabled,
+  loadLocalKnowledgeIndexStatus,
+  buildLocalKnowledgeIndex
 } from '../api/notes'
 
 export const knowledgeService = {
@@ -66,5 +68,11 @@ export const knowledgeService = {
   },
   async setChunkEnabled(docId, chunkId, enabled) {
     return await setChunkEnabled(docId, chunkId, enabled)
+  },
+  async getLocalIndexStatus() {
+    return await loadLocalKnowledgeIndexStatus()
+  },
+  async buildLocalIndex(payload) {
+    return await buildLocalKnowledgeIndex(payload)
   }
 }

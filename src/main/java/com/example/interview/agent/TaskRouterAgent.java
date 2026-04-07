@@ -15,6 +15,7 @@ import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.modelrouting.TimeoutHint;
 import com.example.interview.service.IntentTreeRoutingService;
+import com.example.interview.service.KnowledgeRetrievalMode;
 import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.LearningSource;
@@ -129,7 +130,8 @@ public class TaskRouterAgent {
                 case PROFILE_TRAINING_PLAN_QUERY -> TaskResponse.ok(routeProfileTrainingPlan(request.payload(), request.context())); // 查询训练计划
                 case KNOWLEDGE_QA -> TaskResponse.ok(knowledgeQaAgent.execute(
                         readText(request.payload(), "query"),
-                        readText(request.context(), "history")
+                        readText(request.context(), "history"),
+                        resolveKnowledgeRetrievalMode(request.context())
                 ));
             };
             
@@ -516,6 +518,10 @@ public class TaskRouterAgent {
 
     private String resolveReplyTo(Map<String, Object> context) {
         return readText(context, "replyTo");
+    }
+
+    private KnowledgeRetrievalMode resolveKnowledgeRetrievalMode(Map<String, Object> context) {
+        return KnowledgeRetrievalMode.fromNullable(readText(context, "retrievalMode"), null);
     }
 
     private void publishReply(TaskResponse response, TaskType taskType, String replyTo, String correlationId, String traceId) {

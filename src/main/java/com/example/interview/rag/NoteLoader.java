@@ -45,10 +45,30 @@ public class NoteLoader {
      * @return 资源列表
      */
     public List<Resource> loadNotes(String vaultPath, List<String> ignoredDirs) {
+        return loadNotes(vaultPath, null, ignoredDirs);
+    }
+
+    /**
+     * 指定包含目录与忽略目录加载笔记。
+     *
+     * @param vaultPath 笔记库根路径
+     * @param includeDirs 允许纳入的相对目录；为空时表示扫描整个 vault
+     * @param ignoredDirs 额外忽略目录
+     * @return 资源列表
+     */
+    public List<Resource> loadNotes(String vaultPath, List<String> includeDirs, List<String> ignoredDirs) {
         logger.info("Scanning for markdown files in: {}", vaultPath);
         Path root = Paths.get(vaultPath);
         Set<String> ignored = new HashSet<>();
         ignored.addAll(DEFAULT_IGNORED_DIRS.stream().map(String::toLowerCase).collect(Collectors.toSet()));
+        Set<String> includes = new HashSet<>();
+        if (includeDirs != null) {
+            includes.addAll(includeDirs.stream()
+                    .filter(item -> item != null && !item.isBlank())
+                    .map(String::trim)
+                    .map(item -> item.replace("\\", "/").toLowerCase())
+                    .collect(Collectors.toSet()));
+        }
         if (ignoredDirs != null) {
             ignored.addAll(ignoredDirs.stream()
                     .filter(item -> item != null && !item.isBlank())
@@ -59,6 +79,7 @@ public class NoteLoader {
         try (Stream<Path> paths = Files.walk(Paths.get(vaultPath))) {
             return paths
                     .filter(Files::isRegularFile)
+                    .filter(path -> isIncluded(path, root, includes))
                     .filter(path -> !isIgnored(path, root, ignored))
                     .filter(path -> path.toString().endsWith(".md"))
                     .map(FileSystemResource::new)
@@ -77,6 +98,22 @@ public class NoteLoader {
         for (Path part : relative) {
             String name = part.toString();
             if (ignored.contains(name.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 检查路径是否命中允许纳入的目录。
+     */
+    private boolean isIncluded(Path filePath, Path root, Set<String> includes) {
+        if (includes == null || includes.isEmpty()) {
+            return true;
+        }
+        String relative = root.relativize(filePath).toString().replace("\\", "/").toLowerCase();
+        for (String include : includes) {
+            if (relative.equals(include) || relative.startsWith(include + "/")) {
                 return true;
             }
         }

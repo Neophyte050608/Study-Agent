@@ -58,6 +58,64 @@
           </div>
         </div>
 
+        <div class="grid grid-cols-3 gap-6">
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">执行路径</div>
+            <div class="flex flex-wrap gap-2">
+              <span v-if="traceSummary.usesLocalGraph" class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-cyan-50 text-cyan-700 border border-cyan-200">
+                Local Graph
+              </span>
+              <span v-if="traceSummary.usesRag" class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-indigo-50 text-indigo-700 border border-indigo-200">
+                RAG
+              </span>
+              <span v-if="!traceSummary.usesLocalGraph && !traceSummary.usesRag" class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                Unknown
+              </span>
+            </div>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Fallback</div>
+            <div class="flex flex-wrap gap-2">
+              <span v-if="traceSummary.fallbackNodes.length" class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-amber-50 text-amber-700 border border-amber-200">
+                {{ traceSummary.fallbackNodes.length }} triggered
+              </span>
+              <span v-else class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                none
+              </span>
+            </div>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">异常节点</div>
+            <div class="flex flex-wrap gap-2">
+              <span v-if="traceSummary.failedNodes.length" class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-red-50 text-red-700 border border-red-200">
+                {{ traceSummary.failedNodes.length }} failed
+              </span>
+              <span v-else class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                none
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="traceSummary.fallbackNodes.length || traceSummary.failedNodes.length" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+              <span class="material-symbols-outlined text-amber-600 text-lg">warning</span>
+              风险提示
+            </h3>
+          </div>
+          <div class="p-5 space-y-3">
+            <div v-if="traceSummary.fallbackNodes.length" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              本次链路发生 fallback，节点：
+              {{ traceSummary.fallbackNodes.map(node => node.nodeName).join(' / ') }}
+            </div>
+            <div v-if="traceSummary.failedNodes.length" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              检测到失败节点：
+              {{ traceSummary.failedNodes.map(node => node.nodeName).join(' / ') }}
+            </div>
+          </div>
+        </div>
+
         <!-- Waterfall Chart Card -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -93,15 +151,15 @@
 
                   <!-- Type Badge -->
                   <div class="w-24 shrink-0">
-                    <span class="px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-tighter bg-slate-100 text-slate-500 border border-slate-200">
-                      {{ node.nodeType }}
+                    <span class="px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-tighter border" :class="getNodeTypeBadgeClass(node.nodeType)">
+                      {{ formatNodeType(node.nodeType) }}
                     </span>
                   </div>
 
                   <!-- Bar -->
                   <div class="flex-1 h-6 relative bg-slate-50/50 rounded-sm overflow-hidden border border-slate-100/50">
                     <div class="absolute top-1 bottom-1 rounded-sm transition-all duration-500 shadow-sm"
-                         :class="getNodeBarColor(node.status)"
+                         :class="getNodeBarColor(node.status, node.nodeType)"
                          :style="{ left: `${node.leftPercent}%`, width: `${Math.max(node.widthPercent, 0.5)}%` }">
                     </div>
                   </div>
@@ -109,6 +167,12 @@
                   <!-- Duration -->
                   <div class="w-20 shrink-0 text-right">
                     <span class="text-xs font-mono font-bold text-slate-600">{{ node.durationMs }}ms</span>
+                  </div>
+
+                  <div class="w-28 shrink-0">
+                    <span class="px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-tighter border" :class="getNodePathBadgeClass(node.nodeType)">
+                      {{ getNodePathLabel(node.nodeType) }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -125,6 +189,14 @@
           <div>
             <h3 class="text-lg font-black text-slate-900">{{ selectedNode.nodeName }}</h3>
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{{ selectedNode.nodeType }} | {{ selectedNode.nodeId }}</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border" :class="getNodeTypeBadgeClass(selectedNode.nodeType)">
+                {{ formatNodeType(selectedNode.nodeType) }}
+              </span>
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border" :class="getNodePathBadgeClass(selectedNode.nodeType)">
+                {{ getNodePathLabel(selectedNode.nodeType) }}
+              </span>
+            </div>
           </div>
           <button @click="selectedNode = null" class="p-2 hover:bg-slate-200 rounded-full transition-all">
             <span class="material-symbols-outlined">close</span>
@@ -143,6 +215,15 @@
             <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
               <div class="text-[9px] font-black text-slate-400 uppercase mb-1">Duration</div>
               <span class="text-sm font-mono font-bold text-slate-700">{{ selectedNode.durationMs }} ms</span>
+            </div>
+          </div>
+
+          <div v-if="isFallbackNode(selectedNode) || selectedNode.errorSummary" class="rounded-xl border px-4 py-3" :class="selectedNode.errorSummary ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'">
+            <div class="text-[11px] font-black uppercase tracking-widest" :class="selectedNode.errorSummary ? 'text-red-600' : 'text-amber-700'">
+              {{ selectedNode.errorSummary ? 'Execution Alert' : 'Fallback Node' }}
+            </div>
+            <div class="mt-2 text-sm" :class="selectedNode.errorSummary ? 'text-red-700' : 'text-amber-800'">
+              {{ selectedNode.errorSummary || '该节点负责本地图谱到 RAG 的降级切换，需重点检查触发条件与输入摘要。'}}
             </div>
           </div>
 
@@ -255,6 +336,40 @@ const statusClass = computed(() => {
   return 'bg-emerald-50 text-emerald-600 border-emerald-100'
 })
 
+const LOCAL_NODE_TYPES = new Set([
+  'LOCAL_INDEX_LOAD',
+  'LOCAL_CANDIDATE_RECALL',
+  'LOCAL_OLLAMA_ROUTE',
+  'LOCAL_NOTE_GRAPH'
+])
+
+const isFallbackNodeType = (nodeType) => {
+  return typeof nodeType === 'string' && nodeType.trim().toUpperCase() === 'LOCAL_GRAPH_FALLBACK'
+}
+
+const isLocalNodeType = (nodeType) => {
+  const normalized = typeof nodeType === 'string' ? nodeType.trim().toUpperCase() : ''
+  return LOCAL_NODE_TYPES.has(normalized)
+}
+
+const usesRagNodeType = (nodeType) => {
+  const normalized = typeof nodeType === 'string' ? nodeType.trim().toUpperCase() : ''
+  return !isLocalNodeType(normalized) && !isFallbackNodeType(normalized)
+}
+
+const traceSummary = computed(() => {
+  const nodes = Array.isArray(trace.value?.nodes) ? trace.value.nodes : []
+  return {
+    usesLocalGraph: nodes.some(node => isLocalNodeType(node?.nodeType)),
+    usesRag: nodes.some(node => usesRagNodeType(node?.nodeType)),
+    fallbackNodes: nodes.filter(node => isFallbackNodeType(node?.nodeType)),
+    failedNodes: nodes.filter(node => {
+      const status = typeof node?.status === 'string' ? node.status.trim().toUpperCase() : ''
+      return status === 'FAILED' || status === 'ERROR' || status === 'TIMEOUT'
+    })
+  }
+})
+
 const windowDuration = computed(() => {
   if (!trace.value?.nodes?.length) return 0
   return trace.value.durationMs || 1
@@ -323,15 +438,46 @@ const formatTime = (ts) => {
   return new Date(ts).toLocaleString()
 }
 
+const formatNodeType = (nodeType) => {
+  if (!nodeType) return 'UNKNOWN'
+  return String(nodeType).replaceAll('_', ' ')
+}
+
+const getNodePathLabel = (nodeType) => {
+  if (isFallbackNodeType(nodeType)) return 'fallback'
+  if (isLocalNodeType(nodeType)) return 'local graph'
+  return 'rag/core'
+}
+
+const getNodeTypeBadgeClass = (nodeType) => {
+  if (isFallbackNodeType(nodeType)) return 'bg-amber-50 text-amber-700 border-amber-200'
+  if (isLocalNodeType(nodeType)) return 'bg-cyan-50 text-cyan-700 border-cyan-200'
+  return 'bg-slate-100 text-slate-500 border-slate-200'
+}
+
+const getNodePathBadgeClass = (nodeType) => {
+  if (isFallbackNodeType(nodeType)) return 'bg-amber-50 text-amber-700 border-amber-200'
+  if (isLocalNodeType(nodeType)) return 'bg-cyan-50 text-cyan-700 border-cyan-200'
+  return 'bg-indigo-50 text-indigo-700 border-indigo-200'
+}
+
+const isFallbackNode = (node) => {
+  return isFallbackNodeType(node?.nodeType)
+}
+
 const getNodeStatusColor = (status) => {
-  if (status === 'FAILED') return 'bg-red-500'
-  if (status === 'RUNNING') return 'bg-amber-500'
+  const normalized = typeof status === 'string' ? status.trim().toUpperCase() : ''
+  if (normalized === 'FAILED' || normalized === 'ERROR' || normalized === 'TIMEOUT') return 'bg-red-500'
+  if (normalized === 'RUNNING') return 'bg-amber-500'
   return 'bg-emerald-500'
 }
 
-const getNodeBarColor = (status) => {
-  if (status === 'FAILED') return 'bg-red-400'
-  if (status === 'RUNNING') return 'bg-amber-400'
+const getNodeBarColor = (status, nodeType) => {
+  const normalized = typeof status === 'string' ? status.trim().toUpperCase() : ''
+  if (normalized === 'FAILED' || normalized === 'ERROR' || normalized === 'TIMEOUT') return 'bg-red-400'
+  if (normalized === 'RUNNING') return 'bg-amber-400'
+  if (isFallbackNodeType(nodeType)) return 'bg-amber-400'
+  if (isLocalNodeType(nodeType)) return 'bg-cyan-500'
   return 'bg-indigo-500'
 }
 

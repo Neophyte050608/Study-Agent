@@ -23,10 +23,14 @@ export function listChatMessages(sessionId, limit = 50, beforeId = null) {
   return httpGet(url)
 }
 
-export function streamChat(sessionId, content, handlers = {}) {
+export function streamChat(sessionId, content, handlers = {}, options = {}) {
+  const payload = { content }
+  if (options?.retrievalMode) {
+    payload.retrievalMode = options.retrievalMode
+  }
   return createPostEventStream(
     `/api/chat/sessions/${sessionId}/stream`,
-    { content },
+    payload,
     handlers
   )
 }

@@ -235,6 +235,22 @@ app:
       hydrate-parent-context-chars: ${APP_RAG_PARENT_CHILD_HYDRATE_PARENT_CONTEXT_CHARS:420}
       hydrate-child-match-chars: ${APP_RAG_PARENT_CHILD_HYDRATE_CHILD_MATCH_CHARS:180}
       fallback-to-flat-retrieval: ${APP_RAG_PARENT_CHILD_FALLBACK_TO_FLAT_RETRIEVAL:false}
+  knowledge:
+    retrieval:
+      default-mode: ${APP_KNOWLEDGE_RETRIEVAL_DEFAULT_MODE:RAG_ONLY}
+      index-file-path: ${APP_KNOWLEDGE_RETRIEVAL_INDEX_FILE_PATH:}
+      required-schema-version: ${APP_KNOWLEDGE_RETRIEVAL_REQUIRED_SCHEMA_VERSION:1}
+      candidate-recall-top-n: ${APP_KNOWLEDGE_RETRIEVAL_CANDIDATE_RECALL_TOP_N:20}
+      max-local-matches: ${APP_KNOWLEDGE_RETRIEVAL_MAX_LOCAL_MATCHES:3}
+      max-linked-notes: ${APP_KNOWLEDGE_RETRIEVAL_MAX_LINKED_NOTES:2}
+      max-backlink-notes: ${APP_KNOWLEDGE_RETRIEVAL_MAX_BACKLINK_NOTES:2}
+      max-tag-neighbor-notes: ${APP_KNOWLEDGE_RETRIEVAL_MAX_TAG_NEIGHBOR_NOTES:2}
+      min-local-context-chars: ${APP_KNOWLEDGE_RETRIEVAL_MIN_LOCAL_CONTEXT_CHARS:200}
+      max-note-chars: ${APP_KNOWLEDGE_RETRIEVAL_MAX_NOTE_CHARS:4000}
+      local-context-budget-chars: ${APP_KNOWLEDGE_RETRIEVAL_LOCAL_CONTEXT_BUDGET_CHARS:12000}
+      ollama-base-url: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_BASE_URL:http://localhost:11434}
+      ollama-model: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_MODEL:qwen2.5:0.5b-instruct}
+      ollama-timeout-ms: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_TIMEOUT_MS:5000}
 
   mcp:
     timeout-millis: ${APP_MCP_TIMEOUT_MILLIS:1500}

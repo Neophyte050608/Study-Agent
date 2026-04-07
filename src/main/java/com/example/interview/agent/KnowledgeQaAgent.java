@@ -3,9 +3,11 @@ package com.example.interview.agent;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.service.KnowledgeContextPacket;
+import com.example.interview.service.KnowledgeRetrievalCoordinator;
+import com.example.interview.service.KnowledgeRetrievalMode;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.RAGObservabilityService;
-import com.example.interview.service.RAGService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,22 +22,28 @@ import java.util.function.Consumer;
 public class KnowledgeQaAgent {
     private static final Logger log = LoggerFactory.getLogger(KnowledgeQaAgent.class);
 
-    private final RAGService ragService;
+    private final KnowledgeRetrievalCoordinator knowledgeRetrievalCoordinator;
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
     private final RAGObservabilityService ragObservabilityService;
 
-    public KnowledgeQaAgent(RAGService ragService,
+    public KnowledgeQaAgent(KnowledgeRetrievalCoordinator knowledgeRetrievalCoordinator,
                             RoutingChatService routingChatService,
                             PromptManager promptManager,
                             RAGObservabilityService ragObservabilityService) {
-        this.ragService = ragService;
+        this.knowledgeRetrievalCoordinator = knowledgeRetrievalCoordinator;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.ragObservabilityService = ragObservabilityService;
     }
 
     public Map<String, Object> execute(String question, String history) {
+        return execute(question, history, null);
+    }
+
+    public Map<String, Object> execute(String question,
+                                       String history,
+                                       KnowledgeRetrievalMode retrievalMode) {
         String traceId = RAGTraceContext.getTraceId();
         if (traceId == null || traceId.isBlank()) {
             traceId = UUID.randomUUID().toString();
@@ -46,7 +54,7 @@ public class KnowledgeQaAgent {
         ragObservabilityService.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A");
 
         try {
-            RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(question, "");
+            KnowledgeContextPacket packet = knowledgeRetrievalCoordinator.retrieve(question, "", retrievalMode);
             String combinedContext = buildCombinedContext(packet);
 
             Map<String, Object> vars = new HashMap<>();
@@ -63,6 +71,11 @@ public class KnowledgeQaAgent {
             result.put("sources", packet.retrievalEvidence());
             result.put("images", packet.retrievedImages());
             result.put("webFallbackUsed", packet.webFallbackUsed());
+            result.put("localGraphUsed", packet.localGraphUsed());
+            result.put("ragUsed", packet.ragUsed());
+            result.put("fallbackReason", packet.fallbackReason());
+            result.put("retrievalModeRequested", packet.retrievalModeRequested());
+            result.put("retrievalModeResolved", packet.retrievalModeResolved());
             result.put("traceId", traceId);
 
             ragObservabilityService.endNode(traceId, nodeId, question, answer, null);
@@ -80,6 +93,13 @@ public class KnowledgeQaAgent {
      */
     public Map<String, Object> executeStream(String question, String history,
                                              Consumer<String> tokenConsumer) {
+        return executeStream(question, history, null, tokenConsumer);
+    }
+
+    public Map<String, Object> executeStream(String question,
+                                             String history,
+                                             KnowledgeRetrievalMode retrievalMode,
+                                             Consumer<String> tokenConsumer) {
         String traceId = RAGTraceContext.getTraceId();
         if (traceId == null || traceId.isBlank()) {
             traceId = UUID.randomUUID().toString();
@@ -90,7 +110,7 @@ public class KnowledgeQaAgent {
         ragObservabilityService.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A Streaming");
 
         try {
-            RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(question, "");
+            KnowledgeContextPacket packet = knowledgeRetrievalCoordinator.retrieve(question, "", retrievalMode);
             String combinedContext = buildCombinedContext(packet);
 
             Map<String, Object> vars = new HashMap<>();
@@ -108,6 +128,11 @@ public class KnowledgeQaAgent {
             result.put("sources", packet.retrievalEvidence());
             result.put("images", packet.retrievedImages());
             result.put("webFallbackUsed", packet.webFallbackUsed());
+            result.put("localGraphUsed", packet.localGraphUsed());
+            result.put("ragUsed", packet.ragUsed());
+            result.put("fallbackReason", packet.fallbackReason());
+            result.put("retrievalModeRequested", packet.retrievalModeRequested());
+            result.put("retrievalModeResolved", packet.retrievalModeResolved());
             result.put("traceId", traceId);
 
             ragObservabilityService.endNode(traceId, nodeId, question, answer, null);
@@ -121,7 +146,7 @@ public class KnowledgeQaAgent {
         }
     }
 
-    private String buildCombinedContext(RAGService.KnowledgePacket packet) {
+    private String buildCombinedContext(KnowledgeContextPacket packet) {
         StringBuilder contextBuilder = new StringBuilder(packet.context() == null ? "" : packet.context());
         if (packet.imageContext() != null && !packet.imageContext().isBlank()) {
             contextBuilder.append("\n\n相关图片说明:\n").append(packet.imageContext());

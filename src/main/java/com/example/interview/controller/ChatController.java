@@ -2,6 +2,7 @@ package com.example.interview.controller;
 
 import com.example.interview.entity.ChatMessageDO;
 import com.example.interview.entity.ChatSessionDO;
+import com.example.interview.service.KnowledgeRetrievalMode;
 import com.example.interview.service.ChatStreamingService;
 import com.example.interview.service.UserIdentityResolver;
 import com.example.interview.service.WebChatService;
@@ -81,7 +82,9 @@ public class ChatController {
             HttpServletRequest request) {
         String userId = userIdentityResolver.resolve(request);
         String content = String.valueOf(body.getOrDefault("content", ""));
-        return chatStreamingService.streamChat(sessionId, userId, content);
+        String retrievalModeValue = body == null ? null : String.valueOf(body.getOrDefault("retrievalMode", ""));
+        KnowledgeRetrievalMode retrievalMode = KnowledgeRetrievalMode.fromNullable(retrievalModeValue, null);
+        return chatStreamingService.streamChat(sessionId, userId, content, retrievalMode);
     }
 
     @PostMapping("/stream/stop")

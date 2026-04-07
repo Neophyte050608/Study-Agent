@@ -58,3 +58,11 @@ export function rechunkDocument(docId) {
 export function setChunkEnabled(docId, chunkId, enabled) {
   return httpPatch(`/api/knowledge-documents/${docId}/chunks/${chunkId}/enabled?value=${enabled}`, {})
 }
+
+export function loadLocalKnowledgeIndexStatus() {
+  return httpGet('/api/knowledge-retrieval/index/status')
+}
+
+export function buildLocalKnowledgeIndex(payload) {
+  return httpPostJson('/api/knowledge-retrieval/index/build', payload || {})
+}

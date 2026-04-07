@@ -73,7 +73,14 @@
 
       <!-- Tab Contents -->
       <div class="min-h-[400px]">
-        <KnowledgeBaseTab v-if="activeTab === 'kb'" :config="config" />
+        <KnowledgeBaseTab
+          v-if="activeTab === 'kb'"
+          :config="config"
+          :index-status="indexStatus"
+          :index-loading="indexLoading"
+          @build-index="handleBuildLocalIndex"
+          @advanced-build-index="showIndexBuildModal = true"
+        />
         <DocumentsTab v-else-if="activeTab === 'docs'" @view-chunks="handleViewChunks" />
         <ChunksTab v-else-if="activeTab === 'chunks'" :docId="selectedDocId" @back="activeTab = 'docs'" />
         <SyncTasksTab v-else-if="activeTab === 'tasks'" :reports="stats.recentReports" :lastSyncTime="lastSyncTime" />
@@ -82,17 +89,25 @@
 
     <!-- Sync Modal -->
     <SyncConfigModal v-if="showSyncModal" @close="showSyncModal = false" @sync="handleSync" :initialConfig="config" :loading="syncLoading" />
+    <LocalIndexBuildModal
+      v-if="showIndexBuildModal"
+      @close="showIndexBuildModal = false"
+      @build="handleBuildLocalIndexAdvanced"
+      :initial-config="indexBuildInitialConfig"
+      :loading="indexLoading"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { knowledgeService } from '../services/knowledgeService'
 import KnowledgeBaseTab from './knowledge/KnowledgeBaseTab.vue'
 import DocumentsTab from './knowledge/DocumentsTab.vue'
 import ChunksTab from './knowledge/ChunksTab.vue'
 import SyncTasksTab from './knowledge/SyncTasksTab.vue'
 import SyncConfigModal from './knowledge/SyncConfigModal.vue'
+import LocalIndexBuildModal from './knowledge/LocalIndexBuildModal.vue'
 
 defineProps({
   sidebarCollapsed: {
@@ -118,9 +133,24 @@ const handleViewChunks = (docId) => {
 
 const config = ref({ paths: '', imagePath: '', ignoreDirs: '' })
 const stats = ref({ recentReports: [] })
+const indexStatus = ref({
+  defaultMode: '',
+  indexFilePath: '',
+  indexExists: false,
+  nodeCount: 0,
+  buildId: '',
+  vaultRoot: '',
+  ollamaModel: '',
+  configuredVaultPath: '',
+  configuredIgnoreDirs: '',
+  scopeFilePath: '',
+  error: ''
+})
 const loading = ref(false)
 const syncLoading = ref(false)
+const indexLoading = ref(false)
 const showSyncModal = ref(false)
+const showIndexBuildModal = ref(false)
 const lastSyncTime = ref('暂无')
 
 const message = ref('')
@@ -144,6 +174,7 @@ const loadData = async () => {
   try {
     config.value = await knowledgeService.getConfig()
     stats.value = await knowledgeService.getStats()
+    indexStatus.value = await knowledgeService.getLocalIndexStatus()
   } catch (err) {
     showMessage(`加载失败: ${err.message || 'unknown'}`, 'error')
   }
@@ -218,6 +249,51 @@ const handleUpload = async (event) => {
     event.target.value = ''
   }
 }
+
+const handleBuildLocalIndex = async () => {
+  indexLoading.value = true
+  try {
+    const result = await knowledgeService.buildLocalIndex({ activate: true })
+    showMessage(`本地图谱索引已生成：节点 ${result.nodeCount || 0}，输出 ${result.outputPath || ''}`, 'success')
+    indexStatus.value = await knowledgeService.getLocalIndexStatus()
+  } catch (error) {
+    showMessage(`索引生成失败: ${error.message || 'unknown'}`, 'error')
+  } finally {
+    indexLoading.value = false
+  }
+}
+
+const handleBuildLocalIndexAdvanced = async ({ vaultPath, scopeFilePath, outputPath, ignoreDirs, activate }) => {
+  indexLoading.value = true
+  try {
+    const ignoreDirList = String(ignoreDirs || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+    const result = await knowledgeService.buildLocalIndex({
+      vaultPath: vaultPath || '',
+      scopeFilePath: scopeFilePath || '',
+      outputPath: outputPath || '',
+      ignoreDirs: ignoreDirList,
+      activate: activate !== false
+    })
+    showMessage(`本地图谱索引已生成：节点 ${result.nodeCount || 0}，输出 ${result.outputPath || ''}`, 'success')
+    indexStatus.value = await knowledgeService.getLocalIndexStatus()
+    showIndexBuildModal.value = false
+  } catch (error) {
+    showMessage(`索引生成失败: ${error.message || 'unknown'}`, 'error')
+  } finally {
+    indexLoading.value = false
+  }
+}
+
+const indexBuildInitialConfig = computed(() => ({
+  vaultPath: indexStatus.value.configuredVaultPath || '',
+  scopeFilePath: indexStatus.value.scopeFilePath || '',
+  outputPath: indexStatus.value.indexFilePath || '',
+  ignoreDirs: config.value.ignoreDirs || '',
+  activate: true
+}))
 
 onMounted(() => {
   loadData()

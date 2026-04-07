@@ -190,6 +190,20 @@
                     <div v-html="renderMarkdown(msg.content)"></div>
                     <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${idx}-${imageIdx}`" :image="image" />
                     <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
+                    <div v-if="msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason" class="mt-3 flex flex-wrap gap-2">
+                      <span v-if="msg.retrievalModeResolved" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                        mode: {{ formatRetrievalMode(msg.retrievalModeResolved) }}
+                      </span>
+                      <span v-if="msg.localGraphUsed" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-200 dark:border-cyan-900">
+                        local graph
+                      </span>
+                      <span v-if="msg.ragUsed" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-200 dark:border-indigo-900">
+                        rag
+                      </span>
+                      <span v-if="msg.fallbackReason" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
+                        fallback: {{ msg.fallbackReason }}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -207,6 +221,20 @@
                    <div v-else class="markdown-body text-[15px] leading-relaxed">
                      <span v-html="renderMarkdown(streamingContent)"></span>
                      <ImageCard v-for="(image, imageIdx) in streamingImages" :key="`stream-${imageIdx}`" :image="image" />
+                     <div v-if="streamingMeta.retrievalModeResolved || streamingMeta.localGraphUsed || streamingMeta.ragUsed || streamingMeta.fallbackReason" class="mt-3 flex flex-wrap gap-2">
+                       <span v-if="streamingMeta.retrievalModeResolved" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                         mode: {{ formatRetrievalMode(streamingMeta.retrievalModeResolved) }}
+                       </span>
+                       <span v-if="streamingMeta.localGraphUsed" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-200 dark:border-cyan-900">
+                         local graph
+                       </span>
+                       <span v-if="streamingMeta.ragUsed" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-200 dark:border-indigo-900">
+                         rag
+                       </span>
+                       <span v-if="streamingMeta.fallbackReason" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
+                         fallback: {{ streamingMeta.fallbackReason }}
+                       </span>
+                     </div>
                      <span class="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse align-middle"></span>
                    </div>
                 </div>
@@ -216,6 +244,20 @@
 
           <!-- 底部输入框 -->
           <div class="p-6 bg-transparent z-10 w-full max-w-6xl mx-auto">
+            <div class="mb-3 flex items-center justify-between">
+              <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span class="font-semibold">检索模式</span>
+                <select v-model="selectedRetrievalMode" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                  <option value="LOCAL_GRAPH_FIRST">LOCAL_GRAPH_FIRST</option>
+                  <option value="RAG_ONLY">RAG_ONLY</option>
+                  <option value="LOCAL_GRAPH_ONLY">LOCAL_GRAPH_ONLY</option>
+                  <option value="HYBRID_FUSION">HYBRID_FUSION</option>
+                </select>
+              </div>
+              <div class="text-[11px] text-slate-400 dark:text-slate-500">
+                当前请求级模式
+              </div>
+            </div>
             <div class="relative flex flex-col bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden">
               <textarea
                 v-model="inputContent"
@@ -277,6 +319,9 @@ const props = defineProps({
   }
 })
 
+const RETRIEVAL_MODE_STORAGE_KEY = 'chat.selectedRetrievalMode'
+const RETRIEVAL_MODE_OPTIONS = ['LOCAL_GRAPH_FIRST', 'RAG_ONLY', 'LOCAL_GRAPH_ONLY', 'HYBRID_FUSION']
+
 const sessions = ref([])
 const currentSessionId = ref(null)
 const currentSession = computed(() => sessions.value.find(s => (s.sessionId || s.id) === currentSessionId.value))
@@ -293,6 +338,14 @@ const currentQuizPayload = ref(null)
 const streamTaskId = ref(null)
 const streamHandle = ref(null)
 const messagesContainer = ref(null)
+const selectedRetrievalMode = ref('LOCAL_GRAPH_FIRST')
+const streamingMeta = ref({
+  retrievalModeRequested: '',
+  retrievalModeResolved: '',
+  fallbackReason: '',
+  localGraphUsed: false,
+  ragUsed: false
+})
 
 const editingId = ref(null)
 const editTitle = ref('')
@@ -340,8 +393,17 @@ const showError = (msg) => {
   }, 3000)
 }
 
+const normalizeRetrievalMode = (value) => {
+  return RETRIEVAL_MODE_OPTIONS.includes(value) ? value : 'LOCAL_GRAPH_FIRST'
+}
+
 // Load sessions on mount
 onMounted(async () => {
+  try {
+    selectedRetrievalMode.value = normalizeRetrievalMode(localStorage.getItem(RETRIEVAL_MODE_STORAGE_KEY))
+  } catch (err) {
+    console.warn('Failed to restore retrieval mode from localStorage', err)
+  }
   await loadSessions()
 })
 
@@ -375,10 +437,11 @@ const selectSession = async (id) => {
     const rawMessages = Array.isArray(data) ? data : (data.content || [])
     // 检测 contentType=quiz 的历史消息，解析 content 为 quizPayload
     messages.value = rawMessages.map(msg => {
+      const metadata = msg?.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}
       if (msg.contentType === 'quiz' && msg.content) {
         try {
           const quizPayload = JSON.parse(msg.content)
-          return { ...msg, quizPayload, content: '' }
+          return { ...msg, ...metadata, quizPayload, content: '' }
         } catch (e) {
           // JSON 解析失败，保持原样
         }
@@ -388,6 +451,7 @@ const selectSession = async (id) => {
           const richPayload = JSON.parse(msg.content)
           return {
             ...msg,
+            ...metadata,
             content: richPayload?.text || '',
             images: Array.isArray(richPayload?.images) ? richPayload.images : []
           }
@@ -395,7 +459,7 @@ const selectSession = async (id) => {
           // JSON 解析失败，保持原样
         }
       }
-      return msg
+      return { ...msg, ...metadata }
     })
     scrollToBottom()
   } catch (err) {
@@ -465,6 +529,12 @@ const renderMarkdown = (content) => {
   }
 }
 
+const formatRetrievalMode = (mode) => {
+  const normalized = typeof mode === 'string' ? mode.trim().toUpperCase() : ''
+  if (!normalized) return 'UNKNOWN'
+  return normalized.replaceAll('_', ' ')
+}
+
 const handleSendFromEmpty = async () => {
   const content = inputContent.value.trim()
   if (!content || isStreaming.value) return
@@ -504,6 +574,13 @@ const handleSend = async () => {
   streamingImages.value = []
   currentQuizPayload.value = null
   streamTaskId.value = null
+  streamingMeta.value = {
+    retrievalModeRequested: selectedRetrievalMode.value,
+    retrievalModeResolved: '',
+    fallbackReason: '',
+    localGraphUsed: false,
+    ragUsed: false
+  }
 
   const targetSessionId = currentSessionId.value
 
@@ -537,12 +614,21 @@ const handleSend = async () => {
         }
         scrollToBottom()
       },
-      onFinish: () => {
+      onFinish: (payload) => {
+        const result = payload?.result || {}
+        streamingMeta.value = {
+          retrievalModeRequested: result?.retrievalModeRequested || selectedRetrievalMode.value,
+          retrievalModeResolved: result?.retrievalModeResolved || '',
+          fallbackReason: result?.fallbackReason || '',
+          localGraphUsed: !!result?.localGraphUsed,
+          ragUsed: !!result?.ragUsed
+        }
         messages.value.push({ 
           role: 'assistant', 
           content: streamingContent.value,
           images: [...streamingImages.value],
-          quizPayload: currentQuizPayload.value 
+          quizPayload: currentQuizPayload.value,
+          ...streamingMeta.value
         })
         streamingContent.value = ''
         streamingImages.value = []
@@ -557,6 +643,13 @@ const handleSend = async () => {
         messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[生成出错]**' })
         streamingContent.value = ''
         streamingImages.value = []
+        streamingMeta.value = {
+          retrievalModeRequested: '',
+          retrievalModeResolved: '',
+          fallbackReason: '',
+          localGraphUsed: false,
+          ragUsed: false
+        }
         isStreaming.value = false
         streamHandle.value = null
         showError('流式生成出错')
@@ -568,6 +661,8 @@ const handleSend = async () => {
           streamHandle.value = null
         }
       }
+    }, {
+      retrievalMode: selectedRetrievalMode.value
     })
     
     await streamHandle.value.start()
@@ -595,6 +690,13 @@ const handleStop = async () => {
     messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[已停止]**' })
     streamingContent.value = ''
     streamingImages.value = []
+    streamingMeta.value = {
+      retrievalModeRequested: '',
+      retrievalModeResolved: '',
+      fallbackReason: '',
+      localGraphUsed: false,
+      ragUsed: false
+    }
     isStreaming.value = false
   }
   scrollToBottom()
@@ -602,6 +704,19 @@ const handleStop = async () => {
 
 watch(() => messages.value.length, () => {
   scrollToBottom()
+})
+
+watch(selectedRetrievalMode, (value) => {
+  const normalized = normalizeRetrievalMode(value)
+  if (normalized !== value) {
+    selectedRetrievalMode.value = normalized
+    return
+  }
+  try {
+    localStorage.setItem(RETRIEVAL_MODE_STORAGE_KEY, normalized)
+  } catch (err) {
+    console.warn('Failed to persist retrieval mode to localStorage', err)
+  }
 })
 
 </script>

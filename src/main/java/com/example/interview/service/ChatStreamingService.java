@@ -9,6 +9,7 @@ import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.security.InputSanitizer;
+import com.example.interview.service.KnowledgeRetrievalMode;
 import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
@@ -58,6 +59,13 @@ public class ChatStreamingService {
     }
 
     public SseEmitter streamChat(String sessionId, String userId, String content) {
+        return streamChat(sessionId, userId, content, null);
+    }
+
+    public SseEmitter streamChat(String sessionId,
+                                 String userId,
+                                 String content,
+                                 KnowledgeRetrievalMode retrievalMode) {
         String sanitizedContent = inputSanitizer.sanitize(content);
         String traceId = UUID.randomUUID().toString();
         SseEmitter emitter = new SseEmitter(timeoutMillis);
@@ -70,10 +78,11 @@ public class ChatStreamingService {
                 "streamTaskId", taskId,
                 "action", "chat",
                 "traceId", traceId,
-                "sessionId", sessionId
+                "sessionId", sessionId,
+                "retrievalModeRequested", retrievalMode == null ? "" : retrievalMode.name()
         ));
 
-        streamingExecutor.execute(() -> runChat(sessionId, userId, sanitizedContent, traceId, taskId, sender));
+        streamingExecutor.execute(() -> runChat(sessionId, userId, sanitizedContent, retrievalMode, traceId, taskId, sender));
         return emitter;
     }
 
@@ -82,6 +91,7 @@ public class ChatStreamingService {
     }
 
     private void runChat(String sessionId, String userId, String content,
+                         KnowledgeRetrievalMode retrievalMode,
                          String traceId, String taskId, InterviewSseEmitterSender sender) {
         RAGTraceContext.setTraceId(traceId);
         try {
@@ -206,6 +216,9 @@ public class ChatStreamingService {
             context.put("userId", userId);
             context.put("history", history);
             context.put("traceId", traceId);
+            if (retrievalMode != null) {
+                context.put("retrievalMode", retrievalMode.name());
+            }
 
             TaskRequest request = new TaskRequest(null, payload, context);
             TaskResponse response = webChatService.getTaskRouterAgent().dispatch(request);
@@ -215,7 +228,7 @@ public class ChatStreamingService {
             // 判断是否为知识问答意图（可以走流式）
             if (isKnowledgeQaResult(response)) {
                 // 走原有的 KnowledgeQaAgent 流式路径
-                runKnowledgeQaStream(sessionId, content, history, traceId, taskId, sender);
+                runKnowledgeQaStream(sessionId, content, history, retrievalMode, traceId, taskId, sender);
             } else {
                 // 非知识问答意图（面试、编码练习等），结果已计算完成，分块流式发送
                 
@@ -324,6 +337,7 @@ public class ChatStreamingService {
      * 原有的 KnowledgeQaAgent 流式知识问答路径。
      */
     private void runKnowledgeQaStream(String sessionId, String content, String history,
+                                       KnowledgeRetrievalMode retrievalMode,
                                        String traceId, String taskId, InterviewSseEmitterSender sender) {
         sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "RETRIEVING", "label", "正在检索知识", "status", "running", "percent", 50));
@@ -333,7 +347,7 @@ public class ChatStreamingService {
 
         StringBuilder fullAnswer = new StringBuilder();
         Map<String, Object> result = knowledgeQaAgent.executeStream(
-                content, history,
+                content, history, retrievalMode,
                 token -> {
                     if (!taskManager.isCancelled(taskId)) {
                         fullAnswer.append(token);
@@ -350,22 +364,56 @@ public class ChatStreamingService {
 
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("traceId", traceId);
+        if (result.containsKey("retrievalModeRequested")) {
+            metadata.put("retrievalModeRequested", result.get("retrievalModeRequested"));
+        }
+        if (result.containsKey("retrievalModeResolved")) {
+            metadata.put("retrievalModeResolved", result.get("retrievalModeResolved"));
+        }
+        if (result.containsKey("fallbackReason")) {
+            metadata.put("fallbackReason", result.get("fallbackReason"));
+        }
+        if (result.containsKey("localGraphUsed")) {
+            metadata.put("localGraphUsed", result.get("localGraphUsed"));
+        }
+        if (result.containsKey("ragUsed")) {
+            metadata.put("ragUsed", result.get("ragUsed"));
+        }
         if (result.containsKey("sources")) {
             metadata.put("sources", result.get("sources"));
+        }
+        Map<String, Object> finishResult = new LinkedHashMap<>();
+        finishResult.put("content", replyText);
+        finishResult.put("traceId", traceId);
+        if (result.containsKey("retrievalModeRequested")) {
+            finishResult.put("retrievalModeRequested", result.get("retrievalModeRequested"));
+        }
+        if (result.containsKey("retrievalModeResolved")) {
+            finishResult.put("retrievalModeResolved", result.get("retrievalModeResolved"));
+        }
+        if (result.containsKey("fallbackReason")) {
+            finishResult.put("fallbackReason", result.get("fallbackReason"));
+        }
+        if (result.containsKey("localGraphUsed")) {
+            finishResult.put("localGraphUsed", result.get("localGraphUsed"));
+        }
+        if (result.containsKey("ragUsed")) {
+            finishResult.put("ragUsed", result.get("ragUsed"));
         }
         Object images = result.get("images");
         if (images instanceof List<?> imageList && !imageList.isEmpty()) {
             metadata.put("images", images);
             sendImageEvents(sender, imageList, taskId);
             webChatService.saveAssistantMessage(sessionId, buildRichContent(replyText, imageList), metadata, "rich");
+            finishResult.put("images", imageList);
             sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
-                    "result", Map.of("content", replyText, "traceId", traceId, "images", imageList)));
+                    "result", finishResult));
         } else {
             webChatService.saveAssistantMessage(sessionId, replyText, metadata);
             sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
-                    "result", Map.of("content", replyText, "traceId", traceId)));
+                    "result", finishResult));
         }
         webChatService.autoTitleIfNeeded(sessionId, content);
         sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
