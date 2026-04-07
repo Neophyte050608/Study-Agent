@@ -65,6 +65,9 @@ class ParentChildRetrievalHydrationTest {
     @Mock
     private ParentChildIndexService parentChildIndexService;
 
+    @Mock
+    private ImageService imageService;
+
     private RAGService ragService;
     private RetrievalTokenizerService retrievalTokenizerService;
     private RagRetrievalProperties ragRetrievalProperties;
@@ -94,7 +97,8 @@ class ParentChildRetrievalHydrationTest {
                 retrievalTokenizerService,
                 ragRetrievalProperties,
                 parentChildRetrievalProperties,
-                parentChildIndexService
+                parentChildIndexService,
+                imageService
         );
     }
 

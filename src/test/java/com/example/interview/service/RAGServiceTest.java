@@ -85,6 +85,9 @@ class RAGServiceTest {
     @Mock
     private ParentChildIndexService parentChildIndexService;
 
+    @Mock
+    private ImageService imageService;
+
     private final Executor ragRetrieveExecutor = Runnable::run;
 
     private RetrievalTokenizerService retrievalTokenizerService;
@@ -110,7 +113,8 @@ class RAGServiceTest {
                 retrievalTokenizerService,
                 ragRetrievalProperties,
                 parentChildRetrievalProperties,
-                parentChildIndexService
+                parentChildIndexService,
+                imageService
         );
     }
 

@@ -52,6 +52,9 @@ public class RAGService {
     private static final Pattern RAW_API_KEY_PATTERN = Pattern.compile("(?i)(\"?api[-_ ]?key\"?\\s*[:=]\\s*\"?)([^\",\\s]+)");
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*bearer\\s+)([A-Za-z0-9._-]{8,})");
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
+    private static final double FINAL_IMAGE_MIN_SCORE = 0.72d;
+    private static final double SECOND_IMAGE_MIN_SCORE = 0.82d;
+    private static final double ADDITIONAL_IMAGE_SCORE_GAP = 0.12d;
 
     private final RoutingChatService routingChatService;
     private final VectorStore vectorStore;
@@ -1906,10 +1909,33 @@ public class RAGService {
                         existing == null || image.relevanceScore() > existing.relevanceScore() ? image : existing);
             }
         }
-        return merged.values().stream()
+        List<ImageService.ImageResult> ranked = merged.values().stream()
                 .sorted((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()))
                 .limit(3)
                 .toList();
+        if (ranked.isEmpty()) {
+            return ranked;
+        }
+        double topScore = ranked.getFirst().relevanceScore();
+        if (topScore < FINAL_IMAGE_MIN_SCORE) {
+            return List.of();
+        }
+        List<ImageService.ImageResult> filtered = new ArrayList<>();
+        for (int i = 0; i < ranked.size(); i++) {
+            ImageService.ImageResult image = ranked.get(i);
+            if (i == 0) {
+                filtered.add(image);
+                continue;
+            }
+            if (image.relevanceScore() < SECOND_IMAGE_MIN_SCORE) {
+                continue;
+            }
+            if (topScore - image.relevanceScore() > ADDITIONAL_IMAGE_SCORE_GAP) {
+                continue;
+            }
+            filtered.add(image);
+        }
+        return filtered;
     }
 
     public record CodingAssessment(

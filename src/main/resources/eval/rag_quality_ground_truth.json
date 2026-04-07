@@ -6,12 +6,6 @@
     "tag": "spring"
   },
   {
-    "query": "Spring Boot自动配置原理",
-    "groundTruthAnswer": "Spring Boot启动时通过@EnableAutoConfiguration触发自动装配，核心由AutoConfigurationImportSelector读取自动配置候选类。候选来源在spring.factories或AutoConfiguration.imports中声明，最终按条件注解决定是否生效，例如@ConditionalOnClass、@ConditionalOnMissingBean和@ConditionalOnProperty，实现按需装配与覆盖。",
-    "groundTruthKeyConcepts": ["EnableAutoConfiguration", "AutoConfigurationImportSelector", "ConditionalOnClass", "ConditionalOnMissingBean", "spring.factories"],
-    "tag": "spring"
-  },
-  {
     "query": "Redis缓存雪崩怎么处理",
     "groundTruthAnswer": "缓存雪崩是大量key在同一时间失效或Redis整体不可用，导致请求集中打到数据库。常见治理手段是过期时间随机打散、热点数据永不过期并异步刷新、多级缓存与本地缓存兜底、服务降级限流熔断、数据库读写隔离与扩容，同时提升Redis高可用能力如主从+哨兵或集群，避免单点故障。",
     "groundTruthKeyConcepts": ["过期时间打散", "多级缓存", "降级限流", "熔断", "高可用"],
@@ -75,12 +69,6 @@
     "query": "单例模式实现要点",
     "groundTruthAnswer": "单例模式目标是确保一个类在进程内只有一个实例并提供全局访问点。常见实现有饿汉式、懒汉式加同步、静态内部类和枚举单例。线程安全与延迟加载需要权衡，双重检查锁需配合volatile防止指令重排。还要考虑反射与反序列化破坏单例的问题，枚举方式在这两点上更稳妥。",
     "groundTruthKeyConcepts": ["饿汉式", "懒汉式", "双重检查锁", "volatile", "枚举单例"],
-    "tag": "design-pattern"
-  },
-  {
-    "query": "策略模式和工厂模式区别",
-    "groundTruthAnswer": "策略模式强调算法可互换，通常在运行期根据上下文选择具体策略，实现行为切换；工厂模式强调对象创建封装，将实例化逻辑与使用方解耦。策略关注“做什么算法”，工厂关注“怎么创建对象”。二者可组合：先由工厂创建不同策略，再由上下文按条件调度，以减少if-else并提升扩展性。",
-    "groundTruthKeyConcepts": ["行为切换", "对象创建", "解耦", "运行期选择", "组合使用"],
     "tag": "design-pattern"
   },
   {

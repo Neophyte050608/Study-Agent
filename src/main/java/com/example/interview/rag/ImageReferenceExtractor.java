@@ -70,9 +70,61 @@ public class ImageReferenceExtractor {
                     matcher.group(),
                     matcher.start(),
                     resolved,
+                    resolveSectionPath(markdown, matcher.start()),
+                    extractNearbyContext(markdown, matcher.start(), matcher.end()),
                     "图片：" + imageName
             ));
         }
+    }
+
+    private String resolveSectionPath(String markdown, int position) {
+        if (markdown == null || markdown.isBlank()) {
+            return "";
+        }
+        String[] lines = markdown.split("\\R", -1);
+        List<String> currentPath = new ArrayList<>();
+        int offset = 0;
+        for (String line : lines) {
+            if (offset > position) {
+                break;
+            }
+            String trimmed = line.trim();
+            if (trimmed.startsWith("#")) {
+                int level = headingLevel(trimmed);
+                if (level > 0) {
+                    String heading = trimmed.substring(level).trim();
+                    while (currentPath.size() >= level) {
+                        currentPath.remove(currentPath.size() - 1);
+                    }
+                    if (!heading.isBlank()) {
+                        currentPath.add(heading);
+                    }
+                }
+            }
+            offset += line.length() + 1;
+        }
+        return currentPath.isEmpty() ? "" : String.join(" > ", currentPath);
+    }
+
+    private int headingLevel(String line) {
+        int level = 0;
+        while (level < line.length() && line.charAt(level) == '#') {
+            level++;
+        }
+        if (level == 0 || level >= line.length() || !Character.isWhitespace(line.charAt(level))) {
+            return 0;
+        }
+        return level;
+    }
+
+    private String extractNearbyContext(String markdown, int start, int end) {
+        if (markdown == null || markdown.isBlank()) {
+            return "";
+        }
+        int safeStart = Math.max(0, start - 120);
+        int safeEnd = Math.min(markdown.length(), end + 120);
+        String snippet = markdown.substring(safeStart, safeEnd);
+        return snippet.replace('\n', ' ').replace('\r', ' ').trim();
     }
 
     private String sanitizeTarget(String target, boolean obsidianStyle) {
@@ -147,6 +199,8 @@ public class ImageReferenceExtractor {
             String refSyntax,
             int position,
             Path resolvedPath,
+            String sectionPath,
+            String nearbyContext,
             String summaryText
     ) {
     }

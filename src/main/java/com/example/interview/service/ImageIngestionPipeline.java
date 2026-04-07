@@ -36,10 +36,14 @@ public class ImageIngestionPipeline {
 
     @Async("imageIngestionExecutor")
     public CompletableFuture<ImageMetadataDO> processImage(ImageReferenceExtractor.ImageReference ref, String vaultPath, String notePath) {
+        return CompletableFuture.completedFuture(processImageSync(ref, vaultPath, notePath));
+    }
+
+    public ImageMetadataDO processImageSync(ImageReferenceExtractor.ImageReference ref, String vaultPath, String notePath) {
         try {
             if (ref.resolvedPath() == null || !Files.exists(ref.resolvedPath())) {
                 logger.warn("Referenced image not found, notePath={}, target={}", notePath, ref.referencedPath());
-                return CompletableFuture.completedFuture(null);
+                return null;
             }
             ImageMetadataCollector.CollectedImageMetadata collected =
                     imageMetadataCollector.collect(ref.resolvedPath(), vaultPath);
@@ -52,7 +56,7 @@ public class ImageIngestionPipeline {
                     && collected.fileHash().equals(existing.getFileHash())
                     && "COMPLETED".equals(existing.getSummaryStatus())) {
                 logger.debug("Image unchanged, skipping: {}", ref.resolvedPath());
-                return CompletableFuture.completedFuture(existing);
+                return existing;
             }
             ImageMetadataDO metadata = createOrUpdatePendingMetadata(collected);
             metadata.setSummaryStatus("PROCESSING");
@@ -62,13 +66,13 @@ public class ImageIngestionPipeline {
             metadata.setSummaryStatus("COMPLETED");
             imageMetadataMapper.updateById(metadata);
             imageIndexService.indexImage(metadata, ref.resolvedPath());
-            return CompletableFuture.completedFuture(metadata);
+            return metadata;
         } catch (IOException e) {
             logger.warn("Collect image metadata failed, notePath={}, target={}", notePath, ref.referencedPath(), e);
-            return CompletableFuture.completedFuture(null);
+            return null;
         } catch (Exception e) {
             logger.warn("Image async processing failed, notePath={}, target={}", notePath, ref.referencedPath(), e);
-            return CompletableFuture.completedFuture(markFailed(ref));
+            return markFailed(ref);
         }
     }
 

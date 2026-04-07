@@ -21,6 +21,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,6 +32,7 @@ import java.util.stream.Collectors;
 public class IngestionService {
 
     private static final Logger logger = LoggerFactory.getLogger(IngestionService.class);
+    private static final Path BROWSER_ASSET_ROOT = Path.of("uploads", "browser-assets");
 
     private final NoteLoader noteLoader;
     private final DocumentSplitter documentSplitter;
@@ -214,6 +218,7 @@ public class IngestionService {
             return new SyncSummary(0, 0, 0, 0, 0, 0, 0);
         }
         String folderKey = sanitizeFolderKey(folderName);
+        persistUploadedAssets(files, relativePaths, folderKey);
         String prefix = "browser://" + folderKey + "/";
         Set<String> ignoredSet = ignoredDirs == null ? Set.of() : ignoredDirs.stream()
                 .filter(Objects::nonNull)
@@ -394,6 +399,48 @@ public class IngestionService {
             }
         }
         return false;
+    }
+
+    private void persistUploadedAssets(List<MultipartFile> files, List<String> relativePaths, String folderKey) {
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+        Path baseDir = BROWSER_ASSET_ROOT.resolve(folderKey).toAbsolutePath().normalize();
+        for (int i = 0; i < files.size(); i++) {
+            MultipartFile file = files.get(i);
+            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.getOriginalFilename();
+            if (relativePath == null || relativePath.isBlank()) {
+                relativePath = file.getOriginalFilename();
+            }
+            if (relativePath == null || !isSupportedImage(relativePath)) {
+                continue;
+            }
+            try {
+                Path target = baseDir.resolve(relativePath.replace("\\", "/")).normalize();
+                if (!target.startsWith(baseDir)) {
+                    logger.warn("Skip uploaded image outside asset root: {}", relativePath);
+                    continue;
+                }
+                Files.createDirectories(target.getParent());
+                try (InputStream inputStream = file.getInputStream()) {
+                    Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (Exception e) {
+                logger.warn("Persist uploaded image asset failed: {}", relativePath, e);
+            }
+        }
+    }
+
+    private boolean isSupportedImage(String path) {
+        if (path == null) {
+            return false;
+        }
+        String lower = path.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".png")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".gif")
+                || lower.endsWith(".webp");
     }
 
     private AddStatus addFile(Resource resource, String filePath, String hash) {

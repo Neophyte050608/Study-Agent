@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,12 +29,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class ImageService {
 
     private static final Logger logger = LoggerFactory.getLogger(ImageService.class);
+    private static final Path BROWSER_ASSET_ROOT = Paths.get("uploads", "browser-assets");
+    private static final Pattern TOKEN_SPLIT_PATTERN = Pattern.compile("[^\\p{L}\\p{N}]+");
+    private static final int MAX_CONTEXT_TOKENS = 8;
+    private static final double MIN_ASSOCIATION_SCORE = 0.35d;
 
     private final ImageReferenceExtractor imageReferenceExtractor;
     private final ImageIngestionPipeline imageIngestionPipeline;
@@ -43,6 +49,8 @@ public class ImageService {
     private final RagParentMapper ragParentMapper;
     private final IngestConfigService ingestConfigService;
     private final int imageSearchTopK;
+    private final double associatedImageMinScore;
+    private final double semanticImageMinScore;
 
     public ImageService(ImageReferenceExtractor imageReferenceExtractor,
                         ImageIngestionPipeline imageIngestionPipeline,
@@ -51,7 +59,9 @@ public class ImageService {
                         TextImageRelationMapper textImageRelationMapper,
                         RagParentMapper ragParentMapper,
                         IngestConfigService ingestConfigService,
-                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.image-search-top-k:3}") int imageSearchTopK) {
+                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.image-search-top-k:3}") int imageSearchTopK,
+                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.associated-image-min-score:0.62}") double associatedImageMinScore,
+                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.semantic-image-min-score:0.80}") double semanticImageMinScore) {
         this.imageReferenceExtractor = imageReferenceExtractor;
         this.imageIngestionPipeline = imageIngestionPipeline;
         this.imageIndexService = imageIndexService;
@@ -60,15 +70,18 @@ public class ImageService {
         this.ragParentMapper = ragParentMapper;
         this.ingestConfigService = ingestConfigService;
         this.imageSearchTopK = imageSearchTopK;
+        this.associatedImageMinScore = associatedImageMinScore;
+        this.semanticImageMinScore = semanticImageMinScore;
     }
 
     public String enrichMarkdownWithImageSummaries(String markdown, String notePath) {
-        List<ImageReferenceExtractor.ImageReference> refs = imageReferenceExtractor.extract(markdown, notePath, currentImageBasePath());
+        List<ImageReferenceExtractor.ImageReference> refs = imageReferenceExtractor.extract(markdown, notePath, resolveImageBasePath(notePath));
+        refs = hydrateImageSummaries(refs, notePath);
         return imageReferenceExtractor.embedSummaries(markdown, refs);
     }
 
     public void indexImagesForDocument(String notePath, String markdown, List<Document> chunks) {
-        List<ImageReferenceExtractor.ImageReference> refs = imageReferenceExtractor.extract(markdown, notePath, currentImageBasePath());
+        List<ImageReferenceExtractor.ImageReference> refs = imageReferenceExtractor.extract(markdown, notePath, resolveImageBasePath(notePath));
         if (refs.isEmpty()) {
             clearRelationsForChunks(chunks);
             return;
@@ -110,8 +123,8 @@ public class ImageService {
                 if (imageId == null) {
                     continue;
                 }
-                boolean matched = chunk.getText().contains(ref.refSyntax()) || chunk.getText().contains(ref.imageName());
-                if (!matched) {
+                RelationScore relationScore = scoreChunkImageRelation(chunk, ref);
+                if (relationScore.score() < MIN_ASSOCIATION_SCORE) {
                     continue;
                 }
                 TextImageRelationDO relation = new TextImageRelationDO();
@@ -119,7 +132,8 @@ public class ImageService {
                 relation.setParentDocId(parentId);
                 relation.setImageId(imageId);
                 relation.setPositionInText(ref.position());
-                relation.setRefSyntax(ref.refSyntax());
+                relation.setRefSyntax(ref.refSyntax() + " ##score=" + String.format(Locale.ROOT, "%.3f", relationScore.score())
+                        + " ##reason=" + relationScore.reason());
                 relation.setCreatedAt(now);
                 textImageRelationMapper.insert(relation);
                 parentToImages.computeIfAbsent(parentId, key -> new LinkedHashSet<>()).add(imageId);
@@ -175,7 +189,9 @@ public class ImageService {
             if (image == null) {
                 continue;
             }
-            double score = chunkScoreMap.getOrDefault(relation.getTextChunkId(), 0.55d);
+            double retrievalScore = chunkScoreMap.getOrDefault(relation.getTextChunkId(), 0.55d);
+            double associationScore = parseAssociationScore(relation.getRefSyntax());
+            double score = retrievalScore * 0.7d + associationScore * 0.3d;
             deduplicated.compute(image.getImageId(), (key, existing) -> {
                 ImageResult candidate = new ImageResult(
                         image.getImageId(),
@@ -195,6 +211,7 @@ public class ImageService {
         }
         return deduplicated.values().stream()
                 .sorted((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()))
+                .filter(image -> image.relevanceScore() >= associatedImageMinScore)
                 .limit(imageSearchTopK)
                 .toList();
     }
@@ -229,6 +246,7 @@ public class ImageService {
                     );
                 })
                 .filter(Objects::nonNull)
+                .filter(image -> image.relevanceScore() >= semanticImageMinScore)
                 .sorted(Comparator.comparingDouble(ImageResult::relevanceScore).reversed())
                 .toList();
     }
@@ -295,6 +313,9 @@ public class ImageService {
     }
 
     private String resolveVaultPath(String notePath) {
+        if (notePath != null && notePath.startsWith("browser://")) {
+            return resolveImageBasePath(notePath);
+        }
         String configuredVaultPath = currentVaultPath();
         if (!configuredVaultPath.isBlank()) {
             return configuredVaultPath;
@@ -315,6 +336,159 @@ public class ImageService {
 
     private String currentImageBasePath() {
         return normalizeConfigValue(ingestConfigService.getConfig().get("imagePath"));
+    }
+
+    private String resolveImageBasePath(String notePath) {
+        String configured = currentImageBasePath();
+        if (!configured.isBlank()) {
+            return configured;
+        }
+        if (notePath != null && notePath.startsWith("browser://")) {
+            int slash = notePath.indexOf('/', "browser://".length());
+            String folderKey = slash < 0 ? notePath.substring("browser://".length()) : notePath.substring("browser://".length(), slash);
+            if (!folderKey.isBlank()) {
+                return BROWSER_ASSET_ROOT.resolve(folderKey).toAbsolutePath().normalize().toString();
+            }
+        }
+        return "";
+    }
+
+    private List<ImageReferenceExtractor.ImageReference> hydrateImageSummaries(List<ImageReferenceExtractor.ImageReference> refs, String notePath) {
+        if (refs == null || refs.isEmpty()) {
+            return List.of();
+        }
+        List<ImageReferenceExtractor.ImageReference> hydrated = new ArrayList<>(refs.size());
+        String vaultPath = resolveVaultPath(notePath);
+        for (ImageReferenceExtractor.ImageReference ref : refs) {
+            String summary = ref.summaryText();
+            try {
+                ImageMetadataDO metadata = imageIngestionPipeline.processImageSync(ref, vaultPath, notePath);
+                if (metadata != null && metadata.getSummaryText() != null && !metadata.getSummaryText().isBlank()) {
+                    summary = metadata.getSummaryText();
+                }
+            } catch (Exception e) {
+                logger.debug("Hydrate image summary failed for notePath={}, image={}", notePath, ref.imageName(), e);
+            }
+            hydrated.add(new ImageReferenceExtractor.ImageReference(
+                    ref.imageName(),
+                    ref.referencedPath(),
+                    ref.refSyntax(),
+                    ref.position(),
+                    ref.resolvedPath(),
+                    ref.sectionPath(),
+                    ref.nearbyContext(),
+                    summary
+            ));
+        }
+        return hydrated;
+    }
+
+    private RelationScore scoreChunkImageRelation(Document chunk, ImageReferenceExtractor.ImageReference ref) {
+        String chunkText = normalizeText(chunk.getText());
+        String sectionPath = normalizeText(stringMetadata(chunk, "section_path"));
+        String chunkBody = normalizeText(stripMetadataPrefix(chunk.getText()));
+
+        double score = 0.0d;
+        List<String> reasons = new ArrayList<>();
+
+        if (chunkText.contains(normalizeText(ref.refSyntax()))) {
+            score += 0.60d;
+            reasons.add("exact_ref");
+        }
+        if (chunkText.contains(normalizeText(ref.imageName()))) {
+            score += 0.30d;
+            reasons.add("image_name");
+        }
+
+        String refSection = normalizeText(ref.sectionPath());
+        if (!refSection.isBlank() && !sectionPath.isBlank()) {
+            if (sectionPath.equals(refSection)) {
+                score += 0.25d;
+                reasons.add("same_section");
+            } else if (sectionPath.contains(refSection) || refSection.contains(sectionPath)) {
+                score += 0.12d;
+                reasons.add("near_section");
+            }
+        }
+
+        double contextOverlap = overlapScore(chunkBody, ref.nearbyContext(), MAX_CONTEXT_TOKENS);
+        if (contextOverlap > 0) {
+            score += 0.25d * contextOverlap;
+            reasons.add("near_context");
+        }
+
+        double summaryOverlap = overlapScore(chunkBody, ref.summaryText(), MAX_CONTEXT_TOKENS);
+        if (summaryOverlap > 0) {
+            score += 0.20d * summaryOverlap;
+            reasons.add("summary_overlap");
+        }
+
+        return new RelationScore(Math.min(1.0d, score), reasons.isEmpty() ? "weak_match" : String.join("+", reasons));
+    }
+
+    private double overlapScore(String text, String candidate, int maxTokens) {
+        Set<String> textTokens = tokenize(text, maxTokens * 3);
+        Set<String> candidateTokens = tokenize(candidate, maxTokens);
+        if (textTokens.isEmpty() || candidateTokens.isEmpty()) {
+            return 0.0d;
+        }
+        long matched = candidateTokens.stream().filter(textTokens::contains).count();
+        return matched == 0 ? 0.0d : Math.min(1.0d, matched / (double) candidateTokens.size());
+    }
+
+    private Set<String> tokenize(String text, int limit) {
+        if (text == null || text.isBlank()) {
+            return Set.of();
+        }
+        String[] parts = TOKEN_SPLIT_PATTERN.split(normalizeText(text));
+        Set<String> tokens = new LinkedHashSet<>();
+        for (String part : parts) {
+            if (part == null || part.isBlank() || part.length() < 2) {
+                continue;
+            }
+            tokens.add(part);
+            if (tokens.size() >= limit) {
+                break;
+            }
+        }
+        return tokens;
+    }
+
+    private String normalizeText(String text) {
+        return text == null ? "" : text.toLowerCase(Locale.ROOT).trim();
+    }
+
+    private String stripMetadataPrefix(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        int newline = text.indexOf('\n');
+        if (newline <= 0) {
+            return text;
+        }
+        String firstLine = text.substring(0, newline);
+        if (firstLine.startsWith("[文档:") || firstLine.startsWith("[章节:") || firstLine.startsWith("[来源:")) {
+            return text.substring(newline + 1);
+        }
+        return text;
+    }
+
+    private double parseAssociationScore(String refSyntax) {
+        if (refSyntax == null || refSyntax.isBlank()) {
+            return 0.55d;
+        }
+        int marker = refSyntax.indexOf("##score=");
+        if (marker < 0) {
+            return 0.55d;
+        }
+        int start = marker + "##score=".length();
+        int end = refSyntax.indexOf(' ', start);
+        String raw = end < 0 ? refSyntax.substring(start) : refSyntax.substring(start, end);
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (Exception ignored) {
+            return 0.55d;
+        }
     }
 
     private String normalizeConfigValue(String raw) {
@@ -360,5 +534,8 @@ public class ImageService {
             double relevanceScore,
             String retrieveChannel
     ) {
+    }
+
+    private record RelationScore(double score, String reason) {
     }
 }
