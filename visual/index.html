@@ -34,6 +34,12 @@
             <p>把“用户发起对话 -> 路由判定 -> 分流到不同能力 -> 返回结果”的完整主链路放在一张图里。</p>
             <p class="mini">难度标签：极高 | 适合作为先看总览、再钻具体模块的总入口</p>
           </a>
+          <a class="nav-card" href="tech-architecture.html">
+            <span class="tag tag--warn">技术视图</span>
+            <h3>模块页：技术架构图</h3>
+            <p>单独展示项目每一层各自采用了什么技术，比如 Vue 3、Spring Boot、MySQL、Redis、Milvus、Neo4j、RocketMQ、MCP、Ollama。</p>
+            <p class="mini">难度标签：中高 | 适合作为“先认技术版图，再看具体链路”的入口</p>
+          </a>
           <a class="nav-card" href="module-interview.html">
             <span class="tag tag--ok">高优先级</span>
             <h3>模块页：面试编排链路</h3>
@@ -67,10 +73,11 @@
           <span class="tag">新人最短理解路径</span>
         </div>
         <ol class="timeline">
-          <li class="done"><strong>1. 先看“面试编排链路”</strong><div class="mini">搞清楚 `InterviewController -> InterviewService -> TaskRouterAgent -> InterviewOrchestratorAgent`</div></li>
-          <li class="done"><strong>2. 再看“知识入库 / ETL”</strong><div class="mini">理解 Markdown 如何切块、建向量、建词法索引、建 Parent-Child 和图谱关系</div></li>
-          <li><strong>3. 再看“RAG 评估分析”</strong><div class="mini">掌握 Recall@K、MRR、Faithfulness 与 Java / Ragas 双引擎评测口径</div></li>
-          <li><strong>4. 最后看“异常流程模拟”</strong><div class="mini">集中理解技术债、降级与风险控制</div></li>
+          <li class="done"><strong>1. 先看“技术架构图”</strong><div class="mini">先建立全局技术版图，知道前端、后端、存储、检索、异步分别落在哪些技术上</div></li>
+          <li class="done"><strong>2. 再看“面试编排链路”</strong><div class="mini">搞清楚 `InterviewController -> InterviewService -> TaskRouterAgent -> InterviewOrchestratorAgent`</div></li>
+          <li><strong>3. 再看“知识入库 / ETL”</strong><div class="mini">理解 Markdown 如何切块、建向量、建词法索引、建 Parent-Child 和图谱关系</div></li>
+          <li><strong>4. 再看“RAG 评估分析”</strong><div class="mini">掌握 Recall@K、MRR、Faithfulness 与 Java / Ragas 双引擎评测口径</div></li>
+          <li><strong>5. 最后看“异常流程模拟”</strong><div class="mini">集中理解技术债、降级与风险控制</div></li>
         </ol>
       </div>
 
