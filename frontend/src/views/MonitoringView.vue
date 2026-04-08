@@ -39,6 +39,75 @@
 
     <!-- Model Routing Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+      <div class="bg-white dark:bg-slate-900 border p-6 rounded-xl relative transition-all duration-300 shadow-[0_4px_20px_-2px_rgba(15,23,42,0.08)]"
+           :class="ollamaCard.statusClass === 'safe'
+             ? 'border-[#d1fae5] dark:border-emerald-900'
+             : ollamaCard.statusClass === 'warn'
+               ? 'border-[#fde68a] dark:border-amber-900'
+               : 'border-[#fecaca] dark:border-red-900'">
+        <div class="flex justify-between items-start mb-8">
+          <div class="flex items-center gap-4">
+            <div class="relative">
+              <div class="w-3 h-3"
+                   :class="ollamaCard.statusClass === 'safe'
+                     ? 'bg-[#059669]'
+                     : ollamaCard.statusClass === 'warn'
+                       ? 'bg-[#d97706]'
+                       : 'bg-[#dc2626] animate-pulse'"></div>
+              <div class="absolute -inset-1 border opacity-20 scale-150"
+                   :class="ollamaCard.statusClass === 'safe'
+                     ? 'border-[#059669]'
+                     : ollamaCard.statusClass === 'warn'
+                       ? 'border-[#d97706]'
+                       : 'border-[#dc2626]'"></div>
+            </div>
+            <div>
+              <h3 class="font-headline text-lg font-bold tracking-tight text-[#111827] dark:text-slate-100">Local Ollama</h3>
+              <div class="font-bold text-[10px] text-[#4b5563] dark:text-slate-400 uppercase tracking-widest mt-1">MODEL: {{ ollamaHealth.model || 'UNCONFIGURED' }}</div>
+            </div>
+          </div>
+          <div class="font-mono text-xs font-bold px-2 py-0.5 border uppercase rounded"
+               :class="ollamaCard.statusClass === 'safe'
+                 ? 'text-[#047857] dark:text-emerald-300 border-[#a7f3d0] dark:border-emerald-800 bg-[#ecfdf5] dark:bg-emerald-950/30'
+                 : ollamaCard.statusClass === 'warn'
+                   ? 'text-[#92400e] dark:text-amber-300 border-[#fde68a] dark:border-amber-800 bg-[#fffbeb] dark:bg-amber-950/30'
+                   : 'text-[#b91c1c] dark:text-red-300 border-[#fecaca] dark:border-red-800 bg-[#fef2f2] dark:bg-red-950/30'">
+            {{ ollamaHealth.status || 'UNKNOWN' }}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4 mb-8">
+          <div>
+            <div class="text-[9px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Service</div>
+            <div class="text-xl font-black text-[#111827] dark:text-slate-100">{{ ollamaHealth.serviceUp ? 'UP' : 'DOWN' }}</div>
+          </div>
+          <div>
+            <div class="text-[9px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Model</div>
+            <div class="text-xl font-black" :class="ollamaHealth.modelReady ? 'text-[#059669] dark:text-emerald-400' : 'text-[#d97706] dark:text-amber-400'">
+              {{ ollamaHealth.modelReady ? 'READY' : 'MISSING' }}
+            </div>
+          </div>
+          <div>
+            <div class="text-[9px] font-bold text-[#4b5563] dark:text-slate-400 uppercase mb-1 tracking-widest">Latency</div>
+            <div class="text-xl font-black text-[#111827] dark:text-slate-100">{{ ollamaHealth.latencyMs || 0 }}ms</div>
+          </div>
+        </div>
+
+        <div v-if="ollamaHealth.error" class="bg-[#fff7ed] dark:bg-amber-950/30 p-4 mb-6 border-l-4 border-[#f59e0b] rounded">
+          <div class="text-[9px] font-bold text-[#b45309] dark:text-amber-300 uppercase mb-1 tracking-widest">Health Detail</div>
+          <div class="text-xs font-mono text-[#92400e] dark:text-amber-200 font-medium">{{ ollamaHealth.error }}</div>
+        </div>
+
+        <div class="flex justify-between items-center pt-4 border-t border-[#e5e7eb] dark:border-slate-700">
+          <span class="text-[9px] font-mono font-bold text-[#6b7280] dark:text-slate-400">
+            {{ ollamaHealth.baseUrl || 'http://localhost:11434' }}
+          </span>
+          <span class="text-[9px] font-mono font-bold text-[#6b7280] dark:text-slate-400">
+            {{ formatCheckedAt(ollamaHealth.checkedAt) }}
+          </span>
+        </div>
+      </div>
+
       <div v-for="item in detailCards" :key="item.name" 
            class="bg-white dark:bg-slate-900 border p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg"
            :class="item.statusClass === 'safe' ? 'border-[#e5e7eb] dark:border-slate-700 shadow-[0_4px_20px_-2px_rgba(5,150,105,0.1)]' : 'border-[#fee2e2] shadow-[0_4px_20px_-2px_rgba(220,38,38,0.1)]'">
@@ -175,6 +244,16 @@ const runtimeStats = ref({ totalRequests: 0, totalFailureCount: 0, routeFallback
 const rawDetails = ref({})
 const rawStates = ref({})
 const healthLogs = ref([])
+const ollamaHealth = ref({
+  baseUrl: '',
+  model: '',
+  serviceUp: false,
+  modelReady: false,
+  status: 'UNKNOWN',
+  latencyMs: 0,
+  error: null,
+  checkedAt: null
+})
 
 const lastUpdate = ref('00:00:00')
 const countdown = ref(5)
@@ -210,6 +289,24 @@ const detailCards = computed(() => {
   })
 })
 
+const ollamaCard = computed(() => {
+  const status = ollamaHealth.value?.status || 'UNKNOWN'
+  if (status === 'UP') {
+    return { statusClass: 'safe' }
+  }
+  if (status === 'DEGRADED') {
+    return { statusClass: 'warn' }
+  }
+  return { statusClass: 'danger' }
+})
+
+function formatCheckedAt(value) {
+  if (!value) return 'CHECK_PENDING'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'CHECK_PENDING'
+  return `checked ${date.toLocaleTimeString('en-US', { hour12: false })}`
+}
+
 let timer = null
 let countdownTimer = null
 
@@ -226,6 +323,7 @@ const updateStats = async () => {
       rawDetails.value = data.runtime.details || {}
       rawStates.value = data.runtime.states || {}
       healthLogs.value = data.healthLogs || []
+      ollamaHealth.value = data.ollama || ollamaHealth.value
       if (import.meta.env.DEV) {
         const hasRequiredHealthFields = typeof runtimeHealth.totalRequests === 'number'
           && typeof runtimeHealth.totalFailureCount === 'number'

@@ -2,6 +2,7 @@ package com.example.interview.controller;
 
 import com.example.interview.modelrouting.ModelRoutingProperties;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.service.OllamaHealthService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
@@ -25,6 +26,8 @@ class ModelRoutingControllerTest {
                 "states", Map.of("m1", "OPEN")
         ));
         ModelRoutingProperties properties = new ModelRoutingProperties();
+        OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
+        when(ollamaHealthService.getHealthInfo()).thenReturn(Map.of("status", "UP", "serviceUp", true, "modelReady", true));
         properties.setEnabled(true);
         properties.setDefaultModel("deepseek-chat");
         properties.setDeepThinkingModel("deepseek-reasoner");
@@ -32,7 +35,7 @@ class ModelRoutingControllerTest {
         candidate.setName("deepseek-chat");
         properties.setCandidates(List.of(candidate));
 
-        ModelRoutingController controller = new ModelRoutingController(routingChatService, properties);
+        ModelRoutingController controller = new ModelRoutingController(routingChatService, properties, ollamaHealthService);
         ResponseEntity<Map<String, Object>> response = controller.stats();
 
         assertEquals(200, response.getStatusCode().value());
@@ -41,5 +44,6 @@ class ModelRoutingControllerTest {
         assertEquals("deepseek-chat", body.get("defaultModel"));
         assertEquals(1, body.get("candidateCount"));
         assertTrue(body.containsKey("runtime"));
+        assertTrue(body.containsKey("ollama"));
     }
 }
