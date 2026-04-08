@@ -1,7 +1,7 @@
 {
   "schemaVersion" : 1,
-  "buildId" : "358fe83e-4d5a-42b2-81ce-0e01a89cf1aa",
-  "generatedAt" : "2026-04-07T11:40:01.016543700Z",
+  "buildId" : "bf880e93-f076-42bb-8b52-cbb40baba047",
+  "generatedAt" : "2026-04-08T09:00:38.160709600Z",
   "vaultRoot" : "D:\\Obsidian\\NoteHub\\learning\\tech",
   "nodeCount" : 200,
   "nodes" : [ {
@@ -44,7 +44,7 @@
     "id" : "AI/LLM",
     "title" : "LLM",
     "aliases" : [ ],
-    "summary" : "参数： Softmax的公式里有用到",
+    "summary" : "本质上还是一个概率性文本续写器 参数： Softmax的公式里有用到",
     "tags" : [ "AI", "LLM", "大语言模型", "自然语言处理" ],
     "filePath" : "AI/LLM.md",
     "wikiLinks" : [ ],

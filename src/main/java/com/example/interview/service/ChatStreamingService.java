@@ -8,8 +8,8 @@ import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.core.RAGTraceContext;
+import com.example.interview.entity.ChatMessageDO;
 import com.example.interview.security.InputSanitizer;
-import com.example.interview.service.KnowledgeRetrievalMode;
 import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
@@ -87,17 +87,31 @@ public class ChatStreamingService {
     }
 
     public boolean stopTask(String streamTaskId) {
-        return taskManager.cancel(streamTaskId, "已停止生成");
+        String messageId = taskManager.getMessageId(streamTaskId);
+        boolean stopped = taskManager.cancel(streamTaskId, "已停止生成");
+        if (stopped) {
+            updateAssistantPlaceholder(
+                    messageId,
+                    "已停止生成",
+                    buildTerminalMetadata("", streamTaskId, "CANCELLED", null),
+                    "text",
+                    "CANCELLED"
+            );
+        }
+        return stopped;
     }
 
     private void runChat(String sessionId, String userId, String content,
                          KnowledgeRetrievalMode retrievalMode,
                          String traceId, String taskId, InterviewSseEmitterSender sender) {
         RAGTraceContext.setTraceId(traceId);
+        String assistantMessageId = "";
         try {
             if (taskManager.isCancelled(taskId)) return;
 
             webChatService.saveUserMessage(sessionId, content);
+            assistantMessageId = createRunningAssistantPlaceholder(sessionId, traceId, taskId).getMessageId();
+            taskManager.attachMessage(taskId, assistantMessageId);
             sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
                     "stage", "THINKING", "label", "正在思考", "status", "running", "percent", 20));
 
@@ -135,7 +149,7 @@ public class ChatStreamingService {
                     } else {
                         metadata.put("type", "interview_answer");
                     }
-                    webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+                    updateAssistantPlaceholder(assistantMessageId, replyText, metadata, "text", "COMPLETED");
 
                     sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                             "action", "chat",
@@ -197,7 +211,7 @@ public class ChatStreamingService {
                 if (!isLast) {
                     metadata.put("codingSessionId", activeCodingId);
                 }
-                webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+                updateAssistantPlaceholder(assistantMessageId, replyText, metadata, "text", "COMPLETED");
 
                 sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                         "action", "chat",
@@ -228,7 +242,7 @@ public class ChatStreamingService {
             // 判断是否为知识问答意图（可以走流式）
             if (isKnowledgeQaResult(response)) {
                 // 走原有的 KnowledgeQaAgent 流式路径
-                runKnowledgeQaStream(sessionId, content, history, retrievalMode, traceId, taskId, sender);
+                runKnowledgeQaStream(sessionId, content, history, retrievalMode, traceId, taskId, sender, assistantMessageId);
             } else {
                 // 非知识问答意图（面试、编码练习等），结果已计算完成，分块流式发送
                 
@@ -255,7 +269,7 @@ public class ChatStreamingService {
                     metadata.put("type", "coding_practice_batch");
                     metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
 
-                    webChatService.saveAssistantMessage(sessionId, quizJson, metadata, "quiz");
+                    updateAssistantPlaceholder(assistantMessageId, quizJson, metadata, "quiz", "COMPLETED");
 
                     sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                             "action", "chat",
@@ -292,7 +306,7 @@ public class ChatStreamingService {
                     }
                     metadata.put("type", "coding_practice");
                 }
-                webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+                updateAssistantPlaceholder(assistantMessageId, replyText, metadata, "text", "COMPLETED");
                 webChatService.autoTitleIfNeeded(sessionId, content);
 
                 sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
@@ -305,6 +319,13 @@ public class ChatStreamingService {
         } catch (Exception ex) {
             log.warn("chat stream failed, taskId={}", taskId, ex);
             if (!taskManager.isCancelled(taskId)) {
+                updateAssistantPlaceholder(
+                        assistantMessageId,
+                        "抱歉，处理您的请求时遇到了问题：" + (ex.getMessage() != null ? ex.getMessage() : "处理失败"),
+                        buildTerminalMetadata(traceId, taskId, "FAILED", ex.getMessage()),
+                        "text",
+                        "FAILED"
+                );
                 sender.sendEvent(InterviewStreamEventType.ERROR.value(), Map.of(
                         "code", "CHAT_STREAM_FAILED",
                         "message", ex.getMessage() != null ? ex.getMessage() : "处理失败"));
@@ -339,6 +360,14 @@ public class ChatStreamingService {
     private void runKnowledgeQaStream(String sessionId, String content, String history,
                                        KnowledgeRetrievalMode retrievalMode,
                                        String traceId, String taskId, InterviewSseEmitterSender sender) {
+        runKnowledgeQaStream(sessionId, content, history, retrievalMode, traceId, taskId, sender, "");
+    }
+
+    private void runKnowledgeQaStream(String sessionId, String content, String history,
+                                      KnowledgeRetrievalMode retrievalMode,
+                                      String traceId, String taskId,
+                                      InterviewSseEmitterSender sender,
+                                      String assistantMessageId) {
         sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "RETRIEVING", "label", "正在检索知识", "status", "running", "percent", 50));
 
@@ -404,13 +433,19 @@ public class ChatStreamingService {
         if (images instanceof List<?> imageList && !imageList.isEmpty()) {
             metadata.put("images", images);
             sendImageEvents(sender, imageList, taskId);
-            webChatService.saveAssistantMessage(sessionId, buildRichContent(replyText, imageList), metadata, "rich");
+            updateAssistantPlaceholder(
+                    assistantMessageId,
+                    buildRichContent(replyText, imageList),
+                    metadata,
+                    "rich",
+                    "COMPLETED"
+            );
             finishResult.put("images", imageList);
             sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
                     "result", finishResult));
         } else {
-            webChatService.saveAssistantMessage(sessionId, replyText, metadata);
+            updateAssistantPlaceholder(assistantMessageId, replyText, metadata, "text", "COMPLETED");
             sender.sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
                     "result", finishResult));
@@ -419,6 +454,41 @@ public class ChatStreamingService {
         sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
         taskManager.unregister(taskId);
         sender.complete();
+    }
+
+    private ChatMessageDO createRunningAssistantPlaceholder(String sessionId, String traceId, String taskId) {
+        return webChatService.createAssistantPlaceholder(
+                sessionId,
+                "正在生成中...",
+                buildTerminalMetadata(traceId, taskId, "RUNNING", null),
+                "text"
+        );
+    }
+
+    private void updateAssistantPlaceholder(String messageId,
+                                            String content,
+                                            Map<String, Object> metadata,
+                                            String contentType,
+                                            String generationStatus) {
+        Map<String, Object> merged = metadata == null ? new LinkedHashMap<>() : new LinkedHashMap<>(metadata);
+        if (generationStatus != null && !generationStatus.isBlank()) {
+            merged.put("generationStatus", generationStatus);
+        }
+        webChatService.updateAssistantMessage(messageId, content, merged, contentType);
+    }
+
+    private Map<String, Object> buildTerminalMetadata(String traceId,
+                                                      String taskId,
+                                                      String generationStatus,
+                                                      String errorMessage) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("traceId", traceId);
+        metadata.put("streamTaskId", taskId);
+        metadata.put("generationStatus", generationStatus);
+        if (errorMessage != null && !errorMessage.isBlank()) {
+            metadata.put("generationError", errorMessage);
+        }
+        return metadata;
     }
 
     private void sendImageEvents(InterviewSseEmitterSender sender, List<?> images, String taskId) {

@@ -25,7 +25,7 @@ public class InterviewSseEmitterSender {
             try {
                 emitter.send(SseEmitter.event().name(eventName).data(data));
             } catch (IOException | IllegalStateException ex) {
-                fail(ex);
+                closeSilently();
             }
         }
     }
@@ -35,7 +35,11 @@ public class InterviewSseEmitterSender {
             return;
         }
         synchronized (lock) {
-            emitter.complete();
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+                // Async request may already be in terminal state after disconnect.
+            }
         }
     }
 
@@ -44,7 +48,24 @@ public class InterviewSseEmitterSender {
             return;
         }
         synchronized (lock) {
-            emitter.completeWithError(throwable);
+            try {
+                emitter.completeWithError(throwable);
+            } catch (IllegalStateException ignored) {
+                // Container may have already finished async error handling.
+            }
+        }
+    }
+
+    private void closeSilently() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        synchronized (lock) {
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+                // Ignore container async lifecycle races after client disconnect.
+            }
         }
     }
 }

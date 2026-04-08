@@ -1,5 +1,7 @@
 package com.example.interview.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,7 +28,13 @@ public class GlobalExceptionHandler {
      * @return 统一的 413 响应
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, String>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ignored) {
+    public ResponseEntity<?> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ignored,
+                                                         HttpServletRequest request) {
+        if (isSseRequest(request)) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body("上传文件超过服务端限制，请上传 20MB 以内 PDF");
+        }
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("message", "上传文件超过服务端限制，请上传 20MB 以内 PDF"));
     }
@@ -38,10 +46,16 @@ public class GlobalExceptionHandler {
      * @return 统一的 400 响应
      */
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException exception) {
+    public ResponseEntity<?> handleIllegalArgument(IllegalArgumentException exception,
+                                                   HttpServletRequest request) {
         String message = exception == null || exception.getMessage() == null || exception.getMessage().isBlank()
                 ? "请求参数不合法"
                 : exception.getMessage();
+        if (isSseRequest(request)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(message);
+        }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("message", message));
     }
@@ -53,8 +67,23 @@ public class GlobalExceptionHandler {
      * @return 统一的 500 响应
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleGenericException(Exception exception) {
+    public ResponseEntity<?> handleGenericException(Exception exception, HttpServletRequest request) {
+        if (isSseRequest(request)) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body("服务器内部错误，请稍后重试");
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", "服务器内部错误，请稍后重试"));
+    }
+
+    private boolean isSseRequest(HttpServletRequest request) {
+        if (request == null) {
+            return false;
+        }
+        String accept = request.getHeader("Accept");
+        String contentType = request.getContentType();
+        return (accept != null && accept.contains(MediaType.TEXT_EVENT_STREAM_VALUE))
+                || (contentType != null && contentType.contains(MediaType.TEXT_EVENT_STREAM_VALUE));
     }
 }

@@ -190,7 +190,16 @@
                     <div v-html="renderMarkdown(msg.content)"></div>
                     <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${idx}-${imageIdx}`" :image="image" />
                     <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
-                    <div v-if="msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason" class="mt-3 flex flex-wrap gap-2">
+                    <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason" class="mt-3 flex flex-wrap gap-2">
+                      <span v-if="msg.generationStatus === 'RUNNING'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900">
+                        generating
+                      </span>
+                      <span v-else-if="msg.generationStatus === 'CANCELLED'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
+                        cancelled
+                      </span>
+                      <span v-else-if="msg.generationStatus === 'FAILED'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-900">
+                        failed
+                      </span>
                       <span v-if="msg.retrievalModeResolved" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
                         mode: {{ formatRetrievalMode(msg.retrievalModeResolved) }}
                       </span>
@@ -297,7 +306,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import QuizCard from './chat/QuizCard.vue'
@@ -356,6 +365,121 @@ const messagesLoading = ref(false)
 const errorMsg = ref('')
 
 const sessionToDelete = ref(null)
+const streamAbortExpected = ref(false)
+let runningMessagePollTimer = null
+
+const isAbortLikeError = (err) => {
+  if (!err) return false
+  const name = typeof err?.name === 'string' ? err.name : ''
+  const message = typeof err?.message === 'string' ? err.message.toLowerCase() : ''
+  return name === 'AbortError' || message.includes('aborted') || message.includes('abort')
+}
+
+const cleanupStreamingState = () => {
+  streamingContent.value = ''
+  streamingImages.value = []
+  currentQuizPayload.value = null
+  streamingMeta.value = {
+    retrievalModeRequested: '',
+    retrievalModeResolved: '',
+    fallbackReason: '',
+    localGraphUsed: false,
+    ragUsed: false
+  }
+  isStreaming.value = false
+  streamHandle.value = null
+}
+
+const stopRunningMessagePolling = () => {
+  if (runningMessagePollTimer) {
+    clearInterval(runningMessagePollTimer)
+    runningMessagePollTimer = null
+  }
+}
+
+const hasRunningMessages = (items) => {
+  return Array.isArray(items) && items.some(msg => msg?.generationStatus === 'RUNNING')
+}
+
+const normalizeMessages = (rawMessages) => {
+  return rawMessages.map(msg => {
+    const metadata = msg?.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}
+    if (msg.contentType === 'quiz' && msg.content) {
+      try {
+        const quizPayload = JSON.parse(msg.content)
+        return { ...msg, ...metadata, quizPayload, content: '' }
+      } catch (e) {
+        return { ...msg, ...metadata }
+      }
+    }
+    if (msg.contentType === 'rich' && msg.content) {
+      try {
+        const richPayload = JSON.parse(msg.content)
+        return {
+          ...msg,
+          ...metadata,
+          content: richPayload?.text || '',
+          images: Array.isArray(richPayload?.images) ? richPayload.images : []
+        }
+      } catch (e) {
+        return { ...msg, ...metadata }
+      }
+    }
+    return { ...msg, ...metadata }
+  })
+}
+
+const refreshCurrentMessages = async ({ silent = false } = {}) => {
+  if (!currentSessionId.value) return
+  if (!silent) {
+    messagesLoading.value = true
+  }
+  try {
+    const data = await listChatMessages(currentSessionId.value, 200)
+    const rawMessages = Array.isArray(data) ? data : (data.content || [])
+    messages.value = normalizeMessages(rawMessages)
+    if (!hasRunningMessages(messages.value)) {
+      stopRunningMessagePolling()
+    }
+    scrollToBottom()
+  } catch (err) {
+    console.error('Failed to refresh messages', err)
+    if (!silent) {
+      showError('加载消息记录失败')
+    }
+  } finally {
+    if (!silent) {
+      messagesLoading.value = false
+    }
+  }
+}
+
+const ensureRunningMessagePolling = () => {
+  if (!currentSessionId.value || isStreaming.value || !hasRunningMessages(messages.value) || runningMessagePollTimer) {
+    return
+  }
+  runningMessagePollTimer = setInterval(async () => {
+    if (!currentSessionId.value || isStreaming.value) {
+      stopRunningMessagePolling()
+      return
+    }
+    await refreshCurrentMessages({ silent: true })
+  }, 2000)
+}
+
+const cancelActiveStream = ({ expected = false } = {}) => {
+  if (expected) {
+    streamAbortExpected.value = true
+  }
+  if (streamHandle.value) {
+    streamHandle.value.cancel()
+    streamHandle.value = null
+  }
+}
+
+const handlePageLeave = () => {
+  cancelActiveStream({ expected: true })
+}
 
 const handleDeleteSession = (id) => {
   sessionToDelete.value = id
@@ -399,12 +523,21 @@ const normalizeRetrievalMode = (value) => {
 
 // Load sessions on mount
 onMounted(async () => {
+  window.addEventListener('pagehide', handlePageLeave)
+  window.addEventListener('beforeunload', handlePageLeave)
   try {
     selectedRetrievalMode.value = normalizeRetrievalMode(localStorage.getItem(RETRIEVAL_MODE_STORAGE_KEY))
   } catch (err) {
     console.warn('Failed to restore retrieval mode from localStorage', err)
   }
   await loadSessions()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pagehide', handlePageLeave)
+  window.removeEventListener('beforeunload', handlePageLeave)
+  cancelActiveStream({ expected: true })
+  stopRunningMessagePolling()
 })
 
 const loadSessions = async () => {
@@ -424,50 +557,13 @@ const isCurrentSession = (id) => id === currentSessionId.value
 
 const selectSession = async (id) => {
   if (editingId.value) return // Don't switch while editing
+  stopRunningMessagePolling()
   currentSessionId.value = id
   messages.value = []
   isStreaming.value = false
-  if (streamHandle.value) {
-    streamHandle.value.cancel()
-    streamHandle.value = null
-  }
-  messagesLoading.value = true
-  try {
-    const data = await listChatMessages(id, 200)
-    const rawMessages = Array.isArray(data) ? data : (data.content || [])
-    // 检测 contentType=quiz 的历史消息，解析 content 为 quizPayload
-    messages.value = rawMessages.map(msg => {
-      const metadata = msg?.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}
-      if (msg.contentType === 'quiz' && msg.content) {
-        try {
-          const quizPayload = JSON.parse(msg.content)
-          return { ...msg, ...metadata, quizPayload, content: '' }
-        } catch (e) {
-          // JSON 解析失败，保持原样
-        }
-      }
-      if (msg.contentType === 'rich' && msg.content) {
-        try {
-          const richPayload = JSON.parse(msg.content)
-          return {
-            ...msg,
-            ...metadata,
-            content: richPayload?.text || '',
-            images: Array.isArray(richPayload?.images) ? richPayload.images : []
-          }
-        } catch (e) {
-          // JSON 解析失败，保持原样
-        }
-      }
-      return { ...msg, ...metadata }
-    })
-    scrollToBottom()
-  } catch (err) {
-    console.error('Failed to load messages', err)
-    showError('加载消息记录失败')
-  } finally {
-    messagesLoading.value = false
-  }
+  cancelActiveStream({ expected: true })
+  await refreshCurrentMessages()
+  ensureRunningMessagePolling()
 }
 
 const handleCreateSession = async () => {
@@ -570,6 +666,7 @@ const handleSend = async () => {
   scrollToBottom()
 
   isStreaming.value = true
+  streamAbortExpected.value = false
   streamingContent.value = ''
   streamingImages.value = []
   currentQuizPayload.value = null
@@ -636,22 +733,18 @@ const handleSend = async () => {
         isStreaming.value = false
         streamHandle.value = null
         loadSessions() // Title might have been updated
+        refreshCurrentMessages({ silent: true })
         scrollToBottom()
       },
       onError: (err) => {
+        if (streamAbortExpected.value || isAbortLikeError(err)) {
+          cleanupStreamingState()
+          streamAbortExpected.value = false
+          return
+        }
         console.error('Stream error:', err)
         messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[生成出错]**' })
-        streamingContent.value = ''
-        streamingImages.value = []
-        streamingMeta.value = {
-          retrievalModeRequested: '',
-          retrievalModeResolved: '',
-          fallbackReason: '',
-          localGraphUsed: false,
-          ragUsed: false
-        }
-        isStreaming.value = false
-        streamHandle.value = null
+        cleanupStreamingState()
         showError('流式生成出错')
         scrollToBottom()
       },
@@ -667,6 +760,11 @@ const handleSend = async () => {
     
     await streamHandle.value.start()
   } catch (err) {
+    if (streamAbortExpected.value || isAbortLikeError(err)) {
+      cleanupStreamingState()
+      streamAbortExpected.value = false
+      return
+    }
     console.error('Send error:', err)
     isStreaming.value = false
     streamHandle.value = null
@@ -675,10 +773,7 @@ const handleSend = async () => {
 }
 
 const handleStop = async () => {
-  if (streamHandle.value) {
-    streamHandle.value.cancel()
-    streamHandle.value = null
-  }
+  cancelActiveStream({ expected: true })
   if (streamTaskId.value) {
     try {
       await stopChatStream(streamTaskId.value)
@@ -688,16 +783,7 @@ const handleStop = async () => {
   }
   if (isStreaming.value) {
     messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[已停止]**' })
-    streamingContent.value = ''
-    streamingImages.value = []
-    streamingMeta.value = {
-      retrievalModeRequested: '',
-      retrievalModeResolved: '',
-      fallbackReason: '',
-      localGraphUsed: false,
-      ragUsed: false
-    }
-    isStreaming.value = false
+    cleanupStreamingState()
   }
   scrollToBottom()
 }
@@ -705,6 +791,17 @@ const handleStop = async () => {
 watch(() => messages.value.length, () => {
   scrollToBottom()
 })
+
+watch(
+  () => [currentSessionId.value, isStreaming.value, hasRunningMessages(messages.value)],
+  ([sessionId, streaming, running]) => {
+    if (!sessionId || streaming || !running) {
+      stopRunningMessagePolling()
+      return
+    }
+    ensureRunningMessagePolling()
+  }
+)
 
 watch(selectedRetrievalMode, (value) => {
   const normalized = normalizeRetrievalMode(value)

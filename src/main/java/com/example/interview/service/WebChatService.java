@@ -125,6 +125,37 @@ public class WebChatService {
         return msg;
     }
 
+    public ChatMessageDO createAssistantPlaceholder(String sessionId,
+                                                    String content,
+                                                    Map<String, Object> metadata,
+                                                    String contentType) {
+        return saveAssistantMessage(sessionId, content, metadata, contentType);
+    }
+
+    public void updateAssistantMessage(String messageId,
+                                       String content,
+                                       Map<String, Object> metadata,
+                                       String contentType) {
+        if (messageId == null || messageId.isBlank()) {
+            return;
+        }
+        ChatMessageDO existing = messageMapper.selectOne(
+                new LambdaQueryWrapper<ChatMessageDO>()
+                        .eq(ChatMessageDO::getMessageId, messageId)
+                        .last("LIMIT 1")
+        );
+        if (existing == null) {
+            return;
+        }
+        existing.setContent(content);
+        existing.setMetadata(metadata);
+        if (contentType != null && !contentType.isBlank()) {
+            existing.setContentType(contentType);
+        }
+        messageMapper.updateById(existing);
+        touchSession(existing.getSessionId());
+    }
+
     // ======== Chat Dispatch ========
 
     public TaskResponse dispatchChat(String sessionId, String userId, String userContent) {

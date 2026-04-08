@@ -21,9 +21,9 @@ public class InterviewStreamTaskManager {
     }
 
     public void bindLifecycle(String taskId, SseEmitter emitter) {
-        emitter.onCompletion(() -> unregister(taskId));
-        emitter.onTimeout(() -> unregister(taskId));
-        emitter.onError(ex -> unregister(taskId));
+        emitter.onCompletion(() -> detach(taskId));
+        emitter.onTimeout(() -> detach(taskId));
+        emitter.onError(ex -> detach(taskId));
     }
 
     public boolean isCancelled(String taskId) {
@@ -37,21 +37,44 @@ public class InterviewStreamTaskManager {
             return false;
         }
         task.cancelled.set(true);
-        task.sender.sendEvent(InterviewStreamEventType.CANCEL.value(), Map.of(
-                "streamTaskId", taskId,
-                "message", message == null || message.isBlank() ? "已停止生成" : message
-        ));
-        task.sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
-        task.sender.complete();
+        InterviewSseEmitterSender sender = task.sender;
+        if (sender != null) {
+            sender.sendEvent(InterviewStreamEventType.CANCEL.value(), Map.of(
+                    "streamTaskId", taskId,
+                    "message", message == null || message.isBlank() ? "已停止生成" : message
+            ));
+            sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
+            sender.complete();
+        }
         return true;
+    }
+
+    public void attachMessage(String taskId, String messageId) {
+        StreamTask task = tasks.get(taskId);
+        if (task != null) {
+            task.messageId = messageId;
+        }
+    }
+
+    public String getMessageId(String taskId) {
+        StreamTask task = tasks.get(taskId);
+        return task == null ? "" : task.messageId;
     }
 
     public void unregister(String taskId) {
         tasks.remove(taskId);
     }
 
+    public void detach(String taskId) {
+        StreamTask task = tasks.get(taskId);
+        if (task != null) {
+            task.sender = null;
+        }
+    }
+
     private static final class StreamTask {
-        private final InterviewSseEmitterSender sender;
+        private volatile InterviewSseEmitterSender sender;
+        private volatile String messageId = "";
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
         private StreamTask(InterviewSseEmitterSender sender) {
