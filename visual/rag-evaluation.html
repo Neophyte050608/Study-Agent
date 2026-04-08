@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG 评估分析可视化</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .view-tabs{display:flex;gap:10px;margin-bottom:14px}
+    .view-tabs .tab.active{background:var(--accent);color:#fff}
+    .eval-wrap{overflow:auto;border-radius:20px;cursor:grab;user-select:none}
+    .eval-wrap.dragging{cursor:grabbing}
+    .eval-board{position:relative;min-width:2100px;min-height:960px;border-radius:20px;border:1px solid rgba(216,201,174,.92);background:linear-gradient(0deg,rgba(181,93,51,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(181,93,51,.05) 1px,transparent 1px),#fffdf8;background-size:28px 28px}
+    .band{position:absolute;border-radius:24px;border:1px dashed rgba(122,74,35,.22);background:rgba(255,250,242,.56);pointer-events:none}
+    .band span{position:absolute;left:16px;top:10px;display:inline-flex;padding:4px 10px;border-radius:999px;background:#f1e2cf;color:#7a4a23;font-size:12px}
+    .band.retrieve{background:rgba(238,247,231,.65)}
+    .band.metric{background:rgba(238,241,252,.62)}
+    .band.persist{background:rgba(248,243,231,.66)}
+    .band.quality{background:rgba(231,241,251,.62)}
+    .line-label{position:absolute;padding:2px 8px;border-radius:999px;background:#fff7ef;border:1px solid rgba(181,93,51,.25);color:#8a4b26;font-size:11px;white-space:nowrap;transform:translate(-50%,-50%)}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .metric-card{padding:14px;border-radius:18px;border:1px solid rgba(216,201,174,.92);background:#fffaf2}
+    .metric-card strong{display:block;font-size:24px;margin-top:8px}
+    .compare-bar{height:10px;border-radius:999px;background:#eee0cd;overflow:hidden}
+    .compare-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--cache),var(--accent))}
+    .engine-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .engine-card{padding:14px;border-radius:18px;border:1px solid rgba(216,201,174,.92);background:#fffaf2}
+    .engine-card.active{border-color:rgba(43,108,176,.55);background:#eef6ff}
+    .engine-card strong{display:block;margin-bottom:8px}
+    @media (max-width:980px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong>模块页：RAG 评估分析</strong>
+        <span>检索评测 + 生成质量评测</span>
+      </div>
+      <div class="topbar__actions">
+        <a class="button button--ghost" href="index.html">返回主索引</a>
+        <label class="switch"><input id="details-toggle" type="checkbox"><span>显示技术细节</span></label>
+      </div>
+    </header>
+
+    <section class="page-grid">
+      <div class="span-4 panel">
+        <div class="section-title"><h3>评测控制</h3><span class="tag">真实服务映射</span></div>
+        <div class="stack">
+          <label>评测视图
+            <select id="view-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="retrieval">检索评测</option>
+              <option value="quality">生成质量评测</option>
+            </select>
+          </label>
+          <label>参数模板
+            <select id="template-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="baseline-rrf">baseline-rrf</option>
+              <option value="high-rerank">high-rerank</option>
+              <option value="fallback-observe">fallback-observe</option>
+            </select>
+          </label>
+          <label>质量评测引擎
+            <select id="engine-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="java">java</option>
+              <option value="ragas">ragas（容器服务）</option>
+            </select>
+          </label>
+          <label class="switch"><input id="web-toggle" type="checkbox"><span>允许 Web Fallback</span></label>
+          <label class="switch"><input id="ragas-health-toggle" type="checkbox" checked><span>模拟容器 Ragas 可用</span></label>
+          <label class="switch"><input id="persist-toggle" type="checkbox" checked><span>持久化评测结果</span></label>
+          <label class="switch"><input id="compare-toggle" type="checkbox" checked><span>展示 A/B 对比</span></label>
+          <div class="inline-group">
+            <button id="play-btn" class="button button--accent">播放评测链路</button>
+            <button id="pause-btn">暂停</button>
+            <button id="resume-btn">继续</button>
+            <button id="reset-btn" class="button--ghost">重置</button>
+          </div>
+          <div class="toolbar">
+            <span class="subtle">速度</span>
+            <input id="speed-input" type="range" min="0.5" max="2.5" step="0.25" value="1.25">
+            <span id="speed-label" class="tag">1.25x</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="span-8 panel panel--strong">
+        <div class="section-title"><h3>页面说明</h3><span class="tag tag--ok">评测口径区分</span></div>
+        <div id="narration-box" class="callout">这个页面区分两种评测：`RetrievalEvaluationService` 评估“能不能把对的文档召回来”；`RAGQualityEvaluationService` 评估“拿到上下文后答案是不是忠实、相关、完整”。质量评测又分两套引擎：Java 本地评估，以及容器内 Ragas Python HTTP 评测服务。</div>
+      </div>
+
+      <div class="span-12 panel">
+        <div class="section-title"><h3>RAG 评估链路图</h3><span id="view-tag" class="tag tag--cache">检索评测</span></div>
+        <div class="toolbar" style="margin-bottom:12px;">
+          <button id="pan-left" class="button button--small">向左看</button>
+          <button id="pan-right" class="button button--small">向右看</button>
+          <button id="pan-reset" class="button button--small button--ghost">回到起点</button>
+          <span class="subtle">缩放</span>
+          <input id="zoom-input" type="range" min="0.75" max="1.45" step="0.05" value="1">
+          <span id="zoom-label" class="tag">100%</span>
+        </div>
+        <div id="eval-wrap" class="eval-wrap">
+          <div id="eval-board" class="eval-board"></div>
+        </div>
+      </div>
+
+      <div class="span-12 panel">
+        <div class="view-tabs">
+          <button id="retrieval-tab" class="tab button button--small active">检索评测</button>
+          <button id="quality-tab" class="tab button button--small button--ghost">生成质量评测</button>
+        </div>
+        <div id="retrieval-panel">
+          <div class="metric-grid">
+            <div class="metric-card"><div class="mini">Recall@1</div><strong id="metric-r1">0.00</strong></div>
+            <div class="metric-card"><div class="mini">Recall@3</div><strong id="metric-r3">0.00</strong></div>
+            <div class="metric-card"><div class="mini">Recall@5</div><strong id="metric-r5">0.00</strong></div>
+            <div class="metric-card"><div class="mini">MRR</div><strong id="metric-mrr">0.00</strong></div>
+          </div>
+        </div>
+        <div id="quality-panel" class="hidden">
+          <div class="metric-grid">
+            <div class="metric-card"><div class="mini">Faithfulness</div><strong id="metric-faith">0.00</strong></div>
+            <div class="metric-card"><div class="mini">Answer Relevancy</div><strong id="metric-answer">0.00</strong></div>
+            <div class="metric-card"><div class="mini">Context Precision</div><strong id="metric-cp">0.00</strong></div>
+            <div class="metric-card"><div class="mini">Context Recall</div><strong id="metric-cr">0.00</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="span-6 panel">
+        <div class="section-title"><h3>运行快照</h3><span class="tag">runId / options / parameterSnapshot</span></div>
+        <pre id="run-json"></pre>
+      </div>
+      <div class="span-6 panel">
+        <div class="section-title"><h3>逐样本结果</h3><span class="tag tag--warn">case 级别</span></div>
+        <pre id="case-json"></pre>
+      </div>
+
+      <div class="span-6 panel">
+        <div class="section-title"><h3>A/B 对比</h3><span class="tag tag--ok">baseline vs candidate</span></div>
+        <div id="compare-box" class="stack"></div>
+      </div>
+      <div class="span-6 panel">
+        <div class="section-title"><h3>当前节点技术说明</h3><span class="tag">点击节点查看</span></div>
+        <div id="detail-box" class="stack"><div class="callout">点击链路图中的任一节点，这里会展示它对应的服务、指标和关键技术栈。</div></div>
+      </div>
+
+      <div class="span-6 panel">
+        <div class="section-title"><h3>评测引擎状态</h3><span class="tag tag--cache">Java / 容器 Ragas</span></div>
+        <div id="engine-box" class="engine-grid"></div>
+      </div>
+      <div class="span-6 panel">
+        <div class="section-title"><h3>Prepared Cases</h3><span class="tag">发往 `/evaluate` 的请求体</span></div>
+        <pre id="prepared-json"></pre>
+      </div>
+
+      <div class="span-12 panel">
+        <div class="section-title"><h3>失败样本分析</h3><span class="tag tag--danger">样本级失败原因</span></div>
+        <div id="failure-box" class="stack"></div>
+      </div>
+
+      <div class="span-12 panel" data-detail-block>
+        <div class="section-title"><h3>关键实现点</h3><span class="tag tag--warn">基于实际代码</span></div>
+        <ul class="bullet-list">
+          <li>`RetrievalEvaluationService` 直接复用 `RAGService.buildKnowledgePacket(query, "", false)`，评测时显式关闭 Web fallback，确保指标衡量的是本地检索能力。</li>
+          <li>检索评测的命中规则是：取前 5 条召回文本，只要文本包含任一 expected keyword，就算命中，并记录 firstHitRank 用来算 Recall@K 和 MRR。</li>
+          <li>参数模板真实存在：`baseline-rrf`、`high-rerank`、`fallback-observe`，核心差异在 `rerankTopK` 和 `allowWebFallback`。</li>
+          <li>`RAGQualityEvaluationService` 会先走真实检索，再生成答案，然后并发计算 `faithfulness / answerRelevancy / contextPrecision / contextRecall`。</li>
+          <li>质量评测支持 `java` 与 `ragas` 两种引擎；`ragas` 实际对应容器内 Python HTTP 服务，由 `RagasEvalClient` 通过 `serviceUrl/health` 探活、通过 `/evaluate` 发起批量评测；不可用时自动回退到 Java 本地评测流程。</li>
+          <li>两类评测都支持留档：运行汇总表 + 逐样本明细表，并可通过 compare / trend 接口做 A/B 对比和趋势分析。</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title"><h3 data-modal-title>详情</h3><button class="button button--small" data-close-modal>关闭</button></div>
+      <div data-modal-body></div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    const pageKey = "rag-evaluation";
+    const retrievalNodes = [
+      {id:"dataset",x:40,y:180,title:"评测集加载",type:"ok",detail:"默认评测集来自 `classpath:eval/rag_ground_truth.json`，也支持手工 cases 与 CSV 上传。",stack:["RetrievalEvaluationService","ObjectMapper","ResourceLoader"],payload:{in:"EvalCase[] / CSV",out:"normalized cases"}},
+      {id:"options",x:300,y:180,title:"参数模板",type:"cache",detail:"参数模板包含 `fusionMode / rerankTopK / allowWebFallback / webFallbackMode`。",stack:["EvalRunOptions","parameterSnapshot"],payload:{in:"template key",out:"parameter snapshot"}},
+      {id:"retrieve",x:600,y:180,title:"主检索链复用",type:"ok",detail:"检索评测直接复用 `RAGService.buildKnowledgePacket(query, '', false)`。",stack:["RAGService","KnowledgePacket"],payload:{in:"query",out:"retrievedDocs / evidence"}},
+      {id:"rank",x:920,y:70,title:"命中判定",type:"ok",detail:"只看前 5 条召回文本，按 expected keywords 判断 firstHitRank。",stack:["containsAnyKeyword","firstHitRank"],payload:{in:"top5 snippets + expectedKeywords",out:"hit / rank"}},
+      {id:"metric",x:1220,y:70,title:"检索指标汇总",type:"cache",detail:"汇总 Recall@1 / Recall@3 / Recall@5 / MRR。",stack:["Recall@K","MRR"],payload:{in:"per-case rank",out:"report metrics"}},
+      {id:"archive",x:1540,y:180,title:"结果留档",type:"ok",detail:"运行汇总写 `t_retrieval_eval_run`，逐样本写 `t_retrieval_eval_case`，内存历史作兜底。",stack:["RetrievalEvalRunMapper","RetrievalEvalCaseMapper"],payload:{in:"report + case results",out:"runId"}},
+      {id:"compare",x:1840,y:180,title:"对比与趋势",type:"cache",detail:"支持 run detail、compare、trend、failure cluster 与模板列表。",stack:["compareRetrievalEvalRuns","getRetrievalEvalTrend"],payload:{in:"baselineRunId + candidateRunId",out:"comparison / trend"}}
+    ];
+    const qualityNodes = [
+      {id:"q-dataset",x:40,y:520,title:"质量评测集",type:"ok",detail:"默认质量评测集来自 `rag_quality_ground_truth.json`，包含 query / groundTruthAnswer / expectedFacts / tag。",stack:["RAGQualityEvaluationService","QualityEvalCase"],payload:{in:"QualityEvalCase[]",out:"normalized cases"}},
+      {id:"q-engine",x:320,y:520,title:"评测引擎选择",type:"cache",detail:"引擎取 `java` 或 `ragas`；其中 `ragas` 对应容器内 Python HTTP 服务，`RagasEvalClient` 会先调 `/health` 探活，再调 `/evaluate` 批量评测；若服务不可用则回退本地 Java 评测。",stack:["evaluationEngine","RagasEvalClient","/health","/evaluate"],payload:{in:"engine + serviceUrl",out:"resolved engine + availability"}},
+      {id:"q-engine-status",x:620,y:400,title:"引擎健康检查",type:"cache",detail:"当选择 `ragas` 时，会先探活容器服务；如果 `/health` 失败，则切回 Java 本地评测。",stack:["RagasEvalClient.isAvailable","getHealthInfo"],payload:{in:"serviceUrl",out:"available / unavailable"}},
+      {id:"q-retrieve",x:700,y:580,title:"检索 + 生成答案",type:"ok",detail:"先走真实检索拿 context，再调用远程模型生成答案，确保质量评测基于真实回答。",stack:["RAGService","RoutingChatService"],payload:{in:"query",out:"generatedAnswer + retrievedContext"}},
+      {id:"q-metric",x:980,y:400,title:"Faithfulness",type:"ok",detail:"评估答案是否忠于 retrieved context。",stack:["LLM JSON Eval / Java Eval"],payload:{in:"answer + context",out:"faithfulness score"}},
+      {id:"q-answer",x:980,y:520,title:"Answer Relevancy",type:"ok",detail:"评估答案与问题本身是否相关、聚焦。",stack:["LLM JSON Eval / Java Eval"],payload:{in:"query + answer",out:"answer relevancy"}},
+      {id:"q-cp",x:980,y:640,title:"Context Precision",type:"cache",detail:"评估召回上下文里有多少内容真正支持答案。",stack:["MetricScore"],payload:{in:"query + context",out:"context precision"}},
+      {id:"q-cr",x:1280,y:520,title:"Context Recall",type:"cache",detail:"评估召回上下文是否覆盖 ground truth 的关键事实。",stack:["MetricScore"],payload:{in:"groundTruth + context",out:"context recall"}},
+      {id:"q-archive",x:1540,y:520,title:"质量评测留档",type:"ok",detail:"汇总写 `t_rag_quality_eval_run`，逐样本写 `t_rag_quality_eval_case`。",stack:["RagQualityEvalRunMapper","RagQualityEvalCaseMapper"],payload:{in:"quality report",out:"quality runId"}},
+      {id:"q-compare",x:1840,y:520,title:"质量对比与趋势",type:"cache",detail:"支持 compare、trend、run detail、engine status。",stack:["compareRAGQualityEvalRuns","getRAGQualityEvalTrend"],payload:{in:"baselineId + candidateId",out:"comparison / trend"}}
+    ];
+    const edges = [
+      ["dataset","options","normal","配置模板"],
+      ["options","retrieve","cache","带参数评测"],
+      ["retrieve","rank","normal","top5 snippets"],
+      ["rank","metric","cache","rank 汇总"],
+      ["metric","archive","normal","persist"],
+      ["archive","compare","cache","A/B / 趋势"],
+      ["q-dataset","q-engine","normal","选择引擎"],
+      ["q-engine","q-engine-status","cache","健康检查"],
+      ["q-engine-status","q-retrieve","cache","可用则继续"],
+      ["q-engine-status","q-archive","cache","不可用回退 Java"],
+      ["q-retrieve","q-metric","normal","context"],
+      ["q-retrieve","q-answer","normal","query+answer"],
+      ["q-retrieve","q-cp","cache","retrieved context"],
+      ["q-retrieve","q-cr","cache","ground truth 对照"],
+      ["q-metric","q-archive","normal","汇总指标"],
+      ["q-answer","q-archive","normal","汇总指标"],
+      ["q-cp","q-archive","cache","汇总指标"],
+      ["q-cr","q-archive","cache","汇总指标"],
+      ["q-archive","q-compare","cache","对比 / 趋势"]
+    ];
+    const defaultState = {
+      showDetails:true,activeView:"retrieval",speed:1.25,paused:false,stopRequested:false,zoom:1,
+      template:"baseline-rrf",engine:"java",allowWebFallback:false,persistResult:true,showCompare:true,
+      ragasHealthy:true,active:[],selectedNodeId:"",runSnapshot:{},caseSnapshot:[],compareSnapshot:{},preparedCases:[],failureCases:[]
+    };
+    let state = Object.assign({}, defaultState, DemoState.read(pageKey, {}));
+    state.active = Array.isArray(state.active) ? state.active : [];
+    const templates = {
+      "baseline-rrf":{fusionMode:"RRF",rerankTopK:8,allowWebFallback:false},
+      "high-rerank":{fusionMode:"RRF",rerankTopK:15,allowWebFallback:false},
+      "fallback-observe":{fusionMode:"RRF",rerankTopK:8,allowWebFallback:true,webFallbackMode:"ON_LOW_QUALITY"}
+    };
+    function persist(){ DemoState.write(pageKey, state); }
+    function nodeById(id){ return retrievalNodes.concat(qualityNodes).find(function(n){ return n.id === id; }); }
+    function currentNodes(){ return state.activeView === "retrieval" ? retrievalNodes : qualityNodes; }
+    function currentRoute(){ return state.activeView === "retrieval" ? ["dataset","options","retrieve","rank","metric","archive","compare"] : ["q-dataset","q-engine","q-retrieve","q-metric","q-answer","q-cp","q-cr","q-archive","q-compare"]; }
+    function edgeVisible(edge){
+      const route = currentRoute();
+      return route.includes(edge[0]) && route.includes(edge[1]);
+    }
+    function buildSnapshots(){
+      const params = Object.assign({}, templates[state.template] || templates["baseline-rrf"]);
+      params.allowWebFallback = !!state.allowWebFallback;
+      state.preparedCases = [];
+      if(state.activeView === "retrieval"){
+        state.runSnapshot = {
+          runId:"retrieval-eval-20260408",
+          datasetSource:"manual",
+          runLabel:state.template,
+          experimentTag:state.template,
+          parameterSnapshot:params,
+          totalCases:4,
+          recallAt1: state.template === "high-rerank" ? 0.50 : 0.25,
+          recallAt3: state.template === "fallback-observe" ? 0.75 : 0.50,
+          recallAt5: 1.00,
+          mrr: state.template === "high-rerank" ? 0.67 : 0.46
+        };
+        state.caseSnapshot = [
+          {query:"Spring事务传播行为有哪些", rank:1, hit:true, snippets:["...REQUIRED...SUPPORTS...","...事务边界..."]},
+          {query:"Redis为什么快", rank: state.template === "high-rerank" ? 2 : 3, hit:true, snippets:["...内存...","...单线程..."]},
+          {query:"JVM垃圾收集器对比", rank:4, hit:true, snippets:["...G1...CMS...","...暂停时间..."]},
+          {query:"MySQL隔离级别", rank:-1, hit:false, snippets:["...锁机制...","...事务日志..."]}
+        ];
+        state.compareSnapshot = {
+          baseline:{label:"baseline-rrf", recallAt5:0.75, mrr:0.43},
+          candidate:{label:state.template, recallAt5:state.runSnapshot.recallAt5, mrr:state.runSnapshot.mrr},
+          delta:{recallAt5:(state.runSnapshot.recallAt5-0.75).toFixed(2),mrr:(state.runSnapshot.mrr-0.43).toFixed(2)}
+        };
+        state.failureCases = [
+          { query:"MySQL隔离级别", type:"检索漏召回", reason:"top5 snippets 未命中 expectedKeywords，firstHitRank=-1", action:"检查词法索引、知识标签与 rerankTopK" },
+          { query:"JVM垃圾收集器对比", type:"排序偏后", reason:"命中但 rank=4，Recall@5 有贡献但 MRR 偏低", action:"提高 rerankTopK 或优化 query overlap 权重" }
+        ];
+        state.preparedCases = [
+          { query:"Spring事务传播行为有哪些", expectedKeywords:["REQUIRED","SUPPORTS","MANDATORY"], tag:"spring" },
+          { query:"Redis为什么快", expectedKeywords:["内存","单线程","IO多路复用"], tag:"redis" },
+          { query:"JVM垃圾收集器对比", expectedKeywords:["G1","CMS","暂停时间"], tag:"jvm" }
+        ];
+      } else {
+        state.runSnapshot = {
+          runId:"rag-quality-eval-20260408",
+          datasetSource:"manual",
+          runLabel:"rag-quality-" + state.engine,
+          engine: state.engine === "ragas" && !state.ragasHealthy ? "java" : state.engine,
+          requestedEngine: state.engine,
+          engineMode: state.engine === "ragas" && state.ragasHealthy ? "container-http-service" : "in-process-java",
+          ragasServiceUrl: state.engine === "ragas" ? "http://localhost:8100" : "",
+          ragasHealth: state.engine === "ragas" ? { status: state.ragasHealthy ? "up" : "down", endpoint:"/health", protocol:"HTTP" } : null,
+          fallbackToJava: state.engine === "ragas" && !state.ragasHealthy,
+          parameterSnapshot:Object.assign({}, params, {engine:state.engine}),
+          totalCases:3,
+          avgFaithfulness: state.engine === "ragas" && state.ragasHealthy ? 0.84 : 0.78,
+          avgAnswerRelevancy: state.engine === "ragas" && state.ragasHealthy ? 0.81 : 0.76,
+          avgContextPrecision: 0.72,
+          avgContextRecall: 0.69
+        };
+        state.caseSnapshot = [
+          {query:"Spring事务传播行为有哪些", faithfulness:0.91, answerRelevancy:0.88, contextPrecision:0.80, contextRecall:0.77},
+          {query:"Redis为什么快", faithfulness:0.82, answerRelevancy:0.79, contextPrecision:0.71, contextRecall:0.66},
+          {query:"MySQL隔离级别有哪些", faithfulness:0.63, answerRelevancy:0.61, contextPrecision:0.66, contextRecall:0.64}
+        ];
+        state.compareSnapshot = {
+          baseline:{label:"java", faithfulness:0.78, answerRelevancy:0.76},
+          candidate:{label:state.runSnapshot.engine, faithfulness:state.runSnapshot.avgFaithfulness, answerRelevancy:state.runSnapshot.avgAnswerRelevancy},
+          delta:{faithfulness:(state.runSnapshot.avgFaithfulness-0.78).toFixed(2),answerRelevancy:(state.runSnapshot.avgAnswerRelevancy-0.76).toFixed(2)}
+        };
+        state.failureCases = [
+          { query:"MySQL隔离级别有哪些", type:"忠实度不足", reason:"答案覆盖了部分事实，但上下文对串行化细节支撑不够", action:"补齐 contextRecall，增加高质量结构化上下文" },
+          { query:"Redis为什么快", type:"上下文精度一般", reason:"召回上下文含较多泛化描述，对最终答案支撑比例不高", action:"提高 contextPrecision，收窄召回噪声" }
+        ];
+        state.preparedCases = state.caseSnapshot.map(function(item){
+          return {
+            query:item.query,
+            answer:"",
+            contexts:[
+              "上下文片段 A：核心原理与主结论。",
+              "上下文片段 B：补充边界与例外场景。"
+            ],
+            ground_truth:item.query.indexOf("Redis") >= 0 ? "Redis 依赖内存、单线程事件循环、IO 多路复用与高效数据结构。" : item.query.indexOf("MySQL") >= 0 ? "隔离级别包括读未提交、读已提交、可重复读、串行化。" : "事务传播包括 REQUIRED、SUPPORTS、MANDATORY、REQUIRES_NEW、NESTED。"
+          };
+        });
+      }
+    }
+    function renderBoard(){
+      const board = document.getElementById("eval-board");
+      board.innerHTML = "";
+      board.style.transform = "scale(" + (state.zoom || 1) + ")";
+      board.style.transformOrigin = "top left";
+      [
+        {title:"检索评测链",x:20,y:30,w:1880,h:280,cls:"retrieve"},
+        {title:"质量评测链",x:20,y:340,w:1880,h:360,cls:"quality"},
+        {title:"指标与留档",x:1180,y:20,w:860,h:680,cls:"metric"},
+        {title:"A/B 对比与趋势",x:1500,y:720,w:520,h:170,cls:"persist"}
+      ].forEach(function(b){
+        const div = document.createElement("div");
+        div.className = "band " + b.cls;
+        div.style.left = b.x + "px";
+        div.style.top = b.y + "px";
+        div.style.width = b.w + "px";
+        div.style.height = b.h + "px";
+        div.innerHTML = "<span>" + b.title + "</span>";
+        board.appendChild(div);
+      });
+      const refs = {};
+      retrievalNodes.concat(qualityNodes).forEach(function(node){
+        const visible = state.activeView === "retrieval" ? retrievalNodes.some(function(x){ return x.id === node.id; }) : qualityNodes.some(function(x){ return x.id === node.id; });
+        if(!visible) return;
+        const route = currentRoute();
+        const div = document.createElement("div");
+        div.className = "node " + (node.type === "cache" ? "cache" : node.type === "error" ? "error" : "ok") + ((state.active.includes(node.id) || route.includes(node.id)) ? " active" : "");
+        div.style.left = node.x + "px";
+        div.style.top = node.y + "px";
+        div.innerHTML = "<strong>" + node.title + "</strong><div class='mini'>" + node.id + "</div>";
+        div.addEventListener("click", function(){ openNode(node.id); });
+        board.appendChild(div);
+        refs[node.id] = {x:node.x+90,y:node.y+41};
+      });
+      edges.forEach(function(edge){
+        if(!edgeVisible(edge)) return;
+        const from = refs[edge[0]], to = refs[edge[1]];
+        if(!from || !to) return;
+        const dx = to.x-from.x, dy = to.y-from.y;
+        const line = document.createElement("div");
+        line.className = "line " + (edge[2] === "cache" ? "cache" : "") + ((state.active.includes(edge[0]) && state.active.includes(edge[1])) ? " active" : "");
+        line.style.left = from.x + "px";
+        line.style.top = from.y + "px";
+        line.style.width = Math.sqrt(dx*dx+dy*dy) + "px";
+        line.style.transform = "rotate(" + (Math.atan2(dy,dx)*180/Math.PI) + "deg)";
+        board.appendChild(line);
+        const label = document.createElement("div");
+        label.className = "line-label";
+        label.style.left = ((from.x+to.x)/2) + "px";
+        label.style.top = ((from.y+to.y)/2) + "px";
+        label.textContent = edge[3];
+        board.appendChild(label);
+      });
+    }
+    function openNode(id){
+      const node = nodeById(id);
+      if(!node) return;
+      state.selectedNodeId = id;
+      persist();
+      renderDetail();
+      DemoUI.openModal(node.title, "<div class='stack'><div class='callout'>" + node.detail + "</div><div class='kv'><strong>技术栈</strong><span>" + node.stack.join(" / ") + "</span><strong>载荷</strong><span>见下方 JSON</span></div><pre>" + JSON.stringify(node.payload, null, 2) + "</pre></div>");
+    }
+    function renderDetail(){
+      const box = document.getElementById("detail-box");
+      const node = nodeById(state.selectedNodeId);
+      if(!node){
+        box.innerHTML = "<div class='callout'>点击链路图中的任一节点，这里会展示它对应的服务、指标和关键技术栈。</div>";
+        return;
+      }
+      box.innerHTML = "<div class='callout'>" + node.detail + "</div><div class='kv'><strong>节点</strong><span>" + node.title + "</span><strong>技术栈</strong><span>" + node.stack.join(" / ") + "</span></div><pre>" + JSON.stringify(node.payload, null, 2) + "</pre>";
+    }
+    function renderMetrics(){
+      if(state.activeView === "retrieval"){
+        document.getElementById("metric-r1").textContent = (state.runSnapshot.recallAt1 || 0).toFixed(2);
+        document.getElementById("metric-r3").textContent = (state.runSnapshot.recallAt3 || 0).toFixed(2);
+        document.getElementById("metric-r5").textContent = (state.runSnapshot.recallAt5 || 0).toFixed(2);
+        document.getElementById("metric-mrr").textContent = (state.runSnapshot.mrr || 0).toFixed(2);
+      } else {
+        document.getElementById("metric-faith").textContent = (state.runSnapshot.avgFaithfulness || 0).toFixed(2);
+        document.getElementById("metric-answer").textContent = (state.runSnapshot.avgAnswerRelevancy || 0).toFixed(2);
+        document.getElementById("metric-cp").textContent = (state.runSnapshot.avgContextPrecision || 0).toFixed(2);
+        document.getElementById("metric-cr").textContent = (state.runSnapshot.avgContextRecall || 0).toFixed(2);
+      }
+    }
+    function renderCompare(){
+      const box = document.getElementById("compare-box");
+      if(!state.showCompare){
+        box.innerHTML = "<div class='callout'>A/B 对比已关闭。</div>";
+        return;
+      }
+      if(state.activeView === "retrieval"){
+        box.innerHTML = "<div class='mini'>Recall@5 差值：" + state.compareSnapshot.delta.recallAt5 + "</div><div class='compare-bar'><span style='width:" + ((state.compareSnapshot.candidate.recallAt5||0)*100) + "%'></span></div><div class='mini'>MRR 差值：" + state.compareSnapshot.delta.mrr + "</div><div class='compare-bar'><span style='width:" + ((state.compareSnapshot.candidate.mrr||0)*100) + "%'></span></div><div class='callout'>基线：baseline-rrf；候选：" + state.compareSnapshot.candidate.label + "。这一块模拟 `/compare` 与 `/trend` 的核心阅读方式。</div>";
+      } else {
+        box.innerHTML = "<div class='mini'>Faithfulness 差值：" + state.compareSnapshot.delta.faithfulness + "</div><div class='compare-bar'><span style='width:" + ((state.compareSnapshot.candidate.faithfulness||0)*100) + "%'></span></div><div class='mini'>Answer Relevancy 差值：" + state.compareSnapshot.delta.answerRelevancy + "</div><div class='compare-bar'><span style='width:" + ((state.compareSnapshot.candidate.answerRelevancy||0)*100) + "%'></span></div><div class='callout'>质量评测引擎当前为 `" + state.engine + "`。当选择 `ragas` 时，这里表达的是“Java 本地评测”与“容器内 Ragas HTTP 服务评测”的对比。</div>";
+      }
+    }
+    function renderEngineBox(){
+      const box = document.getElementById("engine-box");
+      const javaActive = state.engine === "java";
+      const ragasActive = state.engine === "ragas";
+      box.innerHTML =
+        "<div class='engine-card" + (javaActive ? " active" : "") + "'>" +
+          "<strong>Java 本地评测</strong>" +
+          "<div class='mini'>模式：in-process-java</div>" +
+          "<div class='mini'>执行位置：当前 Spring 服务进程内</div>" +
+          "<div class='mini'>适用：默认可用、低依赖、稳定回退</div>" +
+          "<div class='mini'>当前状态：" + (javaActive ? "已选中" : "可切换") + "</div>" +
+        "</div>" +
+        "<div class='engine-card" + (ragasActive ? " active" : "") + "'>" +
+          "<strong>Ragas 容器评测</strong>" +
+          "<div class='mini'>模式：container-http-service</div>" +
+          "<div class='mini'>服务地址：http://localhost:8100</div>" +
+          "<div class='mini'>探活：GET /health，评测：POST /evaluate</div>" +
+          "<div class='mini'>当前状态：" + (ragasActive ? (state.ragasHealthy ? "已选中，容器健康" : "已选中，但容器不可用") : "未选中") + "</div>" +
+        "</div>";
+    }
+    function renderFailures(){
+      const box = document.getElementById("failure-box");
+      if(!state.failureCases || !state.failureCases.length){
+        box.innerHTML = "<div class='callout'>当前没有失败样本。</div>";
+        return;
+      }
+      box.innerHTML = state.failureCases.map(function(item, index){
+        return "<div class='timeline li error'><strong>失败样本 " + (index + 1) + "：" + item.query + "</strong><div class='mini'>类型：" + item.type + "</div><div class='mini'>原因：" + item.reason + "</div><div class='mini'>建议：" + item.action + "</div></div>";
+      }).join("");
+    }
+    function render(){
+      DemoUI.bindDetailsToggle(pageKey, "#details-toggle");
+      document.getElementById("view-select").value = state.activeView;
+      document.getElementById("template-select").value = state.template;
+      document.getElementById("engine-select").value = state.engine;
+      document.getElementById("web-toggle").checked = !!state.allowWebFallback;
+      document.getElementById("ragas-health-toggle").checked = !!state.ragasHealthy;
+      document.getElementById("persist-toggle").checked = !!state.persistResult;
+      document.getElementById("compare-toggle").checked = !!state.showCompare;
+      document.getElementById("speed-input").value = state.speed;
+      document.getElementById("speed-label").textContent = state.speed.toFixed(2) + "x";
+      document.getElementById("zoom-input").value = state.zoom || 1;
+      document.getElementById("zoom-label").textContent = Math.round((state.zoom || 1) * 100) + "%";
+      document.getElementById("retrieval-tab").className = "tab button button--small" + (state.activeView === "retrieval" ? " active" : " button--ghost");
+      document.getElementById("quality-tab").className = "tab button button--small" + (state.activeView === "quality" ? " active" : " button--ghost");
+      document.getElementById("retrieval-panel").classList.toggle("hidden", state.activeView !== "retrieval");
+      document.getElementById("quality-panel").classList.toggle("hidden", state.activeView !== "quality");
+      document.getElementById("view-tag").textContent = state.activeView === "retrieval" ? "检索评测" : "生成质量评测";
+      buildSnapshots();
+      DemoUI.renderJson("#run-json", state.runSnapshot);
+      DemoUI.renderJson("#case-json", state.caseSnapshot);
+      DemoUI.renderJson("#prepared-json", state.preparedCases);
+      renderMetrics();
+      renderCompare();
+      renderEngineBox();
+      renderFailures();
+      renderBoard();
+      renderDetail();
+      DemoViewport.bindDraggableScroll("#eval-wrap");
+    }
+    async function play(){
+      state.stopRequested = false;
+      state.paused = false;
+      state.active = [];
+      buildSnapshots();
+      persist();
+      const route = currentRoute();
+      const textMap = {
+        dataset:"加载评测集。检索评测集是 query + expectedKeywords；质量评测集是 query + groundTruthAnswer + expectedFacts。",
+        options:"参数模板会决定 rerankTopK、allowWebFallback 等评测参数。",
+        retrieve:"复用真实主检索链，确保评测口径与线上召回一致。",
+        rank:"对前 5 条召回文本做关键词命中判定，得到 firstHitRank。",
+        metric:"把每条样本的 rank 汇总成 Recall@K 和 MRR。",
+        archive:"写入运行汇总与样本明细表，并保留内存历史兜底。",
+        compare:"基于 runId 做对比、趋势、失败聚类分析。",
+        "q-dataset":"加载质量评测集，准备 ground truth 与预期事实。",
+        "q-engine":"选择 Java 本地评测，或选择容器内 Ragas HTTP 服务作为质量评测引擎。",
+        "q-engine-status": state.engine === "ragas" ? (state.ragasHealthy ? "容器 `/health` 探活成功，继续走 `/evaluate`。": "容器 `/health` 失败，自动回退 Java 本地评测。") : "当前直接使用 Java 本地评测，无需外部探活。",
+        "q-retrieve":"先检索，再生成答案，质量评测必须基于真实上下文和真实回答。",
+        "q-metric":"Faithfulness 关注答案是否忠于上下文。",
+        "q-answer":"Answer Relevancy 关注答案是否真正回答了问题。",
+        "q-cp":"Context Precision 看召回上下文里有多少是支持答案的。",
+        "q-cr":"Context Recall 看上下文是否覆盖 ground truth 关键事实。",
+        "q-archive":"把多维评分汇总留档。",
+        "q-compare":"比较不同引擎或不同参数组合下的平均质量指标。"
+      };
+      await DemoFlow.runSequence({
+        steps: route.map(function(id){ return {id:id, delay:980}; }),
+        speed: state.speed,
+        shouldPause:function(){ return state.paused; },
+        shouldStop:function(){ return state.stopRequested; },
+        onStep: async function(step){
+          if(!state.active.includes(step.id)) state.active.push(step.id);
+          DemoUI.setText("#narration-box", textMap[step.id] || "继续执行评测链路。");
+          persist();
+          render();
+        }
+      });
+    }
+    function reset(){
+      state = Object.assign({}, defaultState);
+      persist();
+      render();
+    }
+    document.getElementById("play-btn").addEventListener("click", play);
+    document.getElementById("pause-btn").addEventListener("click", function(){ state.paused = true; persist(); });
+    document.getElementById("resume-btn").addEventListener("click", function(){ state.paused = false; persist(); });
+    document.getElementById("reset-btn").addEventListener("click", function(){ state.stopRequested = true; reset(); });
+    document.getElementById("speed-input").addEventListener("input", function(e){ state.speed = Number(e.target.value); persist(); render(); });
+    document.getElementById("zoom-input").addEventListener("input", function(e){ state.zoom = Number(e.target.value); persist(); render(); });
+    document.getElementById("view-select").addEventListener("change", function(e){ state.activeView = e.target.value; state.active = []; persist(); render(); });
+    document.getElementById("template-select").addEventListener("change", function(e){ state.template = e.target.value; persist(); render(); });
+    document.getElementById("engine-select").addEventListener("change", function(e){ state.engine = e.target.value; persist(); render(); });
+    document.getElementById("web-toggle").addEventListener("change", function(e){ state.allowWebFallback = e.target.checked; persist(); render(); });
+    document.getElementById("persist-toggle").addEventListener("change", function(e){ state.persistResult = e.target.checked; persist(); render(); });
+    document.getElementById("ragas-health-toggle").addEventListener("change", function(e){ state.ragasHealthy = e.target.checked; persist(); render(); });
+    document.getElementById("compare-toggle").addEventListener("change", function(e){ state.showCompare = e.target.checked; persist(); render(); });
+    document.getElementById("retrieval-tab").addEventListener("click", function(){ state.activeView = "retrieval"; state.active = []; persist(); render(); });
+    document.getElementById("quality-tab").addEventListener("click", function(){ state.activeView = "quality"; state.active = []; persist(); render(); });
+    document.getElementById("pan-left").addEventListener("click", function(){ document.getElementById("eval-wrap").scrollBy({left:-260,behavior:"smooth"}); });
+    document.getElementById("pan-right").addEventListener("click", function(){ document.getElementById("eval-wrap").scrollBy({left:260,behavior:"smooth"}); });
+    document.getElementById("pan-reset").addEventListener("click", function(){ const wrap = document.getElementById("eval-wrap"); wrap.scrollTo({left:0,top:0,behavior:"smooth"}); state.zoom = 1; persist(); render(); });
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知识入库深度可视化</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .ingest-wrap{overflow:auto;border-radius:20px;cursor:grab;user-select:none}
+    .ingest-wrap.dragging{cursor:grabbing}
+    .ingest-board{position:relative;min-width:1960px;min-height:980px;border-radius:20px;border:1px solid rgba(216,201,174,.92);background:linear-gradient(0deg,rgba(181,93,51,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(181,93,51,.05) 1px,transparent 1px),#fffdf8;background-size:28px 28px}
+    .band{position:absolute;border-radius:24px;border:1px dashed rgba(122,74,35,.2);background:rgba(255,250,242,.55);pointer-events:none}
+    .band span{position:absolute;left:16px;top:10px;display:inline-flex;padding:4px 10px;border-radius:999px;background:#f1e2cf;color:#7a4a23;font-size:12px}
+    .band.parse{background:rgba(248,237,224,.7)}
+    .band.chunk{background:rgba(238,247,231,.7)}
+    .band.index{background:rgba(238,241,252,.7)}
+    .band.observe{background:rgba(231,241,251,.68)}
+    .line-label{position:absolute;padding:2px 8px;border-radius:999px;background:#fff7ef;border:1px solid rgba(181,93,51,.25);color:#8a4b26;font-size:11px;white-space:nowrap;transform:translate(-50%,-50%)}
+    .node.active{transform:none !important;box-shadow:0 0 0 3px rgba(181,93,51,.2),0 16px 30px rgba(67,46,20,.16)}
+    .line.vector{background:linear-gradient(90deg,rgba(47,125,75,.18),rgba(47,125,75,.9))}
+    .line.lexical{background:linear-gradient(90deg,rgba(43,108,176,.18),rgba(43,108,176,.9))}
+    .line.graph{background:linear-gradient(90deg,rgba(191,123,34,.18),rgba(191,123,34,.9))}
+    .line.observe{background:linear-gradient(90deg,rgba(90,108,224,.16),rgba(90,108,224,.85));height:3px;border-top:2px dashed rgba(90,108,224,.65);border-radius:0}
+    .sample-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    @media (max-width:980px){.sample-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong>模块页：知识入库 / ETL / 索引构建</strong>
+        <span>知识入库、切块建模、索引构建与任务观测</span>
+      </div>
+      <div class="topbar__actions">
+        <a class="button button--ghost" href="index.html">返回主索引</a>
+        <label class="switch"><input id="details-toggle" type="checkbox"><span>显示技术细节</span></label>
+      </div>
+    </header>
+
+    <section class="page-grid">
+      <div class="span-4 panel">
+        <div class="section-title"><h3>入库控制</h3><span class="tag">深度模拟</span></div>
+        <div class="stack">
+          <label>入库路线
+            <select id="route-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="local">本地目录同步</option>
+              <option value="upload">浏览器上传入库</option>
+              <option value="rechunk">单文档重切块</option>
+            </select>
+          </label>
+          <label>切块策略
+            <select id="chunk-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="STRUCTURE_RECURSIVE_WITH_METADATA">结构优先 + 递归切分 + 元数据前缀</option>
+              <option value="STRUCTURE_RECURSIVE">结构优先 + 递归切分</option>
+              <option value="RECURSIVE_ONLY">纯递归切分</option>
+            </select>
+          </label>
+          <label class="switch"><input id="parent-child-toggle" type="checkbox" checked><span>启用 Parent-Child 索引</span></label>
+          <label class="switch"><input id="metadata-toggle" type="checkbox" checked><span>启用元数据前缀增强</span></label>
+          <label class="switch"><input id="image-toggle" type="checkbox" checked><span>同步图片摘要与图片索引</span></label>
+          <label class="switch"><input id="graph-toggle" type="checkbox" checked><span>同步 GraphRAG 关系</span></label>
+          <label class="switch"><input id="incremental-toggle" type="checkbox" checked><span>启用 hash 增量判定</span></label>
+          <div class="inline-group">
+            <button id="play-btn" class="button button--accent">播放入库链路</button>
+            <button id="pause-btn">暂停</button>
+            <button id="resume-btn">继续</button>
+            <button id="reset-btn" class="button--ghost">重置</button>
+          </div>
+          <div class="toolbar">
+            <span class="subtle">速度</span>
+            <input id="speed-input" type="range" min="0.5" max="2.5" step="0.25" value="1.25">
+            <span id="speed-label" class="tag">1.25x</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="span-8 panel panel--strong">
+        <div class="section-title"><h3>页面说明</h3><span class="tag tag--ok">真实实现映射</span></div>
+        <div id="narration-box" class="callout">这一页关注 `IngestionService` 如何把 Markdown 笔记变成向量、词法索引、Parent-Child 结构、图片索引和图谱关系，并把整个过程写入任务观测体系。</div>
+      </div>
+
+      <div class="span-12 panel">
+        <div class="section-title"><h3>知识入库全链路</h3><span id="route-tag" class="tag tag--cache">本地目录同步</span></div>
+        <div class="toolbar" style="margin-bottom:12px;">
+          <button id="pan-left" class="button button--small">向左看</button>
+          <button id="pan-right" class="button button--small">向右看</button>
+          <button id="pan-reset" class="button button--small button--ghost">回到起点</button>
+          <span class="subtle">缩放</span>
+          <input id="zoom-input" type="range" min="0.75" max="1.45" step="0.05" value="1">
+          <span id="zoom-label" class="tag">100%</span>
+        </div>
+        <div id="ingest-wrap" class="ingest-wrap">
+          <div id="ingest-board" class="ingest-board"></div>
+        </div>
+      </div>
+
+      <div class="span-6 panel">
+        <div class="section-title"><h3>切块结果快照</h3><span class="tag">真实字段模拟</span></div>
+        <pre id="chunk-json"></pre>
+      </div>
+      <div class="span-6 panel">
+        <div class="section-title"><h3>索引落点快照</h3><span class="tag tag--ok">Milvus / 词法 / Parent-Child / 图谱</span></div>
+        <pre id="index-json"></pre>
+      </div>
+
+      <div class="span-6 panel">
+        <div class="section-title"><h3>任务观测</h3><span class="tag tag--cache">taskId / stageOverview</span></div>
+        <pre id="task-json"></pre>
+      </div>
+      <div class="span-6 panel">
+        <div class="section-title"><h3>当前节点技术说明</h3><span class="tag">点击节点查看</span></div>
+        <div id="detail-box" class="stack"><div class="callout">点击入库链路中的任一节点，这里会展示它对应的职责、技术栈、参数和关键算法。</div></div>
+      </div>
+
+      <div class="span-12 panel" data-detail-block>
+        <div class="section-title"><h3>入库设计重点</h3><span class="tag tag--warn">结合实际代码</span></div>
+        <div class="sample-grid">
+          <div class="callout">`IngestionService.addFile/updateFile` 是核心提交点：`vectorStore.add`、`lexicalIndexService.upsertDocuments`、`parentChildIndexService.rebuildByChunks`、`imageService.indexImagesForDocument`、`processGraphRelationships` 在这里统一落库。</div>
+          <div class="callout">切块不是简单按字符裁剪：`DocumentSplitter` 先按 Markdown 标题结构拆 section，再交给 `RecursiveChunker` 递归切分，并把 `section_path / parent_id / child_id / chunk_strategy` 等元数据写进 chunk。</div>
+          <div class="callout">Parent-Child 参数来自 `app.rag.parent-child.*`：当前代码里 child 目标大小 `220`、overlap `40`、parent 最大保留 `1200`，检索阶段再做 parent 回填。</div>
+          <div class="callout">任务观测由 `IngestionTaskService` 包装：本地目录和浏览器上传都先进入 Pipeline 阶段，再写 `IngestionTaskSnapshot / IngestionNodeLog`，管理端可看阶段耗时、输入输出、details。</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title"><h3 data-modal-title>详情</h3><button class="button button--small" data-close-modal>关闭</button></div>
+      <div data-modal-body></div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    const pageKey = "knowledge-ingestion";
+    const nodeMap = [
+      { id:"source", x:40, y:180, title:"源文件入口", type:"ok", detail:"本地目录走 `NoteLoader.loadNotes`，浏览器上传走 `syncUploadedNotes` 的 MultipartFile 列表。", stack:["IngestionService","NoteLoader","MultipartFile"], payload:{in:"vaultPath 或 files[]", out:"Resource / 上传文件流"} },
+      { id:"hash", x:260, y:180, title:"增量判定", type:"cache", detail:"按文件 hash 对比 `SyncIndexDO.fileHash`，决定新增、修改、未变或删除。", stack:["SyncIndexMapper","MD5","增量同步"], payload:{in:"file bytes + existing hash", out:"new / modified / unchanged / deleted"} },
+      { id:"image-enrich", x:500, y:180, title:"图片摘要增强", type:"cache", detail:"`imageService.enrichMarkdownWithImageSummaries` 会先把图片说明回写到 Markdown 文本中，避免后续切块时丢失图文上下文。", stack:["ImageService","Markdown Enrich"], payload:{in:"markdown + filePath", out:"enriched markdown"} },
+      { id:"extract", x:760, y:180, title:"知识抽取", type:"ok", detail:"`ObsidianKnowledgeExtractor.extract` 从 Markdown 中抽出文档、标签、wiki_links 等语义元数据。", stack:["ObsidianKnowledgeExtractor"], payload:{in:"markdown", out:"ExtractionResult.documents"} },
+      { id:"section", x:1020, y:90, title:"结构切段", type:"ok", detail:"`MarkdownSectionBuilder.buildSections` 按标题层级拆 section，当前配置保留到 headingLevels=3。", stack:["MarkdownSectionBuilder"], payload:{in:"full text", out:"Markdown sections"} },
+      { id:"recursive", x:1280, y:90, title:"递归切块", type:"ok", detail:"`RecursiveChunker` 结合 target/max/overlap 继续拆分 section。默认普通块 `550/800/80`，Parent-Child 启用时 child 改为 `220/40`。", stack:["RecursiveChunker","ChunkingProperties","ParentChildRetrievalProperties"], payload:{in:"section content", out:"text chunks"} },
+      { id:"metadata", x:1540, y:90, title:"元数据增强", type:"cache", detail:"策略为 `STRUCTURE_RECURSIVE_WITH_METADATA` 时，把文档名、章节路径、来源类型、知识标签拼到 chunk 前缀。", stack:["DocumentSplitter","ChunkingStrategy"], payload:{in:"chunk text + metadata", out:"enriched chunk text"} },
+      { id:"parent-child", x:1800, y:90, title:"Parent-Child 建模", type:"ok", detail:"每个 chunk 会写入 `parent_id / parent_text / child_id / child_index`，为后续检索回填 parent 上下文做准备。", stack:["ParentChildIndexService","RagParentDO","RagChildDO"], payload:{in:"chunk docs", out:"parent-child records"} },
+      { id:"vector", x:1280, y:340, title:"向量化入库", type:"ok", detail:"`vectorStore.add(documents)` 把 chunk 写入 Milvus。向量化本身由 Spring AI EmbeddingModel + Milvus VectorStore 承担。", stack:["VectorStore","Milvus","EmbeddingModel"], payload:{in:"chunk docs", out:"Milvus vectors"} },
+      { id:"lexical", x:1540, y:340, title:"词法索引", type:"cache", detail:"`lexicalIndexService.upsertDocuments` 把文本、路径、知识标签、chunkStrategy 等写入词法索引表，支撑 FULLTEXT/LIKE。", stack:["LexicalIndexService","MySQL FULLTEXT"], payload:{in:"chunk docs", out:"t_lexical_index"} },
+      { id:"image-index", x:1800, y:340, title:"图片索引", type:"cache", detail:"`imageService.indexImagesForDocument` 会抽图、建图片元数据、建立文本块与图片关系，并可写图像向量。", stack:["ImageService","t_image_metadata","t_text_image_relation","Milvus Image"], payload:{in:"markdown + chunks", out:"image metadata / relation / image vector"} },
+      { id:"graph", x:2060, y:340, title:"图谱关系同步", type:"error", detail:"`processGraphRelationships` 读取 `wiki_links`，把文档与关联概念写入 Neo4j/TechConceptRepository。", stack:["TechConceptRepository","Neo4j"], payload:{in:"wiki_links + doc text", out:"graph edges"} },
+      { id:"sync-index", x:2320, y:180, title:"同步索引落库", type:"ok", detail:"`saveToIndexDb` 把 `filePath / fileHash / docIds` 写入 `SyncIndexDO`，下次同步靠它判断增量。", stack:["SyncIndexMapper","SyncIndexDO"], payload:{in:"filePath + hash + docIds", out:"sync index record"} },
+      { id:"task", x:2580, y:180, title:"任务快照与节点日志", type:"cache", detail:"`IngestionTaskService` 在外层包任务化 Pipeline，记录 `taskId / stageOverview / IngestionNodeLog.details`。", stack:["IngestionTaskService","IngestionTaskSnapshot","IngestionNodeLog"], payload:{in:"stage metrics", out:"task history / observability"} }
+    ];
+    const edges = [
+      ["source","hash","normal","读取源文件"],
+      ["hash","image-enrich","cache","新增/修改继续"],
+      ["image-enrich","extract","cache","图文增强"],
+      ["extract","section","normal","抽取 document"],
+      ["section","recursive","normal","section 递归切分"],
+      ["recursive","metadata","normal","chunk 文本"],
+      ["metadata","parent-child","cache","补 metadata"],
+      ["metadata","vector","vector","入 Milvus"],
+      ["metadata","lexical","lexical","入词法索引"],
+      ["metadata","image-index","cache","图片关系补建"],
+      ["metadata","graph","graph","wiki_links 同步"],
+      ["parent-child","sync-index","normal","回写 docIds"],
+      ["vector","sync-index","vector","vector doc ids"],
+      ["lexical","sync-index","lexical","lexical upsert"],
+      ["image-index","sync-index","cache","image refs"],
+      ["graph","sync-index","graph","graph persisted"],
+      ["sync-index","task","observe","task summary"],
+      ["hash","task","observe","stageOverview"]
+    ];
+    const routeSteps = {
+      local:["source","hash","image-enrich","extract","section","recursive","metadata","parent-child","vector","lexical","image-index","graph","sync-index","task"],
+      upload:["source","hash","image-enrich","extract","section","recursive","metadata","parent-child","vector","lexical","image-index","graph","sync-index","task"],
+      rechunk:["source","hash","extract","section","recursive","metadata","parent-child","vector","lexical","image-index","graph","sync-index","task"]
+    };
+    const defaultState = {
+      showDetails:true, speed:1.25, paused:false, stopRequested:false, zoom:1,
+      route:"local", chunkStrategy:"STRUCTURE_RECURSIVE_WITH_METADATA",
+      parentChild:true, metadataPrefix:true, image:true, graph:true, incremental:true,
+      active:[], selectedNodeId:"", chunkSample:{}, indexSnapshot:{}, taskSnapshot:{}
+    };
+    let state = Object.assign({}, defaultState, DemoState.read(pageKey, {}));
+    state.active = Array.isArray(state.active) ? state.active : [];
+
+    function persist(){ DemoState.write(pageKey, state); }
+    function nodeById(id){ return nodeMap.find(function(item){ return item.id === id; }); }
+    function currentRoute(){ return routeSteps[state.route] || routeSteps.local; }
+    function algorithmText(id){
+      const map = {
+        source:"本地扫描 / 上传目录恢复",
+        hash:"MD5 Hash + 增量比对",
+        "image-enrich":"图片摘要回写 Markdown",
+        extract:"Markdown 抽取 + wiki_links 解析",
+        section:"标题层级切段",
+        recursive:"结构优先递归切分 + overlap",
+        metadata:"文档名/章节/来源/标签前缀注入",
+        "parent-child":"parent_id/child_id 映射构建",
+        vector:"Embedding + Milvus add",
+        lexical:"FULLTEXT/LIKE 词法 upsert",
+        "image-index":"图文关系 + 图像向量索引",
+        graph:"wiki_links -> 图谱边",
+        "sync-index":"fileHash/docIds 持久化",
+        task:"taskId + node logs + stageOverview"
+      };
+      return map[id] || "待补充";
+    }
+    function buildChunkSample(){
+      const target = state.parentChild ? 220 : 550;
+      const overlap = state.parentChild ? 40 : 80;
+      return {
+        chunkStrategy: state.chunkStrategy,
+        headingLevels: 3,
+        targetSize: target,
+        maxSize: state.parentChild ? 800 : 800,
+        overlap: overlap,
+        metadataPrefixEnabled: state.metadataPrefix,
+        parentChildEnabled: state.parentChild,
+        sampleChunk: {
+          file_path: state.route === "upload" ? "browser://spring-notes/boot/AutoConfiguration.md" : "D:/notes/boot/AutoConfiguration.md",
+          section_path: "Spring Boot / 自动配置 / 条件注解",
+          chunk_index: 4,
+          parent_id: state.parentChild ? "parent-9f2a" : null,
+          child_id: state.parentChild ? "child-b0d3" : null,
+          knowledge_tags: "spring-boot,autoconfiguration,starter",
+          chunk_strategy: state.chunkStrategy,
+          preview: (state.metadataPrefix ? "[文档: AutoConfiguration] [章节: Spring Boot / 自动配置 / 条件注解] [来源: obsidian] [标签: spring-boot,autoconfiguration,starter]\n" : "") + "自动配置失效时，需要优先检查 `@ConditionalOnClass` 是否命中，以及自动配置类是否被正确导入。"
+        }
+      };
+    }
+    function buildIndexSnapshot(){
+      return {
+        vectorStore: {
+          engine: "Milvus",
+          collection: "interview_knowledge",
+          addCount: state.parentChild ? 18 : 9,
+          payloadFields: ["id","content","metadata.file_path","metadata.section_path","metadata.parent_id","metadata.child_id"]
+        },
+        lexicalIndex: {
+          table: "t_lexical_index",
+          searchMode: "AUTO -> FULLTEXT / LIKE fallback",
+          columns: ["doc_id","text","file_path","knowledge_tags","parent_id","child_index","chunk_strategy"]
+        },
+        parentChild: state.parentChild ? {
+          parentTable: "t_rag_parent",
+          childTable: "t_rag_child",
+          childTargetSize: 220,
+          childOverlap: 40,
+          parentMaxSize: 1200
+        } : { enabled: false },
+        imageIndex: state.image ? {
+          tables: ["t_image_metadata","t_text_image_relation"],
+          imageCollection: "interview_images"
+        } : { enabled: false },
+        graphRag: state.graph ? {
+          repository: "TechConceptRepository",
+          source: "wiki_links",
+          target: "Neo4j"
+        } : { enabled: false },
+        syncIndex: {
+          table: "t_sync_index",
+          fields: ["file_path","file_hash","doc_ids","created_at"]
+        }
+      };
+    }
+    function buildTaskSnapshot(){
+      const routeName = state.route === "local" ? "LOCAL_VAULT" : state.route === "upload" ? "BROWSER_UPLOAD" : "RECHUNK_SINGLE";
+      return {
+        taskId: "ingest-" + (state.route === "upload" ? "up" : state.route === "rechunk" ? "re" : "lo") + "-20260408",
+        sourceType: routeName,
+        status: "SUCCESS",
+        stageOverview: [
+          { stage:"SOURCE", message: state.route === "upload" ? "接收上传文件并恢复 relativePaths" : state.route === "rechunk" ? "读取单文档并准备重建" : "扫描本地目录并按 ignoreDirs 过滤", details:{ scannedFiles: state.route === "rechunk" ? 1 : 12 } },
+          { stage:"PARSE", message:"图片增强 -> ObsidianKnowledgeExtractor -> MarkdownSectionBuilder", details:{ parsedDocuments: 6, sections: 14 } },
+          { stage:"CHUNK", message:"DocumentSplitter + RecursiveChunker", details:{ chunks: state.parentChild ? 18 : 9, chunkStrategy: state.chunkStrategy } },
+          { stage:"INDEX", message:"向量 / 词法 / Parent-Child / 图片 / 图谱 同步", details:{ vectors: state.parentChild ? 18 : 9, graphEnabled: state.graph, imageEnabled: state.image } },
+          { stage:"COMMIT", message:"saveToIndexDb + task history 持久化", details:{ syncIndexWritten: true } }
+        ]
+      };
+    }
+    function openNode(id){
+      const node = nodeById(id);
+      if(!node) return;
+      state.selectedNodeId = id;
+      persist();
+      renderDetail();
+      DemoUI.openModal(node.title, "<div class='stack'><div class='callout'>" + node.detail + "</div><div class='kv'><strong>技术栈</strong><span>" + node.stack.join(" / ") + "</span><strong>关键算法</strong><span>" + algorithmText(id) + "</span></div><pre>" + JSON.stringify(node.payload, null, 2) + "</pre></div>");
+    }
+    function renderBoard(){
+      const board = document.getElementById("ingest-board");
+      const zoom = state.zoom || 1;
+      const route = currentRoute();
+      board.innerHTML = "";
+      board.style.transform = "scale(" + zoom + ")";
+      board.style.transformOrigin = "top left";
+      [
+        {title:"解析增强区", x:22, y:30, w:830, h:250, cls:"parse"},
+        {title:"切片建模区", x:900, y:30, w:1060, h:250, cls:"chunk"},
+        {title:"索引落地区", x:1180, y:280, w:770, h:280, cls:"index"},
+        {title:"任务观测区", x:2210, y:100, w:340, h:220, cls:"observe"}
+      ].forEach(function(b){
+        const div = document.createElement("div");
+        div.className = "band " + b.cls;
+        div.style.left = b.x + "px";
+        div.style.top = b.y + "px";
+        div.style.width = b.w + "px";
+        div.style.height = b.h + "px";
+        div.innerHTML = "<span>" + b.title + "</span>";
+        board.appendChild(div);
+      });
+      const refs = {};
+      nodeMap.forEach(function(node){
+        const div = document.createElement("div");
+        div.className = "node " + (node.type === "cache" ? "cache" : node.type === "error" ? "error" : "ok") + ((state.active.includes(node.id) || route.includes(node.id)) ? " active" : "");
+        div.style.left = node.x + "px";
+        div.style.top = node.y + "px";
+        div.innerHTML = "<strong>" + node.title + "</strong><div class='mini'>" + node.id + "</div><div class='mini'>算法：" + algorithmText(node.id) + "</div>";
+        div.addEventListener("click", function(){ openNode(node.id); });
+        board.appendChild(div);
+        refs[node.id] = { x: node.x + 90, y: node.y + 41 };
+      });
+      edges.forEach(function(edge){
+        const active = route.includes(edge[0]) && route.includes(edge[1]) && route.indexOf(edge[1]) > route.indexOf(edge[0]);
+        if(!active && state.active.length && !(state.active.includes(edge[0]) && state.active.includes(edge[1]))) return;
+        const from = refs[edge[0]], to = refs[edge[1]];
+        if(!from || !to) return;
+        const dx = to.x - from.x, dy = to.y - from.y;
+        const line = document.createElement("div");
+        line.className = "line " + (edge[2] === "vector" ? "vector" : edge[2] === "lexical" ? "lexical" : edge[2] === "graph" ? "graph" : edge[2] === "observe" ? "observe" : edge[2] === "cache" ? "cache" : "") + (active ? " active" : "");
+        line.style.left = from.x + "px";
+        line.style.top = from.y + "px";
+        line.style.width = Math.sqrt(dx * dx + dy * dy) + "px";
+        line.style.transform = "rotate(" + (Math.atan2(dy, dx) * 180 / Math.PI) + "deg)";
+        board.appendChild(line);
+        const label = document.createElement("div");
+        label.className = "line-label";
+        label.style.left = ((from.x + to.x) / 2) + "px";
+        label.style.top = ((from.y + to.y) / 2) + "px";
+        label.textContent = edge[3];
+        board.appendChild(label);
+      });
+    }
+    function renderDetail(){
+      const box = document.getElementById("detail-box");
+      const node = nodeById(state.selectedNodeId);
+      if(!node){
+        box.innerHTML = "<div class='callout'>点击入库链路中的任一节点，这里会展示它对应的职责、技术栈、参数和关键算法。</div>";
+        return;
+      }
+      box.innerHTML = "<div class='callout'>" + node.detail + "</div><div class='kv'><strong>节点</strong><span>" + node.title + "</span><strong>技术栈</strong><span>" + node.stack.join(" / ") + "</span><strong>关键算法</strong><span>" + algorithmText(node.id) + "</span></div><pre>" + JSON.stringify(node.payload, null, 2) + "</pre>";
+    }
+    function syncStateFromInputs(){
+      state.route = document.getElementById("route-select").value;
+      state.chunkStrategy = document.getElementById("chunk-select").value;
+      state.parentChild = document.getElementById("parent-child-toggle").checked;
+      state.metadataPrefix = document.getElementById("metadata-toggle").checked;
+      state.image = document.getElementById("image-toggle").checked;
+      state.graph = document.getElementById("graph-toggle").checked;
+      state.incremental = document.getElementById("incremental-toggle").checked;
+      state.chunkSample = buildChunkSample();
+      state.indexSnapshot = buildIndexSnapshot();
+      state.taskSnapshot = buildTaskSnapshot();
+    }
+    function render(){
+      DemoUI.bindDetailsToggle(pageKey, "#details-toggle");
+      document.getElementById("route-select").value = state.route;
+      document.getElementById("chunk-select").value = state.chunkStrategy;
+      document.getElementById("parent-child-toggle").checked = !!state.parentChild;
+      document.getElementById("metadata-toggle").checked = !!state.metadataPrefix;
+      document.getElementById("image-toggle").checked = !!state.image;
+      document.getElementById("graph-toggle").checked = !!state.graph;
+      document.getElementById("incremental-toggle").checked = !!state.incremental;
+      document.getElementById("speed-input").value = state.speed;
+      document.getElementById("speed-label").textContent = state.speed.toFixed(2) + "x";
+      document.getElementById("zoom-input").value = state.zoom || 1;
+      document.getElementById("zoom-label").textContent = Math.round((state.zoom || 1) * 100) + "%";
+      document.getElementById("route-tag").textContent = state.route === "upload" ? "浏览器上传入库" : state.route === "rechunk" ? "单文档重切块" : "本地目录同步";
+      syncStateFromInputs();
+      DemoUI.renderJson("#chunk-json", state.chunkSample);
+      DemoUI.renderJson("#index-json", state.indexSnapshot);
+      DemoUI.renderJson("#task-json", state.taskSnapshot);
+      renderBoard();
+      renderDetail();
+      DemoViewport.bindDraggableScroll("#ingest-wrap");
+    }
+    async function play(){
+      state.stopRequested = false;
+      state.paused = false;
+      state.active = [];
+      syncStateFromInputs();
+      persist();
+      const messageMap = {
+        source: state.route === "upload" ? "浏览器上传链路会先保留 relativePaths，再进入统一入库管道。" : state.route === "rechunk" ? "单文档重切块会读取既有文件，跳过目录扫描。" : "本地目录同步先扫描 vaultPath，并按 ignoredDirs 过滤。",
+        hash: state.incremental ? "系统读取 `t_sync_index` 中的 fileHash，判断新增、修改、未变或删除。" : "这里模拟全量重建，忽略增量 hash 直接继续。",
+        "image-enrich":"Markdown 在切片前会先补图片摘要，避免图文上下文在切块后丢失。",
+        extract:"`ObsidianKnowledgeExtractor` 先抽 document、tags、wiki_links 等结构信息。",
+        section:"文档按标题结构切成 section，当前 headingLevels=3。",
+        recursive:"每个 section 再交给 `RecursiveChunker`，按 target/max/overlap 继续切块。",
+        metadata: state.metadataPrefix ? "当前策略会把文档名、章节路径、来源、知识标签注入 chunk 前缀。" : "当前关闭元数据前缀，chunk 仅保留纯正文。",
+        "parent-child": state.parentChild ? "Parent-Child 模式开启：child 目标大小 220，overlap 40，并写入 parent/child 映射。" : "Parent-Child 关闭：只保留普通 chunk，不构造 parent/child 双层映射。",
+        vector:"所有有效 chunk 会进入 Milvus 向量库。",
+        lexical:"同时写入词法索引，支撑 FULLTEXT/LIKE 检索。",
+        "image-index": state.image ? "图片索引开启：建立图片元数据、图文关系，并可写图片向量。" : "图片索引关闭，跳过这一步。",
+        graph: state.graph ? "GraphRAG 同步开启：根据 wiki_links 把概念关系写入图谱。" : "图谱同步关闭，跳过关系写入。",
+        "sync-index":"最后把 fileHash、docIds 等写回同步索引。",
+        task:"`IngestionTaskService` 汇总 taskId、stageOverview、node logs，供管理台观测。"
+      };
+      await DemoFlow.runSequence({
+        steps: currentRoute().map(function(id){ return { id:id, delay:960 }; }),
+        speed: state.speed,
+        shouldPause:function(){ return state.paused; },
+        shouldStop:function(){ return state.stopRequested; },
+        onStep: async function(step){
+          if(!state.active.includes(step.id)) state.active.push(step.id);
+          DemoUI.setText("#narration-box", messageMap[step.id] || "继续执行入库链路。");
+          persist();
+          render();
+        }
+      });
+    }
+    function reset(){
+      state = Object.assign({}, defaultState);
+      state.chunkSample = buildChunkSample();
+      state.indexSnapshot = buildIndexSnapshot();
+      state.taskSnapshot = buildTaskSnapshot();
+      persist();
+      render();
+    }
+    document.getElementById("play-btn").addEventListener("click", play);
+    document.getElementById("pause-btn").addEventListener("click", function(){ state.paused = true; persist(); });
+    document.getElementById("resume-btn").addEventListener("click", function(){ state.paused = false; persist(); });
+    document.getElementById("reset-btn").addEventListener("click", function(){ state.stopRequested = true; reset(); });
+    document.getElementById("speed-input").addEventListener("input", function(e){ state.speed = Number(e.target.value); persist(); render(); });
+    document.getElementById("zoom-input").addEventListener("input", function(e){ state.zoom = Number(e.target.value); persist(); render(); });
+    ["route-select","chunk-select","parent-child-toggle","metadata-toggle","image-toggle","graph-toggle","incremental-toggle"].forEach(function(id){
+      document.getElementById(id).addEventListener("change", function(){ syncStateFromInputs(); persist(); render(); });
+    });
+    document.getElementById("pan-left").addEventListener("click", function(){ document.getElementById("ingest-wrap").scrollBy({ left:-260, behavior:"smooth" }); });
+    document.getElementById("pan-right").addEventListener("click", function(){ document.getElementById("ingest-wrap").scrollBy({ left:260, behavior:"smooth" }); });
+    document.getElementById("pan-reset").addEventListener("click", function(){ const wrap = document.getElementById("ingest-wrap"); wrap.scrollTo({ left:0, top:0, behavior:"smooth" }); state.zoom = 1; persist(); render(); });
+    syncStateFromInputs();
+    render();
+  </script>
+</body>
+</html>

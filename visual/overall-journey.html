@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 助手总链路总览</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .view-tabs{display:flex;gap:10px;margin-bottom:14px}
+    .view-tabs .tab.active{background:var(--accent);color:#fff}
+    .diagram-wrap{width:100%;max-width:100%;max-height:92vh;height:min(92vh,1200px);overflow:auto;border-radius:20px;cursor:grab;user-select:none;border:1px solid rgba(216,201,174,.92);background:linear-gradient(0deg,rgba(181,93,51,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(181,93,51,.05) 1px,transparent 1px),#fffdf8;background-size:28px 28px}
+    .diagram-wrap.dragging{cursor:grabbing}
+    .diagram-board{position:relative;width:100%;min-width:2000px;min-height:520px}
+    .diagram-view.hidden{display:none}
+    .layer-band{position:absolute;left:30px;right:30px;border-radius:24px;border:1px dashed rgba(122,74,35,.22);background:rgba(255,248,238,.55);pointer-events:none}
+    .layer-band span{position:absolute;left:18px;top:10px;display:inline-flex;padding:4px 10px;border-radius:999px;background:#f1e2cf;color:#7a4a23;font-size:12px}
+    .layer-band.journey-band{left:18px;right:18px;border-style:solid;background:rgba(255,250,242,.42)}
+    .layer-band.intent-band{background:rgba(248,237,224,.65)}
+    .layer-band.interview-band{background:rgba(238,247,231,.62)}
+    .layer-band.knowledge-band{background:rgba(238,241,252,.62)}
+    .layer-band.async-band{background:rgba(231,241,251,.6)}
+    .layer-band.output-band{background:rgba(248,243,231,.66)}
+    .route-badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:700;box-shadow:0 6px 16px rgba(181,93,51,.22);margin-bottom:6px}
+    .line-label{position:absolute;padding:2px 8px;border-radius:999px;background:#fff7ef;border:1px solid rgba(181,93,51,.25);color:#8a4b26;font-size:11px;white-space:nowrap;transform:translate(-50%,-50%)}
+    .algo-list{display:flex;flex-wrap:wrap;gap:8px}
+    .algo-chip{display:inline-flex;padding:6px 10px;border-radius:999px;background:#f5e6d5;color:#70411f;font-size:12px}
+    .node.active{transform:none !important;box-shadow:0 0 0 3px rgba(181,93,51,.20),0 16px 30px rgba(67,46,20,.16)}
+    .line.route-rag{background:linear-gradient(90deg,rgba(180,78,42,.18),rgba(180,78,42,.92))}
+    .line.route-local{background:linear-gradient(90deg,rgba(46,137,86,.16),rgba(46,137,86,.92))}
+    .line.route-fusion{background:linear-gradient(90deg,rgba(120,82,204,.16),rgba(120,82,204,.92))}
+    .line.async{background:linear-gradient(90deg,rgba(43,108,176,.18),rgba(43,108,176,.92));height:3px;border-top:2px dashed rgba(43,108,176,.7);border-radius:0}
+    .breaker-steps{display:flex;gap:10px;flex-wrap:wrap}
+    .breaker-step{flex:1 1 150px;padding:12px;border:1px solid var(--line);border-radius:16px;background:#fff9ef}
+    .breaker-step strong{display:block;margin-bottom:6px}
+    .panel-fullscreen{position:fixed !important;inset:0;z-index:9999;margin:0;border-radius:0;padding:20px;background:var(--panel);overflow:auto}
+    .panel-fullscreen .diagram-wrap{max-height:calc(100vh - 170px) !important;height:calc(100vh - 170px) !important}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong>总链路页：从一次对话到不同功能路由结束</strong>
+        <span>AI 助手主链路全景：入口、路由、执行、返回</span>
+      </div>
+      <div class="topbar__actions">
+        <a class="button button--ghost" href="index.html">返回主索引</a>
+        <label class="switch"><input id="details-toggle" type="checkbox"><span>显示技术细节</span></label>
+      </div>
+    </header>
+    <section class="page-grid">
+      <div class="span-4 panel">
+        <div class="section-title"><h3>总链路控制</h3><span class="tag">全局入口</span></div>
+        <div class="stack">
+          <label>用户输入
+            <textarea id="query-input" style="width:100%;min-height:92px;border-radius:14px;border:1px solid var(--line);padding:12px;">来一场 Spring Boot 模拟面试，然后如果结束了帮我生成报告。</textarea>
+          </label>
+          <label>目标功能
+            <select id="route-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="interview">模拟面试</option>
+              <option value="knowledge">知识问答</option>
+              <option value="coding">刷题练习</option>
+              <option value="profile">画像/学习建议</option>
+              <option value="mcp">MCP 工具调用</option>
+            </select>
+          </label>
+          <label>高亮链路
+            <select id="highlight-select" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);">
+              <option value="interview">高亮模拟面试链路</option>
+              <option value="knowledge">高亮知识问答链路</option>
+              <option value="knowledge_rag">高亮多通道 RAG 链路</option>
+              <option value="knowledge_local">高亮本地模型知识路由链路</option>
+              <option value="knowledge_fusion">高亮融合检索链路</option>
+              <option value="coding">高亮刷题练习链路</option>
+              <option value="profile">高亮画像建议链路</option>
+              <option value="mcp">高亮 MCP 链路</option>
+              <option value="clarify">高亮澄清链路</option>
+              <option value="legacy">高亮 Legacy 回退链路</option>
+            </select>
+          </label>
+          <label class="switch"><input id="clarify-toggle" type="checkbox"><span>模拟意图不清，需要澄清</span></label>
+          <label class="switch"><input id="fallback-toggle" type="checkbox"><span>模拟意图树失败，回退 Legacy 路由</span></label>
+          <label class="switch"><input id="stream-toggle" type="checkbox" checked><span>使用流式返回</span></label>
+          <div class="inline-group">
+            <button id="play-btn" class="button button--accent">播放完整链路</button>
+            <button id="pause-btn">暂停</button>
+            <button id="resume-btn">继续</button>
+            <button id="reset-btn" class="button--ghost">重置</button>
+          </div>
+          <div class="toolbar">
+            <span class="subtle">速度</span>
+            <input id="speed-input" type="range" min="0.5" max="2.5" step="0.25" value="1.25">
+            <span id="speed-label" class="tag">1.25x</span>
+          </div>
+        </div>
+      </div>
+      <div class="span-8 panel panel--strong">
+        <div class="section-title"><h3>当前视图讲解</h3><span class="tag tag--ok">链路图 / 架构图联动</span></div>
+        <div id="narration-box" class="callout">这个页面把 AI 助手的主入口链路和整体架构放在同一处查看：先看请求如何流转，再看这些节点分别落在哪一层。</div>
+      </div>
+        <div class="span-12 panel">
+          <div class="section-title"><h3>全局可视化视图</h3><span id="view-tag" class="tag tag--cache">链路图</span></div>
+        <div class="view-tabs">
+          <button id="journey-tab" class="tab button button--small active">链路图</button>
+          <button id="architecture-tab" class="tab button button--small button--ghost">架构图</button>
+        </div>
+        <div class="toolbar" style="margin-bottom:12px;">
+          <button id="pan-left" class="button button--small">向左看</button>
+          <button id="pan-right" class="button button--small">向右看</button>
+          <button id="pan-reset" class="button button--small button--ghost">回到起点</button>
+          <button id="fullscreen-btn" class="button button--small button--ghost">全屏查看</button>
+          <span class="subtle">缩放</span>
+          <input id="zoom-input" type="range" min="0.6" max="1.8" step="0.1" value="1">
+          <span id="zoom-label" class="tag">100%</span>
+        </div>
+        <div id="journey-view" class="diagram-view">
+          <div id="journey-wrap" class="diagram-wrap"><div id="journey-board" class="diagram-board"></div></div>
+        </div>
+        <div id="architecture-view" class="diagram-view hidden">
+          <div id="architecture-wrap" class="diagram-wrap"><div id="architecture-board" class="diagram-board"></div></div>
+        </div>
+      </div>
+        <div class="span-6 panel">
+          <div class="section-title"><h3>执行轨迹</h3><span class="tag">主流程日志</span></div>
+          <ul id="trace-log" class="timeline"></ul>
+        </div>
+      <div class="span-6 panel">
+        <div class="section-title"><h3>数据流转拆解</h3><span class="tag tag--cache">每步输入输出</span></div>
+        <ul id="data-steps" class="timeline"></ul>
+      </div>
+      <div class="span-6 panel" data-detail-block>
+        <div class="section-title"><h3>架构层说明</h3></div>
+        <table class="table">
+          <thead><tr><th>层级</th><th>对应节点</th><th>职责</th></tr></thead>
+          <tbody>
+            <tr><td>用户/前端层</td><td>用户输入、WebChat 前端、会话装配</td><td>承接输入、管理会话、发起请求</td></tr>
+            <tr><td>业务服务层</td><td>Controller、Service 门面、TaskRouter、各功能执行器</td><td>路由、编排、业务处理、能力分发</td></tr>
+            <tr><td>数据层</td><td>历史压缩、本地图谱、RAG 服务、持久化</td><td>数据装配、检索、写入和读取</td></tr>
+            <tr><td>基础设施层</td><td>身份解析、限流净化、流式入口、观测埋点、A2A、模型路由</td><td>安全、通信、监控、模型与任务运行支撑</td></tr>
+          </tbody>
+        </table>
+      </div>
+        <div class="span-6 panel" data-detail-block>
+          <div class="section-title"><h3>当前节点技术栈</h3><span class="tag">点击节点查看</span></div>
+          <div id="tech-stack-box" class="stack"><div class="callout">点击链路图或架构图中的任一节点，这里会展示它对应的技术栈、职责和处理规则。</div></div>
+        </div>
+        <div class="span-12 panel">
+          <div class="section-title"><h3>节点数据快照</h3><span class="tag">实时更新</span></div>
+          <pre id="state-json"></pre>
+        </div>
+        <div class="span-12 panel" data-detail-block>
+          <div class="section-title"><h3>页面理解提示</h3></div>
+        <ul class="bullet-list">
+          <li>链路图回答“请求怎么走”，架构图回答“这些节点分别属于哪一层、如何协作”。</li>
+          <li>缩放不再依赖 `transform: scale()`，而是直接重算画布尺寸、节点坐标和连线长度。</li>
+          <li>两个视图各自记忆滚动位置和缩放比例，切换后不会丢状态。</li>
+          <li>高亮链路只影响链路图，架构图主要用于看层次结构与模块关系。</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title"><h3 data-modal-title>详情</h3><button class="button button--small" data-close-modal>关闭</button></div>
+      <div data-modal-body></div>
+    </div>
+  </div>
+  <script src="assets/app.js"></script>
+  <script>
+    const pageKey="overall-journey";
+    const baseJourneyBoard={width:6500,height:1840};
+    const baseArchitectureBoard={width:4300,height:1200};
+    const nodeSize={width:180,height:82};
+    const journeyNodes=[
+      {id:"user",x:40,y:250,title:"用户输入",detail:"用户从聊天框、面试模式或 IM 会话发出自然语言请求。",stack:["Vue 3","Vite","SSE/HTTP"],payload:{in:"query/source/sessionHint",out:"raw message envelope"}},
+      {id:"webchat",x:280,y:250,title:"WebChat 前端",detail:"前端封装会话、页面状态、输入框内容与目标模式。",stack:["Vue Router","Pinia","Fetch/EventSource"],payload:{in:"message + uiState",out:"request payload"}},
+      {id:"chat-session",x:560,y:250,title:"会话装配",detail:"前端或网关补齐 sessionId、traceId、历史摘要标识。",stack:["SessionStorage","TraceId","Request Builder"],payload:{in:"request payload",out:"request + session meta"}},
+      {id:"controller",x:860,y:250,title:"Controller",detail:"HTTP 入口层负责参数校验、traceId 透传、错误码映射。",stack:["Spring Boot Web","RestController","GlobalExceptionHandler"],payload:{in:"HTTP JSON / multipart",out:"controller dto"}},
+      {id:"identity",x:1180,y:130,title:"身份解析",detail:"解析 JWT、Header 或匿名态，确定主用户与租户信息。",stack:["Spring Security","JWT","Header/Session"],payload:{in:"Authorization/X-User-Id",out:"userId tenantId roles"}},
+      {id:"ratelimit",x:1180,y:370,title:"限流与净化",detail:"请求进入业务前先做频控、敏感词与非法输入净化。",stack:["HandlerInterceptor","InputSanitizer","RateLimiter"],payload:{in:"raw content",out:"sanitized content + allow flag"}},
+      {id:"stream",x:1480,y:120,title:"流式入口",detail:"流式接口会建立 emitter、streamTaskId 与事件写出上下文。",stack:["SseEmitter","TaskManager","Async Executor"],payload:{in:"stream request",out:"streamTaskId emitter"}},
+      {id:"service",x:1480,y:370,title:"Service 门面",detail:"门面层把控制器参数转为内部 TaskRequest，并封装链路上下文。",stack:["Spring Service","Facade","Assembler"],payload:{in:"controller dto",out:"task request / context"}},
+      {id:"history",x:1780,y:120,title:"历史压缩",detail:"参考 Claude 风格的上下文压缩：保留系统设定、最近对话、未完成目标、用户偏好、工具结果摘要、活跃会话状态，丢弃重复寒暄和低价值轮次。",stack:["WebChatService","ChatContextCompressor","MyBatis-Plus"],payload:{in:"messages + sessionId",out:"summary + activeSessionFlags + persistent memory"}},
+      {id:"profile-snapshot",x:1780,y:220,title:"画像快照读取",detail:"在出题、面试和知识回答前读取用户画像快照，拿到能力分层、薄弱点、偏好语言和历史表现。",stack:["LearningProfileAgent","MySQL","Redis"],payload:{in:"userId + taskType",out:"profile snapshot"}},
+      {id:"observability",x:1780,y:410,title:"观测埋点",detail:"记录 trace、耗时、路由结果与异常事件，便于排障。",stack:["TraceId","Metrics","Structured Logging"],payload:{in:"request context",out:"log / metric / audit"}},
+      {id:"router",x:2080,y:250,title:"TaskRouterAgent",detail:"总路由器统一识别 taskType、slot、上下文，并决定后续执行器。",stack:["IntentTree","PromptManager","A2ABus"],payload:{in:"TaskRequest",out:"taskType + slots + route meta"}},
+      {id:"intent-tree",x:2380,y:20,title:"意图树入口",detail:"意图树先做主任务分类，判断是面试、知识问答、刷题、画像还是工具调用。",stack:["IntentTreeRoutingService","Classifier Prompt"],payload:{in:"query + context",out:"intent candidates"}},
+      {id:"slot-extract",x:2380,y:170,title:"槽位抽取",detail:"从 query 中提取语言、技术栈、岗位、题量、知识点等关键参数。",stack:["Slot Filling","Prompt Template"],payload:{in:"intent candidates",out:"structured slots"}},
+      {id:"decision-gate",x:2380,y:320,title:"决策闸门",detail:"根据置信度、槽位完整度、历史会话状态决定继续、澄清或回退。",stack:["Confidence Gate","Rule Check"],payload:{in:"intent + slots + confidence",out:"route decision"}},
+      {id:"clarify",x:2700,y:40,title:"澄清分支",detail:"意图不清晰时，不进入具体业务，先返回澄清问题。",stack:["IntentTreeRoutingService","LLM 分类"],payload:{in:"ambiguous intent",out:"clarificationQuestion + options"}},
+      {id:"legacy",x:2700,y:250,title:"Legacy ReAct 路由",detail:"意图树不可用或失败时，回退到旧 ReAct 决策链。",stack:["RoutingChatService","Prompt Template"],payload:{in:"fallback request",out:"fallback taskType"}},
+      {id:"model-routing",x:2700,y:430,title:"模型路由",detail:"依据任务类型、成本和能力要求选择底层模型与执行策略。",stack:["LLM Router","Prompt Strategy","Cost Control"],payload:{in:"taskType + context",out:"model config"}},
+      {id:"first-token-check",x:2920,y:430,title:"首包时延检测",detail:"统计各模型首 token 时间，动态判断当前链路是否满足交互时延要求。",stack:["Latency Probe","First Token Monitor"],payload:{in:"model call metadata",out:"ttfb / first token latency"}},
+      {id:"circuit-breaker",x:3300,y:430,title:"三态熔断",detail:"模型侧维护 closed / half-open / open 三态，异常超时或慢首包会触发熔断和回退。",stack:["Circuit Breaker","Health Policy"],payload:{in:"latency + error ratio",out:"breaker state"}},
+      {id:"a2a",x:3600,y:70,title:"A2A 状态总线",detail:"复杂任务会经由 A2A/事件总线同步阶段状态与执行进度。",stack:["A2A","Domain Event","Status Sync"],payload:{in:"task events",out:"agent stage events"}},
+      {id:"interview",x:3600,y:180,title:"面试编排",detail:"面试编排器负责整场面试生命周期：初始化、出题、追问、评估、报告。",stack:["InterviewOrchestratorAgent","COLA StateMachine","RAGService"],payload:{in:"interview task",out:"question / score / report"}},
+      {id:"interview-state",x:3920,y:70,title:"面试状态机",detail:"维护 idle、asking、answering、evaluating、finished 等阶段状态。",stack:["COLA StateMachine","Session State"],payload:{in:"session events",out:"next interview state"}},
+      {id:"difficulty-adjust",x:3920,y:180,title:"难度调节",detail:"根据答题正确率、停顿时长、追问表现动态上调或下调题目难度。",stack:["DifficultyPolicy","Score Heuristic"],payload:{in:"answer metrics",out:"difficulty level / next prompt"}},
+      {id:"answer-eval",x:3920,y:290,title:"答题评估",detail:"对当前回答做结构化评分，输出知识点覆盖、深度和表达反馈。",stack:["Rubric Evaluator","LLM Scoring"],payload:{in:"answer text",out:"score / feedback / weak points"}},
+      {id:"report-build",x:3920,y:400,title:"报告生成",detail:"汇总整场面试记录，生成最终报告、能力雷达与改进建议。",stack:["Report Builder","LearningProfileAgent"],payload:{in:"session summary",out:"final report"}},
+      {id:"knowledge-coordinator",x:3720,y:840,title:"知识检索协调",detail:"KnowledgeRetrievalCoordinator 负责选择 RAG_ONLY、LOCAL_GRAPH_ONLY、LOCAL_GRAPH_FIRST 等模式；当前首版实现里，本地链与 RAG 链是协调切换关系，不是同一条统一重排流水线。",stack:["KnowledgeRetrievalCoordinator","KnowledgeRetrievalProperties"],payload:{in:"knowledge task + requestedMode",out:"effective retrieval mode"}},
+      {id:"local-llm-route",x:4040,y:700,title:"本地知识路由入口",detail:"进入本地知识链后，会先走本地候选召回，再由 Ollama 只做候选定位，不直接产出最终答案。",stack:["LocalGraphKnowledgeService","KnowledgeMapService"],payload:{in:"question",out:"local route request"}},
+      {id:"local-candidate-recall",x:4380,y:610,title:"本地候选召回",detail:"LocalCandidateRecallService 先用标题、别名、标签、路径等确定性规则缩小候选集，降低后续本地模型选择成本。",stack:["LocalCandidateRecallService","Rule Score"],payload:{in:"question + knowledge snapshot",out:"candidate nodes"}},
+      {id:"local-ollama-route",x:4740,y:610,title:"Ollama 定位",detail:"OllamaRoutingService 只在候选集内选择最相关知识节点，输出 matchedIds，不直接回答问题。",stack:["OllamaRoutingService","Ollama API"],payload:{in:"question + candidates",out:"matched node ids"}},
+      {id:"local-note-graph",x:5100,y:610,title:"本地笔记图展开",detail:"NoteGraphResolver 依据主笔记、关联笔记、反链笔记、标签邻居构造本地上下文。",stack:["NoteGraphResolver","Wiki Links","Tag Graph"],payload:{in:"matched nodes",out:"note graph context"}},
+      {id:"local-context-pack",x:5460,y:610,title:"本地上下文包",detail:"本地链最终输出 KnowledgeContextPacket，携带 context/evidence；后续仍交给远程大模型统一生成回答。",stack:["KnowledgeContextPacket","Evidence Builder"],payload:{in:"local note graph context",out:"context + evidence"}},
+      {id:"rag-vector-route",x:4040,y:900,title:"RAG 向量链路",detail:"RAG_ONLY 模式下，问题进入现有多路召回主链，至少包含向量召回，随后进入统一重排与生成。",stack:["RAGService","Vector Retrieval Route"],payload:{in:"semantic query",out:"rag retrieve plan"}},
+      {id:"hybrid-route",x:4040,y:1130,title:"混合检索策略",detail:"代码层已预留 HYBRID_FUSION 模式枚举，但当前协调器首版尚未把本地链与 RAG 链做统一融合重排；这里展示的是目标方案，需要进一步确认/补实现。",stack:["KnowledgeRetrievalMode.HYBRID_FUSION","Strategy Placeholder"],payload:{in:"complex query",out:"planned fusion plan"}},
+      {id:"coding",x:3720,y:1340,title:"刷题练习",detail:"刷题链路负责出题、评分、提示和批量 quiz，且会参考画像快照决定题型、难度和提示强度。",stack:["CodingPracticeAgent","Rule Evaluator"],payload:{in:"coding task + profile snapshot",out:"question / evaluation / next step"}},
+      {id:"profile",x:4260,y:1340,title:"画像建议",detail:"画像服务输出用户能力概览、薄弱项与推荐学习路径。",stack:["LearningProfileAgent","MySQL"],payload:{in:"profile task",out:"overview / recommendation"}},
+      {id:"profile-update",x:5560,y:1490,title:"画像异步更新",detail:"只有面试评估结果和刷题结果会异步回流到画像更新器，更新技能画像、薄弱点和稳定度标签。",stack:["Async Event","LearningProfileUpdater","MySQL/Redis"],payload:{in:"interview / coding domain events",out:"new profile state"}},
+      {id:"mcp",x:5220,y:1510,title:"MCP 工具调用",detail:"MCP 网关负责 discover、invoke、审计与失败回退。",stack:["FastMCP","SSE/stdio","OpsAuditService"],payload:{in:"tool intent",out:"capabilities / invoke result"}},
+      {id:"vector-recall",x:4380,y:900,title:"向量检索",detail:"基于 embedding 在 Milvus 中召回语义最相关的分片。",stack:["Embedding","Milvus"],payload:{in:"query embedding",out:"semantic chunks"}},
+      {id:"keyword-recall",x:4380,y:1090,title:"关键词检索",detail:"对本地知识库做关键词或 BM25 检索，补足精确术语命中。",stack:["BM25","Lexical Index"],payload:{in:"keywords",out:"keyword hits"}},
+      {id:"local-graph",x:4740,y:1090,title:"图谱检索",detail:"GraphRAG/图谱侧提供实体关系补充，适合知识链路和报告增强。",stack:["Neo4j","TechConceptRepository"],payload:{in:"entity/topic",out:"graph relations"}},
+      {id:"rerank",x:5100,y:930,title:"重排与去重",detail:"RAG 主链会把意图定向、向量召回、图谱结果做融合、去重和重排；这一步当前不直接消费本地知识链输出。",stack:["RRF","Query Overlap Rerank","Dedup"],payload:{in:"intent/vector/graph hits",out:"ranked context"}},
+      {id:"rag-service",x:5460,y:930,title:"远程大模型生成",detail:"统一由远程大模型基于检索上下文或本地上下文包生成最终答案，并附带来源。",stack:["RAGService","RoutingChatService","Prompt Builder"],payload:{in:"ranked context or local context packet",out:"answer draft + sources"}},
+      {id:"image-service",x:5820,y:930,title:"图片与附件增强",detail:"如果答案包含图像、截图或附件，会在这里完成补充装配。",stack:["ImageService","Attachment Mapper"],payload:{in:"answer draft",out:"answer + media refs"}},
+      {id:"storage",x:5840,y:470,title:"持久化",detail:"将对话、会话状态、报告、审计或工具调用结果写入存储。",stack:["MySQL","Redis","Object Storage"],payload:{in:"domain result",out:"saved id / cache key"}},
+      {id:"response",x:6140,y:720,title:"结果返回",detail:"以 JSON、SSE、卡片、图片事件或 quiz 事件回到前端。",stack:["SSE","JSON","Rich Content"],payload:{in:"final domain result",out:"message / finish / done / error"}}
+    ];
+    const journeyEdges=[["user","webchat"],["webchat","chat-session"],["chat-session","controller"],["controller","identity"],["controller","ratelimit"],["identity","stream"],["identity","service"],["ratelimit","stream"],["ratelimit","service"],["stream","history"],["service","history"],["history","profile-snapshot"],["profile-snapshot","service"],["service","observability"],["history","observability"],["history","router"],["observability","router"],["router","intent-tree"],["intent-tree","slot-extract"],["slot-extract","decision-gate"],["decision-gate","clarify"],["decision-gate","legacy"],["legacy","clarify"],["clarify","intent-tree"],["decision-gate","model-routing"],["legacy","model-routing"],["model-routing","first-token-check"],["first-token-check","circuit-breaker"],["circuit-breaker","a2a"],["circuit-breaker","knowledge-coordinator"],["circuit-breaker","coding"],["circuit-breaker","profile"],["circuit-breaker","mcp"],["a2a","interview"],["profile-snapshot","interview"],["interview","interview-state"],["interview-state","difficulty-adjust"],["difficulty-adjust","answer-eval"],["answer-eval","report-build"],["report-build","storage"],["report-build","response"],["knowledge-coordinator","local-llm-route"],["local-llm-route","local-candidate-recall"],["local-candidate-recall","local-ollama-route"],["local-ollama-route","local-note-graph"],["local-note-graph","local-context-pack"],["local-context-pack","rag-service"],["local-context-pack","rerank"],["knowledge-coordinator","rag-vector-route"],["knowledge-coordinator","hybrid-route"],["rag-vector-route","vector-recall"],["hybrid-route","local-candidate-recall"],["hybrid-route","vector-recall"],["hybrid-route","keyword-recall"],["hybrid-route","local-graph"],["vector-recall","rerank"],["keyword-recall","rerank"],["local-graph","rerank"],["rerank","rag-service"],["rag-service","image-service"],["image-service","response"],["profile-snapshot","coding"],["coding","storage"],["coding","response"],["profile","storage"],["profile","response"],["mcp","storage"],["mcp","response"],["answer-eval","profile-update"],["report-build","profile-update"],["coding","profile-update"],["profile-update","storage"],["storage","response"],["clarify","response"]];
+    const routePaths={
+      interview:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","profile-snapshot","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","a2a","interview","interview-state","difficulty-adjust","answer-eval","report-build","profile-update","storage","response"],
+      knowledge:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","knowledge-coordinator","hybrid-route","local-candidate-recall","local-ollama-route","local-note-graph","local-context-pack","vector-recall","keyword-recall","local-graph","rerank","rag-service","image-service","response"],
+      knowledge_rag:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","knowledge-coordinator","rag-vector-route","vector-recall","rerank","rag-service","image-service","response"],
+      knowledge_local:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","knowledge-coordinator","local-llm-route","local-candidate-recall","local-ollama-route","local-note-graph","local-context-pack","rag-service","image-service","response"],
+      knowledge_fusion:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","knowledge-coordinator","hybrid-route","local-candidate-recall","local-ollama-route","local-note-graph","local-context-pack","vector-recall","keyword-recall","local-graph","rerank","rag-service","image-service","response"],
+      coding:["user","webchat","chat-session","controller","identity","ratelimit","service","history","profile-snapshot","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","coding","profile-update","storage","response"],
+      profile:["user","webchat","chat-session","controller","identity","ratelimit","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","profile","storage","response"],
+      mcp:["user","webchat","chat-session","controller","identity","ratelimit","service","observability","router","intent-tree","slot-extract","decision-gate","model-routing","first-token-check","circuit-breaker","mcp","storage","response"],
+      clarify:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","service","observability","router","intent-tree","slot-extract","decision-gate","legacy","clarify","response"],
+      legacy:["user","webchat","chat-session","controller","identity","ratelimit","stream","history","service","observability","router","intent-tree","slot-extract","decision-gate","legacy","model-routing","first-token-check","circuit-breaker","knowledge-coordinator","rag-vector-route","vector-recall","rerank","rag-service","response"]
+    };
+    const architectureNodes=[
+      {id:"layer-user",x:120,y:60,title:"接入层",detail:"承接 WebChat、IM、文件附件等前端入口，负责把用户输入装配成统一请求。",stack:["Vue 3","Vite","Pinia","Fetch/SSE"],payload:{in:"用户输入/附件",out:"标准请求载荷"}},
+      {id:"layer-business",x:1120,y:60,title:"应用编排层",detail:"负责 Controller、TaskRouter、意图树、业务 Agent 编排。",stack:["Spring Boot","TaskRouterAgent","IntentTreeRoutingService"],payload:{in:"HTTP/SSE request",out:"task route + execution plan"}},
+      {id:"layer-data",x:2240,y:60,title:"检索与数据层",detail:"负责本地知识索引、向量检索、图谱检索、画像、存储。",stack:["Milvus","Neo4j","MySQL","Redis"],payload:{in:"retrieval/data request",out:"context / state / persistence"}},
+      {id:"layer-infra",x:3360,y:60,title:"基础设施与治理层",detail:"负责鉴权、限流、模型路由、熔断、观测、A2A。",stack:["JWT","Metrics","LLM Router","Circuit Breaker"],payload:{in:"runtime signals",out:"guard / support ability"}},
+      {id:"arch-access",x:120,y:250,title:"前端接入与会话装配",detail:"对应 用户输入 / WebChat 前端 / 会话装配，负责 sessionId、traceId、目标模式与上下文摘要标志。",stack:["WebChat","Session Builder","TraceId"],payload:{in:"query + ui state",out:"request payload"}},
+      {id:"arch-gateway",x:520,y:430,title:"控制器与流式网关",detail:"对应 Controller、SseEmitter、门面层，承担参数校验、异常映射和流式写出。",stack:["RestController","SseEmitter","Facade"],payload:{in:"request payload",out:"TaskRequest"}},
+      {id:"arch-intent",x:1120,y:220,title:"意图路由引擎",detail:"由 TaskRouterAgent、IntentTreeRoutingService、槽位抽取、决策闸门组成，决定面试/问答/刷题/画像/MCP 路由。",stack:["TaskRouterAgent","IntentTree","Slot Filling","Decision Gate"],payload:{in:"TaskRequest + history",out:"taskType + slots + route"}},
+      {id:"arch-interview-state",x:1120,y:500,title:"面试编排与状态机",detail:"InterviewOrchestratorAgent + 状态机负责出题、追问、评估、难度调节与报告生成。",stack:["InterviewOrchestratorAgent","COLA StateMachine","DifficultyPolicy"],payload:{in:"interview route",out:"question / score / report"}},
+      {id:"arch-profile-memory",x:1120,y:820,title:"用户画像服务",detail:"执行前读取画像快照，执行后异步回写技能掌握度、薄弱点、稳定度与偏好标签。",stack:["LearningProfileAgent","Async Event","Redis/MySQL"],payload:{in:"snapshot request / async events",out:"profile snapshot / updated profile"}},
+      {id:"arch-local-retrieval",x:2240,y:220,title:"本地知识路由链",detail:"KnowledgeRetrievalCoordinator + LocalGraphKnowledgeService 组合链，内部包括候选召回、Ollama 路由、笔记图展开与上下文包构造。",stack:["KnowledgeRetrievalCoordinator","LocalCandidateRecallService","OllamaRoutingService","NoteGraphResolver"],payload:{in:"LOCAL_GRAPH request",out:"local context packet"}},
+      {id:"arch-rag",x:2240,y:500,title:"RAG 多路召回引擎",detail:"RAGService 内并发执行意图定向检索、全局向量检索、GraphRAG，再经 RRF 与 query overlap 重排。",stack:["RAGService","LexicalIndexService","VectorStore","TechConceptRepository","RRF"],payload:{in:"RAG query",out:"ranked context"}},
+      {id:"arch-persistence",x:2240,y:820,title:"存储与索引层",detail:"统一承载会话、报告、画像、词法索引、对象存储与知识索引快照。",stack:["MySQL","Redis","Object Storage","Local Index"],payload:{in:"domain result / retrieval data",out:"persistent state"}},
+      {id:"arch-runtime",x:3360,y:220,title:"模型路由与运行时",detail:"RoutingChatService、ModelSelector、A2A、流式任务管理共同组成运行时底座。",stack:["RoutingChatService","ModelSelector","A2A","Async Executor"],payload:{in:"task route + model request",out:"runtime execution"}},
+      {id:"arch-llm-guard",x:3360,y:500,title:"模型健康治理",detail:"包含首包时延检测、失败统计、三态熔断和自动降级。",stack:["FirstPacketAwaiter","ModelHealthStore","Circuit Breaker"],payload:{in:"latency + error ratio",out:"breaker state + fallback decision"}},
+      {id:"arch-security",x:3360,y:820,title:"安全与观测",detail:"身份解析、限流净化、结构化日志、指标埋点与审计统一收敛到这一层。",stack:["Spring Security","Interceptor","Metrics","Structured Logging"],payload:{in:"request/runtime event",out:"trusted request + metrics"}},
+      {id:"arch-response",x:3820,y:520,title:"统一结果出口",detail:"统一把远程大模型生成结果、本地知识上下文生成结果、面试报告和工具结果回写给前端。",stack:["JSON","SSE","Rich Content"],payload:{in:"final result",out:"frontend response"}}
+    ];
+    const architectureEdges=[["layer-user","arch-access"],["arch-access","arch-gateway"],["arch-gateway","arch-intent"],["layer-business","arch-intent"],["arch-intent","arch-interview-state"],["arch-intent","arch-profile-memory"],["arch-intent","arch-local-retrieval"],["arch-intent","arch-rag"],["layer-data","arch-local-retrieval"],["layer-data","arch-rag"],["layer-data","arch-persistence"],["arch-local-retrieval","arch-response"],["arch-rag","arch-response"],["arch-interview-state","arch-response"],["arch-profile-memory","arch-response"],["arch-persistence","arch-response"],["layer-infra","arch-runtime"],["layer-infra","arch-llm-guard"],["layer-infra","arch-security"],["arch-runtime","arch-intent"],["arch-runtime","arch-rag"],["arch-runtime","arch-response"],["arch-llm-guard","arch-runtime"],["arch-security","arch-gateway"],["arch-security","arch-runtime"],["arch-profile-memory","arch-persistence"],["arch-interview-state","arch-persistence"],["arch-local-retrieval","arch-persistence"],["arch-rag","arch-persistence"]];
+    const journeyLaneBounds={
+      "intent-tree":{min:0,max:120,left:2280,right:2580},"slot-extract":{min:130,max:260,left:2280,right:2580},"decision-gate":{min:270,max:420,left:2280,right:2580},
+      "clarify":{min:0,max:160,left:2620,right:2920},"legacy":{min:200,max:340,left:2620,right:2920},"model-routing":{min:390,max:520,left:2620,right:2900},"first-token-check":{min:390,max:520,left:2860,right:3140},"circuit-breaker":{min:390,max:520,left:3240,right:3540},
+      "a2a":{min:0,max:130,left:3500,right:3800},"interview":{min:130,max:260,left:3500,right:3800},"interview-state":{min:0,max:130,left:3840,right:4140},"difficulty-adjust":{min:140,max:260,left:3840,right:4140},"answer-eval":{min:270,max:390,left:3840,right:4140},"report-build":{min:390,max:520,left:3840,right:4140},
+      "knowledge-coordinator":{min:800,max:940,left:3620,right:3920},"local-llm-route":{min:660,max:800,left:3960,right:4240},"local-candidate-recall":{min:570,max:710,left:4300,right:4580},"local-ollama-route":{min:570,max:710,left:4660,right:4940},"local-note-graph":{min:570,max:710,left:5020,right:5300},"local-context-pack":{min:570,max:710,left:5380,right:5660},
+      "rag-vector-route":{min:860,max:1000,left:3960,right:4240},"hybrid-route":{min:1090,max:1230,left:3960,right:4240},"vector-recall":{min:860,max:1000,left:4300,right:4580},"keyword-recall":{min:1050,max:1190,left:4300,right:4580},"local-graph":{min:1050,max:1190,left:4660,right:4940},"rerank":{min:890,max:1030,left:5020,right:5300},"rag-service":{min:890,max:1030,left:5380,right:5660},"image-service":{min:890,max:1030,left:5740,right:6020},
+      "coding":{min:1300,max:1540,left:3620,right:3920},"profile":{min:1300,max:1540,left:4180,right:4460},"mcp":{min:1480,max:1730,left:5100,right:5400},"profile-update":{min:1450,max:1710,left:5480,right:5840},"storage":{min:390,max:560,left:5760,right:6020},"response":{min:760,max:960,left:6060,right:6320}
+    };
+    const nodeAlgorithms={
+      user:["输入事件收集","会话上下文拼装"],webchat:["路由态管理","请求去抖"],"chat-session":["session 续接","traceId 注入"],controller:["DTO 校验","异常映射"],identity:["JWT 解析","用户主体归一"],ratelimit:["令牌桶限流","文本净化"],stream:["SSE 事件写出","异步任务托管"],service:["门面组装","上下文封装"],history:["系统提示保留","目标摘要提炼","低价值轮次裁剪","长期偏好保留"],"profile-snapshot":["画像快照读取","能力标签注入"],observability:["结构化日志","耗时指标埋点"],router:["路由总控","任务分流"],"intent-tree":["主意图分类","层级意图判定"],"slot-extract":["槽位抽取","参数结构化"],"decision-gate":["置信度判定","澄清或回退决策"],clarify:["不确定意图判别","澄清问题生成"],legacy:["ReAct 决策","回退路由"],"model-routing":["模型选择","成本与能力策略"],"first-token-check":["首 token 时延检测","动态首包阈值"],"circuit-breaker":["closed/half-open/open","故障熔断与恢复探测"],a2a:["状态广播","阶段同步"],interview:["面试生命周期编排","出题阶段推进"],"interview-state":["状态迁移","面试轮次推进"],"difficulty-adjust":["动态难度调节","自适应追问"],"answer-eval":["结构化评分","要点覆盖评估"],"report-build":["报告汇总","能力总结生成"],"knowledge-coordinator":["模式选择","本地链/RAG链协调"],"local-llm-route":["本地链入口分流","进入本地知识路由"],"local-candidate-recall":["标题/别名/标签打分","候选集裁剪"],"local-ollama-route":["候选内路由","matchedIds 定位"],"local-note-graph":["主笔记展开","关联/反链/标签邻居扩展"],"local-context-pack":["上下文包构造","evidence 拼装"],"rag-vector-route":["向量链策略选择","语义召回"],"hybrid-route":["混合模式占位","方案态融合"],"vector-recall":["向量召回","embedding 相似度匹配"],"keyword-recall":["BM25/关键词召回","术语精确命中"],"local-graph":["实体链接","图关系扩展"],rerank:["RRF 融合","query overlap 重排","去重"],"rag-service":["上下文拼接","远程大模型答案生成","来源挂载"],"image-service":["媒体资源补齐","附件映射"],coding:["规则评估","题目编排"],profile:["画像聚合","推荐生成"],"profile-update":["异步画像更新","技能标签回写","稳定度更新"],mcp:["工具发现","能力调用","审计"],storage:["读写分流","缓存回填"],response:["SSE/JSON 输出","结束态封包"],"layer-user":["接入层划分"],"layer-business":["编排层划分"],"layer-data":["数据层划分"],"layer-infra":["治理层划分"],"arch-access":["前端接入","会话装配"],"arch-gateway":["控制器入口","流式网关"],"arch-intent":["意图树决策","任务路由"],"arch-interview-state":["状态机驱动","难度策略控制"],"arch-profile-memory":["画像快照 + 异步回写"],"arch-local-retrieval":["候选召回","Ollama 路由","笔记图展开"],"arch-rag":["并发召回","RRF + 重排","远程生成"],"arch-persistence":["持久化与索引管理"],"arch-runtime":["运行时调度","模型路由"],"arch-llm-guard":["首包检测","三态熔断"],"arch-security":["身份鉴权","限流观测"],"arch-response":["结果格式编排"]};
+    const allNodeMap={};
+    journeyNodes.concat(architectureNodes).forEach(function(node){allNodeMap[node.id]=node;});
+    const defaultState={showDetails:true,activeView:"journey",speed:1.25,paused:false,stopRequested:false,active:[],selectedNodeId:"",highlightRoute:"interview",log:["等待播放总链路。"],snapshot:{routeTarget:"interview",stream:true,clarify:false,fallback:false,query:"来一场 Spring Boot 模拟面试，然后如果结束了帮我生成报告。"},viewports:{journey:{zoom:1,scrollLeft:0,scrollTop:0},architecture:{zoom:1,scrollLeft:0,scrollTop:0}}};
+    let state=Object.assign({},defaultState,DemoState.read(pageKey,{}));
+    state.snapshot=Object.assign({},defaultState.snapshot,state.snapshot||{});
+    state.viewports=Object.assign({},defaultState.viewports,state.viewports||{});
+    state.viewports.journey=Object.assign({},defaultState.viewports.journey,state.viewports.journey||{});
+    state.viewports.architecture=Object.assign({},defaultState.viewports.architecture,state.viewports.architecture||{});
+    state.active=Array.isArray(state.active)?state.active:[];
+    state.log=Array.isArray(state.log)&&state.log.length?state.log:["等待播放总链路。"];
+    state.activeView=state.activeView==="architecture"?"architecture":"journey";
+    state.highlightRoute=routePaths[state.highlightRoute]?state.highlightRoute:"interview";
+    let detailsBound=false;
+    function persist(){DemoState.write(pageKey,state);}
+    function nodeById(id){return allNodeMap[id];}
+    function routeMeta(){const target=document.getElementById("route-select").value;return{query:document.getElementById("query-input").value.trim(),routeTarget:target,highlightRoute:document.getElementById("highlight-select").value,stream:document.getElementById("stream-toggle").checked,clarify:document.getElementById("clarify-toggle").checked,fallback:document.getElementById("fallback-toggle").checked,finalHandler:target==="interview"?"InterviewOrchestratorAgent":target==="knowledge"?"KnowledgeQaAgent":target==="coding"?"CodingPracticeAgent":target==="profile"?"LearningProfileAgent":"McpGatewayService",responseMode:document.getElementById("stream-toggle").checked?"SSE":"JSON"};}
+    function algorithmText(id){return(nodeAlgorithms[id]||["待补充"]).join(" / ");}
+    function breakerHtml(id){if(id!=="circuit-breaker"&&id!=="arch-llm-guard")return"";return "<div class='breaker-steps'><div class='breaker-step'><strong>Closed</strong><span>健康状态，正常放行。</span></div><div class='breaker-step'><strong>Half-Open</strong><span>故障后试探放量，观察首包和成功率。</span></div><div class='breaker-step'><strong>Open</strong><span>持续超时或慢首包，直接熔断并回退。</span></div></div>";}
+    function openNode(id){const node=nodeById(id);if(!node)return;state.selectedNodeId=id;persist();renderTechStack();DemoUI.openModal(node.title,"<div class='stack'><div class='callout'>"+node.detail+"</div>"+breakerHtml(id)+"<div class='kv'><strong>技术栈</strong><span>"+node.stack.join(" / ")+"</span><strong>关键算法</strong><span>"+algorithmText(id)+"</span><strong>节点载荷</strong><span>见下方 JSON</span></div><pre>"+JSON.stringify(node.payload,null,2)+"</pre></div>");}
+    function currentViewport(){return state.viewports[state.activeView];}
+    function viewportByView(view){return state.viewports[view];}
+    function currentWrap(){return document.getElementById(state.activeView==="journey"?"journey-wrap":"architecture-wrap");}
+    function visualPanel(){return document.getElementById("journey-view").closest(".panel");}
+    function scaledBoardSize(base,zoom){return{width:Math.max(2000,Math.round(base.width*zoom)),height:Math.round(base.height*zoom)};}
+    function laneOf(nodeEl){return journeyLaneBounds[nodeEl.dataset.nodeId]||null;}
+    function clampTopByLane(nodeEl, top, boardHeight){const lane=laneOf(nodeEl);const nodeHeight=nodeEl.offsetHeight;const minTop=lane?lane.min:0;const maxTop=lane?Math.max(lane.min,Math.min(boardHeight-nodeHeight,lane.max-nodeHeight)):Math.max(0,boardHeight-nodeHeight);return Math.max(minTop,Math.min(maxTop,top));}
+    function clampLeftByLane(nodeEl, left, boardWidth){const lane=laneOf(nodeEl);const nodeWidth=nodeEl.offsetWidth;const minLeft=lane&&typeof lane.left==="number"?lane.left:0;const maxLeft=lane&&typeof lane.right==="number"?Math.max(minLeft,Math.min(boardWidth-nodeWidth,lane.right-nodeWidth)):Math.max(0,boardWidth-nodeWidth);return Math.max(minLeft,Math.min(maxLeft,left));}
+    function resolveNodeOverlaps(nodeElements, boardWidth, boardHeight){const gapX=42;const gapY=38;const priorityBottom={"profile-update":1,"response":1,"storage":1};for(let round=0;round<28;round+=1){let moved=false;for(let i=0;i<nodeElements.length;i+=1){for(let j=i+1;j<nodeElements.length;j+=1){const a=nodeElements[i];const b=nodeElements[j];const ax=a.offsetLeft;const ay=a.offsetTop;const aw=a.offsetWidth;const ah=a.offsetHeight;const bx=b.offsetLeft;const by=b.offsetTop;const bw=b.offsetWidth;const bh=b.offsetHeight;const overlapX=Math.min(ax+aw,bx+bw)-Math.max(ax,bx);const overlapY=Math.min(ay+ah,by+bh)-Math.max(ay,by);const nearX=overlapX>-gapX&&Math.abs((ax+aw/2)-(bx+bw/2))<Math.max(aw,bw)*0.95;const nearY=overlapY>-gapY&&Math.abs((ay+ah/2)-(by+bh/2))<Math.max(ah,bh)*0.95;if((overlapX>0&&overlapY>0)||(nearX&&nearY)){moved=true;const laneA=laneOf(a);const laneB=laneOf(b);const sameColumn=Math.abs(ax-bx)<Math.min(aw,bw)*0.58||((laneA&&laneB&&laneA.left===laneB.left&&laneA.right===laneB.right));let pushX=Math.ceil((Math.max(overlapX,0)+gapX)/2);let pushY=Math.ceil((Math.max(overlapY,0)+gapY)/2);const aPinnedBottom=priorityBottom[a.dataset.nodeId];const bPinnedBottom=priorityBottom[b.dataset.nodeId];if(aPinnedBottom&&!bPinnedBottom){const nextTopB=clampTopByLane(b,by+pushY,boardHeight);b.style.top=nextTopB+"px";continue;}if(bPinnedBottom&&!aPinnedBottom){const nextTopA=clampTopByLane(a,ay-pushY,boardHeight);a.style.top=nextTopA+"px";continue;}if(sameColumn||overlapY<=overlapX){const dir=ay<=by?-1:1;const nextTopA=clampTopByLane(a,ay-dir*pushY,boardHeight);const nextTopB=clampTopByLane(b,by+dir*pushY,boardHeight);a.style.top=nextTopA+"px";b.style.top=nextTopB+"px";}else{const dir=ax<=bx?-1:1;const nextLeftA=clampLeftByLane(a,ax-dir*pushX,boardWidth);const nextLeftB=clampLeftByLane(b,bx+dir*pushX,boardWidth);a.style.left=nextLeftA+"px";b.style.left=nextLeftB+"px";}}}}if(!moved)break;}nodeElements.forEach(function(nodeEl){nodeEl.style.top=clampTopByLane(nodeEl,nodeEl.offsetTop,boardHeight)+"px";nodeEl.style.left=clampLeftByLane(nodeEl,nodeEl.offsetLeft,boardWidth)+"px";});}
+    function buildNodeRefs(nodeElements){const refs={};nodeElements.forEach(function(item){refs[item.dataset.nodeId]={x:item.offsetLeft+Math.round(item.offsetWidth/2),y:item.offsetTop+Math.round(item.offsetHeight/2)};});return refs;}
+    function renderDiagram(options){const board=document.getElementById(options.boardId);const wrap=document.getElementById(options.wrapId);const zoom=viewportByView(options.viewKey).zoom;const size=scaledBoardSize(options.baseSize,zoom);const compact=zoom<0.95;const ultraCompact=zoom<0.78;board.innerHTML="";board.style.width=size.width+"px";board.style.minWidth="2000px";board.style.height=size.height+"px";board.style.minHeight=Math.min(size.height,620)+"px";wrap.style.width="100%";wrap.style.maxWidth="100%";wrap.style.maxHeight="92vh";wrap.style.height=Math.min(size.height+24,Math.floor(window.innerHeight*.92),1200)+"px";if(options.bands){options.bands.forEach(function(band){const layer=document.createElement("div");layer.className="layer-band"+(band.className?" "+band.className:"");if(typeof band.left==="number")layer.style.left=Math.round(band.left*zoom)+"px";if(typeof band.right==="number")layer.style.right=Math.max(0,size.width-Math.round(band.right*zoom))+"px";layer.style.top=Math.round(band.y*zoom)+"px";layer.style.height=Math.round(band.height*zoom)+"px";layer.innerHTML="<span>"+band.title+"</span>";board.appendChild(layer);});}const nodeElements=[];options.nodes.forEach(function(node){let tone="ok";if(node.id.indexOf("clarify")>=0)tone="warn";if(node.id.indexOf("legacy")>=0||node.id.indexOf("mcp")>=0||node.id.indexOf("runtime")>=0||node.id.indexOf("infra")>=0)tone="cache";const div=document.createElement("div");const routeOrder=options.nodeOrder?options.nodeOrder(node.id):0;div.className="node "+tone+(options.isNodeActive(node.id)?" active":"");div.dataset.nodeId=node.id;div.style.left=Math.round(node.x*zoom)+"px";div.style.top=Math.round(node.y*zoom)+"px";div.style.width=Math.round(nodeSize.width*Math.max(.82,zoom))+"px";div.style.minHeight=Math.round(nodeSize.height*Math.max(.8,zoom))+"px";div.style.padding=Math.max(8,Math.round(12*Math.max(.82,zoom)))+"px";div.style.fontSize=Math.max(11,Math.round(13*Math.max(.82,zoom)))+"px";let content=(routeOrder?"<div class='route-badge'>"+routeOrder+"</div>":"")+"<strong>"+node.title+"</strong>";if(!ultraCompact)content+="<div class='mini'>"+node.id+"</div>";if(!compact)content+="<div class='mini'>算法："+algorithmText(node.id)+"</div>";div.innerHTML=content;div.addEventListener("click",function(){openNode(node.id);});board.appendChild(div);nodeElements.push(div);});resolveNodeOverlaps(nodeElements,size.width,size.height);const refs=buildNodeRefs(nodeElements);options.edges.forEach(function(edge){const edgeActive=options.isEdgeActive(edge);if(options.hideInactiveEdges&&!edgeActive)return;const from=refs[edge[0]];const to=refs[edge[1]];if(!from||!to)return;const dx=to.x-from.x;const dy=to.y-from.y;const line=document.createElement("div");line.className="line "+options.edgeTone(edge)+(edgeActive?" active":"");line.style.left=from.x+"px";line.style.top=from.y+"px";line.style.width=Math.sqrt(dx*dx+dy*dy)+"px";line.style.transform="rotate("+(Math.atan2(dy,dx)*180/Math.PI)+"deg)";board.appendChild(line);const label=options.edgeLabel?options.edgeLabel(edge):"";if(label&&!ultraCompact){const mid=document.createElement("div");mid.className="line-label";mid.style.left=((from.x+to.x)/2)+"px";mid.style.top=((from.y+to.y)/2)+"px";mid.textContent=label;board.appendChild(mid);}});}
+    function currentRouteTone(){if(state.highlightRoute==="knowledge_rag")return" route-rag";if(state.highlightRoute==="knowledge_local")return" route-local";if(state.highlightRoute==="knowledge_fusion"||state.highlightRoute==="knowledge")return" route-fusion";return"";}
+    function isClarifyReentry(edge){return state.highlightRoute.indexOf("knowledge")===0&&((edge[0]==="decision-gate"&&edge[1]==="clarify")||(edge[0]==="clarify"&&edge[1]==="intent-tree"));}
+    function renderJourneyBoard(){const highlight=routePaths[state.highlightRoute]||[];renderDiagram({boardId:"journey-board",wrapId:"journey-wrap",viewKey:"journey",baseSize:baseJourneyBoard,nodes:journeyNodes,edges:journeyEdges,bands:[{title:"意图路由区",y:0,height:610,className:"journey-band intent-band",left:18,right:3440},{title:"面试编排区",y:0,height:600,className:"journey-band interview-band",left:3500,right:4300},{title:"知识检索区",y:560,height:760,className:"journey-band knowledge-band",left:3600,right:6020},{title:"异步画像区",y:1410,height:310,className:"journey-band async-band",left:5440,right:5900},{title:"结果输出区",y:740,height:430,className:"journey-band output-band",left:5740,right:6320}],isNodeActive:function(id){return state.active.includes(id)||highlight.includes(id)||(state.highlightRoute.indexOf("knowledge")===0&&id==="clarify");},nodeOrder:function(id){const idx=highlight.indexOf(id);return idx>=0?idx+1:0;},isEdgeActive:function(edge){const isPlayed=state.active.includes(edge[0])&&state.active.includes(edge[1]);const isHighlighted=highlight.includes(edge[0])&&highlight.includes(edge[1])&&highlight.indexOf(edge[1])>highlight.indexOf(edge[0]);return isPlayed||isHighlighted||isClarifyReentry(edge);},edgeTone:function(edge){if(edge[1]==="profile-update"||edge[0]==="profile-update"||edge[0]==="answer-eval"&&edge[1]==="profile-update"||edge[0]==="report-build"&&edge[1]==="profile-update"||edge[0]==="coding"&&edge[1]==="profile-update")return"async";if(state.highlightRoute.indexOf("knowledge")===0)return currentRouteTone().trim();return edge[1]==="legacy"||edge[1]==="mcp"||edge[0]==="storage"?"cache":"";},edgeLabel:function(edge){if(edge[0]==="decision-gate"&&edge[1]==="clarify"&&state.highlightRoute.indexOf("knowledge")===0)return"澄清";if(edge[0]==="legacy"&&edge[1]==="clarify"&&state.highlightRoute.indexOf("knowledge")===0)return"ReAct 澄清";if(edge[0]==="clarify"&&edge[1]==="intent-tree"&&state.highlightRoute.indexOf("knowledge")===0)return"补充后重入";const fromIndex=highlight.indexOf(edge[0]);const toIndex=highlight.indexOf(edge[1]);return fromIndex>=0&&toIndex>fromIndex?(fromIndex+1)+"→"+(toIndex+1):"";},hideInactiveEdges:true});}
+    function renderArchitectureBoard(){renderDiagram({boardId:"architecture-board",wrapId:"architecture-wrap",viewKey:"architecture",baseSize:baseArchitectureBoard,nodes:architectureNodes,edges:architectureEdges,bands:[{title:"接入层",y:20,height:180},{title:"应用编排层",y:210,height:220},{title:"检索与数据层",y:440,height:260},{title:"治理与基础设施层",y:710,height:220}],isNodeActive:function(id){return state.selectedNodeId===id;},isEdgeActive:function(){return false;},edgeTone:function(edge){return edge[0].indexOf("layer-")===0||edge[1].indexOf("runtime")>=0?"cache":"";}});}
+    function renderTechStack(){const box=document.getElementById("tech-stack-box");const node=nodeById(state.selectedNodeId);if(!node){box.innerHTML="<div class='callout'>点击链路图或架构图中的任一节点，这里会展示它对应的技术栈、职责、算法和处理规则。</div>";return;}const algorithmHtml=(nodeAlgorithms[node.id]||["待补充"]).map(function(item){return "<span class='algo-chip'>"+item+"</span>";}).join("");box.innerHTML="<div class='callout'>"+node.detail+"</div>"+breakerHtml(node.id)+"<div class='kv'><strong>节点名称</strong><span>"+node.title+"</span><strong>技术栈</strong><span>"+node.stack.join(" / ")+"</span><strong>关键算法</strong><span><div class='algo-list'>"+algorithmHtml+"</div></span><strong>关键载荷</strong><span><pre>"+JSON.stringify(node.payload,null,2)+"</pre></span></div>";}
+    function renderDataSteps(){const list=document.getElementById("data-steps");const route=routePaths[state.highlightRoute]||[];list.innerHTML="";route.forEach(function(id,index){const node=nodeById(id);const li=document.createElement("li");li.className=state.active.includes(id)?"done":index===route.length-1?"active":"";li.innerHTML="<strong>步骤 "+(index+1)+"："+node.title+"</strong><div class='mini'>输入："+(node.payload.in||"见节点定义")+"</div><div class='mini'>输出："+(node.payload.out||"见节点定义")+"</div><div class='mini'>技术栈："+node.stack.join(" / ")+"</div><div class='mini'>算法："+algorithmText(id)+"</div>";list.appendChild(li);});}
+    function restoreViewport(view){const wrap=document.getElementById(view==="journey"?"journey-wrap":"architecture-wrap");const vp=viewportByView(view);if(!wrap)return;wrap.scrollLeft=vp.scrollLeft||0;wrap.scrollTop=vp.scrollTop||0;}
+    function captureViewport(view){const wrap=document.getElementById(view==="journey"?"journey-wrap":"architecture-wrap");if(!wrap)return;viewportByView(view).scrollLeft=wrap.scrollLeft;viewportByView(view).scrollTop=wrap.scrollTop;}
+    function setActiveView(view){captureViewport(state.activeView);state.activeView=view;persist();render();restoreViewport(view);}
+    function syncFullscreenButton(){const panel=visualPanel();const full=document.fullscreenElement===panel;panel.classList.toggle("panel-fullscreen",full);document.getElementById("fullscreen-btn").textContent=full?"退出全屏":"全屏查看";}
+    function render(){if(!detailsBound){DemoUI.bindDetailsToggle(pageKey,"#details-toggle");detailsBound=true;}document.getElementById("speed-input").value=state.speed;document.getElementById("speed-label").textContent=state.speed.toFixed(2)+"x";document.getElementById("highlight-select").value=state.highlightRoute||"interview";document.getElementById("route-select").value=state.snapshot.routeTarget||"interview";document.getElementById("clarify-toggle").checked=!!state.snapshot.clarify;document.getElementById("fallback-toggle").checked=!!state.snapshot.fallback;document.getElementById("stream-toggle").checked=state.snapshot.stream!==false;document.getElementById("query-input").value=state.snapshot.query||"来一场 Spring Boot 模拟面试，然后如果结束了帮我生成报告。";document.getElementById("zoom-input").value=currentViewport().zoom;document.getElementById("zoom-label").textContent=Math.round(currentViewport().zoom*100)+"%";document.getElementById("journey-tab").className="tab button button--small"+(state.activeView==="journey"?" active":" button--ghost");document.getElementById("architecture-tab").className="tab button button--small"+(state.activeView==="architecture"?" active":" button--ghost");document.getElementById("journey-view").classList.toggle("hidden",state.activeView!=="journey");document.getElementById("architecture-view").classList.toggle("hidden",state.activeView!=="architecture");document.getElementById("view-tag").textContent=state.activeView==="journey"?"链路图":"架构图";DemoUI.renderJson("#state-json",Object.assign({},state.snapshot,{activeView:state.activeView,journeyViewport:state.viewports.journey,architectureViewport:state.viewports.architecture}));renderJourneyBoard();renderArchitectureBoard();renderDataSteps();renderTechStack();DemoViewport.bindDraggableScroll("#journey-wrap");DemoViewport.bindDraggableScroll("#architecture-wrap");restoreViewport(state.activeView);const logEl=document.getElementById("trace-log");logEl.innerHTML="";state.log.forEach(function(item){const li=document.createElement("li");li.textContent=item;logEl.appendChild(li);});const focusNodeId=state.active[state.active.length-1]||state.selectedNodeId||(routePaths[state.highlightRoute]||[])[0];if(state.activeView==="journey"&&focusNodeId){const activeNode=Array.from(document.querySelectorAll("#journey-board .node")).find(function(item){return item.querySelector(".mini")&&item.querySelector(".mini").textContent===focusNodeId;});if(activeNode)DemoViewport.centerNode("#journey-wrap","#journey-board",activeNode);}syncFullscreenButton();}
+    async function playJourney(){state.stopRequested=false;state.paused=false;state.active=[];state.log=["开始执行 AI 助手总链路。"];state.snapshot=routeMeta();state.highlightRoute=state.snapshot.highlightRoute||state.snapshot.routeTarget;state.activeView="journey";persist();const seq=[{id:"user",text:"用户在前端输入请求，链路从自然语言 query 开始。"},{id:"webchat",text:"WebChat 前端组装页面状态、目标模式和当前输入。"},{id:"chat-session",text:"会话装配层补齐 sessionId、traceId 和会话上下文。"},{id:"controller",text:"Controller 接收请求并解析基础参数。"},{id:"identity",text:"系统解析用户身份，决定 userId、角色与租户上下文。"},{id:"ratelimit",text:"业务前置保护触发：限流、输入净化与安全兜底。"}];if(state.snapshot.stream){seq.push({id:"stream",text:"因为是流式接口，先建立 SseEmitter、异步任务与事件输出通道。"});seq.push({id:"history",text:"压缩历史上下文，并探测当前是否存在活跃面试或刷题会话。"});}seq.push({id:"service",text:"门面层将外部请求转换为内部 TaskRequest。"});seq.push({id:"observability",text:"链路埋点记录 trace、耗时和初始上下文。"});seq.push({id:"router",text:"TaskRouterAgent 开始识别当前请求该进入哪种功能链路。"});seq.push({id:"intent-tree",text:"意图树先做主任务分类。"});seq.push({id:"slot-extract",text:"提取语言、知识点、岗位、工具名等关键槽位。"});seq.push({id:"decision-gate",text:"根据置信度和槽位完整度做继续、澄清或回退决策。"});if(state.snapshot.clarify){seq.push({id:"clarify",text:"意图不够清晰，先返回澄清问题，链路在此短暂停住。"});seq.push({id:"response",text:"澄清问题已通过 "+state.snapshot.responseMode+" 返回给前端，等待下一轮输入。"});}else{if(state.snapshot.fallback){seq.push({id:"legacy",text:"意图树不可用或失败，退回 Legacy ReAct 路由。"});}seq.push({id:"model-routing",text:"模型路由根据任务类型选择底层模型策略。"});seq.push({id:"first-token-check",text:"模型调用前后记录首包时延，判断交互质量是否可接受。"});seq.push({id:"circuit-breaker",text:"三态熔断根据错误率、超时和慢首包决定 closed、half-open 或 open。"});const finalRoute=state.highlightRoute;const textMap={interview:[{id:"a2a",text:"路由器将状态同步到 A2A，总线负责面试阶段进度广播。"},{id:"interview",text:"已命中“模拟面试”链路，进入 InterviewOrchestratorAgent。"},{"id":"interview-state",text:"面试状态机把当前会话推进到 asking / answering / evaluating 等阶段。"},{"id":"difficulty-adjust",text:"根据答题表现动态调整难度，决定下一题更难、持平还是回退。"},{"id":"answer-eval",text:"对当前回答做结构化评分，输出要点覆盖、深度和表达反馈。"},{"id":"report-build",text:"当达到结束条件后，汇总整场面试记录并生成最终报告。"},{"id":"storage",text:"面试状态、评估结果和最终报告被写入持久化层。"}],knowledge:[{id:"knowledge-coordinator",text:"当前默认知识问答视角展示的是混合策略方案图。"},{"id":"hybrid-route",text:"这里展示的是产品目标态：本地知识线索与 RAG 多路召回共同参与。"},{"id":"local-candidate-recall",text:"本地链会先用确定性规则做候选压缩。"},{"id":"vector-recall",text:"向量召回拿到语义最相关分片。"},{"id":"keyword-recall",text:"关键词/BM25 召回补强精确术语命中。"},{"id":"local-graph",text:"图谱检索补实体关系和上下游概念。"},{"id":"rerank",text:"RAG 主链对多路召回结果统一融合、去重并重排。"},{"id":"rag-service",text:"远程大模型基于上下文生成答案与来源。"},{"id":"image-service",text:"如果存在图片或附件素材，在返回前补齐媒体引用。"}],knowledge_rag:[{id:"knowledge-coordinator",text:"知识协调器选择 RAG 向量链。"},{"id":"rag-vector-route",text:"当前问题更适合语义检索优先的 RAG 向量链路。"},{"id":"vector-recall",text:"向量召回拿到语义最相关分片。"},{"id":"rerank",text:"对向量召回结果做重排。"},{"id":"rag-service",text:"基于重排上下文生成答案。"},{"id":"image-service",text:"补齐图片与附件引用。"}],knowledge_local:[{id:"knowledge-coordinator",text:"知识协调器选择本地知识链。"},{"id":"local-llm-route",text:"进入 LocalGraphKnowledgeService，本地模型不直接作答。"},{"id":"local-candidate-recall",text:"先用规则召回把候选节点压到可交给 Ollama 的规模。"},{"id":"local-ollama-route",text:"Ollama 只做候选定位，输出 matchedIds。"},{"id":"local-note-graph",text:"再展开主笔记、关联笔记、反链和标签邻居。"},{"id":"local-context-pack",text:"最终组装为 KnowledgeContextPacket，本地链在这里产出上下文。"},{"id":"rag-service",text:"远程大模型基于本地上下文包组织最终答案。"},{"id":"image-service",text:"如有图片或附件，则在返回前补齐媒体引用。"}],knowledge_fusion:[{id:"knowledge-coordinator",text:"知识协调器收到 HYBRID_FUSION 请求。"},{"id":"hybrid-route",text:"代码中已预留融合模式，但当前协调器首版尚未真正把本地链和 RAG 链做统一重排融合。"},{"id":"local-candidate-recall",text:"页面这里展示目标方案中的本地候选压缩步骤。"},{"id":"vector-recall",text:"页面同时展示目标方案中的向量召回步骤。"},{"id":"keyword-recall",text:"关键词召回用于精确术语补强。"},{"id":"local-graph",text:"图谱召回补充实体关联。"},{"id":"rerank",text:"这里是目标态统一融合重排位点，真实代码实现仍需进一步确认/补齐。"},{"id":"rag-service",text:"最终仍由远程大模型负责统一回答生成。"},{"id":"image-service",text:"补齐图片与附件引用。"}],coding:[{id:"coding",text:"已命中“刷题练习”链路，进入 CodingPracticeAgent。"},{id:"storage",text:"题目、评分和用户进度被写入持久化层。"}],profile:[{id:"profile",text:"已命中“画像建议”链路，进入 LearningProfileAgent。"},{id:"storage",text:"画像快照与推荐结果写入数据库与缓存。"}],mcp:[{id:"mcp",text:"已命中“MCP 工具调用”链路，进入 McpGatewayService。"},{id:"storage",text:"工具调用结果与审计记录被持久化，便于追溯。"}],legacy:[{id:"knowledge-coordinator",text:"Legacy 回退后当前示例继续走知识问答链。"},{"id":"rag-vector-route",text:"回退链默认走较稳的向量检索策略。"},{"id":"vector-recall",text:"向量召回拿到主相关分片。"},{"id":"rerank",text:"结果重排后生成回答。"},{"id":"rag-service",text:"生成最终答案。"}]};(textMap[finalRoute]||textMap[state.snapshot.routeTarget]||[]).forEach(function(item){seq.push(item);});seq.push({id:"response",text:"业务执行完成，结果以 "+state.snapshot.responseMode+" 返回给前端。"});}await DemoFlow.runSequence({steps:seq.map(function(item){return Object.assign({delay:980},item);}),speed:state.speed,shouldPause:function(){return state.paused;},shouldStop:function(){return state.stopRequested;},onStep:async function(step){if(!state.active.includes(step.id))state.active.push(step.id);state.log.push(step.text);DemoUI.setText("#narration-box",step.text);persist();render();}});}
+    document.getElementById("play-btn").addEventListener("click",playJourney);
+    document.getElementById("pause-btn").addEventListener("click",function(){state.paused=true;persist();});
+    document.getElementById("resume-btn").addEventListener("click",function(){state.paused=false;persist();});
+    document.getElementById("speed-input").addEventListener("input",function(event){state.speed=Number(event.target.value);persist();render();});
+    document.getElementById("highlight-select").addEventListener("change",function(event){state.highlightRoute=event.target.value;persist();render();});
+    document.getElementById("zoom-input").addEventListener("input",function(event){currentViewport().zoom=Number(event.target.value);persist();render();});
+    document.getElementById("pan-left").addEventListener("click",function(){currentWrap().scrollBy({left:-260,behavior:"smooth"});});
+    document.getElementById("pan-right").addEventListener("click",function(){currentWrap().scrollBy({left:260,behavior:"smooth"});});
+    document.getElementById("pan-reset").addEventListener("click",function(){const wrap=currentWrap();wrap.scrollTo({left:0,top:0,behavior:"smooth"});currentViewport().zoom=1;currentViewport().scrollLeft=0;currentViewport().scrollTop=0;persist();render();});
+    document.getElementById("fullscreen-btn").addEventListener("click",async function(){const panel=visualPanel();if(document.fullscreenElement===panel){await document.exitFullscreen();}else{await panel.requestFullscreen();}syncFullscreenButton();});
+    document.getElementById("route-select").addEventListener("change",function(event){state.highlightRoute=event.target.value;state.snapshot.routeTarget=event.target.value;persist();render();});
+    document.getElementById("journey-tab").addEventListener("click",function(){setActiveView("journey");});
+    document.getElementById("architecture-tab").addEventListener("click",function(){setActiveView("architecture");});
+    document.getElementById("journey-wrap").addEventListener("scroll",function(){state.viewports.journey.scrollLeft=this.scrollLeft;state.viewports.journey.scrollTop=this.scrollTop;persist();});
+    document.getElementById("architecture-wrap").addEventListener("scroll",function(){state.viewports.architecture.scrollLeft=this.scrollLeft;state.viewports.architecture.scrollTop=this.scrollTop;persist();});
+    document.getElementById("reset-btn").addEventListener("click",function(){state.stopRequested=true;state.active=[];state.selectedNodeId="";state.highlightRoute="interview";state.activeView="journey";state.log=["等待播放总链路。"];state.snapshot={routeTarget:"interview",stream:true,clarify:false,fallback:false,query:"来一场 Spring Boot 模拟面试，然后如果结束了帮我生成报告。"};state.viewports={journey:{zoom:1,scrollLeft:0,scrollTop:0},architecture:{zoom:1,scrollLeft:0,scrollTop:0}};persist();render();});
+    document.addEventListener("fullscreenchange",syncFullscreenButton);
+    render();
+  </script>
+</body>
+</html>

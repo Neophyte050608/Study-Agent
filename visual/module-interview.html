@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>面试编排链路可视化</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong>模块页：面试编排链路</strong>
+        <span>面试编排、状态流转、评分与画像更新</span>
+      </div>
+      <div class="topbar__actions">
+        <a class="button button--ghost" href="index.html">返回主索引</a>
+        <label class="switch"><input id="details-toggle" type="checkbox"><span>显示技术细节</span></label>
+      </div>
+    </header>
+
+    <section class="page-grid">
+      <div class="span-4 panel">
+        <div class="section-title"><h3>探索模式</h3><span class="tag">手动驱动</span></div>
+        <div class="stack">
+          <label>用户主题
+            <input id="topic-input" style="width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);" value="Spring Boot">
+          </label>
+          <label>回答文本
+            <textarea id="answer-input" style="width:100%;min-height:100px;border-radius:14px;border:1px solid var(--line);padding:12px;">我会先介绍自动配置原理，再讲条件装配和 starter。</textarea>
+          </label>
+          <div class="inline-group">
+            <button id="step-start" class="button button--accent">开始面试</button>
+            <button id="step-answer">提交回答</button>
+            <button id="step-report">生成报告</button>
+          </div>
+          <div class="inline-group">
+            <button id="step-back" class="button button--small">回退上一步</button>
+            <button id="step-reset" class="button button--small button--ghost">重置流程</button>
+          </div>
+          <label class="switch"><input id="garbage-toggle" type="checkbox"><span>模拟垃圾回答拦截</span></label>
+          <label class="switch"><input id="async-toggle" type="checkbox" checked><span>报告阶段模拟异步画像更新</span></label>
+        </div>
+      </div>
+
+      <div class="span-8 panel panel--strong">
+        <div class="section-title"><h3>自动演示模式</h3><span class="tag tag--ok">按编排链自动播放</span></div>
+        <div class="toolbar">
+          <button id="auto-play" class="button button--accent">自动演示</button>
+          <button id="pause-play">暂停</button>
+          <button id="resume-play">继续</button>
+          <span class="subtle">速度</span>
+          <input id="speed-input" type="range" min="0.5" max="2.5" step="0.25" value="1.25">
+          <span id="speed-label" class="tag">1.25x</span>
+        </div>
+        <div class="callout" id="narration-box">点击“自动演示”后，将按项目里的真实链路依次触发：创建会话、评分、状态机推进、报告与画像更新。</div>
+      </div>
+
+      <div class="span-7 panel">
+        <div class="section-title"><h3>链路步骤</h3><span class="tag">可回退</span></div>
+        <div id="stepper" class="stepper"></div>
+        <div class="stack" style="margin-top:14px;">
+          <div><strong>当前阶段：</strong><span id="stage-chip" class="status-chip">尚未开始</span></div>
+          <ul id="event-log" class="timeline"></ul>
+        </div>
+      </div>
+
+      <div class="span-5 panel">
+        <div class="section-title"><h3>实时会话对象</h3><span class="tag tag--cache">InterviewSession</span></div>
+        <pre id="session-json"></pre>
+      </div>
+
+      <div class="span-6 panel" data-detail-block>
+        <div class="section-title"><h3>关键技术细节</h3></div>
+        <ul class="bullet-list">
+          <li><strong>入口门面：</strong>`InterviewController -> InterviewService -> TaskRouterAgent`，先统一包装成 `TaskRequest`。</li>
+          <li><strong>真正编排：</strong>`InterviewOrchestratorAgent.submitAnswer` 里执行“决策层 -> 知识层 -> 评估层 -> 成长层”。</li>
+          <li><strong>垃圾回答短路：</strong>如果文本过短、纯标点、纯数字，会直接返回低分反馈，不走 LLM。</li>
+          <li><strong>阶段机：</strong>自我介绍、简历深挖、核心知识、场景/编码、收尾，靠 COLA 状态机推进。</li>
+          <li><strong>报告后置任务：</strong>最终报告返回后，画像更新走异步线程池，不阻塞用户。</li>
+        </ul>
+      </div>
+
+      <div class="span-6 panel" data-detail-block>
+        <div class="section-title"><h3>对应代码定位</h3></div>
+        <table class="table">
+          <thead><tr><th>职责</th><th>文件</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>HTTP 入口</td><td>InterviewController</td><td>解析 topic、answer、traceId，做错误映射</td></tr>
+            <tr><td>门面层</td><td>InterviewService</td><td>把请求转成 `TaskRequest`</td></tr>
+            <tr><td>总路由</td><td>TaskRouterAgent</td><td>决定调用哪个 Agent</td></tr>
+            <tr><td>会话编排</td><td>InterviewOrchestratorAgent</td><td>控制状态推进、评分、反馈、报告</td></tr>
+            <tr><td>持久化</td><td>DbSessionRepository</td><td>把 `InterviewSession` 序列化到 MySQL</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title"><h3 data-modal-title>详情</h3><button class="button button--small" data-close-modal>关闭</button></div>
+      <div data-modal-body></div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    const pageKey = "module-interview";
+    const steps = [
+      { id: "created", title: "创建面试会话", stage: "INTRODUCTION", delay: 1100, narration: "调用 /api/start 后，系统会装载简历上下文与画像快照，并生成首题。" },
+      { id: "evaluated", title: "提交回答并评分", stage: "RESUME_DEEP_DIVE", delay: 1400, narration: "回答先经过输入净化与垃圾回答拦截，正常情况下进入四层 Agent 链路做评估。" },
+      { id: "advanced", title: "更新状态机与掌握度", stage: "CORE_KNOWLEDGE", delay: 1200, narration: "评估完成后会更新 difficulty、followUpState、topicMastery，并尝试推进 SOP 阶段机。" },
+      { id: "reported", title: "生成报告与画像写入", stage: "CLOSING", delay: 1300, narration: "报告生成后会触发异步画像更新，避免最终报告接口被画像落库阻塞。" }
+    ];
+    const initialSession = {
+      id: "session-demo-001", topic: "Spring Boot", currentQuestion: "", totalQuestions: 5, history: [],
+      difficultyLevel: "BASIC", followUpState: "PROBE", topicMastery: { "Spring Boot": 65 }, currentStage: "INTRODUCTION",
+      profileSnapshot: "画像快照：近期主要练习后端框架与中间件。", rollingSummary: "", averageScore: 0
+    };
+    let state = DemoState.read(pageKey, {
+      showDetails: true, currentStep: -1, paused: false, stopRequested: false, speed: 1.25,
+      garbage: false, asyncProfile: true, session: initialSession, logs: ["等待操作：尚未开始面试。"]
+    });
+    function clone(value) { return JSON.parse(JSON.stringify(value)); }
+    function recomputeAverage(session) {
+      if (!session.history.length) { session.averageScore = 0; return; }
+      const total = session.history.reduce((sum, item) => sum + item.score, 0);
+      session.averageScore = Number((total / session.history.length).toFixed(1));
+    }
+    function buildSessionAt(stepIndex) {
+      const session = clone(initialSession);
+      session.topic = document.getElementById("topic-input").value || "Spring Boot";
+      session.topicMastery = { [session.topic]: 65 };
+      if (stepIndex >= 0) session.currentQuestion = "请解释 Spring Boot 自动配置的核心机制。";
+      if (stepIndex >= 1) {
+        const garbage = document.getElementById("garbage-toggle").checked;
+        const answer = garbage ? "..." : document.getElementById("answer-input").value;
+        session.history.push({
+          questionText: session.currentQuestion, userAnswer: answer, score: garbage ? 5 : 84,
+          feedback: garbage ? "回答过于简短，命中垃圾回答拦截。" : "回答结构完整，但还可以补充条件装配的边界。",
+          citations: garbage ? [] : ["1. [obsidian:SpringBootAutoConfiguration.md] 自动配置原理"], conflicts: []
+        });
+        session.followUpState = garbage ? "PROBE" : "DEEPEN";
+        session.difficultyLevel = garbage ? "BASIC" : "INTERMEDIATE";
+        session.currentQuestion = garbage ? "请重新回答上一题。" : "如果让你排查自动配置失效，你会优先检查哪些条件？";
+        session.topicMastery[session.topic] = garbage ? 47 : 71.7;
+        recomputeAverage(session);
+      }
+      if (stepIndex >= 2) {
+        session.currentStage = "CORE_KNOWLEDGE";
+        session.followUpState = "DEEPEN";
+        session.rollingSummary = "最近 1 轮：基础原理掌握尚可，但边界与排障思路需要继续追问。";
+      }
+      if (stepIndex >= 3) {
+        session.currentStage = "CLOSING";
+        session.currentQuestion = "";
+        session.report = {
+          summary: "本轮面试已完成，框架原理理解较好，但排障和条件组合推理仍需加强。",
+          nextFocus: "建议围绕条件注解、自动配置顺序、starter 机制做专项复盘。"
+        };
+        session.profileUpdate = document.getElementById("async-toggle").checked ? "异步提交中" : "同步完成";
+      }
+      return session;
+    }
+    function buildLogs(stepIndex) {
+      const garbage = document.getElementById("garbage-toggle").checked;
+      const logs = ["等待操作：尚未开始面试。"];
+      if (stepIndex >= 0) logs.push("已创建会话：写入 topic、profileSnapshot、currentStage，并生成首题。");
+      if (stepIndex >= 1) logs.push(garbage ? "命中垃圾回答短路：跳过 LLM 评估，直接写入低分反馈并保持原题。" : "已执行四层评估链：决策层 -> 知识层 -> 评估层 -> 成长层。");
+      if (stepIndex >= 2) logs.push("已更新 adaptive state：difficultyLevel、followUpState、topicMastery、rollingSummary。");
+      if (stepIndex >= 3) logs.push(document.getElementById("async-toggle").checked ? "最终报告已返回；画像更新任务进入异步线程池。" : "最终报告与画像更新同步完成。");
+      return logs;
+    }
+    function persist() { DemoState.write(pageKey, state); }
+    function render() {
+      DemoUI.bindDetailsToggle(pageKey, "#details-toggle");
+      document.getElementById("garbage-toggle").checked = !!state.garbage;
+      document.getElementById("async-toggle").checked = state.asyncProfile !== false;
+      document.getElementById("speed-input").value = state.speed || 1.25;
+      document.getElementById("speed-label").textContent = (state.speed || 1.25).toFixed(2) + "x";
+      document.getElementById("stage-chip").textContent = state.session.currentStage || "尚未开始";
+      DemoUI.renderJson("#session-json", state.session);
+      const stepper = document.getElementById("stepper");
+      stepper.innerHTML = "";
+      steps.forEach(function (step, index) {
+        const div = document.createElement("div");
+        div.className = "step" + (index < state.currentStep ? " done" : index === state.currentStep ? " current" : "");
+        div.innerHTML = "<strong>" + (index + 1) + ". " + step.title + "</strong><div class='mini'>" + step.stage + "</div>";
+        div.addEventListener("click", function () { moveTo(index); });
+        stepper.appendChild(div);
+      });
+      const logEl = document.getElementById("event-log");
+      logEl.innerHTML = "";
+      state.logs.forEach(function (text, index) {
+        const li = document.createElement("li");
+        li.className = index <= state.currentStep ? "done" : "";
+        li.textContent = text;
+        logEl.appendChild(li);
+      });
+    }
+    function moveTo(stepIndex) {
+      state.currentStep = stepIndex;
+      state.session = buildSessionAt(stepIndex);
+      state.logs = buildLogs(stepIndex);
+      persist();
+      render();
+      if (stepIndex >= 0) {
+        DemoUI.openModal(steps[stepIndex].title, "<div class='stack'><div class='callout'>" + steps[stepIndex].narration + "</div><div class='kv'><strong>当前阶段</strong><span>" + state.session.currentStage + "</span><strong>平均分</strong><span>" + state.session.averageScore + "</span><strong>追问状态</strong><span>" + state.session.followUpState + "</span></div></div>");
+      }
+    }
+    function reset() {
+      state.currentStep = -1;
+      state.stopRequested = true;
+      state.paused = false;
+      state.session = buildSessionAt(-1);
+      state.logs = buildLogs(-1);
+      persist();
+      render();
+    }
+    async function autoPlay() {
+      state.stopRequested = false;
+      persist();
+      await DemoFlow.runSequence({
+        steps: steps,
+        speed: state.speed,
+        shouldPause: function () { return state.paused; },
+        shouldStop: function () { return state.stopRequested; },
+        onStep: async function (step, index) {
+          moveTo(index);
+          DemoUI.setText("#narration-box", step.narration);
+        }
+      });
+    }
+    document.getElementById("step-start").addEventListener("click", function () { moveTo(0); });
+    document.getElementById("step-answer").addEventListener("click", function () { moveTo(1); });
+    document.getElementById("step-report").addEventListener("click", function () { moveTo(3); });
+    document.getElementById("step-back").addEventListener("click", function () { moveTo(Math.max(-1, state.currentStep - 1)); });
+    document.getElementById("step-reset").addEventListener("click", reset);
+    document.getElementById("auto-play").addEventListener("click", autoPlay);
+    document.getElementById("pause-play").addEventListener("click", function () { state.paused = true; persist(); });
+    document.getElementById("resume-play").addEventListener("click", function () { state.paused = false; persist(); });
+    document.getElementById("speed-input").addEventListener("input", function (event) {
+      state.speed = Number(event.target.value);
+      persist();
+      render();
+    });
+    document.getElementById("garbage-toggle").addEventListener("change", function (event) {
+      state.garbage = event.target.checked;
+      moveTo(state.currentStep);
+    });
+    document.getElementById("async-toggle").addEventListener("change", function (event) {
+      state.asyncProfile = event.target.checked;
+      moveTo(state.currentStep);
+    });
+    render();
+  </script>
+</body>
+</html>

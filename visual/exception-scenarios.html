@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>异常流程模拟</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong>异常流程模拟页</strong>
+        <span>异常链路、降级策略与恢复路径</span>
+      </div>
+      <div class="topbar__actions">
+        <a class="button button--ghost" href="index.html">返回主索引</a>
+        <label class="switch"><input id="details-toggle" type="checkbox"><span>显示技术细节</span></label>
+      </div>
+    </header>
+
+    <section class="page-grid">
+      <div class="span-4 panel">
+        <div class="section-title"><h3>异常开关</h3><span class="tag tag--danger">可组合</span></div>
+        <div class="stack">
+          <label class="switch"><input id="network-timeout" type="checkbox"><span>网络超时</span></label>
+          <label class="switch"><input id="validation-fail" type="checkbox"><span>参数校验失败</span></label>
+          <label class="switch"><input id="auth-fail" type="checkbox"><span>权限不足</span></label>
+          <label class="switch"><input id="dependency-down" type="checkbox"><span>依赖服务宕机</span></label>
+          <label class="switch"><input id="index-missing" type="checkbox"><span>本地索引缺失</span></label>
+          <div class="inline-group">
+            <button id="simulate-btn" class="button button--accent">模拟异常</button>
+            <button id="back-btn">回退</button>
+            <button id="reset-btn" class="button--ghost">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="span-8 panel panel--strong">
+        <div class="section-title"><h3>异常处理讲解</h3></div>
+        <div id="narration-box" class="callout">选择一个或多个异常后点击“模拟异常”。这里会展示错误处理链路、降级策略和最终给用户的提示。</div>
+      </div>
+
+      <div class="span-7 panel">
+        <div class="section-title"><h3>错误处理链路</h3></div>
+        <ul id="exception-steps" class="timeline"></ul>
+      </div>
+
+      <div class="span-5 panel">
+        <div class="section-title"><h3>用户可见结果</h3></div>
+        <pre id="result-json"></pre>
+      </div>
+
+      <div class="span-12 panel" data-detail-block>
+        <div class="section-title"><h3>异常策略映射</h3></div>
+        <table class="table">
+          <thead><tr><th>异常</th><th>触发位置</th><th>系统处理</th><th>用户侧表现</th></tr></thead>
+          <tbody>
+            <tr><td>参数校验失败</td><td>Controller / 全局异常处理</td><td>返回 400，阻断后续服务调用</td><td>直接提示“请求参数不合法”</td></tr>
+            <tr><td>权限不足</td><td>Security / UserIdentityResolver</td><td>JWT 模式下拦截；当前 open 模式多为未启用</td><td>401/403 或被放行，取决于环境</td></tr>
+            <tr><td>MCP 超时</td><td>McpGatewayService</td><td>retry 后 fallback_stub 或 fallback</td><td>功能降级，但接口尽量继续返回</td></tr>
+            <tr><td>Local Graph 失败</td><td>KnowledgeRetrievalCoordinator</td><td>记录 trace，退回 RAG_ONLY</td><td>用户通常无感，只是答案来源变化</td></tr>
+            <tr><td>依赖服务宕机</td><td>clip-service / eval-service / 外部模型</td><td>局部失败，视功能选择降级或报错</td><td>图片缺失、评测失败或回答超时提示</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title"><h3 data-modal-title>详情</h3><button class="button button--small" data-close-modal>关闭</button></div>
+      <div data-modal-body></div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    const pageKey = "exception-scenarios";
+    let state = DemoState.read(pageKey, { showDetails: true, history: [], result: { status: "idle", message: "等待异常模拟。" } });
+    const scenarios = {
+      validation: { label: "参数校验失败", steps: ["Controller 检测到缺失字段", "抛出 IllegalArgumentException", "GlobalExceptionHandler 返回 400 JSON"], result: { status: 400, message: "请求参数不合法" } },
+      auth: { label: "权限不足", steps: ["SecurityConfig 进入 jwt 模式", "请求缺少有效凭证", "资源服务器拒绝访问"], result: { status: 401, message: "未授权访问，需携带有效 JWT" } },
+      timeout: { label: "网络超时", steps: ["McpGatewayService 调用外部能力", "首轮超时", "触发 retry", "仍失败后 fallback_stub 或 fallback"], result: { status: "fallback_stub", message: "主网关超时，已退回 stub 能力" } },
+      dependency: { label: "依赖服务宕机", steps: ["调用 clip-service / eval-service", "健康检查失败", "主流程记录错误并部分降级"], result: { status: 502, message: "依赖服务不可用，当前功能已降级" } },
+      index: { label: "本地索引缺失", steps: ["LocalKnowledgeIndexBuildService 未构建索引", "Local Graph 检索失败", "KnowledgeRetrievalCoordinator fallback 到 RAG_ONLY"], result: { status: 200, message: "本地索引缺失，已自动回退到 RAG 检索" } }
+    };
+    function persist() { DemoState.write(pageKey, state); }
+    function render() {
+      DemoUI.bindDetailsToggle(pageKey, "#details-toggle");
+      const list = document.getElementById("exception-steps");
+      list.innerHTML = "";
+      state.history.forEach(function (step, index) {
+        const li = document.createElement("li");
+        li.className = index === state.history.length - 1 ? "error active" : "error";
+        li.textContent = step;
+        list.appendChild(li);
+      });
+      DemoUI.renderJson("#result-json", state.result);
+    }
+    function selectedScenarioKeys() {
+      const keys = [];
+      if (document.getElementById("validation-fail").checked) keys.push("validation");
+      if (document.getElementById("auth-fail").checked) keys.push("auth");
+      if (document.getElementById("network-timeout").checked) keys.push("timeout");
+      if (document.getElementById("dependency-down").checked) keys.push("dependency");
+      if (document.getElementById("index-missing").checked) keys.push("index");
+      return keys;
+    }
+    function simulate() {
+      const keys = selectedScenarioKeys();
+      if (!keys.length) {
+        state.history = ["未选择异常，系统保持空闲。"];
+        state.result = { status: "idle", message: "请选择至少一个异常开关。" };
+        DemoUI.setText("#narration-box", "当前没有异常开关被打开，因此不会进入异常链路。");
+        persist(); render(); return;
+      }
+      const mergedSteps = [];
+      let finalResult = { status: 200, message: "请求成功" };
+      keys.forEach(function (key) {
+        mergedSteps.push("【" + scenarios[key].label + "】");
+        mergedSteps.push.apply(mergedSteps, scenarios[key].steps);
+        finalResult = scenarios[key].result;
+      });
+      state.history = mergedSteps;
+      state.result = finalResult;
+      DemoUI.setText("#narration-box", "已触发 " + keys.length + " 个异常场景。观察哪些异常会直接中断，哪些会进入 fallback 或降级路径。");
+      persist(); render();
+    }
+    document.getElementById("simulate-btn").addEventListener("click", simulate);
+    document.getElementById("back-btn").addEventListener("click", function () { state.history.pop(); persist(); render(); });
+    document.getElementById("reset-btn").addEventListener("click", function () {
+      state.history = []; state.result = { status: "idle", message: "等待异常模拟。" };
+      document.querySelectorAll('input[type="checkbox"]').forEach(function (input) { if (input.id !== "details-toggle") input.checked = false; });
+      persist(); render();
+    });
+    render();
+  </script>
+</body>
+</html>

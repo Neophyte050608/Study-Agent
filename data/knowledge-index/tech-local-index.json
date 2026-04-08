@@ -1,0 +1,1808 @@
+{
+  "schemaVersion" : 1,
+  "buildId" : "358fe83e-4d5a-42b2-81ce-0e01a89cf1aa",
+  "generatedAt" : "2026-04-07T11:40:01.016543700Z",
+  "vaultRoot" : "D:\\Obsidian\\NoteHub\\learning\\tech",
+  "nodeCount" : 200,
+  "nodes" : [ {
+    "id" : "AI/agent",
+    "title" : "agent",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "AI", "Agent", "智能体", "自动化" ],
+    "filePath" : "AI/agent.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/Agent死循环解决",
+    "title" : "Agent死循环解决",
+    "aliases" : [ ],
+    "summary" : "1. 最大步数限制 2. 哈希去重（计算tool➕args哈希值） 3. 时间/token限制 4. 向量相似度检测，计算最近k步的向量相似度 5. 错误模式匹配（比如找文件连着几次找不到，报了错误，那就可以判断策略失败） 6. 动态温度调整，遇到问题可以加随机性 7. Supervisor介入，让其他agent审查 8. 强制反思",
+    "tags" : [ "agent" ],
+    "filePath" : "AI/Agent死循环解决.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/Agent通用方案",
+    "title" : "Prompt 核心规则（极简可落地）",
+    "aliases" : [ "Agent通用方案" ],
+    "summary" : "比如查某订单相关信息?如何设计? 功能设计： 1. 意图识别 2. 槽位提取：说明我现在需要用户id、订单id等（user_id、order_id） 3. 工具调用，去查数据 4. 逻辑推理：判断有没有订单，订单什么状态，有无异常 5. 结果返回 用户：“我昨天买的东西怎么没发货” → 意图：订单查询 → 缺：user_id/order_id → 反问：“请告诉我你的订单号或手机号” → 调用 get_order_info → 推理：未发货，原因是库存不足 → 回复：自然语言",
+    "tags" : [ "agent" ],
+    "filePath" : "AI/Agent通用方案.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/AI",
+    "title" : "AI",
+    "aliases" : [ ],
+    "summary" : "通过预测下一个最有可能出现的词来进行回答，它给出的只是它训练中数据集中最平均最可能的结果； 可以用来：一次性的代码开发 现在使用ai的方式，是让自己变得更厉害了，还是退化了；当ai帮你把那些最繁琐的困难跳过时，也把你把对应的决策权给替代了，你可能不再清楚对应的代码为什么要使用这个数据结构，变成它只要能跑就行，陷入了ai觉得的最优解；",
+    "tags" : [ "AI", "机器学习", "LLM", "基础概念" ],
+    "filePath" : "AI/AI.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/LLM",
+    "title" : "LLM",
+    "aliases" : [ ],
+    "summary" : "参数： Softmax的公式里有用到",
+    "tags" : [ "AI", "LLM", "大语言模型", "自然语言处理" ],
+    "filePath" : "AI/LLM.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/MCP",
+    "title" : "MCP",
+    "aliases" : [ ],
+    "summary" : "作为一个连接中枢TODO",
+    "tags" : [ "AI", "MCP", "模型控制协议", "开发工具" ],
+    "filePath" : "AI/MCP.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/RAG",
+    "title" : "RAG",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "AI", "RAG", "检索增强", "知识库" ],
+    "filePath" : "AI/RAG.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/RAG切分策略",
+    "title" : "基础固定长度切分（4 种）",
+    "aliases" : [ "RAG切分策略" ],
+    "summary" : "保证上下文完整性和信息密度之间的平衡 关键参数：chunk_size，chunk_overlap，相邻块之间的重叠部分 1. **固定字符切分** 按固定字符长度（如 512、1024）切割，最简单，但容易切断语义。 2. **固定 Token 切分** 按 LLM Token 长度切割，比字符更精准，但仍可能断句。 3. **固定句子切分** 按句号、感叹号、问号分割，保证句子完整，但块大小不均匀。 4. **固定段落切分** 按换行 / 空行分割，保留段落结构，适合普通文",
+    "tags" : [ "gc", "jvm", "rag" ],
+    "filePath" : "AI/RAG切分策略.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/RRF",
+    "title" : "RRF",
+    "aliases" : [ ],
+    "summary" : "（**Reciprocal Rank Fusion，倒数排名融合）** 是 RAG 混合检索中最常用、最优雅的结果融合算法，**只看排名、不看分数**，能把 BM25、向量检索、多查询检索等多个结果列表，合并成一个更准的最终排序列表。TODO",
+    "tags" : [ "AI", "RRF", "检索算法", "排序算法" ],
+    "filePath" : "AI/RRF.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/Skills",
+    "title" : "结构",
+    "aliases" : [ "Skills" ],
+    "summary" : "大模型的一个技能 在.claude/skills/ 建立skill.md skill.md分为三层 1. 元信息层，描述skill的名字和作用（始终加载）——通过查看元信息可以做到让大模型按需加载后面的，减少token 2. 指令层，告诉大模型什么情况调用什么 3. 资源层，通过指令层的描述，大模型可以去资源层调用工具，查看规范，查看参考的图片等； >references：规范文件，对于要生成不同的文件，可以采取不同的规范 >   scripts：脚本文件，只要在指令层说明如",
+    "tags" : [ "AI", "技能", "工具使用", "自动化" ],
+    "filePath" : "AI/Skills.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/Transformer",
+    "title" : "Transformer",
+    "aliases" : [ ],
+    "summary" : "自注意力机制 让每个token根据上下文动态的调整自己的语义表示（每个词和自己那一句进行点积 Q：得到这个信息的问题 K：关键词 V：真实的信息 通过和qkv三个矩阵相乘 多头注意力机制 TODO",
+    "tags" : [ "AI", "Transformer", "神经网络", "深度学习" ],
+    "filePath" : "AI/Transformer.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/向量",
+    "title" : "向量",
+    "aliases" : [ ],
+    "summary" : "将句子经过Embedding模型转化成向量 用向量的点积来作为\"语义相似度\"的一种量化方式",
+    "tags" : [ "AI", "向量", "嵌入", "相似度" ],
+    "filePath" : "AI/向量.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "AI/沙箱",
+    "title" : "沙箱",
+    "aliases" : [ ],
+    "summary" : "可隔离的，可控的，可审计的 要能够执行代码，可控的访问网络，全程监控 需要满足的条件： 现有好的沙箱： firecracker 腾讯的cube沙箱，资源池化预热，镜像加速，启动过程快照（下次用的时候直接恢复到这里，把机器运行时的内存状态直接固化到磁盘），服务启动状态快照 !Pasted image 20260317232707.png 为什么不用docker： 隔离不够强，与主机共用主存，安全隔离就得做的更严格 为什么不用虚拟机： 隔离够了，启动更慢，开销大",
+    "tags" : [ "docker", "agent", "AI", "沙箱", "安全", "隔离环境" ],
+    "filePath" : "AI/沙箱.md",
+    "wikiLinks" : [ "Pasted image 20260317232707.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Algorithm/Algorithm",
+    "title" : "\uD83E\uDDE9 算法 (Algorithm)",
+    "aliases" : [ "Algorithm" ],
+    "summary" : "力扣hot100",
+    "tags" : [ "算法", "数据结构", "编程基础" ],
+    "filePath" : "Algorithm/Algorithm.md",
+    "wikiLinks" : [ "力扣hot100" ],
+    "backlinks" : [ "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Algorithm/力扣hot100",
+    "title" : "哈希",
+    "aliases" : [ "力扣hot100" ],
+    "summary" : "1. [**两数之和**](https://leetcode.cn/problems/two-sum/) 返回下标，用HashMap<Integer,Integer> 存nums[i],i。 2. [**字母异位词分组**](https://leetcode.cn/problems/group-anagrams/) 用HashMap<String,List<String>>存key（每个词字典排序）,异位词，用Arrays的sort对每个词的字符数组排序 3. [**最长连续",
+    "tags" : [ "算法", "LeetCode", "编程题", "面试准备" ],
+    "filePath" : "Algorithm/力扣hot100.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "\uD83E\uDDE9 算法 (Algorithm)" ]
+  }, {
+    "id" : "Backend/Backend",
+    "title" : "\uD83E\uDDF1 后端知识 (Backend)",
+    "aliases" : [ "Backend" ],
+    "summary" : "LIST FROM \"learning/tech/Backend\" WHERE file.name != \"Backend\" SORT file.mtime desc LIMIT 20",
+    "tags" : [ "redis", "sql", "mysql", "Backend", "java", "后端" ],
+    "filePath" : "Backend/Backend.md",
+    "wikiLinks" : [ "learning/tech/Backend/Java", "MySQL", "Redis", "MQ", "ES" ],
+    "backlinks" : [ "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Backend/docker",
+    "title" : "docker",
+    "aliases" : [ ],
+    "summary" : "docker-compose up -d docker-compose down",
+    "tags" : [ "Docker", "容器化", "虚拟化", "部署" ],
+    "filePath" : "Backend/docker.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/ES",
+    "title" : "\uD83D\uDD0E ES",
+    "aliases" : [ "ES" ],
+    "summary" : "LIST FROM \"learning/tech/Backend/ES\" SORT file.mtime desc",
+    "tags" : [ "ES", "索引", "sql", "Elasticsearch", "搜索引擎", "分布式搜索", "数据分析", "mysql" ],
+    "filePath" : "Backend/ES.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "\uD83E\uDDF1 后端知识 (Backend)", "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Backend/Java",
+    "title" : "☕ Java",
+    "aliases" : [ "Java" ],
+    "summary" : "LIST FROM \"learning/tech/Backend/Java\" SORT file.mtime desc",
+    "tags" : [ "Java", "后端开发", "JVM" ],
+    "filePath" : "Backend/Java.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Backend/JavaSE/BigDecimal",
+    "title" : "为什么 float 和 double 会丢精度？",
+    "aliases" : [ "BigDecimal" ],
+    "summary" : "BigDecimal 是 Java 提供的高精度数值计算类，专门解决 float 和 double 的精度丢失问题。涉及到钱的计算，必须用 BigDecimal。 因为它们是用 IEEE 754 标准的二进制浮点数表示的，像 0.1 这种十进制小数在二进制里是无限循环小数，存储时只能截断，所以精度就丢失了。 System.out.println(0.1 + 0.2); // 输出 0.30000000000000004，不是 0.3 System.out.println(1.",
+    "tags" : [ "jvm", "java" ],
+    "filePath" : "Backend/JavaSE/BigDecimal.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "基本数据类型" ]
+  }, {
+    "id" : "Backend/JavaSE/Caffeine",
+    "title" : "Caffeine 介绍",
+    "aliases" : [ "Caffeine" ],
+    "summary" : "Caffeine 是一款高性能的 Java 缓存库，以其高效的缓存淘汰策略著称。 其核心淘汰策略是 Window TinyLFU（最少最近使用的优化版） 核心思想是：如果一个数据最近被频繁访问，那么它在不久的将来也很可能被访问。同时，它实现了**自适应的缓存驱逐策略**，能根据实际的访问模式动态调整缓存行为。例如，若应用在某时间段内频繁访问某类数据，Caffeine 会自动调整，确保这些数据更长时间地留在缓存中，从而提升缓存命中率与系统性能。",
+    "tags" : [ "缓存", "java" ],
+    "filePath" : "Backend/JavaSE/Caffeine.md",
+    "wikiLinks" : [ "Window TinyLFU" ],
+    "backlinks" : [ "慢SQL的排查", "热点key" ]
+  }, {
+    "id" : "Backend/JavaSE/final",
+    "title" : "final关键字与变量可见性",
+    "aliases" : [ "final" ],
+    "summary" : "1. 若final修饰的是基本类型/不可变对象：构造方法执行完后，其他线程能看到正确的final变量值； 2. 若final变量指向**可变对象**（如List）：仅能保证“引用”的可见性，无法保证对象内部状态的可见性； 3. 要保证可变对象内部状态的可见性，需配合volatile或synchronized。 不一定。final 只保证引用不变，不保证对象内容不变。如果 final 修饰的是个 ArrayList，多个线程同时往里加元素照样会出问题。想要线程安全得用 lear",
+    "tags" : [ "jvm", "java", "juc", "并发" ],
+    "filePath" : "Backend/JavaSE/final.md",
+    "wikiLinks" : [ "volatile", "synchronized", "learning/tech/Backend/Java集合/ConcurrentHashMap" ],
+    "backlinks" : [ "**JDK 9的重大变化（Compact Strings）**", "主要组成部分：", "\uD83D\uDCCC **JDK 动态代理原理**" ]
+  }, {
+    "id" : "Backend/JavaSE/Java新特性",
+    "title" : "Java8的新特性",
+    "aliases" : [ "Java新特性" ],
+    "summary" : "1. **Sealed 密封类**：打破“类要么完全开放继承、要么完全禁止继承”的限制，可精确指定允许继承的子类（通过 permits 关键字）。被允许的子类需显式声明继承策略（final / sealed / non-sealed），配合 switch 模式匹配可实现“类型穷举检查”，避免遗漏分支。 2. **增强的伪随机数生成器**：新增 RandomGenerator 接口，支持多种随机数算法（如 L32X64MixRandom），性能优于传统 Random，算法选择更",
+    "tags" : [ "juc", "http", "并发", "java" ],
+    "filePath" : "Backend/JavaSE/Java新特性.md",
+    "wikiLinks" : [ "Optional", "CompletableFuture", "StampedLock", "String" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JavaSE/Java的三大特性",
+    "title" : "封装",
+    "aliases" : [ "Java的三大特性" ],
+    "summary" : "|   |   |   | |---|---|---| |维度|重载 Overloading|重写 Overriding| |发生位置|同一个类中|子类和父类之间| |参数列表|必须不同|必须相同| |返回类型|可以不同|必须相同或是父类返回类型的子类| |访问修饰符|不受限制|不能比父类更严格| |静态方法|可以重载|不能重写，只能隐藏| |异常处理|不受限制|不能抛出比父类更多的异常| 可以抛出不同异常，但需满足： 以日志框架SLF4J的Logger接口为例： 编译器会选",
+    "tags" : [ "java" ],
+    "filePath" : "Backend/JavaSE/Java的三大特性.md",
+    "wikiLinks" : [ "访问修饰符" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JavaSE/Java的数据结构",
+    "title" : "基本数据类型",
+    "aliases" : [ "Java的数据结构" ],
+    "summary" : "char：2字节 byte：1字节 short：2字节 int：4字节 long：8字节 float：4字节 double：8字节 boolean：具体大小依赖虚拟机 大小固定、不支持null，性能高，存于栈上 提升性能、减少对象的创建，在这范围内的是直接返回缓存的对象 1. 集合（如List<Integer>）存储基本类型时，通过装箱转换； 2. 包装类参与算术运算时，自动拆箱。 String、StringBuilder、StringBuffer BigDecimal Ob",
+    "tags" : [ "缓存", "java" ],
+    "filePath" : "Backend/JavaSE/Java的数据结构.md",
+    "wikiLinks" : [ "String、StringBuilder、StringBuffer", "BigDecimal", "Object", "Stream流", "Optional" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JavaSE/Object",
+    "title" : "高频使用的",
+    "aliases" : [ "Object" ],
+    "summary" : "1. equals **和** hashCode 二者是一对配套方法，默认 equals 比较的是对象的内存地址。在实际开发中，通常会按业务字段重写 equals 来判断对象是否“相等”。\uD83D\uDC49 **注意**：重写 equals 必须同时重写 hashCode，否则将对象放入 HashMap 时，两个“相等”的对象可能会被分到不同的桶中，导致无法正确查询。 2. toString 默认输出格式为 类名@十六进制哈希码，打日志时可读性差。重写后输出对象的关键字段，会极大地方便调试",
+    "tags" : [ "jvm", "gc", "java" ],
+    "filePath" : "Backend/JavaSE/Object.md",
+    "wikiLinks" : [ "DI", "AOP", "GC" ],
+    "backlinks" : [ "基本数据类型", "**wait()**" ]
+  }, {
+    "id" : "Backend/JavaSE/Optional",
+    "title" : "核心概念",
+    "aliases" : [ "Optional" ],
+    "summary" : "Optional 是 Java 8 引入的一个容器类，专门用来包装可能为空的值。它的核心作用不是消灭空指针，而是让代码更清晰地表达“这个值可能不存在”的语义，同时提供一套链式 API 简化空值处理。 Java 语言架构师 Brian Goetz 明确表示：Optional 是给方法返回值用的，用来表示“没有结果”，而不是返回 null。 创建 Optional 有 3 种方式： 1. Optional.of(value) 包装非空值，传入 null 会直接抛出 NullPoi",
+    "tags" : [ "java" ],
+    "filePath" : "Backend/JavaSE/Optional.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "Java8的新特性", "基本数据类型" ]
+  }, {
+    "id" : "Backend/JavaSE/Stream流",
+    "title" : "Stream流常用接口方法",
+    "aliases" : [ "Stream流" ],
+    "summary" : "分为**中间操作**（返回Stream，可链式调用）和**终端操作**（触发流处理，返回结果）：",
+    "tags" : [ "java" ],
+    "filePath" : "Backend/JavaSE/Stream流.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "基本数据类型", "基本介绍" ]
+  }, {
+    "id" : "Backend/JavaSE/String",
+    "title" : "String设计为不可变的原因：",
+    "aliases" : [ "String" ],
+    "summary" : "1. **保障字符串常量池生效**：JVM的字符串常量池会复用相同内容的字符串（只存一份），若String可变，修改一个引用的内容会影响其他引用，导致逻辑混乱。 2. **缓存哈希值提升效率**：String的hashCode计算一次后会缓存，后续直接复用，用String作为HashMap的key时无需重复计算，效率更高。 3. **天然线程安全**：不可变对象无需同步，多线程读取时不会出现并发问题。 1个或2个，看字符串常量池中有没有“yupi”这个对象的引用",
+    "tags" : [ "jvm", "juc", "缓存", "并发", "java" ],
+    "filePath" : "Backend/JavaSE/String.md",
+    "wikiLinks" : [ "HashMap", "OOM" ],
+    "backlinks" : [ "Java8的新特性", "**JDK 9的重大变化（Compact Strings）**" ]
+  }, {
+    "id" : "Backend/JavaSE/StringBuilder",
+    "title" : "StringBuilder扩容“乘2加2”中“加2”的原因",
+    "aliases" : [ "StringBuilder" ],
+    "summary" : "1. **继承与核心结构**： 继承自AbstractStringBuilder，底层是一个char[] value数组（JDK9前）+int count变量（记录实际字符数）（JDK9之后char数组换成了byte数组，同时加了一个coder字段标记编码方式 2. **append操作逻辑**： 先检查数组容量，不足则扩容，再将新内容拷贝到数组末尾，更新count；全程在原数组操作，不创建新对象。 3. **扩容策略**：",
+    "tags" : [ "并发", "锁", "juc" ],
+    "filePath" : "Backend/JavaSE/StringBuilder.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "**JDK 9的重大变化（Compact Strings）**" ]
+  }, {
+    "id" : "Backend/JavaSE/String、StringBuilder、StringBuffer",
+    "title" : "**JDK 9的重大变化（Compact Strings）**",
+    "aliases" : [ "String、StringBuilder、StringBuffer" ],
+    "summary" : "1. 字符串基本不变/少量拼接→用String。 2. 单线程下大量拼接→用StringBuilder。 3. 多线程环境下频繁修改→用StringBuffer。 这个优化叫**Compact Strings** 1. **纯常量拼接**： String s = \"a\" + \"b\" + \"c\"; 会在编译期直接优化为常量\"abc\"，运行时仅一个常量对象。 2. **含变量拼接**： String s = a + b + c; 会被编译为： String s = new Str",
+    "tags" : [ "jvm", "锁", "juc" ],
+    "filePath" : "Backend/JavaSE/String、StringBuilder、StringBuffer.md",
+    "wikiLinks" : [ "String", "final", "StringBuilder", "synchronized" ],
+    "backlinks" : [ "基本数据类型" ]
+  }, {
+    "id" : "Backend/JavaSE/访问修饰符",
+    "title" : "Java访问修饰符的可见范围",
+    "aliases" : [ "访问修饰符" ],
+    "summary" : "|           |     |      |         |     | | --------- | --- | ---- | ------- | --- | | 修饰符       | 当前类 | 同一包内 | 子类（不同包） | 其他包 | | public    | 是   | 是    | 是       | 是   | | protected | 是   | 是    | 是       | 否   | | 默认        | 是   | 是    ",
+    "tags" : [ "java" ],
+    "filePath" : "Backend/JavaSE/访问修饰符.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "封装" ]
+  }, {
+    "id" : "Backend/Java集合/ConcurrentHashMap",
+    "title" : "JDK1.7及之前",
+    "aliases" : [ "ConcurrentHashMap" ],
+    "summary" : "无摘要",
+    "tags" : [ "并发", "锁", "juc" ],
+    "filePath" : "Backend/Java集合/ConcurrentHashMap.md",
+    "wikiLinks" : [ "红黑树", "CAS" ],
+    "backlinks" : [ "LRU 的思想" ]
+  }, {
+    "id" : "Backend/Java集合/HashMap",
+    "title" : "原理",
+    "aliases" : [ "HashMap" ],
+    "summary" : "默认初始容量16，负载因子0.75 为什么要设置俩个阈值来转换红黑树？ 为什么不直接使用红黑树，放弃链表？ 为什么要在节点≤6的时候再将红黑树转换为链表 不同Map实现的适用场景 | 场景       | 推荐实现                  | 原因                   | | -------- | --------------------- | -------------------- | | 需要保持插入顺序 | LinkedHashMap    ",
+    "tags" : [ "juc", "锁", "并发", "java" ],
+    "filePath" : "Backend/Java集合/HashMap.md",
+    "wikiLinks" : [ "红黑树", "LinkedHashMap", "learning/tech/Backend/Java集合/ConcurrentHashMap", "CAS" ],
+    "backlinks" : [ "String设计为不可变的原因：", "LinkedHashMap", "Dict的基础结构", "LRU 的思想" ]
+  }, {
+    "id" : "Backend/Java集合/LinkedHashMap",
+    "title" : "LinkedHashMap",
+    "aliases" : [ ],
+    "summary" : "LinkedHashMap 继承自 HashMap，在 HashMap 的基础上用双向链表把所有节点串起来，保证遍历顺序和插入顺序一致。 它有两种排序模式：插入顺序和访问顺序。 因此适合做LRU缓存",
+    "tags" : [ "java" ],
+    "filePath" : "Backend/Java集合/LinkedHashMap.md",
+    "wikiLinks" : [ "HashMap" ],
+    "backlinks" : [ "原理" ]
+  }, {
+    "id" : "Backend/JUC/AQS",
+    "title" : "扩展：",
+    "aliases" : [ "AQS" ],
+    "summary" : "AbstractQueuedSynchronizer（AQS）**抽象队列同步器** 简单来说： AQS起到了抽象、封装的作用，它将排队、入队、加锁、中断等方法提供出来，便于其他的JUC锁使用，具体加锁时机、入队时机等由实现类自己控制 它主要通过维护一个**共享状态（state）和一个先进先出（FIFO）的等待队列**，来管理线程对共享资源的访问。 AQS 常见的实现类有 ReentrantLock、CountDownLatch、Semaphore 等等。 !Pasted i",
+    "tags" : [ "juc", "缓存", "aqs", "锁", "并发", "Java", "同步器", "锁机制" ],
+    "filePath" : "Backend/JUC/AQS.md",
+    "wikiLinks" : [ "volatile", "ReentrantLock", "CountDownLatch", "Semaphore", "Pasted image 20260314180921.png", "Pasted image 20260314181031.png", "模板方法", "Pasted image 20260314181112.png", "Pasted image 20260314181137.png", "Pasted image 20260314181125.png", "CAS" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/CAS",
+    "title" : "一、上锁的原因与本质",
+    "aliases" : [ "CAS" ],
+    "summary" : "|   |   |   | |---|---|---| |问题类型|问题描述|解决方案| |ABA问题|资源被改为B又改回A，CAS误判为未被修改而执行操作，违反线程安全|使用AtomicStampedReference，通过比较值和版本号来保证正确性| |长时间自旋|若一直有线程修改，某线程会一直重试，耗费CPU资源|明确CAS使用场景，适用于读多写少场景；读少写多场景用悲观锁| |多个变量原子操作|CAS仅能保证单个变量的原子修改，无法保证多个变量同时修改的原子性|将多个",
+    "tags" : [ "Java", "并发", "CAS", "原子操作", "无锁编程" ],
+    "filePath" : "Backend/JUC/CAS.md",
+    "wikiLinks" : [ "JMM", "synchronized", "ReentrantLock", "volatile" ],
+    "backlinks" : [ "JDK1.7及之前", "原理", "扩展：", "Java保证线程安全的方式", "ReentrantLock", "synchronized" ]
+  }, {
+    "id" : "Backend/JUC/CompletableFuture",
+    "title" : "基本介绍",
+    "aliases" : [ "CompletableFuture" ],
+    "summary" : "CompletableFuture 是 Java 8 引入的异步编程工具，解决了老版 Future 的两个痛点： 1. get() 方法会阻塞线程 2. 无法把多个异步任务串起来 它支持**链式调用**，可以用 thenApply、thenCompose 等方法把多个异步操作像流水线一样串起来，前一个任务完成自动触发下一个，无需手动阻塞等待结果。 1. **提交任务** 2. **处理结果** 3. **异常处理** 4. **多任务组合** !Pasted image 20",
+    "tags" : [ "Java", "并发", "CompletableFuture", "异步编程", "Future" ],
+    "filePath" : "Backend/JUC/CompletableFuture.md",
+    "wikiLinks" : [ "Future", "Pasted image 20260314235709.png", "Pasted image 20260314235729.png", "Stream流", "线程池" ],
+    "backlinks" : [ "Java8的新特性" ]
+  }, {
+    "id" : "Backend/JUC/ConcurrentHashMap",
+    "title" : "JDK1.7及之前",
+    "aliases" : [ "ConcurrentHashMap" ],
+    "summary" : "ConcurrentHashMap不支持key或value 为 null，为了**消除歧义**，在get(key)返回为null的时候，就不会没法判断key是不存在还是value本身就是null 单线程下这个问题可以用containsKey来区分，但在并发环境下，这两步操作之间可能有其他线程在修改map，导致判断失效。DougLea设计时直接禁止null，从根源上避免了这种歧义。 ConcurrentHashMap的size方法也做了特殊设计。它不会加全局锁去精确计数，而是用",
+    "tags" : [ "Java", "并发", "ConcurrentHashMap", "线程安全", "集合" ],
+    "filePath" : "Backend/JUC/ConcurrentHashMap.md",
+    "wikiLinks" : [ "CAS", "synchronized", "红黑树" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/CountDownLatch",
+    "title" : "CountDownLatch",
+    "aliases" : [ ],
+    "summary" : "TODO",
+    "tags" : [ "Java", "并发", "CountDownLatch", "同步工具", "线程协调" ],
+    "filePath" : "Backend/JUC/CountDownLatch.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ "扩展：" ]
+  }, {
+    "id" : "Backend/JUC/Java保证线程安全的方式",
+    "title" : "Java保证线程安全的方式",
+    "aliases" : [ ],
+    "summary" : "核心思路：**控制对共享资源的并发访问** 可以通过锁（CAS、synchronized） 保证可见性——volatile TODO",
+    "tags" : [ "Java", "并发", "线程安全", "同步", "锁机制" ],
+    "filePath" : "Backend/JUC/Java保证线程安全的方式.md",
+    "wikiLinks" : [ "CAS", "synchronized", "volatile", "TODO" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/ReentrantLock",
+    "title" : "ReentrantLock",
+    "aliases" : [ ],
+    "summary" : "支持超时时间、支持公平锁、可中断、支持多条件判断，可重入 内部实现：一个共享变量，俩个队列，一个是同步队列，一个是等待队列 利用CAS修改state来争抢锁 抢不到就进入同步队列等待，这是一个双向链表 条件condition不满足时则进入等待队列等待，这是双单向链表 是否是公平锁的区别在于：线程获取锁时是加入同步队列尾部还是直接利用CAS争抢锁 !Pasted image 20260314212425.png",
+    "tags" : [ "Java", "并发", "ReentrantLock", "锁机制", "同步" ],
+    "filePath" : "Backend/JUC/ReentrantLock.md",
+    "wikiLinks" : [ "CAS", "Pasted image 20260314212425.png" ],
+    "backlinks" : [ "扩展：", "一、上锁的原因与本质", "介绍（Java 8引入）", "3. MarkWord 在 6 种锁状态下的结构（32 位 JVM 为例）" ]
+  }, {
+    "id" : "Backend/JUC/Semaphore",
+    "title" : "Semaphore",
+    "aliases" : [ ],
+    "summary" : "TODO",
+    "tags" : [ "Java", "并发", "Semaphore", "信号量", "资源控制" ],
+    "filePath" : "Backend/JUC/Semaphore.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ "扩展：" ]
+  }, {
+    "id" : "Backend/JUC/sleep和wait",
+    "title" : "**wait()**",
+    "aliases" : [ "sleep和wait" ],
+    "summary" : "wait() 是 Object 类的方法，必须在 synchronized 块里调用，调用后当前线程释放对象锁，进入等待队列，等着别人调 notify() 或 notifyAll() 把它唤醒。 sleep() 是 Thread 类的静态方法，随便在哪都能调，线程睡指定时间后自己醒。如果当前线程持有锁，睡觉期间锁还攥在手里，别的线程进不来。 调用 sleep() 时如果线程被中断，会抛 InterruptedException。很多人这样处理： try { Thread.sl",
+    "tags" : [ "Java", "并发", "线程控制" ],
+    "filePath" : "Backend/JUC/sleep和wait.md",
+    "wikiLinks" : [ "Object", "synchronized", "Pasted image 20260314235248.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/StampedLock",
+    "title" : "介绍（Java 8引入）",
+    "aliases" : [ "StampedLock" ],
+    "summary" : "是Java 8新增的锁机制，相比ReentrantLock、ReadWriteLock，通过乐观读锁和时间戳（stamp）提升读写性能，尤其适用于读多写少场景。 1. **写锁（write lock）**：独占模式，类似ReentrantLock，保证写操作的排他性。 2. **悲观读锁（read lock）**：共享模式，多个线程可同时持有，写锁需等待。 3. **乐观读锁（optimistic read lock）**：无需阻塞的读锁，无竞争时快速读取；检测到写操作时，回",
+    "tags" : [ "Java", "并发", "StampedLock", "锁机制", "乐观锁" ],
+    "filePath" : "Backend/JUC/StampedLock.md",
+    "wikiLinks" : [ "ReentrantLock", "ReadWriteLock" ],
+    "backlinks" : [ "Java8的新特性" ]
+  }, {
+    "id" : "Backend/JUC/synchronized 底层实现 & 与 Lock 的区别",
+    "title" : "3. MarkWord 在 6 种锁状态下的结构（32 位 JVM 为例）",
+    "aliases" : [ "synchronized 底层实现 & 与 Lock 的区别" ],
+    "summary" : "| 维度   | synchronized    | Lock                        | | ---- | --------------- | --------------------------- | | 实现   | JVM 原生          | API 层面（如 ReentrantLock） | | 锁释放  | 自动释放（异常 / 正常结束） | 需手动unlock()（finally 中）    | | 灵活性  | 不可中断、不可超时",
+    "tags" : [ "gc", "jvm", "锁", "juc" ],
+    "filePath" : "Backend/JUC/synchronized 底层实现 & 与 Lock 的区别.md",
+    "wikiLinks" : [ "synchronized", "ReentrantLock" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/synchronized",
+    "title" : "synchronized",
+    "aliases" : [ ],
+    "summary" : "特点：不支持超时、非公平、不可中断、不支持多条件，不需要手动解锁，可重入 实现：通过对象头和JVM的Monitor（监视器） 锁升级总结： 当升级到重量级锁后，所有线程的都释放锁了，此时它会变回无无锁的状态，当有新的线程来竞争的话又会从无锁再到轻量级锁开始后续的升级流程 对象头：",
+    "tags" : [ "http", "jvm", "锁", "juc" ],
+    "filePath" : "Backend/JUC/synchronized.md",
+    "wikiLinks" : [ "CAS" ],
+    "backlinks" : [ "final关键字与变量可见性", "**JDK 9的重大变化（Compact Strings）**", "一、上锁的原因与本质", "JDK1.7及之前", "Java保证线程安全的方式", "**wait()**", "3. MarkWord 在 6 种锁状态下的结构（32 位 JVM 为例）", "Java内存模型（JMM）", "逃逸分析的定义", "LRU 的思想" ]
+  }, {
+    "id" : "Backend/JUC/ThreadLocal",
+    "title" : "解决思路![[Pasted image 20260314230643.png]]",
+    "aliases" : [ "ThreadLocal" ],
+    "summary" : "GC 仅是让 key 的内存释放，相当于 key 变为 null，但 ThreadLocalMap 还存在着对应的 value。 ThreadLocalMap 实现中已经考虑了这种情况，在调用 set()、get()、remove() 方法的时候，会清理掉 key 为 null 的记录（这是保底手段）；**优雅的方式是由程序员使用完后手动** remove **释放**。 使用**开放寻址法**： 比如一个 entry 要插入到下标为 5 的位置，发现已经被占用了，就插入到下",
+    "tags" : [ "Java", "并发", "ThreadLocal", "线程局部变量", "线程隔离" ],
+    "filePath" : "Backend/JUC/ThreadLocal.md",
+    "wikiLinks" : [ "Pasted image 20260314230643.png", "Pasted image 20260314230549.png" ],
+    "backlinks" : [ "[[Bean的作用域]]与线程安全的关系" ]
+  }, {
+    "id" : "Backend/JUC/volatile",
+    "title" : "变量可见性：",
+    "aliases" : [ "volatile" ],
+    "summary" : "主要作用： !Pasted image 20260314180245.png 在多线程下，每个线程都有自己的工作内存（CPU缓存），从主内存中读取变量的副本进行操作，volatitle强制线程直接从主内存读取或写入变量 public class Singleton { private static volatile Singleton instance; private Singleton() {} public static Singleton getInstance() ",
+    "tags" : [ "缓存", "jvm" ],
+    "filePath" : "Backend/JUC/volatile.md",
+    "wikiLinks" : [ "Pasted image 20260314180245.png", "JMM" ],
+    "backlinks" : [ "final关键字与变量可见性", "扩展：", "一、上锁的原因与本质", "Java保证线程安全的方式", "Java内存模型（JMM）" ]
+  }, {
+    "id" : "Backend/JUC/内置线程池实现",
+    "title" : "Java并发库中5种常见[[线程池]]（通过Executors创建）",
+    "aliases" : [ "内置线程池实现" ],
+    "summary" : "1. **FixedThreadPool** 2. **CachedThreadPool** 3. **SingleThreadExecutor** 4. **ScheduledThreadPool** 5. **WorkStealingPool** 线程池不允许使用Executors创建，需通过ThreadPoolExecutor方式创建。 1. **FixedThreadPool、SingleThreadPool**： 请求队列长度为Integer.MAX_VALUE，易",
+    "tags" : [ "juc", "线程池", "并发", "算法", "java" ],
+    "filePath" : "Backend/JUC/内置线程池实现.md",
+    "wikiLinks" : [ "线程池", "OOM" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/双亲委派机制",
+    "title" : "双亲委派机制",
+    "aliases" : [ ],
+    "summary" : "自定义加载器的话，需要**继承 ClassLoader** 。如果我们不想打破双亲委派模型，就**重写** ClassLoader 类中的 **findClass() 方法**即可，无法被父类加载器加载的类最终会通过这个方法被加载。但是，如果想打破双亲委派模型则需要重写 **loadClass()** 方法。 要是继承ClassLoader的自定义类加载器没有显示指定父类加载器，则会默认以应用程序类加载器为父类加载器 Tomcat 有好几层类加载器。最上面是 Common C",
+    "tags" : [ "jvm" ],
+    "filePath" : "Backend/JUC/双亲委派机制.md",
+    "wikiLinks" : [ "SPI机制" ],
+    "backlinks" : [ "类加载器" ]
+  }, {
+    "id" : "Backend/JUC/可达性分析",
+    "title" : "可达性分析",
+    "aliases" : [ ],
+    "summary" : "主流采用可达性分析算法（JVM标准）：<u></u> GC Roots的来源 >- 线程栈中的引用：每个线程栈中的局部变量、参数等。 >- 类的静态变量：被类加载器加载后的类存储在方法区，其静态变量可作为GC Roots。 >- JNI全局引用：通过JNI创建的全局引用可作为GC Roots。",
+    "tags" : [ "jvm", "gc" ],
+    "filePath" : "Backend/JUC/可达性分析.md",
+    "wikiLinks" : [ "GC" ],
+    "backlinks" : [ "G1 收集器基础介绍", "Java的垃圾回收作用" ]
+  }, {
+    "id" : "Backend/JUC/类加载",
+    "title" : "类加载器",
+    "aliases" : [ "类加载" ],
+    "summary" : "通过双亲委派机制进行类的加载 主要为三件事情： 为类的静态变量分配内存，并**设置默认值**（例如0，null）（**真的赋值初始化在初始化阶段**），如果是**final修饰的静态变量的话就直接赋值** 将常量池中的**符号引用转成直接引用** 执行**静态代码块，为静态变量赋值** !Pasted image 20260405180813.png 1. **遇到**new**、**getstatic**、**putstatic**、**invokestatic**字节码指",
+    "tags" : [ "jvm" ],
+    "filePath" : "Backend/JUC/类加载.md",
+    "wikiLinks" : [ "双亲委派机制", "Pasted image 20260405180813.png", "反射" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/线程和进程",
+    "title" : "线程重复调用 `start()` 的后果",
+    "aliases" : [ "线程和进程" ],
+    "summary" : "1. **NEW**：线程对象刚创建，还未调用 start()。 2. **RUNNABLE**：调用 start() 之后进入，包含操作系统层面的 **Ready**（等待 CPU 时间片）和 **Running**（正在执行）两种状态，JVM 不做区分，统一称为 RUNNABLE。 3. **BLOCKED**：线程在等待获取 synchronized 锁时进入，拿到锁后回到 RUNNABLE。 4. **WAITING**：调用 Object.wait()、Thread",
+    "tags" : [ "jvm", "juc", "锁", "操作系统", "java" ],
+    "filePath" : "Backend/JUC/线程和进程.md",
+    "wikiLinks" : [ "Pasted image 20260314231551.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JUC/线程池",
+    "title" : "线程池",
+    "aliases" : [ ],
+    "summary" : "线程池是一种池化策略，预先创建并管理一组线程，避免了频繁的创建和销毁线程，提高性能和响应数据。 它几个关键的配置包括：核心线程数、最大线程数、空闲存活时间、工作队列、拒绝策略。 !Pasted image 20260314221146.png主要工作原理如下： 1. 默认情况下线程不会预创建，任务提交之后才会创建线程（不过设置  prestartAllCoreThreads  可以预创建核心线程）。 2. 当核心线程满了之后不会新建线程，而是把任务堆积到工作队列中。 3. 如",
+    "tags" : [ "juc", "线程池" ],
+    "filePath" : "Backend/JUC/线程池.md",
+    "wikiLinks" : [ "Pasted image 20260314221146.png", "线程池拒绝策略" ],
+    "backlinks" : [ "基本介绍", "Java并发库中5种常见[[线程池]]（通过Executors创建）", "消息堆积的解决方法" ]
+  }, {
+    "id" : "Backend/JUC/线程池拒绝策略",
+    "title" : "线程池拒绝策略",
+    "aliases" : [ ],
+    "summary" : "四种拒绝策略 1）AbortPolicy，当任务队列满且没有线程空闲，此时添加任务会**直接抛出**RejectedExecutionException错误，这也是**默认**的拒绝策略。适用于必须通知调用者任务未能被执行的场景。 2）CallerRunsPolicy，当任务队列满且没有线程空闲，此时**添加任务由即调用者线程执行**。适用于希望通过减缓任务提交速度来稳定系统的场景。 3）DiscardOldestPolicy，当任务队列满且没有线程空闲，**会删除最早的任务",
+    "tags" : [ "juc", "线程池" ],
+    "filePath" : "Backend/JUC/线程池拒绝策略.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "线程池" ]
+  }, {
+    "id" : "Backend/JVM/G1",
+    "title" : "G1 收集器基础介绍",
+    "aliases" : [ "G1" ],
+    "summary" : "G1 是一款主要面向服务端应用的垃圾收集器。在 G1 收集器出现之前的所有其他收集器，包括 CMS 在内，垃圾收集的目标范围要么是整个新生代（Minor GC），要么就是整个老年代（Major GC），再要么就是整个 Java 堆（Full GC）。而 G1 跳出了这个樊笼，它可以面向堆内存任何部分来组成回收集（Collection Set，一般简称 CSet）进行回收，衡量标准不再是它属于哪个分代，而是哪块内存中存放的垃圾数量最多，回收收益最大，这就是 G1 收集器的 Mi",
+    "tags" : [ "jvm", "gc" ],
+    "filePath" : "Backend/JVM/G1.md",
+    "wikiLinks" : [ "可达性分析" ],
+    "backlinks" : [ "Java的垃圾回收作用", "Serial：" ]
+  }, {
+    "id" : "Backend/JVM/GC",
+    "title" : "Java的垃圾回收作用",
+    "aliases" : [ "GC" ],
+    "summary" : "Garbage Collection——垃圾回收。Java支持自动垃圾回收，C++需要程序手动的回收 先通过可达性分析算法判断垃圾，再使用垃圾回收器进行垃圾回收 针对 HotSpot VM 的实现，它里面的 GC 其实准确分类只有两大种： 收集**整个 Java 堆和方法区**，触发场景包括：老年代空间不足、方法区空间不足、显式System.gc()、堆发生伸缩时",
+    "tags" : [ "jvm", "gc" ],
+    "filePath" : "Backend/JVM/GC.md",
+    "wikiLinks" : [ "OOM", "可达性分析", "垃圾回收器", "G1" ],
+    "backlinks" : [ "高频使用的", "可达性分析" ]
+  }, {
+    "id" : "Backend/JVM/JIT和AOT",
+    "title" : "JIT",
+    "aliases" : [ "JIT和AOT" ],
+    "summary" : "即时编译技术，编译器在程序运行时将热点代码的字节码编译成机器码的技术 之后再执行该部分的代码时就**不用再次解释**，一般用于热点代码，而且该操作能根据实际情况进行动态优化，能显著的提升执行效率，JIT编译是**异步的** 这里会做 java编译器的一种优化技术，用于分析对象是否会逃逸出它的方法或者线程，如果不会的话，那jvm虚拟机会对其进行优化来减少内存的开销 >栈上分配（将对象分配到栈上的空间，不占用堆的空间） >标量替换（将对象的字段替换成基本类型，对象可能不会被真正创",
+    "tags" : [ "jvm", "juc", "锁", "java" ],
+    "filePath" : "Backend/JVM/JIT和AOT.md",
+    "wikiLinks" : [ "逃逸分析", "Pasted image 20260315151319.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JVM/JMM",
+    "title" : "Java内存模型（JMM）",
+    "aliases" : [ "JMM" ],
+    "summary" : "不同操作系统的内存模型不同，如果Java采用了操作系统的内存模型，会导致Java的一套代码不能一次编译，处处运行，所以Java就自己实现了一套内存模型JMM 抽象了工作内存和主存，提供了八种内存操作，规定了主存和工作内存的交互方式 规定了四种内存屏障，保证指令排序 1. **可见性**：一个线程对变量的修改能及时被其他线程看到；volatile关键字强制线程读写主内存最新值，保证可见性。 2. **有序性**：线程内操作顺序不被破坏，但允许指令重排；通过happens-bef",
+    "tags" : [ "jvm", "缓存", "操作系统", "java" ],
+    "filePath" : "Backend/JVM/JMM.md",
+    "wikiLinks" : [ "volatile", "happens-before", "synchronized" ],
+    "backlinks" : [ "一、上锁的原因与本质", "变量可见性：" ]
+  }, {
+    "id" : "Backend/JVM/OOM",
+    "title" : "Java常见OOM情况汇总",
+    "aliases" : [ "OOM" ],
+    "summary" : "| OOM错误类型                            | 原因                  | 常见解决方法                | | ---------------------------------- | ------------------- | --------------------- | | Java Heap Space                    | 堆内存不足，多因大量对象创建      | 优化对象使用或增大",
+    "tags" : [ "jvm", "juc", "线程池", "gc", "java" ],
+    "filePath" : "Backend/JVM/OOM.md",
+    "wikiLinks" : [ "NIO" ],
+    "backlinks" : [ "String设计为不可变的原因：", "Java并发库中5种常见[[线程池]]（通过Executors创建）", "Java的垃圾回收作用", "线程共享" ]
+  }, {
+    "id" : "Backend/JVM/PLAB",
+    "title" : "定义与作用",
+    "aliases" : [ "PLAB" ],
+    "summary" : "（Promotion Local Allocation Buffer） PLAB是GC线程在晋升对象时使用的本地缓冲区。它的设计思路与TLAB一致，都是为了**避免多线程抢同一块内存**，从而提升效率。 在YGC（Young GC）时，存活对象需要从新生代移动到Survivor区或老年代。多个GC线程并行工作时，会竞争老年代的freelist。PLAB让每个GC线程先从freelist申请一块空间作为私有缓冲区。后续晋升对象时，直接在自己的PLAB里用指针碰撞分配，无需每次都",
+    "tags" : [ "gc", "jvm", "锁", "juc" ],
+    "filePath" : "Backend/JVM/PLAB.md",
+    "wikiLinks" : [ "TLAB", "Pasted image 20260315103102.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JVM/TLAB",
+    "title" : "定义与作用",
+    "aliases" : [ "TLAB" ],
+    "summary" : "（Thread-Local Allocation Buffer） TLAB是JVM为每个线程划分的一小块**私有堆内存**，专门用于加速对象分配。 每个线程在自己的TLAB里分配对象时，**无需与其他线程抢锁，分配效率大幅提升**。 多线程环境下，这个指针会成为热点资源，加锁互斥会导致分配效率下降。 这种模式类似分布式发号器，批量获取、用完再申请，减少频繁竞争。 堆内存需要线性遍历，GC扫描时通过对象头获取对象大小并跳转到下一个对象。填充操作可避免空洞导致的遍历中断。",
+    "tags" : [ "jvm", "juc", "gc" ],
+    "filePath" : "Backend/JVM/TLAB.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "定义与作用" ]
+  }, {
+    "id" : "Backend/JVM/内存区域的划分",
+    "title" : "线程共享",
+    "aliases" : [ "内存区域的划分" ],
+    "summary" : "!Pasted image 20260315150735.png 存新对象的，垃圾回收频繁 分为S0和S1交替使用，采用复制算法，到一定年龄后会晋升到老年代 活久了就进去了，垃圾回收少",
+    "tags" : [ "jvm", "垃圾回收", "操作系统", "算法", "java" ],
+    "filePath" : "Backend/JVM/内存区域的划分.md",
+    "wikiLinks" : [ "Pasted image 20260315150735.png", "OOM" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/JVM/垃圾回收器",
+    "title" : "Serial：",
+    "aliases" : [ "垃圾回收器" ],
+    "summary" : "!Pasted image 20260405172735.png## 新生代： !Pasted image 20260405172748.png### ParNew： !Pasted image 20260405172858.png### Parallel Scavenge： !Pasted image 20260405172914.png- Parallel Scavenge的老年代版本，也是采用的标记-整理算法 !Pasted image 20260405172937.p",
+    "tags" : [ "jvm", "gc" ],
+    "filePath" : "Backend/JVM/垃圾回收器.md",
+    "wikiLinks" : [ "Pasted image 20260405172735.png", "Pasted image 20260405172748.png", "Pasted image 20260405172858.png", "Pasted image 20260405172914.png", "G1", "Pasted image 20260405172937.png" ],
+    "backlinks" : [ "Java的垃圾回收作用" ]
+  }, {
+    "id" : "Backend/JVM/逃逸分析",
+    "title" : "逃逸分析的定义",
+    "aliases" : [ "逃逸分析" ],
+    "summary" : "逃逸分析是Java编译器的优化技术，用于确定对象的作用范围（是否逃逸出当前方法或线程）。若对象未逃逸，JVM可实现栈上分配、同步消除、标量替换等优化，减少内存/同步开销，提升性能。 1. **方法逃逸**：对象在方法内创建，却作为返回值、或通过参数传递给其他方法 → 逃逸到方法之外。 2. **线程逃逸**：对象被其他线程访问，或被保存为静态变量/共享变量 → 逃逸到线程/全局作用域。 1. **栈上分配**：对象未逃逸当前方法 → JVM将其分配到栈（而非堆），减少堆内存分",
+    "tags" : [ "jvm", "juc", "gc", "锁", "java" ],
+    "filePath" : "Backend/JVM/逃逸分析.md",
+    "wikiLinks" : [ "synchronized" ],
+    "backlinks" : [ "JIT" ]
+  }, {
+    "id" : "Backend/MQ/kafka",
+    "title" : "kafka",
+    "aliases" : [ ],
+    "summary" : "kafka为什么吞吐量大? 1. 磁盘的顺序写 2. 零拷贝技术 3. 批量处理 4. 分区并行，用了副本保证高可用 5. 二进制消息格式",
+    "tags" : [ "kafka" ],
+    "filePath" : "Backend/MQ/kafka.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/MQ",
+    "title" : "\uD83D\uDCEE MQ",
+    "aliases" : [ "MQ" ],
+    "summary" : "LIST FROM \"learning/tech/Backend/MQ\" SORT file.mtime desc",
+    "tags" : [ "rocketmq", "kafka" ],
+    "filePath" : "Backend/MQ.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "\uD83E\uDDF1 后端知识 (Backend)", "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Backend/MySQL/Binlog",
+    "title" : "Binlog",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "mysql" ],
+    "filePath" : "Backend/MySQL/Binlog.md",
+    "wikiLinks" : [ "Redolog", "InnoDB" ],
+    "backlinks" : [ "连接层", "Redolog", "A 原子性", "过程：" ]
+  }, {
+    "id" : "Backend/MySQL/DELETE和TRUNCATE",
+    "title" : "DELETE 和 TRUNCATE 的区别",
+    "aliases" : [ "DELETE和TRUNCATE" ],
+    "summary" : "|         |        |               | | ------- | ------ | ------------- | | 特性      | DELETE | TRUNCATE      | | 类型      | DML    | DDL           | | 删除方式    | 逐行删除   | 删除整表后重建       | | WHERE子句 | 支持     | 不支持           | | 回滚      | 可以回滚  ",
+    "tags" : [ "sql", "mysql" ],
+    "filePath" : "Backend/MySQL/DELETE和TRUNCATE.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "按照功能分类：" ]
+  }, {
+    "id" : "Backend/MySQL/EXPLAIN",
+    "title" : "EXPLAIN",
+    "aliases" : [ ],
+    "summary" : "使用时再加SQL语句前面，查看对应的执行计划 主要看： const：主键或唯一索引等值查询，最多一行匹配，速度最快； eq_ref：连接查询里通过主键或唯一索引关联，每次只取一行； ref：用非唯一索引查询，可能返回多行； range：索引范围扫描，用在 BETWEEN、>、< 这类条件上； index：扫描整棵索引树，比 ALL 好，但还是很慢； ALL：全表扫描，遇到大表直接性能起飞。 possible_keys 只是候选索引，key 才是优化器最终选择的索引。 Usin",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "Backend/MySQL/EXPLAIN.md",
+    "wikiLinks" : [ "索引" ],
+    "backlinks" : [ "慢SQL的排查", "SQL的数据类型" ]
+  }, {
+    "id" : "Backend/MySQL/InnoDB",
+    "title" : "特点",
+    "aliases" : [ "InnoDB" ],
+    "summary" : "InnoDB对比MyISAM InnoDB中： varchar(100)和varchar(1000)效果不一致： 1. 存储上，虽实际占用由真实字符数决定，但varchar(1000)更易触发 InnoDB 行溢出，需读溢出页； 2. 性能上，长字段会让索引体积变大、读写 IO 增多，查询效率更低； 3. 业务上，声明长度是数据约束，过度声明无意义，还增加维护成本。 实际开发中要按业务最大字符数合理声明，比如只存手机号就用varchar(20)，而非varchar(1000)",
+    "tags" : [ "juc", "索引", "sql", "锁", "事务", "mysql" ],
+    "filePath" : "Backend/MySQL/InnoDB.md",
+    "wikiLinks" : [ "索引", "锁", "事务", "Redolog", "Undolog", "B+树", "SQL基础（数据类型、执行过程、主外键、NULL）", "InnoDB对比MyISAM" ],
+    "backlinks" : [ "Binlog", "InnoDB对比MyISAM", "连接层", "慢SQL的排查", "锁的分类：" ]
+  }, {
+    "id" : "Backend/MySQL/InnoDB对比MyISAM",
+    "title" : "InnoDB对比MyISAM",
+    "aliases" : [ ],
+    "summary" : "|           |                               |                           | | --------- | ----------------------------- | ------------------------- | | 特性        | InnoDB                    | MyISAM                | | 索引类型  | 分为聚集索引与二级索引     ",
+    "tags" : [ "索引", "sql", "锁", "事务", "mysql" ],
+    "filePath" : "Backend/MySQL/InnoDB对比MyISAM.md",
+    "wikiLinks" : [ "InnoDB", "MyISAM", "索引", "事务", "锁" ],
+    "backlinks" : [ "特点", "特点：" ]
+  }, {
+    "id" : "Backend/MySQL/MVCC",
+    "title" : "ReadView 可见性判断",
+    "aliases" : [ "MVCC" ],
+    "summary" : "高效的读写不阻塞机制 每条数据都有三个隐藏字段： ReadView是InnoDB中用于判断版本链中哪个版本对当前事务可见的机制，包含4个关键字段，并有对应的可见性规则： 1. creator_trx_id：当前事务ID（只读事务此值为0） 2. m_ids：生成ReadView时所有活跃事务（已启动未提交）的ID列表 3. min_trx_id：m_ids中的最小值 4. max_trx_id：下一个将被分配的事务ID 从版本链最新版本开始回溯，碰到第一个符合以下规则的版本即",
+    "tags" : [ "sql", "mysql", "mvcc", "事务" ],
+    "filePath" : "Backend/MySQL/MVCC.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "undolog日志:", "A 原子性", "读未提交(Read Uncommitted)" ]
+  }, {
+    "id" : "Backend/MySQL/MyISAM",
+    "title" : "特点：",
+    "aliases" : [ "MyISAM" ],
+    "summary" : "InnoDB对比MyISAM",
+    "tags" : [ "索引", "sql", "锁", "事务", "mysql" ],
+    "filePath" : "Backend/MySQL/MyISAM.md",
+    "wikiLinks" : [ "索引", "事务", "锁", "InnoDB对比MyISAM" ],
+    "backlinks" : [ "InnoDB对比MyISAM", "连接层" ]
+  }, {
+    "id" : "Backend/MySQL/MySQL结构分层",
+    "title" : "连接层",
+    "aliases" : [ "MySQL结构分层" ],
+    "summary" : "负责与外部程序建立连接，提供多种编程语言 / 协议的接口，比如： 是 MySQL 的核心处理层，包含多个功能模块： MySQL 的 “存储核心”，支持多种可插拔的存储引擎（不同引擎有不同特性），常见的有： 负责将数据持久化到物理存储介质，包含：",
+    "tags" : [ "索引", "sql", "锁", "mysql", "事务" ],
+    "filePath" : "Backend/MySQL/MySQL结构分层.md",
+    "wikiLinks" : [ "SQL", "MyISAM", "InnoDB", "Redolog", "Undolog", "索引", "Binlog", "Pasted image 20260304105645.png" ],
+    "backlinks" : [ "\uD83D\uDC2C MySQL" ]
+  }, {
+    "id" : "Backend/MySQL/Redolog",
+    "title" : "Redolog",
+    "aliases" : [ ],
+    "summary" : "物理日志，与Binlog通过二阶段提交协议共同保证事务的持久性",
+    "tags" : [ "mysql", "事务" ],
+    "filePath" : "Backend/MySQL/Redolog.md",
+    "wikiLinks" : [ "Binlog", "二阶段提交协议", "事务" ],
+    "backlinks" : [ "Binlog", "特点", "连接层", "A 原子性", "过程：" ]
+  }, {
+    "id" : "Backend/MySQL/SQL",
+    "title" : "按照功能分类：",
+    "aliases" : [ "SQL" ],
+    "summary" : "SQL是一种结构化的语言，用来管理和操作关系型数据库的标准语言 SQL语句执行顺序：FROM->WHERE->GROUP BY->HAVING->SELECT->ORDER BY->LIMIT |     |        |               |                                 |                     | | --- | ------ | ------------- | ---------------------",
+    "tags" : [ "SQL", "mysql", "事务" ],
+    "filePath" : "Backend/MySQL/SQL.md",
+    "wikiLinks" : [ "SQL优化", "SQL基础（数据类型、执行过程、主外键、NULL）", "SQL查询", "SQL高级查询（函数）", "DELETE和TRUNCATE", "SQL练习" ],
+    "backlinks" : [ "连接层", "\uD83D\uDC2C MySQL", "#{}和${}的区别：" ]
+  }, {
+    "id" : "Backend/MySQL/SQL优化",
+    "title" : "慢SQL的排查",
+    "aliases" : [ "SQL优化" ],
+    "summary" : "开启慢SQL日志，设置好慢SQL的时间阈值 使用EXPLAIN查看执行计划：检查是否走了索引，扫描行数、有无文件排序 减少多表联查（会有笛卡尔积问题），查看是否有因为<collection>的N+1问题。可以用Wrapper装饰器消除N+1方案解决",
+    "tags" : [ "redis", "索引", "sql", "缓存", "rocketmq", "mysql" ],
+    "filePath" : "Backend/MySQL/SQL优化.md",
+    "wikiLinks" : [ "EXPLAIN", "索引", "深分页", "索引失效", "Caffeine", "Redis", "分库分表", "RocketMQ", "InnoDB", "Wrapper装饰器消除N+1方案" ],
+    "backlinks" : [ "按照功能分类：" ]
+  }, {
+    "id" : "Backend/MySQL/SQL基础（数据类型、执行过程、主外键、NULL）",
+    "title" : "SQL的数据类型",
+    "aliases" : [ "SQL基础（数据类型、执行过程、主外键、NULL）" ],
+    "summary" : "SQL数据类型主要分为**数值、字符串、日期时间**三大类： 够用就好，不浪费空间： MySQL 架构分两层：**Server 层**负责连接管理、SQL 解析、查询优化这些逻辑处理，**存储引擎层**负责数据的实际存取。一条 SQL 从发出到拿到结果，大概经过这么几步： 1. 客户端和MySQL建立连接，由**连接器**来校验账号密码、权限 2. 如果是8.0以前的版本会查一下缓存，看看有没有一模一样的SQL缓存过结果，但是删除策略为表一更新就把缓存全失效，所以被砍了 3.",
+    "tags" : [ "索引", "sql", "mysql" ],
+    "filePath" : "Backend/MySQL/SQL基础（数据类型、执行过程、主外键、NULL）.md",
+    "wikiLinks" : [ "索引", "EXPLAIN", "Pasted image 20260304113354.png" ],
+    "backlinks" : [ "特点", "按照功能分类：" ]
+  }, {
+    "id" : "Backend/MySQL/SQL查询",
+    "title" : "WHERE 和HAVING",
+    "aliases" : [ "SQL查询" ],
+    "summary" : "两者均用于过滤数据，但**使用时机、作用对象不同**： 1. **WHERE** 2. **HAVING** |   |   |   | |---|---|---| |维度|DISTINCT|GROUP BY| |功能|仅去重|去重 + 聚合统计| |语法直观性|简单直观（仅去重场景）|需配合聚合函数| |性能|简单去重时稍快|复杂场景更灵活| |筛选拓展|无（需额外子查询）|可结合 HAVING 筛选分组结果| 三种 JOIN 的核心区别在于如何处理不匹配的行： 1）INN",
+    "tags" : [ "sql" ],
+    "filePath" : "Backend/MySQL/SQL查询.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "按照功能分类：" ]
+  }, {
+    "id" : "Backend/MySQL/SQL练习",
+    "title" : "如何查询每个部门工资最高的员工",
+    "aliases" : [ "SQL练习" ],
+    "summary" : "方法一：子查询 SELECT dept_id, MAX(salary) as max_salary FROM employee GROUP BY dept_id; SELECT e.* FROM employee e WHERE (e.dept_id, e.salary) IN ( SELECT dept_id, MAX(salary) FROM employee GROUP BY dept_id ); 方法二：窗口函数——SQL高级查询（函数） SELECT * FROM ",
+    "tags" : [ "sql" ],
+    "filePath" : "Backend/MySQL/SQL练习.md",
+    "wikiLinks" : [ "SQL高级查询（函数）" ],
+    "backlinks" : [ "按照功能分类：" ]
+  }, {
+    "id" : "Backend/MySQL/SQL高级查询（函数）",
+    "title" : "聚合函数",
+    "aliases" : [ "SQL高级查询（函数）" ],
+    "summary" : "聚合函数用于对一组数据计算并返回单个值，常用的有： 1. 通常配合 GROUP BY 对分组数据统计；不加 GROUP BY 时，对整个表操作； 2. 不能在 WHERE 中使用（WHERE 执行于分组前），需用 HAVING 过滤聚合结果。 对一组相关行进行计算，但**不合并多行**，而是为每一行返回一个计算结果（保留原行数，新增计算列）。 函数名() OVER (PARTITION BY ... ORDER BY ...) |   |   |   | |---|---|-",
+    "tags" : [ "sql" ],
+    "filePath" : "Backend/MySQL/SQL高级查询（函数）.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "按照功能分类：", "如何查询每个部门工资最高的员工" ]
+  }, {
+    "id" : "Backend/MySQL/Undolog",
+    "title" : "undolog日志:",
+    "aliases" : [ "Undolog" ],
+    "summary" : "记录数据反向操作的逻辑日志文件 基于日志的逻辑链，用来实现MVCC机制, 每条数据行的记录中，除了业务字段还隐藏俩个字段",
+    "tags" : [ "sql", "mysql", "mvcc", "事务" ],
+    "filePath" : "Backend/MySQL/Undolog.md",
+    "wikiLinks" : [ "MVCC" ],
+    "backlinks" : [ "特点", "连接层", "A 原子性" ]
+  }, {
+    "id" : "Backend/MySQL/xml里写的SQL语句resultType是Integer，改成Map可以运行吗",
+    "title" : "xml里写的SQL语句resultType是Integer，改成Map可以运行吗",
+    "aliases" : [ ],
+    "summary" : "resultType=\"Integer\" 把结果集第一行第一列映射成一个 Integer。 resultType=\"Map\" 把每一行映射成一个 Map<String，Object>，列名是key，值是value。 只要SQL能正常执行，语法上都能跑，不会直接报错。",
+    "tags" : [ "sql" ],
+    "filePath" : "Backend/MySQL/xml里写的SQL语句resultType是Integer，改成Map可以运行吗.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/MySQL/事务",
+    "title" : "A 原子性",
+    "aliases" : [ "事务" ],
+    "summary" : "事务的四大特性： 事务中的操作，在事务进行回滚时对数据进行恢复",
+    "tags" : [ "juc", "sql", "锁", "事务", "mysql", "并发", "mvcc" ],
+    "filePath" : "Backend/MySQL/事务.md",
+    "wikiLinks" : [ "Undolog", "锁", "MVCC", "隔离级别", "Redolog", "Binlog", "二阶段提交协议" ],
+    "backlinks" : [ "特点", "InnoDB对比MyISAM", "特点：", "Redolog" ]
+  }, {
+    "id" : "Backend/MySQL/二阶段提交协议",
+    "title" : "过程：",
+    "aliases" : [ "二阶段提交协议" ],
+    "summary" : "MySQL用来**保证redo log和binlog数据一致性**的机制 1. **Prepare阶段：** 事务提交时，InnoDB先把修改写到redo log，但状态标记为prepare，表示为准备好，但没有真正提交 2. **Commit阶段：** redo log写完之后，Server层把数据写到binlog。binlog落盘成功，在通知InnoDB把redo log状态改为commit，整个事务才算提交完成 假如先写了binlog 发生了崩溃 redo log还没写",
+    "tags" : [ "sql", "mysql", "事务" ],
+    "filePath" : "Backend/MySQL/二阶段提交协议.md",
+    "wikiLinks" : [ "Redolog", "Binlog" ],
+    "backlinks" : [ "Redolog", "A 原子性" ]
+  }, {
+    "id" : "Backend/MySQL/分库分表",
+    "title" : "MySQL分库分表的3种策略",
+    "aliases" : [ "分库分表" ],
+    "summary" : "分库分表是大型系统用于解决单数据库数据量/访问压力过大的方案。 1. **MyCAT**：开源数据库中间件，支持分库分表、读写分离； 2. **ShardingSphere**：Apache旗下分布式数据库中间件； 3. **Atlas**：360开源的MySQL高可用代理层。",
+    "tags" : [ "分布式", "sql", "mysql", "事务" ],
+    "filePath" : "Backend/MySQL/分库分表.md",
+    "wikiLinks" : [ "Seata", "雪花算法" ],
+    "backlinks" : [ "慢SQL的排查" ]
+  }, {
+    "id" : "Backend/MySQL/最左前缀匹配法则",
+    "title" : "最左前缀匹配法则",
+    "aliases" : [ ],
+    "summary" : "指在使用联合索引的时候，比如建立了联合索引（a,b,c）；然后where条件中跳过了a,只使用b|c，那就会索引失效（因为联合索引的本质是**按索引列的顺序逐层排序的**） 那么采用where a=1 AND c=1呢； 那如果是where b=2呢",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "Backend/MySQL/最左前缀匹配法则.md",
+    "wikiLinks" : [ "索引下推" ],
+    "backlinks" : [ "分类：", "索引失效" ]
+  }, {
+    "id" : "Backend/MySQL/深分页",
+    "title" : "解决方案：",
+    "aliases" : [ "深分页" ],
+    "summary" : "解释：因为mysql对于深分页，比如要查询第1w行到1w零10行的数据，它会将第1行一直到第1w零10行的数据都查出来，然后全都排序后返回需要的数据，会有严重的性能问题 子查询： SELECT * FROM mianshiya WHERE name = 'yupi' ORDER BY id LIMIT 99999990, 10; SELECT * FROM mianshiya WHERE name = 'yupi' AND id >= ( SELECT id FROM mia",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "Backend/MySQL/深分页.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "慢SQL的排查" ]
+  }, {
+    "id" : "Backend/MySQL/索引",
+    "title" : "分类：",
+    "aliases" : [ "索引" ],
+    "summary" : "覆盖索引：指在一次查询中，通过**非聚集索引（二级索引/联合索引）** 进行查询时，**查询语句所需要的列**都在该索引对应的叶子节点，不需要进行“回表”查询； >例如你建立了name、age、birthday的联合索引，想查name、age这两列数据，你的查询语句也不涉及其他的一些非主键列和联合索引的列，则你在这个联合索引的叶子节点中就可以得到想要的数据了，那么这就是覆盖索引",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "Backend/MySQL/索引.md",
+    "wikiLinks" : [ "B+树", "最左前缀匹配法则" ],
+    "backlinks" : [ "EXPLAIN", "特点", "InnoDB对比MyISAM", "特点：", "连接层", "慢SQL的排查", "SQL的数据类型", "锁的分类：" ]
+  }, {
+    "id" : "Backend/MySQL/索引下推",
+    "title" : "索引下推",
+    "aliases" : [ ],
+    "summary" : "是最左前缀法则的补充，MySQL 5.6引入的优化技术，只在使用了联合索引的时候，可以把原来在Server层做的过滤下推到引擎层进行一次先行过滤，而不用先回表查完整数据；用于减少回表次数",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "Backend/MySQL/索引下推.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "最左前缀匹配法则" ]
+  }, {
+    "id" : "Backend/MySQL/索引失效",
+    "title" : "索引失效",
+    "aliases" : [ ],
+    "summary" : "1. 不满足最左前缀匹配法则 2. 用了LIKE的左模糊匹配 3. 索引列上做了运算 4. OR连接了非索引字段 5. 隐式类型转换 比如：",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "Backend/MySQL/索引失效.md",
+    "wikiLinks" : [ "最左前缀匹配法则" ],
+    "backlinks" : [ "慢SQL的排查" ]
+  }, {
+    "id" : "Backend/MySQL/锁",
+    "title" : "锁的分类：",
+    "aliases" : [ "锁" ],
+    "summary" : "1. 表锁 锁粒度大，一般用于表数据迁移、备份等 2. 行锁（在InnoDB中有，MyISAM中无） 锁粒度小 3. 意向锁（意向共享锁、意向排它锁） 当你需要查询一个数据时，会对改行上S锁（共享锁），然后对表上IS锁——证明该表中有S锁，这样当其他数据想要对这个表加表锁，就不用遍历所有记录去找了 >比如要对表上S锁时，如果发现表上没用IX锁，说明该表中没有X锁，那就可以直接上S锁和IS锁，如果要加X锁，发现表中没有IS锁和IX锁，那么也可以直接加，避免了遍历表中的所有数据 ",
+    "tags" : [ "juc", "索引", "sql", "锁", "mysql", "事务" ],
+    "filePath" : "Backend/MySQL/锁.md",
+    "wikiLinks" : [ "索引", "InnoDB", "隔离级别" ],
+    "backlinks" : [ "特点", "InnoDB对比MyISAM", "特点：", "A 原子性" ]
+  }, {
+    "id" : "Backend/MySQL/隔离级别",
+    "title" : "读未提交(Read Uncommitted)",
+    "aliases" : [ "隔离级别" ],
+    "summary" : "未加锁，能读到其他事务未提交的修改 通过MVCC多版本并发控制进行隔离，是一种不加锁保证并发安全的机制。 >基于一种Read View的快照读思想 >- 在读已提交的隔离级别下，每次进行select查询时都会生成一张Read View >- 在可重复读的隔离级别下，只有第一次的select查询会生成一张Read View，之后都会复用这张Read View，保证可重复读 通过加间隙锁和临建锁保证 |      | 脏读  | 不可重复读 | 幻读  | | ---- | --",
+    "tags" : [ "juc", "sql", "锁", "事务", "mysql", "并发", "mvcc" ],
+    "filePath" : "Backend/MySQL/隔离级别.md",
+    "wikiLinks" : [ "MVCC" ],
+    "backlinks" : [ "A 原子性", "锁的分类：" ]
+  }, {
+    "id" : "Backend/MySQL",
+    "title" : "\uD83D\uDC2C MySQL",
+    "aliases" : [ "MySQL" ],
+    "summary" : "LIST FROM \"learning/tech/Backend/MySQL\" SORT file.mtime desc",
+    "tags" : [ "MySQL" ],
+    "filePath" : "Backend/MySQL.md",
+    "wikiLinks" : [ "MySQL结构分层", "SQL" ],
+    "backlinks" : [ "\uD83E\uDDF1 后端知识 (Backend)", "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Backend/Redis/AOF",
+    "title" : "AOF",
+    "aliases" : [ ],
+    "summary" : "基于文本命令，记录的都是redis的命令，文件大，数据恢复慢，安全性高，刷盘更快，需要配置appendonly yes，三种刷盘策略：",
+    "tags" : [ "redis", "持久化" ],
+    "filePath" : "Backend/Redis/AOF.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "Redis线程模型" ]
+  }, {
+    "id" : "Backend/Redis/Big key",
+    "title" : "Big key问题",
+    "aliases" : [ "Big key" ],
+    "summary" : "指占用内存很大的Key 解决思路： 拆分例子： 就比如用户与订单，可能之前存以用户id为key，订单为value，可以拆成，用户拼接一个订单，value就订单信息，根据不用的业务场景就以不同的角度来拆；",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/Big key.md",
+    "wikiLinks" : [ "集群" ],
+    "backlinks" : [ "Redis线程模型" ]
+  }, {
+    "id" : "Backend/Redis/Lua脚本",
+    "title" : "Lua脚本",
+    "aliases" : [ ],
+    "summary" : "主要是为了实现原子性以及复杂性 主要特点： 使用例子： 分布式锁的解锁时需要用到lua脚本，保证判断锁是否为自己的与解锁操作的原子性和复杂性。",
+    "tags" : [ "锁", "redis" ],
+    "filePath" : "Backend/Redis/Lua脚本.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "分布式锁的实现" ]
+  }, {
+    "id" : "Backend/Redis/PV、UV统计",
+    "title" : "PV、UV统计",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "redis", "缓存", "并发", "java" ],
+    "filePath" : "Backend/Redis/PV、UV统计.md",
+    "wikiLinks" : [ "Redis" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/RDB",
+    "title" : "RDB",
+    "aliases" : [ ],
+    "summary" : "基于一种二进制快照，生成内存中数据的二进制快照文件，文件小，快速的数据恢复，但安全性差，刷盘更慢，默认开启 手动触发：执行save或bgsave命令（生成环境首选，不阻塞主进程） 自动触发：配置save <秒数> <修改键的次数> save 900 1 # 900秒内至少1个键被修改",
+    "tags" : [ "redis", "持久化" ],
+    "filePath" : "Backend/Redis/RDB.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "全量复制：" ]
+  }, {
+    "id" : "Backend/Redis/Redisson",
+    "title" : "Redisson分布式锁为何用Lua脚本而非Redis事务实现",
+    "aliases" : [ "Redisson" ],
+    "summary" : "因此，Redisson选择Lua脚本而非Redis事务，是因为Lua脚本更灵活地支持了分布式锁实现中“条件判断 + 原子执行”的核心需求。 TODO",
+    "tags" : [ "redis", "juc", "分布式", "锁", "事务" ],
+    "filePath" : "Backend/Redis/Redisson.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ "分布式锁的实现" ]
+  }, {
+    "id" : "Backend/Redis/Redis为什么这么快？",
+    "title" : "Redis为什么这么快？",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "锁", "juc", "redis" ],
+    "filePath" : "Backend/Redis/Redis为什么这么快？.md",
+    "wikiLinks" : [ "IO多路复用", "红黑树" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/Redis的使用",
+    "title" : "Redis的使用",
+    "aliases" : [ ],
+    "summary" : "Redis的用处包括： 建议： 可以 不建议",
+    "tags" : [ "redis", "juc", "分布式", "缓存", "锁" ],
+    "filePath" : "Backend/Redis/Redis的使用.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/rehash",
+    "title" : "Dict的基础结构",
+    "aliases" : [ "rehash" ],
+    "summary" : "类似Java的HashMap，采用**数组+链表**形式，包含两个哈希表： 1. 为哈希表2分配空间（通常是哈希表1的2倍）； 2. 将哈希表1的数据迁移到哈希表2； 3. 释放哈希表1空间，将哈希表2设为新的哈希表1，同时新建空白哈希表2备用。 为解决一次性迁移数据耗时的问题，Redis将迁移拆分多次完成： 1. 先为哈希表2分配空间； 2. rehash期间，每次对哈希表执行增/删/查/改操作时： 3. 随着操作请求增多，最终完成哈希表1的全量迁移。 1. **保证哈希表",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/rehash.md",
+    "wikiLinks" : [ "HashMap" ],
+    "backlinks" : [ "基本数据结构" ]
+  }, {
+    "id" : "Backend/Redis/WatchDog",
+    "title" : "WatchDog",
+    "aliases" : [ ],
+    "summary" : "TODO",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/WatchDog.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ "分布式锁的实现" ]
+  }, {
+    "id" : "Backend/Redis/主从同步",
+    "title" : "全量复制：",
+    "aliases" : [ "主从同步" ],
+    "summary" : "1. 先建立连接 2. 主节点执行bgsave fork一个子线程进行RDB快照的生成，这个fork的过程会阻塞主线程 3. 从节点接收这个RDB快照，清空本地的数据，解析二进制文件RDB，从节点阻塞 4. 在这个过程中主节点产生的命令则会写入一个复制缓冲区（Replication Buffer）里 5. 从节点加载完成后，主节点就会将这期间记录在复制缓冲区的命令发送给从节点使其主从同步 1. 在主从节点断连较短时间时触发 2. 通过将命令存于复制积压缓冲区（Replicat",
+    "tags" : [ "集群", "redis" ],
+    "filePath" : "Backend/Redis/主从同步.md",
+    "wikiLinks" : [ "RDB" ],
+    "backlinks" : [ "热点key", "主从模式：" ]
+  }, {
+    "id" : "Backend/Redis/内存回收机制",
+    "title" : "内存回收机制",
+    "aliases" : [ ],
+    "summary" : "当redis的内存达到maxmemory限制时会采取内存回收机制 主要有一下策略： 1. 不删除键，拒绝新的写入 2. 从设置了过期时间的键中随机删除 3. 从全部键中随机删除 4. 从设置了过期时间的键中根据TTL删除剩余时间最短的 5. 从设置了过期时间的键中采取LRU算法删除 6. 从全部键中采取LRU算法删除（最近最少使用） 7. 从设置了过期时间的键中采取LFU算法删除 8. 从全部键中采取LFU算法删除（最少使用频率）",
+    "tags" : [ "redis", "算法" ],
+    "filePath" : "Backend/Redis/内存回收机制.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/分布式锁的实现",
+    "title" : "分布式锁的实现",
+    "aliases" : [ ],
+    "summary" : "为了满足分布式锁的条件 锁的互斥性 可重入性 锁的性能 引入redis来存储锁，基于内存，并且实例可访问。 自然就可以想到set nx命令，如果 key 不存在，则设置成功（返回OK）；如果 key 已存在，则不设置（返回nil）；",
+    "tags" : [ "锁", "juc", "redis", "分布式" ],
+    "filePath" : "Backend/Redis/分布式锁的实现.md",
+    "wikiLinks" : [ "Lua脚本", "Redisson", "WatchDog", "联锁、红锁扩展" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/发布订阅功能",
+    "title" : "定义",
+    "aliases" : [ "发布订阅功能" ],
+    "summary" : "无摘要",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/发布订阅功能.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/哨兵",
+    "title" : "Redis主从故障转移",
+    "aliases" : [ "哨兵" ],
+    "summary" : "由来： 哨兵的作用（在Redis的**2.8**版本后提供的） 哨兵的工作： 定期发送PING命令给主从节点，正常收到响应后判断为正常运行，如果一段时间内没有收到响应，则判断为**主观下线**，此时有俩种情况 1.主节点挂了没有响应 2.主节点因为压力过大或者网络问题导致的阻塞，所以没有在规定时间内响应 为了减少误判，一般会建立哨兵集群，在哨兵节点判断主节点为主观下线时，会向其他哨兵节点发起命令，其他节点根据自身以及主节点的网络情况，投出赞同或者反对票，当这个数量超过你所配置",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/哨兵.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "主从模式：" ]
+  }, {
+    "id" : "Backend/Redis/数据结构及应用",
+    "title" : "基本数据结构",
+    "aliases" : [ "数据结构及应用" ],
+    "summary" : "实现实时统计网站访问量、视频播放量、商品销量、点赞数等 存购物车信息，商品库存，适合频繁修改，支持部分更新 用来实现消息队列，存用户的评论，因为支持分页查询 Redis 3.2之前： Redis 3.2 之后 存关注列表、粉丝列表，支持高效的集合运算 用来实现排行榜 | 数据类型   | 小数据量编码          | 大数据量编码             | 切换阈值              | | ------ | --------------- | -------",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/数据结构及应用.md",
+    "wikiLinks" : [ "Listpack", "rehash", "ziplist" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/热点key",
+    "title" : "热点key",
+    "aliases" : [ ],
+    "summary" : "热点key问题： Redis中的热点Key问题是指某些Key被频繁访问，导致Redis的压力过大，进而影响整体性能甚至导致集群节点故障。 解决热点Key问题的主要方法包括：",
+    "tags" : [ "缓存", "redis" ],
+    "filePath" : "Backend/Redis/热点key.md",
+    "wikiLinks" : [ "Caffeine", "主从同步" ],
+    "backlinks" : [ "缓存穿透" ]
+  }, {
+    "id" : "Backend/Redis/线程模型",
+    "title" : "Redis线程模型",
+    "aliases" : [ "线程模型" ],
+    "summary" : "无摘要",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/线程模型.md",
+    "wikiLinks" : [ "AOF", "Big key" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/缓存的三大问题",
+    "title" : "缓存穿透",
+    "aliases" : [ "缓存的三大问题" ],
+    "summary" : "解决方案： 解决方案： 解决方案：",
+    "tags" : [ "redis", "缓存", "锁", "并发" ],
+    "filePath" : "Backend/Redis/缓存的三大问题.md",
+    "wikiLinks" : [ "热点key", "多级缓存重构" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/缓存设计",
+    "title" : "缓存设计",
+    "aliases" : [ ],
+    "summary" : "资源安全的： 个人信息，可以考虑双写，缓存和数据库，一个是因为个人的信息短时间改的可能不多，并且不会有多个人进行更改，不存在数据的覆盖问题，那就可以在前端进行一个限制不让他短时间多次改，然后更新时把数据库和缓存都更新了，就不采用删除缓存的策略，这样对于与缓存的交互来说也是一次交互，防止打到数据库。 库存扣减的缓存，库存扣减了然后发送一个RocketMQ消息，MQ成功的话就算扣减成功，用其中的事务消息来保证，本地做一个事务，把redis的扣减和MQ发送放在一个事务里",
+    "tags" : [ "redis", "sql", "缓存", "rocketmq", "mysql", "事务" ],
+    "filePath" : "Backend/Redis/缓存设计.md",
+    "wikiLinks" : [ "RocketMQ", "事务消息" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/联锁、红锁扩展",
+    "title" : "联锁（MultiLock）：多资源协同的 “组合锁”",
+    "aliases" : [ "联锁、红锁扩展" ],
+    "summary" : "联锁是**针对 “多把独立锁” 的协同机制**：当业务需要同时操作多个独立资源时（如转账需同时锁定 “转出账户” 和 “转入账户”），必须确保 “所有资源的锁都成功获取” 后，才能执行业务逻辑；只要有一把锁获取失败，就释放已获取的所有锁，避免资源竞争或死锁。 Redisson 的MultiLock是联锁的典型实现，核心逻辑是 “**组合多把锁，统一管理获取与释放**”，步骤如下： 1. 设定 “整体加锁超时时间”（如 5 秒），并为每把锁分配均等的子超时时间（如 3 把锁则每",
+    "tags" : [ "redis", "分布式", "锁", "事务", "并发" ],
+    "filePath" : "Backend/Redis/联锁、红锁扩展.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "分布式锁的实现" ]
+  }, {
+    "id" : "Backend/Redis/过期删除策略",
+    "title" : "定期删除",
+    "aliases" : [ "过期删除策略" ],
+    "summary" : "redis每过一段时间会扫描一些键的进行检查，并限制扫描的时间和数量，删除其中过期的键，而当其中过期的键超过一定阈值，例如本次扫描了10个键有3个键都过期了，那就会继续扫描新的键，继续删除，一直到最大时间期限或者扫描到的过期键未到阈值才会停止。 当访问到这个键的时候，会查看一下这个键是否过期，若过期了则将它删除，未过期则返回",
+    "tags" : [ "redis" ],
+    "filePath" : "Backend/Redis/过期删除策略.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Redis/集群",
+    "title" : "主从模式：",
+    "aliases" : [ "集群" ],
+    "summary" : "可以用哨兵来保证高可用 Redis 集群主要解决了单机内存和并发的瓶颈，它是通过多个 Redis 实例组成的，每个实例存储部分的数据（**即每个实例之间的数据是不重复的**）。 它的实现原理，可以用三个关键词来概括：分片（Sharding）、Gossip 协议和去中心化。 1. **第一，数据怎么存？** 2. **第二，节点之间怎么联系？** 3. **第三，客户端怎么找数据？** 客户端可以连接集群任意一个节点。 CRC16 是一种**16 位的循环冗余校验算法**，简单",
+    "tags" : [ "redis", "juc", "缓存", "并发" ],
+    "filePath" : "Backend/Redis/集群.md",
+    "wikiLinks" : [ "哨兵", "主从同步" ],
+    "backlinks" : [ "Big key问题" ]
+  }, {
+    "id" : "Backend/Redis",
+    "title" : "\uD83E\uDDE0 Redis",
+    "aliases" : [ "Redis" ],
+    "summary" : "LIST FROM \"learning/tech/Backend/Redis\" SORT file.mtime desc",
+    "tags" : [ "Redis", "缓存" ],
+    "filePath" : "Backend/Redis.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "\uD83E\uDDF1 后端知识 (Backend)", "慢SQL的排查", "PV、UV统计", "消息的幂等性", "一、Redis Cluster：分区时如何保证可用 + 最终一致", "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  }, {
+    "id" : "Backend/RocketMQ/RocketMQ",
+    "title" : "RocketMQ",
+    "aliases" : [ ],
+    "summary" : "异步处理 流量控制 服务解耦 MQ的问题： !Pasted image 20260315203944.png",
+    "tags" : [ "sql", "rocketmq", "mysql", "事务", "zookeeper" ],
+    "filePath" : "Backend/RocketMQ/RocketMQ.md",
+    "wikiLinks" : [ "事务消息", "消息丢失", "延迟消息", "消息的幂等性", "消息堆积", "高效读写", "顺序消息", "消息推拉", "为什么不选择Zookeeper作为注册中心", "Pasted image 20260315203944.png" ],
+    "backlinks" : [ "慢SQL的排查", "缓存设计", "[[RocketMQ]]选择自研NameServer而非ZooKeeper的原因", "第一阶段（消息发送）：", "消息丢失分为三个部分：", "发送顺序消息的保证条件" ]
+  }, {
+    "id" : "Backend/RocketMQ/RocketMQ角色",
+    "title" : "NameServer",
+    "aliases" : [ "RocketMQ角色" ],
+    "summary" : "生产者、消费者、Broker 都会在 NameServer 进行注册，并向 NameServer 发送心跳包。NameServer 可搭建集群，但节点之间不进行互相通讯。每个 Broker 与 NameServer 集群中的所有节点建立长连接，定时注册 Topic 信息到所有 NameServer 接收消息，消息持久化，提供消息 生产者生产消息，向 NameServer 询问 Broker 地址，然后往 Broker 发送消息。Producer 与 NameServer 集群",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/RocketMQ角色.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/RocketMQ/为什么不选择Zookeeper作为注册中心",
+    "title" : "[[RocketMQ]]选择自研NameServer而非ZooKeeper的原因",
+    "aliases" : [ "为什么不选择Zookeeper作为注册中心" ],
+    "summary" : "1. **轻量级和高性能需求** RocketMQ需要高性能、低延迟的注册中心，ZooKeeper的强一致性与复杂管理机制会带来额外开销；而NameServer是简单轻量的服务发现/路由组件，更适配消息队列的性能需求。 2. **动态拓扑和高扩展性** NameServer采用无状态设计，节点可随时增减且无需同步，降低集群复杂度，适配Broker集群的动态环境，便于拓展与维护。 3. **弱一致性要求** RocketMQ的服务发现、路由信息允许短时不一致，NameServe",
+    "tags" : [ "分布式", "elasticsearch", "rocketmq", "算法", "zookeeper" ],
+    "filePath" : "Backend/RocketMQ/为什么不选择Zookeeper作为注册中心.md",
+    "wikiLinks" : [ "RocketMQ" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/事务消息",
+    "title" : "第一阶段（消息发送）：",
+    "aliases" : [ "事务消息" ],
+    "summary" : "RocketMQ 通过二阶段提交保证消息与本地事务的一致性： 1. 生产者将消息发送到 RocketMQ 的 Topic，此时消息为**半消息（Half Message）**，消费者不可见。 2. 生产者执行本地事务逻辑，根据事务结果决定后续操作。 1. **本地事务成功**：生产者向 RocketMQ 提交 Commit 操作，半消息转为正式消息，消费者可见。 2. **本地事务失败**：生产者向 RocketMQ 提交 Rollback 操作，RocketMQ 丢弃该消息",
+    "tags" : [ "rocketmq", "事务" ],
+    "filePath" : "Backend/RocketMQ/事务消息.md",
+    "wikiLinks" : [ "RocketMQ" ],
+    "backlinks" : [ "缓存设计", "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/延迟消息",
+    "title" : "延迟消息的Broker处理流程",
+    "aliases" : [ "延迟消息" ],
+    "summary" : "1. **消息接收与重定向** 当Broker收到延迟级别（DelayLevel > 0）的消息时，不会直接写入目标Topic： 2. **原始信息备份** 把消息的原始Topic和队列信息，存入消息的Properties属性中，防止信息丢失。 3. **定时扫描任务** Broker内部的ScheduleMessageService服务，为每个延迟级别启动定时任务（Timer）： 4. **消息到期后的恢复** 若队列头部消息到期，读取该消息： 5. **重新投递消息** ",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/延迟消息.md",
+    "wikiLinks" : [ "Pasted image 20260315205036.png" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/消息丢失",
+    "title" : "消息丢失分为三个部分：",
+    "aliases" : [ "消息丢失" ],
+    "summary" : "生产者的消息发送出去后，RocketMQ接受到消息然后返回ACK，但在MQ还没有完成持久化之前MQ挂了，这时候生产者不会再发送消息 只要存在内存中且没有持久化的消息，在MQ宕机后都会丢失 MQ发送给消费者消息后，消费者在完成业务之前提前发送了ACK确认，然后消费者发生故障后，MQ不会重新投递消息，这也会发生消息丢失 生产者端 服务端 消费者端 !Pasted image 20260315204509.png",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/消息丢失.md",
+    "wikiLinks" : [ "RocketMQ", "Pasted image 20260315204509.png" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/消息堆积",
+    "title" : "消息堆积的解决方法",
+    "aliases" : [ "消息堆积" ],
+    "summary" : "无摘要",
+    "tags" : [ "rocketmq", "线程池" ],
+    "filePath" : "Backend/RocketMQ/消息堆积.md",
+    "wikiLinks" : [ "线程池" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/消息推拉",
+    "title" : "拉取模式",
+    "aliases" : [ "消息推拉" ],
+    "summary" : "消费者主动询问：“你那里有消息吗？有的话发给我嗷”。 Broker和Consumer建立长连接，Consumer监听Broker，一旦有消息，Broker会通知Consumer。 在推和拉模式下，消费者绑定了多个queue，每个queue只会被一个消费者绑定，消费者和queue是一对多的关系。若queue数量太少，消费者再多也受瓶颈；queue数量变化时，消费者会触发ReBalance，重新竞争queue；某消费者hang住时，其绑定的queue会全部阻塞。于是5.x版本新出",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/消息推拉.md",
+    "wikiLinks" : [ "Pasted image 20260315205622.png" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/消息的幂等性",
+    "title" : "消息的幂等性",
+    "aliases" : [ ],
+    "summary" : "消息的重复消费是没法避免的，但是可以通过消息的幂等来防止重复消息对业务带来的影响。 >数据库中可以存去重表，才用版本号来控制，在where的条件后加上版本号的对比，防止重复消费 为什么无法避免消息的重复消费？ >- **消费完成但 ACK 发送失败**：消费者成功处理了消息，但在向 Broker 发送 “消费完成” 的确认回执（ACK）时，因网络故障、消费者进程突然崩溃等原因，ACK 未被 Broker 接收。Broker 会判定该消息 “未被消费”，并将消息重新推送给该消费",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/消息的幂等性.md",
+    "wikiLinks" : [ "唯一id", "Redis" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/顺序消息",
+    "title" : "发送顺序消息的保证条件",
+    "aliases" : [ "顺序消息" ],
+    "summary" : "无摘要",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/顺序消息.md",
+    "wikiLinks" : [ "RocketMQ" ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/RocketMQ/高效读写",
+    "title" : "高效读写",
+    "aliases" : [ ],
+    "summary" : "RocketMQ 高效读写依赖于两个特性： >RocketMQ 的零拷贝技术主要包括： >- **mmap（内存映射）**：用于 Consumer 读取消息。 >- **sendfile**：用于 Broker 发送消息给 Consumer。 >作用：减少数据拷贝次数，提升消息传输性能。 传统 I/O 流程：磁盘 → 内核缓冲区 → 用户缓冲区 → 内核 socket 缓冲区 → 网卡 零拷贝流程（sendfile）：磁盘 → 内核缓冲区 → 内核 socket 缓冲区 → ",
+    "tags" : [ "rocketmq" ],
+    "filePath" : "Backend/RocketMQ/高效读写.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "RocketMQ" ]
+  }, {
+    "id" : "Backend/Spring/AOP",
+    "title" : "主要组成部分：",
+    "aliases" : [ "AOP" ],
+    "summary" : "通过代理的方式，在调用想要的对象实现的时候，进行拦截处理，执行切入的逻辑，然后再调用真实的方法实现 将与业务逻辑无关的横切面关注点抽取出来，通过声明的方式动态的应用到业务方法上 @Aspect 描述通知和切入点对应关系的 可以被AOP控制的方法 >- **proceed()**：最核心的方法，调用这个方法就会执行**原来的目标方法** >- 无参 proceed()：直接执行目标方法，使用原方法的参数。 >- 有参 proceed(Object[] args)：可以传入自定义",
+    "tags" : [ "spring", "aop" ],
+    "filePath" : "Backend/Spring/AOP.md",
+    "wikiLinks" : [ "动态代理", "final" ],
+    "backlinks" : [ "高频使用的", "注意点", "Spring启动过程" ]
+  }, {
+    "id" : "Backend/Spring/Bean",
+    "title" : "Bean",
+    "aliases" : [ ],
+    "summary" : "任何通过Spring容器实例化、组装和管理的Java对象都可以被称为Spring Bean Bean的作用域 Bean的生命周期 Bean的线程安全",
+    "tags" : [ "spring", "java", "Bean" ],
+    "filePath" : "Backend/Spring/Bean.md",
+    "wikiLinks" : [ "Bean的作用域", "Bean的生命周期", "Bean的线程安全" ],
+    "backlinks" : [ "注意点", "[[Bean的作用域]]与线程安全的关系", "1.构造函数注入：", "Spring启动过程", "解释循环依赖", "@Autowired", "@Bean对比@Component", "ComponentScan", "@SpringBootApplication", "父子容器的关系" ]
+  }, {
+    "id" : "Backend/Spring/BeanFactory",
+    "title" : "BeanFactory",
+    "aliases" : [ ],
+    "summary" : "TODO",
+    "tags" : [ "Bean" ],
+    "filePath" : "Backend/Spring/BeanFactory.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ "注意点", "Spring启动过程" ]
+  }, {
+    "id" : "Backend/Spring/Bean的作用域",
+    "title" : "各作用域说明",
+    "aliases" : [ "Bean的作用域" ],
+    "summary" : "<bean id=\"...\" class=\"...\" scope=\"singleton\"></bean> @Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)",
+    "tags" : [ "spring", "Bean" ],
+    "filePath" : "Backend/Spring/Bean的作用域.md",
+    "wikiLinks" : [ "IOC", "HTTP", "cookie、session、token" ],
+    "backlinks" : [ "Bean", "[[Bean的作用域]]与线程安全的关系" ]
+  }, {
+    "id" : "Backend/Spring/Bean的生命周期",
+    "title" : "注意点",
+    "aliases" : [ "Bean的生命周期" ],
+    "summary" : "1. **实例化Bean**：通过BeanDefinition反射调用无参构造创建对象，若没有无参构造，需指定唯一构造方法。 2. **属性注入**：为Bean的属性注入值，通过setter方法或字段注入 3. **初始化前的扩展机制：检查Bean是否实现了Aware相关接口**：实现的话则执行对应方法。 4. **初始化前：执行BeanPostProcessor（Bean后处理器）的before方法**：此时返回的Bean可被“偷梁换柱”。 5. **初始化Bean：** ",
+    "tags" : [ "spring", "aop", "Bean" ],
+    "filePath" : "Backend/Spring/Bean的生命周期.md",
+    "wikiLinks" : [ "Bean", "AOP", "BeanFactory" ],
+    "backlinks" : [ "Bean" ]
+  }, {
+    "id" : "Backend/Spring/Bean的线程安全",
+    "title" : "[[Bean的作用域]]与线程安全的关系",
+    "aliases" : [ "Bean的线程安全" ],
+    "summary" : "Spring 框架中 Bean 的线程安全取决于其作用域和状态，以下是具体分析： 1. 在 Bean 中尽量避免定义可变的成员变量。 2. 在类中定义一个 ThreadLocal 成员变量，将需要的可变成员变量保存在 ThreadLocal 中（推荐方式）。 即使是无状态的 bean 也不一定绝对线程安全，还需考虑方法是否涉及其他类静态成员变量的资源竞争。",
+    "tags" : [ "spring", "Bean" ],
+    "filePath" : "Backend/Spring/Bean的线程安全.md",
+    "wikiLinks" : [ "Bean", "Bean的作用域", "IOC", "ThreadLocal" ],
+    "backlinks" : [ "Bean" ]
+  }, {
+    "id" : "Backend/Spring/DI",
+    "title" : "1.构造函数注入：",
+    "aliases" : [ "DI" ],
+    "summary" : "依赖注入，用来注入Bean 常见的实现方法： 需要实现有参构造来注入依赖类，适合必填依赖 // 依赖接口 public interface MessageService { void sendMessage(String message); } // 依赖实现 public class EmailService implements MessageService { @Override public void sendMessage(String message) { Sys",
+    "tags" : [ "spring", "java" ],
+    "filePath" : "Backend/Spring/DI.md",
+    "wikiLinks" : [ "Bean", "@Autowired和@Resource", "@Component" ],
+    "backlinks" : [ "高频使用的", "**解释：**", "Spring启动过程", "解释循环依赖" ]
+  }, {
+    "id" : "Backend/Spring/IOC",
+    "title" : "**解释：**",
+    "aliases" : [ "IOC" ],
+    "summary" : "在使用对象时**不用new对象**，而**由外部提供** 将对象创建的控制权转移由程序转移给外部 通过DI（依赖注入）进行实现 使程序充分解耦，提高了扩展性和维护性",
+    "tags" : [ "spring", "java" ],
+    "filePath" : "Backend/Spring/IOC.md",
+    "wikiLinks" : [ "DI" ],
+    "backlinks" : [ "各作用域说明", "[[Bean的作用域]]与线程安全的关系", "@Autowired", "@Bean对比@Component" ]
+  }, {
+    "id" : "Backend/Spring/SPI机制",
+    "title" : "核心概念",
+    "aliases" : [ "SPI机制" ],
+    "summary" : "相当于我调用了一个我提供的一个接口，别人去实现这个接口并在模块中写好实现类的配置文件打成jar包，然后由我引入之后就可以实现这个实现类了。相比于api，api是接口和实现都是别人提供的，而SPI中的接口是由我实现的，实现类由其他人实现。 SPI是一种**运行时动态加载服务的插件机制**，通过定义接口+扩展实现的方式，实现解耦与模块化设计。 1. **服务接口**：接口/抽象类，定义服务的规范/功能。 2. **服务提供者**：实现服务接口的具体类。 3. **服务加载器（Se",
+    "tags" : [ "javase", "spring" ],
+    "filePath" : "Backend/Spring/SPI机制.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "双亲委派机制" ]
+  }, {
+    "id" : "Backend/Spring/Spring事务的传播方式",
+    "title" : "Spring事务的传播方式",
+    "aliases" : [ ],
+    "summary" : "协同派： REQUIRED(required)：默认行为，有事务就加入，没有就新建一个。 SUPPORTS：有事务就跟着跑，没有就裸奔，可事务可不事务 NESTED：在当前事务里开一个嵌套子事务，用Savepoint实现，子事务回滚不影响外层 独立派： REQUIRED_NEW：不管外面有没有事务，都自己新开一个事务，原来的事务挂起等着（日志场景） NOT_SUPPORTED：明确不要事务，有事务就挂起，自己已非事务方式执行（例如不需要事务的数据查询） 约束派（非黑即白）： ",
+    "tags" : [ "spring", "mysql" ],
+    "filePath" : "Backend/Spring/Spring事务的传播方式.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Spring/Spring启动过程",
+    "title" : "Spring启动过程",
+    "aliases" : [ ],
+    "summary" : "1. **加载配置文件，初始化容器**： Spring启动时读取配置文件（如XML、Java Config类），包含数据库连接、事务管理、AOP配置等。 2. **实例化容器**： 根据配置创建ApplicationContext容器，启动阶段实例化BeanFactory并加载BeanDefinitions。 3. **解析BeanDefinitions**： 解析配置中的Bean元数据，包括Bean的作用域、依赖关系等信息。 4. **实例化Bean**： 根据BeanDe",
+    "tags" : [ "aop", "spring", "mysql", "事务", "java" ],
+    "filePath" : "Backend/Spring/Spring启动过程.md",
+    "wikiLinks" : [ "AOP", "BeanFactory", "Bean", "DI" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/Spring/动态代理",
+    "title" : "\uD83D\uDCCC **JDK 动态代理原理**",
+    "aliases" : [ "动态代理" ],
+    "summary" : "JDK动态代理：**基于接口** CGLIB：**基于继承** JDK 动态代理用 java.lang.reflect.Proxy 类和 InvocationHandler 接口实现，核心流程如下： 1. 通过实现 InvocationHandler 接口得到一个切面类 2. 利用 Proxy 根据目标类的类加载器、接口和切面类得到一个代理类 3. 代理类把所有接口方法的调用转发到切面类的 invoke() 方法上，然后根据反射调用目标方法 CGLIB 基于 ASM 字节码操",
+    "tags" : [ "java", "spring" ],
+    "filePath" : "Backend/Spring/动态代理.md",
+    "wikiLinks" : [ "final", "反射", "Pasted image 20260315103343.png" ],
+    "backlinks" : [ "主要组成部分：" ]
+  }, {
+    "id" : "Backend/Spring/循环依赖",
+    "title" : "解释循环依赖",
+    "aliases" : [ "循环依赖" ],
+    "summary" : "Spring如何解决循环依赖 !Pasted image 20260317232015.png !Pasted image 20260317232024.png",
+    "tags" : [ "spring", "缓存" ],
+    "filePath" : "Backend/Spring/循环依赖.md",
+    "wikiLinks" : [ "DI", "死锁", "Bean", "Pasted image 20260317232015.png", "Pasted image 20260317232024.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringBoot/@Autowired和@Resource",
+    "title" : "@Autowired",
+    "aliases" : [ "@Autowired和@Resource" ],
+    "summary" : "@Autowired @Qualifier(\"userService\") // 指定Bean名称 private UserService userService; @Resource(name = \"userService\") // 按名称注入 private UserService userService; @Autowired是Spring官方的注解，导致业务代码和框架强绑定，如果更换给其他IOC框架则不适用了 @Resource是JDK的注解，更像是一个标准或者约定，所",
+    "tags" : [ "spring" ],
+    "filePath" : "Backend/SpringBoot/@Autowired和@Resource.md",
+    "wikiLinks" : [ "Bean", "IOC" ],
+    "backlinks" : [ "1.构造函数注入：" ]
+  }, {
+    "id" : "Backend/SpringBoot/@Bean对比@Component",
+    "title" : "@Bean对比@Component",
+    "aliases" : [ ],
+    "summary" : "1. 使用方法不同@Bean加载方法上，自己返回对象，可以支持自定义，或者返回一个代理对象@Component再加类上，调用无参构造函数到IOC容器里 对于第三方的实例对象，不改他源码，可以用@Bean去new他的对象",
+    "tags" : [ "springboot", "spring" ],
+    "filePath" : "Backend/SpringBoot/@Bean对比@Component.md",
+    "wikiLinks" : [ "Bean", "@Component", "IOC" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringBoot/@Component",
+    "title" : "ComponentScan",
+    "aliases" : [ "@Component" ],
+    "summary" : "@ComponentScan 标注在配置类上，用于指示 Spring 容器扫描哪些地方的 Bean 并将其注册到容器中，常用参数如下：",
+    "tags" : [ "spring" ],
+    "filePath" : "Backend/SpringBoot/@Component.md",
+    "wikiLinks" : [ "Bean" ],
+    "backlinks" : [ "1.构造函数注入：", "@Bean对比@Component", "@SpringBootApplication" ]
+  }, {
+    "id" : "Backend/SpringBoot/@SpringBootApplication",
+    "title" : "@SpringBootApplication",
+    "aliases" : [ ],
+    "summary" : "是 Spring Boot 特定的配置注解，用于标记该类为 Spring Boot 应用程序的配置类。通常情况下，它与 @Configuration 注解具有相同的作用，用来定义应用程序中的 Bean。 是 Spring Boot 自动配置的核心注解。它启用了 Spring Boot 的自动配置机制，根据当前项目的依赖和配置，自动配置 Spring 应用程序的上下文。 注解用于指定 Spring 在哪些包下搜索组件。它会扫描指定的包及其子包，寻找带有 @Component 注",
+    "tags" : [ "springboot" ],
+    "filePath" : "Backend/SpringBoot/@SpringBootApplication.md",
+    "wikiLinks" : [ "Bean", "@Component" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringBoot/cookie、session、token",
+    "title" : "cookie、session、token",
+    "aliases" : [ ],
+    "summary" : "服务端发给客户端，交给客户端保存的数据，每次请求，客户端带上这些数据，服务端就读取这些数据，鉴别身份。 完全由客户端存储，和域名绑定，且不可跨域。 数据大小一般有限制。 容易被伪造，且客户端清除数据就丢失了。 服务端将客户端的信息保存在服务端，然后将一个sessionId传给客户端，客户端保存起来，下次请求携带sessionId，服务端就通过id找到客户端的身份数据。 真正的数据存储在服务端，数据安全，且数据格式由服务端自定义。 sessionId一般客户端通过cookie的",
+    "tags" : [ "http" ],
+    "filePath" : "Backend/SpringBoot/cookie、session、token.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "各作用域说明", "HTTP常见状态码" ]
+  }, {
+    "id" : "Backend/SpringBoot/MyBatis",
+    "title" : "#{}和${}的区别：",
+    "aliases" : [ "MyBatis" ],
+    "summary" : "都是SQL语句的占位符 是将数据作为参数传递给数据库查询，SQL语句会采用**预编译** 使用 # 时，MyBatis 会**自动为参数添加单引号**，并防止 SQL 注入攻击。 数据库在事先编译并优化好SQL模版，执行相同的SQL就不用解析和优化它了 是与SQL语句进行拼接，容易发生SQL注入 一些进行动态SQL的场景只能使用${} 例如动态的指定表名和列名（动态的排序） 与传统的JDBC相比，MyBatis有以下优点： 通过映射文件(XML或注解)将SQL与Java对象进",
+    "tags" : [ "sql", "mybatis", "java" ],
+    "filePath" : "Backend/SpringBoot/MyBatis.md",
+    "wikiLinks" : [ "SQL" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringBoot/跨域问题",
+    "title" : "一、跨域的定义",
+    "aliases" : [ "跨域问题" ],
+    "summary" : "跨域指的是请求的域名、协议或端口与当前页面不同的情况。例如： 浏览器的同源策略出于安全考虑，限制了从一个源加载的文档或脚本与另一个源的资源进行交互的能力。当前端通过 Ajax 访问跨域接口时，就会触发跨域问题，导致请求被浏览器拦截。 1. **JSONP** 原理： 实现步骤： 2. **CORS（跨资源共享）策略** 这是目前较为推荐的方式，只需后端进行配置，前端无需修改。 3. **Nginx 反向代理** 通过 Nginx 配置跨域响应头，如  Access-Contr",
+    "tags" : [ "spring", "http", "java" ],
+    "filePath" : "Backend/SpringBoot/跨域问题.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/CAP架构",
+    "title" : "三个核心特性",
+    "aliases" : [ "CAP架构" ],
+    "summary" : "所有节点在同一时刻看到的数据是完全一致的。无论访问哪个节点，都能得到最新的写入结果。 系统持续可用，任何客户端请求都能得到响应（不保证返回的是最新数据）。 即使网络出现分区（节点之间无法通信），系统仍能正常工作。 AP架构例子",
+    "tags" : [ "cap" ],
+    "filePath" : "Backend/SpringCloud/CAP架构.md",
+    "wikiLinks" : [ "AP架构例子" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/Gateway",
+    "title" : "Spring Cloud Gateway 介绍",
+    "aliases" : [ "Gateway" ],
+    "summary" : "Spring Cloud Gateway 是 Spring Cloud 开源的网关组件，它使用了 WebFlux 框架，充分发挥了响应式编程的特性与优点。其底层使用 Netty 作为通信框架，并且整合了 Spring Framework 5、Spring Boot 2 以及 Project Reactor 等技术，完美适配 Spring Cloud 生态体系。 在微服务架构中，它充当着前端入口点的角色，实现了**路由转发、请求过滤、负载均衡**等核心功能。 1. **路由转发",
+    "tags" : [ "springcloud" ],
+    "filePath" : "Backend/SpringCloud/Gateway.md",
+    "wikiLinks" : [ "Nacos" ],
+    "backlinks" : [ "Sentinel与[[Gateway]]的限流主要在[[限流算法]]实现上存在差别：" ]
+  }, {
+    "id" : "Backend/SpringCloud/Nacos",
+    "title" : "Nacos服务注册表结构",
+    "aliases" : [ "Nacos" ],
+    "summary" : "注册中心加配置中心 分级存储模型： 从外到内为Namespace、Group、服务、集群、实例 !Pasted image 20260405184647.png### Nacos如何支撑十万服务注册的压力 Nacos接受到注册的请求时，不会立即写数据而是将注册任务放入一个阻塞队列中然后响应给客户端。之后利用线程池读取阻塞队列中的任务，异步的完成实例更新，提高并发写能力。 更新实例列表的时候，采取CopyOnWrite技术，会将旧列表拷贝一份，之后更新拷贝的列表，然后再覆盖。 ",
+    "tags" : [ "springcloud" ],
+    "filePath" : "Backend/SpringCloud/Nacos.md",
+    "wikiLinks" : [ "Pasted image 20260405184647.png", "CopyOnWrite" ],
+    "backlinks" : [ "Spring Cloud Gateway 介绍", "四、关键配置（常用）" ]
+  }, {
+    "id" : "Backend/SpringCloud/OpenFeign",
+    "title" : "四、关键配置（常用）",
+    "aliases" : [ "OpenFeign" ],
+    "summary" : "是一款基于Java的**声明式HTTP客户端**，它能让服务间的HTTP调用像调用本地方法一样简单，无需手动拼接URL、处理请求参数和响应解析。 主要解决了以下问题： 1. 简化代码：避免手动使用 RestTemplate 等工具类编写重复的 HTTP 请求代码。 2. 统一契约：接口定义即调用契约，服务消费者与提供者可共享接口，减少沟通成本。 3. 原生集成：与 Spring Cloud 生态无缝兼容，可直接结合负载均衡（如 [[Ribbon）、服务发现（如 Eureka/",
+    "tags" : [ "springcloud" ],
+    "filePath" : "Backend/SpringCloud/OpenFeign.md",
+    "wikiLinks" : [ "HTTP", "Spring Cloud 生态无缝兼容，可直接结合负载均衡（如 [[Ribbon", "Nacos" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/Ribbon",
+    "title" : "介绍",
+    "aliases" : [ "Ribbon" ],
+    "summary" : "Ribbon 是 Spring Cloud Netflix 组件中一个基于 Netflix Ribbon 实现的、支持 HTTP 和 TCP 的**客户端负载均衡工具**。 当存在多个服务提供者时，Ribbon 可以根据负载均衡算法（例如轮询、随机连接等）选择需要调用的服务，还能实现故障转移和重试机制。 !Pasted image 20260405184346.png",
+    "tags" : [ "springcloud" ],
+    "filePath" : "Backend/SpringCloud/Ribbon.md",
+    "wikiLinks" : [ "负载均衡算法", "Pasted image 20260405184346.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/Sentinel",
+    "title" : "Sentinel与[[Gateway]]的限流主要在[[限流算法]]实现上存在差别：",
+    "aliases" : [ "Sentinel" ],
+    "summary" : "Sentinel是阿里巴巴开源的**限流、熔断、降级组件**，旨在为分布式系统提供可靠的保护机制。它设计用于解决高并发流量下的稳定性问题",
+    "tags" : [ "springcloud" ],
+    "filePath" : "Backend/SpringCloud/Sentinel.md",
+    "wikiLinks" : [ "Gateway", "限流算法" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/Spring Cloud优缺点总结",
+    "title" : "微服务的优点",
+    "aliases" : [ "Spring Cloud优缺点总结" ],
+    "summary" : "微服务并不是对所有架构都通用的！ 比如游戏服务端开发对性能场景要求较高，因此采用微服务架构的情况就比较少，在选择使用微服务时需要结合场景进行评估。",
+    "tags" : [ "springcloud" ],
+    "filePath" : "Backend/SpringCloud/Spring Cloud优缺点总结.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/微服务的拆分原则",
+    "title" : "1. 单一职责原则（Single Responsibility Principle）",
+    "aliases" : [ "微服务的拆分原则" ],
+    "summary" : "这是最基础的原则，每个微服务应该只聚焦于**一个明确的业务领域**或**一个核心能力**，做到“高内聚、低耦合”。 以**业务领域模型**为依据，按照业务的自然边界来拆分，而不是按技术层（如按Controller、Service、DAO分层）来拆分。 每个微服务应具备**独立的开发、测试、部署和运行能力**，不依赖其他服务的内部实现，仅通过定义好的API进行交互。 每个微服务应该**拥有自己独立的数据库**，避免多个服务共享同一张表或同一个数据库实例。 服务拆分既不能太粗（接",
+    "tags" : [ "springcloud", "架构" ],
+    "filePath" : "Backend/SpringCloud/微服务的拆分原则.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringCloud/负载均衡算法",
+    "title" : "核心负载均衡算法汇总",
+    "aliases" : [ "负载均衡算法" ],
+    "summary" : "1. **轮询算法（Round Robin）** 2. **加权轮询算法（Weighted Round Robin）** 3. **随机算法（Random）** 4. **加权随机算法（Weight Random）** 5. **最少连接算法（Least Connection）** 6. **哈希算法（Hash）**",
+    "tags" : [ "算法", "springcloud" ],
+    "filePath" : "Backend/SpringCloud/负载均衡算法.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "介绍" ]
+  }, {
+    "id" : "Backend/SpringMVC/HandlerInterceptor类",
+    "title" : "**HandlerInterceptor 的核心方法**",
+    "aliases" : [ "HandlerInterceptor类" ],
+    "summary" : "在 Spring MVC 中，HandlerInterceptor 是一个接口，用于拦截控制器（Controller）的请求处理过程，允许在请求处理的不同阶段执行自定义逻辑。它类似于过滤器（Filter），但更贴近 Spring MVC 的处理流程，常用于日志记录、权限验证、性能监控、参数预处理等场景。 HandlerInterceptor 接口定义了三个核心方法，用于在请求处理的不同阶段进行拦截： |   |   |   | |---|---|---| |方法名|作用时机|",
+    "tags" : [ "SpringMVC" ],
+    "filePath" : "Backend/SpringMVC/HandlerInterceptor类.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringMVC/工作流程",
+    "title" : "工作流程",
+    "aliases" : [ ],
+    "summary" : "!Pasted image 20260315103734.png 像什么模型、视图这些东西都是应用于前后端不分离的情况下，由后端进行前端界面渲染（jsp等技术） 现在都是前后端分离，这些模型、视图这些东西基本不用了，直接Restful风格使用@RestController将Controller的结果封装成json返回就完事",
+    "tags" : [ "SpringMVC" ],
+    "filePath" : "Backend/SpringMVC/工作流程.md",
+    "wikiLinks" : [ "Pasted image 20260315103734.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringMVC/核心组件",
+    "title" : "核心组件",
+    "aliases" : [ ],
+    "summary" : "1. **DispatcherServlet**：Spring MVC 的前端控制器，所有请求都会先由它接收并分发到相应的处理器。它是整个 Spring MVC 流程的入口，也是处理请求的调度中心。 2. **HandlerMapping**：根据请求 URL 查找对应的处理器（Controller）。HandlerMapping 用于将客户端的请求映射到具体的控制器方法。 3. **Controller（控制器）**：负责处理用户请求的核心组件。Controller 接收请",
+    "tags" : [ "spring", "SpringMVC" ],
+    "filePath" : "Backend/SpringMVC/核心组件.md",
+    "wikiLinks" : [ "HTTP" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/SpringMVC/父子容器",
+    "title" : "父子容器的关系",
+    "aliases" : [ "父子容器" ],
+    "summary" : "1. 父容器是顶层容器，管理全局的Bean 2. 子容器管理web层的bean 3. 子容器能访问父容器，反之不能 4. 将web层和服务层分离，便于管理 1. **子容器可以访问父容器的 Bean**：如果一个 Bean 在父容器中定义，子容器也可以直接访问它。这种机制有助于 Web 层（子容器）使用服务层或 DAO 层（父容器）中的 Bean。 2. **父容器不能访问子容器的 Bean**：父容器无法访问子容器中的 Bean，这是 Spring MVC 的设计之一。父容",
+    "tags" : [ "SpringMVC" ],
+    "filePath" : "Backend/SpringMVC/父子容器.md",
+    "wikiLinks" : [ "Bean" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/场景题/AP架构例子",
+    "title" : "一、Redis Cluster：分区时如何保证可用 + 最终一致",
+    "aliases" : [ "AP架构例子" ],
+    "summary" : "Redis Cluster 是典型的 **AP 架构**。 当网络分区导致某些节点无法通信时： 关键点： Redis Cluster 放弃分区期间的**强一致性**，换取 **整体可用性**。 > Redis Cluster 属于 AP 架构。网络分区出现时，各个分区继续提供读写服务，保证可用性；同时各分区的数据可能暂时不一致，但一旦网络恢复，副本会自动同步、补齐差异，最终实现数据一致。 Eureka 是 Spring Cloud 注册中心，也是 **AP 架构** 的代表。",
+    "tags" : [ "redis", "cap" ],
+    "filePath" : "Backend/场景题/AP架构例子.md",
+    "wikiLinks" : [ "Redis" ],
+    "backlinks" : [ "三个核心特性" ]
+  }, {
+    "id" : "Backend/场景题/从CAP的角度，你讲讲你的项目属于哪一类，或者哪一部分属于什么类型",
+    "title" : "从CAP的角度，你讲讲你的项目属于哪一类，或者哪一部分属于什么类型",
+    "aliases" : [ ],
+    "summary" : "TODO",
+    "tags" : [ "cap" ],
+    "filePath" : "Backend/场景题/从CAP的角度，你讲讲你的项目属于哪一类，或者哪一部分属于什么类型.md",
+    "wikiLinks" : [ "TODO" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/场景题/唯一id",
+    "title" : "[[雪花算法]]",
+    "aliases" : [ "唯一id" ],
+    "summary" : "分布式唯一ID设计：",
+    "tags" : [ "redis", "juc", "分布式", "并发", "算法" ],
+    "filePath" : "Backend/场景题/唯一id.md",
+    "wikiLinks" : [ "雪花算法" ],
+    "backlinks" : [ "消息的幂等性", "雪花算法" ]
+  }, {
+    "id" : "Backend/场景题/用户信息恶意攻击防御",
+    "title" : "1. 先做多层防御（从快到准）",
+    "aliases" : [ "用户信息恶意攻击防御" ],
+    "summary" : "我会从**拦截策略、分层处理、模糊内容兜底、体验保障**四部分回答： 1. **规则层** 关键词、正则、敏感词库、命中直接拦截。 优点：快、成本低。 2. **模型层** 用文本分类 / 情感 / 攻击识别模型，判断恶意概率。 3. **用户画像层** 历史行为：是否多次违规、账号风险等级，加权判断。 对**模棱两可、疑似攻击、擦边**内容： 而是走**中间态策略**： 1. **先放行，后置异步审核** 保证用户消息**先送达**，不影响正常沟通。 2. **后台异步复核",
+    "tags" : [ "rag", "安全" ],
+    "filePath" : "Backend/场景题/用户信息恶意攻击防御.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/场景题/考勤记录怎么保证真实性",
+    "title" : "考勤记录怎么保证真实性",
+    "aliases" : [ ],
+    "summary" : "打卡时间统一使用**服务器时间**，不依赖客户端时间，避免用户修改本地时间作弊。 同时结合**GPS 定位、WiFi 信息、人脸核验、设备绑定**等多维度校验，确保是本人、在规定区域、在规定时间内打卡。 打卡接口必须做**用户鉴权**，确保是本人操作。 通过**请求签名、时间戳、随机串**防止请求被篡改、重放、抓包伪造。 全程使用 HTTPS 加密传输，避免数据中途被窃取或修改。 考勤核心表设计为**只允许插入，不允许更新和删除**。 所有异常、补卡、修正都不直接改原记录，而",
+    "tags" : [ "http" ],
+    "filePath" : "Backend/场景题/考勤记录怎么保证真实性.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/场景题/频繁 Full GC 且响应变慢的解决思路",
+    "title" : "频繁 Full GC 且响应变慢的解决思路",
+    "aliases" : [ ],
+    "summary" : "1. **定位原因**： 2. **针对性优化**： 3. **兜底方案**：临时扩容堆内存，重启服务，逐步排查根因。",
+    "tags" : [ "gc", "jvm" ],
+    "filePath" : "Backend/场景题/频繁 Full GC 且响应变慢的解决思路.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/AIO",
+    "title" : "AIO",
+    "aliases" : [ ],
+    "summary" : "发起I/O请求后立即返回，内核在后台完成I/O操作，并在操作完成时通知进程。进程不需要等待I/O完成即可继续执行其他任务 !Pasted image 20260306091009.png",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/AIO.md",
+    "wikiLinks" : [ "Pasted image 20260306091009.png" ],
+    "backlinks" : [ "三种 I/O 模型对比" ]
+  }, {
+    "id" : "Backend/操作系统/AIO、BIO、NIO",
+    "title" : "三种 I/O 模型对比",
+    "aliases" : [ "AIO、BIO、NIO" ],
+    "summary" : "| **模型**               | **核心特点**                                                             | **适用场景**     | **Java 示例**                                            | | -------------------- | -----------------------------------------------",
+    "tags" : [ "并发", "java" ],
+    "filePath" : "Backend/操作系统/AIO、BIO、NIO.md",
+    "wikiLinks" : [ "BIO", "NIO", "IO多路复用", "AIO" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/BIO",
+    "title" : "BIO",
+    "aliases" : [ ],
+    "summary" : "调用I/O操作时，进程会被阻塞，直到数据准备好货操作完成后才继续执行 !Pasted image 20260306090935.png",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/BIO.md",
+    "wikiLinks" : [ "Pasted image 20260306090935.png" ],
+    "backlinks" : [ "三种 I/O 模型对比" ]
+  }, {
+    "id" : "Backend/操作系统/IO多路复用",
+    "title" : "IO多路复用",
+    "aliases" : [ ],
+    "summary" : "允许程序同时等待多个I/O操作，当其中任意一个就绪时就处理 select： poll： epoll： !Pasted image 20260306090457.png",
+    "tags" : [ "并发", "juc", "操作系统" ],
+    "filePath" : "Backend/操作系统/IO多路复用.md",
+    "wikiLinks" : [ "红黑树", "Pasted image 20260306090457.png" ],
+    "backlinks" : [ "Redis为什么这么快？", "三种 I/O 模型对比" ]
+  }, {
+    "id" : "Backend/操作系统/LRU算法",
+    "title" : "LRU 的思想",
+    "aliases" : [ "LRU算法" ],
+    "summary" : "LRU（Least Recently Used，最近最少使用）是一种**缓存淘汰策略**，核心思想是：**当缓存容量满时，优先淘汰最久未被访问过的数据**，认为最近使用过的数据在未来更可能被再次访问。 1. 使用 **双向链表（LinkedList / 自定义链表）** 维护数据的访问顺序：最近访问的节点移到链表头部，最久未访问的节点在尾部。 2. 使用 **哈希表（HashMap）** 存储 key 到链表节点的映射，实现 O (1) 时间复杂度的查询。 3. 组合结构：L",
+    "tags" : [ "juc", "缓存", "并发", "算法", "java" ],
+    "filePath" : "Backend/操作系统/LRU算法.md",
+    "wikiLinks" : [ "HashMap", "synchronized", "ConcurrentHashMap" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/NIO",
+    "title" : "NIO",
+    "aliases" : [ ],
+    "summary" : "不会阻塞进程，如果数据没有准备好，立即返回错误或状态，进程可以继续执行其他操作 !Pasted image 20260306090954.png",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/NIO.md",
+    "wikiLinks" : [ "Pasted image 20260306090954.png" ],
+    "backlinks" : [ "Java常见OOM情况汇总", "三种 I/O 模型对比" ]
+  }, {
+    "id" : "Backend/操作系统/信号驱动IO",
+    "title" : "信号驱动IO",
+    "aliases" : [ ],
+    "summary" : "在数据准备好时，内核内核通过信号通知进程I/O操作，进程在接收到信号后再进行数据读取或写入 !Pasted image 20260306091044.png",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/信号驱动IO.md",
+    "wikiLinks" : [ "Pasted image 20260306091044.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/僵尸进程和孤儿进程",
+    "title" : "哪一个会导致[[内存泄露]]？",
+    "aliases" : [ "僵尸进程和孤儿进程" ],
+    "summary" : "无摘要",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/僵尸进程和孤儿进程.md",
+    "wikiLinks" : [ "内存泄露" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/分页、分段",
+    "title" : "为什么需要分页？为什么需要分段？",
+    "aliases" : [ "分页、分段" ],
+    "summary" : "1. **地址映射**：将虚拟地址转换为物理地址。 2. **内存管理**：记录页是否在物理内存、访问权限（读 / 写 / 执行）、脏页标记等。 3. **缺页异常**：当访问的页不在内存中时，触发缺页中断，由操作系统从磁盘交换区调入。",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/分页、分段.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/死锁",
+    "title" : "资源有序分配法：",
+    "aliases" : [ "死锁" ],
+    "summary" : "死锁只有同时满足以下四个条件才会发生： 避免死锁： 线程 A 和线程 B 获取资源的顺序要一样，当线程 A 是先尝试获取资源 A，然后尝试获取资源 B 的时候，线程 B 同样也是先尝试获取资源 A，然后尝试获取资源 B。也就是说，线程 A 和线程 B 总是以相同的顺序申请自己想要的资源。",
+    "tags" : [ "锁", "juc", "操作系统" ],
+    "filePath" : "Backend/操作系统/死锁.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "解释循环依赖" ]
+  }, {
+    "id" : "Backend/操作系统/用户态和内核态的区别",
+    "title" : "内核态和用户态性能差异",
+    "aliases" : [ "用户态和内核态的区别" ],
+    "summary" : "无摘要",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/用户态和内核态的区别.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/操作系统/缺页中断会导致上下文切换吗？",
+    "title" : "缺页中断会导致上下文切换吗？",
+    "aliases" : [ ],
+    "summary" : "会导致**进程上下文切换**。",
+    "tags" : [ "操作系统" ],
+    "filePath" : "Backend/操作系统/缺页中断会导致上下文切换吗？.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/算法/二叉查找树",
+    "title" : "二叉查找树",
+    "aliases" : [ ],
+    "summary" : "无重复节点 !Pasted image 20260315104550.png## 平衡二叉树 是二叉搜索树，且每个节点的左右子树的高度相差不超过1 !Pasted image 20260315104601.png!Pasted image 20260315104606.png !Pasted image 20260315104611.png!Pasted image 20260315104617.png !Pasted image 20260315104628.png",
+    "tags" : [ "算法" ],
+    "filePath" : "Backend/算法/二叉查找树.md",
+    "wikiLinks" : [ "Pasted image 20260315104550.png", "Pasted image 20260315104601.png", "Pasted image 20260315104606.png", "Pasted image 20260315104611.png", "Pasted image 20260315104617.png", "Pasted image 20260315104628.png" ],
+    "backlinks" : [ "红黑树" ]
+  }, {
+    "id" : "Backend/算法/红黑树",
+    "title" : "红黑树",
+    "aliases" : [ ],
+    "summary" : "!Pasted image 20260305154707.png !Pasted image 20260305154647.png",
+    "tags" : [ "算法" ],
+    "filePath" : "Backend/算法/红黑树.md",
+    "wikiLinks" : [ "二叉查找树", "Pasted image 20260305154707.png", "Pasted image 20260305154647.png" ],
+    "backlinks" : [ "JDK1.7及之前", "原理", "Redis为什么这么快？", "IO多路复用" ]
+  }, {
+    "id" : "Backend/算法/限流算法",
+    "title" : "限流算法",
+    "aliases" : [ ],
+    "summary" : "| 对比项        | 滑动时间窗口                | 令牌桶                                                | 漏桶                      | | ---------- | --------------------- | -------------------------------------------------- | ----------------------- | | 能否",
+    "tags" : [ "算法" ],
+    "filePath" : "Backend/算法/限流算法.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ "Sentinel与[[Gateway]]的限流主要在[[限流算法]]实现上存在差别：" ]
+  }, {
+    "id" : "Backend/算法/雪花算法",
+    "title" : "雪花算法",
+    "aliases" : [ ],
+    "summary" : "!Pasted image 20260316212951.png 可用于分布式生成唯一id，但并不是全局有序的 >因为不同机器的时间戳不可能保持一致 如果发生时间回拨的话，就可能出现重复id >解决方案 >- 通过将10bit的工作机器id拆出几位来作为时钟记录，每次时钟回拨时进行自增 >- 通过网络时间来校准本地时钟避免回拨 雪花算法里发现时间回拨，本质就是记录上一次生成ID时的时间戳，和当前系统时间做对比：",
+    "tags" : [ "算法", "分布式" ],
+    "filePath" : "Backend/算法/雪花算法.md",
+    "wikiLinks" : [ "Pasted image 20260316212951.png", "唯一id" ],
+    "backlinks" : [ "MySQL分库分表的3种策略", "[[雪花算法]]" ]
+  }, {
+    "id" : "Backend/计网/GET和POST",
+    "title" : "GET与POST的典型定义",
+    "aliases" : [ "GET和POST" ],
+    "summary" : "不一定，取决于实际实现： 1. **GET**： 2. **POST**：",
+    "tags" : [ "缓存", "http" ],
+    "filePath" : "Backend/计网/GET和POST.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/计网/HTTP",
+    "title" : "HTTP常见状态码",
+    "aliases" : [ "HTTP" ],
+    "summary" : "1）1xx: 信息响应 2）2xx: 成功 3）3xx: 重定向 4）4xx: 客户端错误 5）5xx: 服务器错误 >先解释无状态什么：指服务器不会记住客户端（浏览器、小程序）的信息，每次调用都是单独的 cookie、session、token HTTP的缓存有两种实现方式，分别是强制缓存和协商缓存 IPv4 + TCP + HTTP+数据包 20字节+20字节+25字节+1个字节=66字节； TCP头变为32字节，答案为78字节；",
+    "tags" : [ "缓存", "tcp", "http" ],
+    "filePath" : "Backend/计网/HTTP.md",
+    "wikiLinks" : [ "cookie、session、token" ],
+    "backlinks" : [ "各作用域说明", "四、关键配置（常用）", "核心组件", "HTTP和HTTPS的区别", "HTTP缓存", "先分清两种加密", "网络模型", "1. 浏览器解析URL" ]
+  }, {
+    "id" : "Backend/计网/HTTP和HTTPS的区别",
+    "title" : "HTTP和HTTPS的区别",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "sql", "http", "mysql", "索引" ],
+    "filePath" : "Backend/计网/HTTP和HTTPS的区别.md",
+    "wikiLinks" : [ "HTTP", "TLS" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/计网/HTTP缓存",
+    "title" : "HTTP缓存",
+    "aliases" : [ ],
+    "summary" : "缓存： HTTP 缓存有两种实现方式，分别是强制缓存和协商缓存。",
+    "tags" : [ "缓存", "http" ],
+    "filePath" : "Backend/计网/HTTP缓存.md",
+    "wikiLinks" : [ "HTTP" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/计网/TCP",
+    "title" : "TCP报文头核心字段及说明",
+    "aliases" : [ "TCP" ],
+    "summary" : "!Pasted image 20260315151810.png 1. **源端口号/目标端口号** 各占2字节，取值范围0~65535，用于标识通信的进程。 2. **序号** 3. **确认应答号** 4. **首部长度** 表示TCP数据段到TCP起始位置的距离，即TCP报文头部的长度。 5. **控制位（共6个）** 6. **窗口大小** 发送方的缓冲区剩余接收能力，告知对方可发送的数据量。 7. **校验和** 发送方填充，接收方用于检验TCP报文是否损坏。 8.",
+    "tags" : [ "tcp", "操作系统" ],
+    "filePath" : "Backend/计网/TCP.md",
+    "wikiLinks" : [ "Pasted image 20260315151810.png", "TCP三次握手", "TCP四次挥手" ],
+    "backlinks" : [ "为什么需要三次握手？", "为什么挥手需要四次?", "TCP缺陷", "网络模型", "1. 浏览器解析URL" ]
+  }, {
+    "id" : "Backend/计网/TCP三次握手",
+    "title" : "为什么需要三次握手？",
+    "aliases" : [ "TCP三次握手" ],
+    "summary" : "具体流程： TCP 握手次数的设计是在可靠性与效率之间的平衡。三次握手既保证了连接的有效性和序列号同步，又避免了不必要的通信消耗；而两次握手可靠性不足，四次及以上则会降低通信效率。",
+    "tags" : [ "tcp" ],
+    "filePath" : "Backend/计网/TCP三次握手.md",
+    "wikiLinks" : [ "TCP" ],
+    "backlinks" : [ "TCP报文头核心字段及说明" ]
+  }, {
+    "id" : "Backend/计网/TCP四次挥手",
+    "title" : "为什么挥手需要四次?",
+    "aliases" : [ "TCP四次挥手" ],
+    "summary" : "!Pasted image 20260315151714.png 1）第一次挥手（FIN → ACK）：客户端主动关闭连接，发送 FIN 包，进入 FIN_WAIT_1 状态。服务器收到 FIN 后，表示不再接收数据，但仍可能继续发送数据。 2）第二次挥手（ACK）：服务器发送 ACK 包，确认已收到 FIN。此时服务器进入 CLOSE_WAIT 状态，客户端进入 FIN_WAIT_2 状态。 3）第三次挥手（FIN → ACK）：服务器完成所有数据传输后，发送 FIN 包，",
+    "tags" : [ "tcp" ],
+    "filePath" : "Backend/计网/TCP四次挥手.md",
+    "wikiLinks" : [ "Pasted image 20260315151714.png", "TCP" ],
+    "backlinks" : [ "TCP报文头核心字段及说明" ]
+  }, {
+    "id" : "Backend/计网/TCP缺陷",
+    "title" : "TCP缺陷",
+    "aliases" : [ ],
+    "summary" : "无摘要",
+    "tags" : [ "http", "tcp" ],
+    "filePath" : "Backend/计网/TCP缺陷.md",
+    "wikiLinks" : [ "TCP" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/计网/传输是对称加密还是非对称加密",
+    "title" : "先分清两种加密",
+    "aliases" : [ "传输是对称加密还是非对称加密" ],
+    "summary" : "HTTP是明文传输，没加密 优点：快、适合大量数据 缺点：密钥不能在网上明文传，容易泄露 优点：**公钥可以随便发**，安全 缺点：慢，不适合传大文件 1. 先用**非对称加密**： RSA 是目前**最经典、最常用的非对称加密算法**，基于**大数质因数分解困难**的数学难题。 客户端 ↔ 服务器，安全交换「对称密钥」 2. 后面真正传数据： 全程用**对称加密**（速度快、安全），真正数据用 AES 等对称加密 交换密钥 + 确认对方是真服务器（这个用CA数字证书） = ",
+    "tags" : [ "http", "算法" ],
+    "filePath" : "Backend/计网/传输是对称加密还是非对称加密.md",
+    "wikiLinks" : [ "HTTP", "HTTPS" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/计网/网络模型",
+    "title" : "网络模型",
+    "aliases" : [ ],
+    "summary" : "常见应用及协议有 HTTP、DNS、FTP、Telnet、SMTP 等。应用层不关注数据传输细节，直接将数据传输任务交给传输层；应用层工作于用户态，传输层及以下工作于内核态。 为应用层提供网络通信支持，不涉及网络传输，包含 TCP 和 UDP 两个协议。 负责网络包的封装、分片、路由、转发，涉及的协议有 IP、ICMP 等。 负责网络包在物理网络中的传输，如网络包的封帧、MAC 寻址、差错检验等，真正的物理层负责最终的数据传输。 !Pasted image 202603081",
+    "tags" : [ "http", "tcp" ],
+    "filePath" : "Backend/计网/网络模型.md",
+    "wikiLinks" : [ "HTTP", "TCP", "IP", "MAC", "Pasted image 20260308134816.png" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Backend/计网/输入网址到网页显示过程",
+    "title" : "1. 浏览器解析URL",
+    "aliases" : [ "输入网址到网页显示过程" ],
+    "summary" : "根据URL拆解出请求协议（如HTTP）、Web服务器（如[www.baidu.com](https://www.baidu.com)）、文件路径（可省略），生成HTTP请求信息。 域名层级：根DNS服务器（.）→ 顶级DNS服务器（.com/.cn）→ 权威DNS服务器（如baidu.com） 解析流程： 1. 客户端向本地DNS查询目标域名IP； 2. 本地DNS查自身缓存，无则问根DNS； 3. 根DNS告知本地DNS对应的顶级DNS（如.com）地址； 4. 本地DNS",
+    "tags" : [ "缓存", "tcp", "http" ],
+    "filePath" : "Backend/计网/输入网址到网页显示过程.md",
+    "wikiLinks" : [ "HTTP", "TCP" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "Episteme",
+    "title" : "\uD83D\uDCDA 知识中心 (Episteme)",
+    "aliases" : [ "Episteme" ],
+    "summary" : "无摘要",
+    "tags" : [ "redis", "sql", "elasticsearch", "mysql", "算法", "java" ],
+    "filePath" : "Episteme.md",
+    "wikiLinks" : [ "Backend", "Java", "MySQL", "Redis", "MQ", "ES", "Algorithm", "计网" ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "index",
+    "title" : "Tech",
+    "aliases" : [ "index" ],
+    "summary" : "无摘要",
+    "tags" : [ "sql", "mysql", "索引" ],
+    "filePath" : "index.md",
+    "wikiLinks" : [ ],
+    "backlinks" : [ ]
+  }, {
+    "id" : "计网",
+    "title" : "计网",
+    "aliases" : [ ],
+    "summary" : "传递包时，目标IP不变，目标MAC地址（路由器地址）会在每一跳中不断变化，查询MAC地址使用ARP协议，如果没在缓存中就在局域网中广播寻找目标IP对应的MAC地址。缓存更新采取隔一点时间就直接删除 以太网的三个特性：将包发送给MAC包头部的接收方MAC地址代表目的地，用MAC地址头部的目标MAC识别发送目的地，用以太网类型识别包的内容 报头：用来测定时钟信号变化周期的一种特定信号，因为后续的电信号（数据信号+时钟信号）的时钟频率不确定，所以加上这一段特殊信号来“找规律”——进",
+    "tags" : [ "tcp", "http" ],
+    "filePath" : "计网.md",
+    "wikiLinks" : [ "Pasted image 20260207210903.png" ],
+    "backlinks" : [ "\uD83D\uDCDA 知识中心 (Episteme)" ]
+  } ]
+}

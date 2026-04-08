@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview Review 项目可视化导航</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong>Interview Review 项目可视化导航地图</strong>
+        <span>目标：吃透复杂链路、核心模块和数据流，而不是只看概述</span>
+      </div>
+      <div class="toolbar">
+        <label class="switch">
+          <input id="details-toggle" type="checkbox" checked>
+          <span>显示技术细节</span>
+        </label>
+      </div>
+    </header>
+
+    <section class="page-grid">
+      <div class="span-12 panel panel--strong">
+        <div class="section-title">
+          <h2>页面总览</h2>
+          <span class="tag">本地直接打开，无需服务</span>
+        </div>
+        <div class="card-grid">
+          <a class="nav-card" href="overall-journey.html">
+            <span class="tag tag--cache">总览入口</span>
+            <h3>总链路：AI 助手全流程</h3>
+            <p>把“用户发起对话 -> 路由判定 -> 分流到不同能力 -> 返回结果”的完整主链路放在一张图里。</p>
+            <p class="mini">难度标签：极高 | 适合作为先看总览、再钻具体模块的总入口</p>
+          </a>
+          <a class="nav-card" href="module-interview.html">
+            <span class="tag tag--ok">高优先级</span>
+            <h3>模块页：面试编排链路</h3>
+            <p>可视化从开场到答题、状态机推进、画像更新、报告生成的完整链路。</p>
+            <p class="mini">难度标签：高 | 含正常流、垃圾回答、报告异步写画像、回退控制</p>
+          </a>
+          <a class="nav-card" href="knowledge-ingestion.html">
+            <span class="tag tag--cache">入库重点</span>
+            <h3>模块页：知识入库 / ETL / 索引构建</h3>
+            <p>详细拆解从 Markdown 源文件到切块、向量化、词法索引、Parent-Child、图片索引、图谱同步与任务观测的全过程。</p>
+            <p class="mini">难度标签：极高 | 含本地目录、浏览器上传、重切块三条入库路线</p>
+          </a>
+          <a class="nav-card" href="rag-evaluation.html">
+            <span class="tag tag--warn">评测重点</span>
+            <h3>模块页：RAG 评估分析</h3>
+            <p>拆解 `RetrievalEvaluationService` 与 `RAGQualityEvaluationService` 两类评测链路，区分召回质量和最终回答质量。</p>
+            <p class="mini">难度标签：极高 | 含 Recall@K、MRR、Faithfulness、A/B 对比、趋势分析</p>
+          </a>
+          <a class="nav-card" href="exception-scenarios.html">
+            <span class="tag tag--danger">异常重点</span>
+            <h3>异常流程模拟</h3>
+            <p>集中演示网络超时、权限不足、索引缺失、依赖宕机、参数错误等异常链路。</p>
+            <p class="mini">难度标签：高 | 支持异常开关、降级路径、用户提示机制</p>
+          </a>
+        </div>
+      </div>
+
+      <div class="span-7 panel">
+        <div class="section-title">
+          <h3>建议浏览顺序</h3>
+          <span class="tag">新人最短理解路径</span>
+        </div>
+        <ol class="timeline">
+          <li class="done"><strong>1. 先看“面试编排链路”</strong><div class="mini">搞清楚 `InterviewController -> InterviewService -> TaskRouterAgent -> InterviewOrchestratorAgent`</div></li>
+          <li class="done"><strong>2. 再看“知识入库 / ETL”</strong><div class="mini">理解 Markdown 如何切块、建向量、建词法索引、建 Parent-Child 和图谱关系</div></li>
+          <li><strong>3. 再看“RAG 评估分析”</strong><div class="mini">掌握 Recall@K、MRR、Faithfulness 与 Java / Ragas 双引擎评测口径</div></li>
+          <li><strong>4. 最后看“异常流程模拟”</strong><div class="mini">集中理解技术债、降级与风险控制</div></li>
+        </ol>
+      </div>
+
+      <div class="span-5 panel">
+        <div class="section-title">
+          <h3>本套 Demo 覆盖重点</h3>
+          <span class="tag">深度而非科普</span>
+        </div>
+        <ul class="bullet-list">
+          <li>状态持久化：每页的步骤、开关、速度、异常场景都会保存在浏览器本地。</li>
+          <li>流程自动演示：每个复杂页面都能自动播放，并同步输出解释。</li>
+          <li>技术细节切换：点击顶部开关即可看隐藏的实现注释、数据结构、处理规则。</li>
+          <li>分支与异常：不是只看成功链路，会把 fallback、重试、失败提示一起画出来。</li>
+          <li>可回溯：支持上一步、重置、暂停、继续、速度控制。</li>
+        </ul>
+        <div class="callout" data-detail-block>
+          这一版刻意不重复“项目是什么”。重点是把项目里最难消化的层次画成可操作的对象：流程、状态、数据、降级、通信。
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="section-title">
+        <h3 data-modal-title>详情</h3>
+        <button class="button button--small" data-close-modal>关闭</button>
+      </div>
+      <div data-modal-body></div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+  <script>
+    DemoUI.bindDetailsToggle("index", "#details-toggle");
+  </script>
+</body>
+</html>
