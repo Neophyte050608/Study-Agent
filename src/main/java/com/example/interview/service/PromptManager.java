@@ -38,6 +38,7 @@ public class PromptManager {
             "coding-next-question",
             "learning-plan",
             "knowledge-qa",
+            "ollama-local-route",
             "chat-context-compress",
             "cross-session-memorize",
             "auto-dream"

@@ -209,6 +209,10 @@ VALUES
 ('batch-quiz-question', 'coding-coach', 'TASK', '批量选择题生成',
  '根据指定主题、难度和数量，一次性生成多道结构化选择题（JSON 数组）',
  '请生成 {{count}} 道关于「{{topic}}」的{{difficulty}}难度选择题。\n\n严格按以下 JSON 格式输出（不要输出任何其他内容，不要使用 markdown 标记包裹 JSON）：\n[\n  {\n    \"index\": 1,\n    \"stem\": \"题目描述\",\n    \"options\": [\"A. 选项1\", \"B. 选项2\", \"C. 选项3\", \"D. 选项4\"],\n    \"correctAnswer\": \"B\",\n    \"explanation\": \"详细解析\"\n  }\n]\n\n要求：\n1. 每题必须有且仅有4个选项（A/B/C/D）\n2. correctAnswer 只能是 A/B/C/D 中的一个大写字母\n3. explanation 要详细解释为什么选择该答案\n4. 题目要有区分度，难度符合 {{difficulty}} 级别\n5. 确保 JSON 格式合法可用\n{% if profileSnapshot %}\n候选人画像参考：{{profileSnapshot}}\n{% endif %}',
+ 1),
+('ollama-local-route', 'knowledge-routing', 'TASK', 'Ollama 本地知识路由',
+ '将用户问题与候选笔记节点渲染成发往 Ollama 的路由提示词，只允许返回候选集内的 id',
+ '你是本地知识路由器。请只根据候选节点选择最相关的知识点 id。\n只输出 JSON，格式为 {\"matches\":[\"id1\",\"id2\"]}。\n不要输出解释，不要输出候选集外的 id，最多返回 {{maxMatches}} 个 id。\n\n用户问题：\n{{question}}\n\n候选节点：\n{{candidateList}}',
  1)
 ON DUPLICATE KEY UPDATE
 content=VALUES(content),

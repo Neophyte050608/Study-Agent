@@ -3,6 +3,8 @@ package com.example.interview.service;
 import com.example.interview.config.KnowledgeRetrievalProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -25,16 +27,22 @@ import java.util.Map;
 @Service
 public class OllamaRoutingService {
 
+    private static final Logger logger = LoggerFactory.getLogger(OllamaRoutingService.class);
+    private static final String ROUTE_TEMPLATE_NAME = "ollama-local-route";
+
     private final KnowledgeRetrievalProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
+    private final PromptManager promptManager;
 
     public OllamaRoutingService(KnowledgeRetrievalProperties properties,
                                 ObjectMapper objectMapper,
-                                RestClient.Builder restClientBuilder) {
+                                RestClient.Builder restClientBuilder,
+                                PromptManager promptManager) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.restClientBuilder = restClientBuilder;
+        this.promptManager = promptManager;
     }
 
     public List<String> route(String question, List<KnowledgeMapService.KnowledgeNode> candidates) {
@@ -56,15 +64,24 @@ public class OllamaRoutingService {
         body.put("model", properties.getOllamaModel());
         body.put("stream", false);
         body.put("format", "json");
-        body.put("prompt", buildPrompt(question, candidates));
+        String prompt = buildPrompt(question, candidates);
+        body.put("prompt", prompt);
 
         try {
+            logger.info("Ollama routing request: baseUrl={}, model={}, candidateCount={}, prompt={}",
+                    properties.getOllamaBaseUrl(),
+                    properties.getOllamaModel(),
+                    candidates.size(),
+                    compactForLog(prompt));
             String raw = restClient.post()
                     .uri("/api/generate")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
                     .body(String.class);
+            logger.info("Ollama routing response: model={}, raw={}",
+                    properties.getOllamaModel(),
+                    compactForLog(raw));
             return parseMatches(raw, candidates);
         } catch (LocalGraphRetrievalException e) {
             throw e;
@@ -101,24 +118,31 @@ public class OllamaRoutingService {
     }
 
     private String buildPrompt(String question, List<KnowledgeMapService.KnowledgeNode> candidates) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("""
-                你是本地知识路由器。请只根据候选节点选择最相关的知识点 id。
-                只输出 JSON，格式为 {"matches":["id1","id2"]}。
-                不要输出解释，不要输出候选集外的 id，最多返回 3 个 id。
-
-                用户问题：
-                """);
-        builder.append(question == null ? "" : question.trim()).append("\n\n候选节点：\n");
+        StringBuilder candidateList = new StringBuilder();
         for (KnowledgeMapService.KnowledgeNode node : candidates) {
-            builder.append("- id=").append(node.id())
+            candidateList.append("- id=").append(node.id())
                     .append("; title=").append(node.title())
                     .append("; aliases=").append(String.join(", ", node.aliases()))
                     .append("; tags=").append(String.join(", ", node.tags()))
                     .append("; summary=").append(node.summary())
                     .append("\n");
         }
-        return builder.toString();
+        Map<String, Object> variables = new LinkedHashMap<>();
+        variables.put("question", question == null ? "" : question.trim());
+        variables.put("candidateList", candidateList.toString().trim());
+        variables.put("maxMatches", properties.getMaxLocalMatches());
+        return promptManager.render(ROUTE_TEMPLATE_NAME, variables);
+    }
+
+    private String compactForLog(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 1000) {
+            return normalized;
+        }
+        return normalized.substring(0, 1000) + "...(truncated)";
     }
 
     private List<String> parseMatches(String raw, List<KnowledgeMapService.KnowledgeNode> candidates) {
