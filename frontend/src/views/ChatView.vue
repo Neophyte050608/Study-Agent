@@ -737,6 +737,9 @@ const handleSend = async () => {
       },
       onFinish: (payload) => {
         const result = payload?.result || {}
+        const finalQuizPayload = currentQuizPayload.value || result?.quizPayload || null
+        const finalImages = streamingImages.value.length ? [...streamingImages.value] : (Array.isArray(result?.images) ? result.images : [])
+        const finalContent = finalQuizPayload ? '' : (streamingContent.value || result?.content || '')
         streamingMeta.value = {
           retrievalModeRequested: result?.retrievalModeRequested || selectedRetrievalMode.value,
           retrievalModeResolved: result?.retrievalModeResolved || '',
@@ -748,9 +751,9 @@ const handleSend = async () => {
         }
         messages.value.push({ 
           role: 'assistant', 
-          content: streamingContent.value,
-          images: [...streamingImages.value],
-          quizPayload: currentQuizPayload.value,
+          content: finalContent,
+          images: finalImages,
+          quizPayload: finalQuizPayload,
           ...streamingMeta.value
         })
         streamingContent.value = ''

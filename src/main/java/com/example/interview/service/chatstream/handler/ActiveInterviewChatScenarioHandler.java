@@ -40,7 +40,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
         String activeInterviewId = webChatService.findActiveInterviewSessionId(context.sessionId());
-        if (activeInterviewId == null || activeInterviewId.isBlank() || ChatIntentHeuristics.looksLikeNewIntent(context.content())) {
+        if (activeInterviewId == null || activeInterviewId.isBlank() || ChatIntentHeuristics.looksLikeExplicitModeSwitch(context.content())) {
             return false;
         }
         InterviewSession interviewSession = interviewOrchestratorAgent.getSession(activeInterviewId);

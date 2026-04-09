@@ -123,11 +123,11 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
         if (!response.success()) {
-            return true;
+            return false;
         }
         Object data = response.data();
         if (data == null) {
-            return true;
+            return false;
         }
         if (data instanceof Map<?, ?> map) {
             return map.containsKey("answer") && !map.containsKey("clarification");

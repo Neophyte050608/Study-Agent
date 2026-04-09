@@ -35,7 +35,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
         String activeCodingId = webChatService.findActiveCodingSessionId(context.sessionId());
-        if (activeCodingId == null || activeCodingId.isBlank() || ChatIntentHeuristics.looksLikeNewIntent(context.content())) {
+        if (activeCodingId == null || activeCodingId.isBlank() || ChatIntentHeuristics.looksLikeExplicitModeSwitch(context.content())) {
             return false;
         }
 
@@ -58,6 +58,8 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
 
         String replyText = webChatService.extractReplyText(codingResponse);
         boolean isLast = true;
+        Object nextQuizPayload = null;
+        boolean nextQuizGenerated = false;
         if (codingResponse.data() instanceof Map<?, ?> evalMap && "evaluated".equals(evalMap.get("status"))) {
             isLast = Boolean.TRUE.equals(evalMap.get("isLast"));
             if (!isLast) {
@@ -74,8 +76,15 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                 ));
                 TaskResponse nextResponse = webChatService.getTaskRouterAgent().dispatch(nextRequest);
                 if (nextResponse.success()) {
-                    String nextText = webChatService.extractReplyText(nextResponse);
-                    replyText = replyText + "\n\n---\n\n" + nextText;
+                    if (nextResponse.data() instanceof Map<?, ?> nextMap
+                            && "batch_quiz".equals(nextMap.get("status"))
+                            && nextMap.containsKey("quizPayload")) {
+                        nextQuizPayload = nextMap.get("quizPayload");
+                        nextQuizGenerated = true;
+                    } else {
+                        String nextText = webChatService.extractReplyText(nextResponse);
+                        replyText = replyText + "\n\n---\n\n" + nextText;
+                    }
                 }
             }
         }
@@ -90,22 +99,35 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
 
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("traceId", context.traceId());
-        metadata.put("type", "coding_practice");
-        metadata.put("routeLabel", "coding-practice");
+        metadata.put("type", nextQuizGenerated ? "coding_practice_batch" : "coding_practice");
+        metadata.put("routeLabel", nextQuizGenerated ? "coding-batch-quiz" : "coding-practice");
         metadata.put("routeSource", "active-session");
         if (!isLast) {
             metadata.put("codingSessionId", activeCodingId);
         }
-        chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
+
+        Map<String, Object> finishResult = new LinkedHashMap<>();
+        finishResult.put("content", replyText);
+        finishResult.put("traceId", context.traceId());
+        finishResult.put("routeLabel", nextQuizGenerated ? "coding-batch-quiz" : "coding-practice");
+        finishResult.put("routeSource", "active-session");
+
+        if (nextQuizGenerated) {
+            context.sender().sendEvent(InterviewStreamEventType.QUIZ.value(), nextQuizPayload);
+            String quizJson = chatStreamingSupport.toJson(
+                    nextQuizPayload,
+                    "已为您生成批量选择题，请在答题卡中作答。"
+            );
+            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), quizJson, metadata, "quiz", "COMPLETED");
+            finishResult.put("content", quizJson);
+            finishResult.put("quizPayload", nextQuizPayload);
+        } else {
+            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
+        }
 
         context.sender().sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
-                "result", Map.of(
-                        "content", replyText,
-                        "traceId", context.traceId(),
-                        "routeLabel", "coding-practice",
-                        "routeSource", "active-session"
-                )));
+                "result", finishResult));
         context.sender().sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
         chatStreamingSupport.completeTask(context.taskId(), context.sender());
         return true;
