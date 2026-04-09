@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian Context Ingestor"
+  short_description: "Convert Obsidian notes into model-ready linked context"
+  default_prompt: "Use $obsidian-context-ingestor to turn these Obsidian notes into structured context."

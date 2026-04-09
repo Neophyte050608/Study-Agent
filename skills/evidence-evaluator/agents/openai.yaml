@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence Evaluator"
+  short_description: "Score answers with evidence-backed reasoning and citations"
+  default_prompt: "Use $evidence-evaluator to score this answer against the provided evidence packet."

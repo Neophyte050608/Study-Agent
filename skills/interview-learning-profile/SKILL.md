@@ -1,42 +1,37 @@
 ---
 name: "interview-learning-profile"
-description: "维护用户学习画像并输出薄弱主题趋势。Invoke when updating profile after rounds or when user asks personalized interview focus."
+description: "维护用户面试学习画像，更新主题掌握度、薄弱项趋势和个性化提示。用于每轮评估后的画像更新、长期趋势分析、下一轮个性化出题和聚焦主题生成。"
 ---
 
 # Interview Learning Profile
 
-## Purpose
-维护用户在多轮模拟中的能力画像，沉淀主题掌握度、薄弱项趋势与个性化建议依据。
+## Goal
+把单轮评估信号沉淀为长期可复用的学习画像，支持趋势判断、个性化出题和训练建议。
 
-## Invoke When
-- 每轮评估完成后需要更新用户画像
-- 需要为下一轮出题提供个性化聚焦主题
-- 用户要求查看长期进步趋势与能力短板
+## Required Input
+- `userId`
+- `sessionSummary`
+- `scoreBreakdown`
+- `evidenceSignals`
+- 历史画像或历史统计（若有）
 
-## Inputs
-- userId（用户标识）
-- sessionSummary（本轮会话摘要）
-- scoreBreakdown（维度分与主题分）
-- evidenceSignals（引用与冲突信号）
+## Procedure
+1. 读取已有画像并合并本轮信号；缺少历史数据时初始化基础画像。
+2. 更新主题掌握度、稳定度和变化趋势，必要时考虑时间衰减。
+3. 标记新出现、持续存在或明显改善的薄弱主题。
+4. 输出给下游可直接消费的画像快照、趋势信号和个性化提示。
 
-## Outputs
-- profileSnapshot（当前画像快照）
-- weakTopics（薄弱主题列表）
-- trendSignals（能力趋势信号）
-- personalizationHints（个性化提问提示）
-
-## Workflow
-1. 读取用户历史画像并合并本轮信号
-2. 更新主题能力分、稳定度与衰减权重
-3. 识别新出现或持续存在的薄弱点
-4. 输出给决策层和知识层可消费的提示
+## Output Contract
+- 输出至少包含 `profileSnapshot`、`weakTopics`、`trendSignals`、`personalizationHints`。
+- 结果应能直接驱动 `strategyHint`、`focusHint` 或个性化出题逻辑。
+- 若没有足够历史，只输出基础模板和低置信度提示，不伪造趋势。
 
 ## Guardrails
-- 画像更新需保持幂等，避免重复写入放大
-- 不暴露敏感原始文本，仅保留必要特征
-- 主题能力计算规则在不同会话保持一致
+- 保持更新幂等，避免重复计算导致画像失真。
+- 不暴露敏感原始文本，只保留必要特征和摘要。
+- 主题能力计算口径在不同会话之间保持一致。
 
-## Acceptance Checks
-- 同一用户多轮后可观察到主题趋势变化
-- 输出字段可直接驱动 strategyHint/focusHint
-- 历史数据不足时仍能返回基础画像模板
+## Self-check
+- 同一用户重复更新时，结果是否稳定且不会无故放大。
+- 薄弱主题和趋势信号是否能从输入中解释出来。
+- 下游系统是否可以直接消费输出字段。

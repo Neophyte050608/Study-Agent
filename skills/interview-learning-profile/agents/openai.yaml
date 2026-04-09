@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interview Learning Profile"
+  short_description: "Maintain interview learning profiles and weak-topic trends"
+  default_prompt: "Use $interview-learning-profile to update the learner profile from this interview round."

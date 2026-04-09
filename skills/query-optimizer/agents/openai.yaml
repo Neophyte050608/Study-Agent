@@ -1,0 +1,4 @@
+interface:
+  display_name: "Query Optimizer"
+  short_description: "Extract CORE and EXPAND terms for retrieval queries"
+  default_prompt: "Use $query-optimizer to turn this interview question into CORE and EXPAND retrieval terms."

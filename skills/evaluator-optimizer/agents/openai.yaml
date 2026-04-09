@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evaluator Optimizer"
+  short_description: "Rewrite outputs to better match task and expected results"
+  default_prompt: "Use $evaluator-optimizer to rewrite the current output so it better matches the expected result."

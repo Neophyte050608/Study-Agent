@@ -1,0 +1,4 @@
+interface:
+  display_name: "Personalized Learning Planner"
+  short_description: "Create focused 7-day learning plans from recent weak areas"
+  default_prompt: "Use $personalized-learning-planner to create a 7-day plan from these weaknesses."

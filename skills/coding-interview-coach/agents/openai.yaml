@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coding Interview Coach"
+  short_description: "Generate algorithm questions and review candidate code"
+  default_prompt: "Use $coding-interview-coach to generate or evaluate an algorithm interview round."

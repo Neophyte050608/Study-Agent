@@ -1,0 +1,4 @@
+interface:
+  display_name: "Question Strategy"
+  short_description: "Set next-question strategy from performance and mastery"
+  default_prompt: "Use $question-strategy to choose the next interview direction from this performance summary."

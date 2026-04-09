@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interview Growth Coach"
+  short_description: "Turn interview score trends into actionable growth plans"
+  default_prompt: "Use $interview-growth-coach to turn these interview results into a focused training plan."

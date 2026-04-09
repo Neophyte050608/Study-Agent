@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interview Report Generator"
+  short_description: "Generate structured interview retrospectives with strict tags"
+  default_prompt: "Use $interview-report-generator to produce a tagged summary for this full interview session."
