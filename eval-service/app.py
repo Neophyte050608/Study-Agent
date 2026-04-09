@@ -15,6 +15,7 @@ import traceback
 import ragas
 import asyncio
 import nest_asyncio
+from typing import Optional
 
 nest_asyncio.apply()
 
@@ -68,7 +69,7 @@ def _build_llm(req: EvalRequest) -> ChatOpenAI:
 
     return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
 
-def _build_embeddings(req: EvalRequest) -> LangchainEmbeddingsWrapper | None:
+def _build_embeddings(req: EvalRequest) -> Optional[LangchainEmbeddingsWrapper]:
     emb_config = req.embedding_config or EmbeddingConfig()
     api_key = emb_config.api_key or os.environ.get("EMBEDDING_API_KEY", "") or os.environ.get("LLM_API_KEY", "")
     model = emb_config.model or os.environ.get("EMBEDDING_MODEL", "embedding-3")

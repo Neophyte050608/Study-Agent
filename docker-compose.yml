@@ -191,7 +191,6 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/clip-cache/torch:/models/torch
 
   ragas-eval:
-    profiles: ["optional-ai"]
     build:
       context: ./eval-service
       dockerfile: Dockerfile
