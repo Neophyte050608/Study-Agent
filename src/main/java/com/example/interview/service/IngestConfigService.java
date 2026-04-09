@@ -1,11 +1,13 @@
 package com.example.interview.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.example.interview.config.KnowledgeRetrievalProperties;
 import com.example.interview.entity.IngestConfigDO;
 import com.example.interview.mapper.IngestConfigMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.util.Map;
 
 /**
@@ -16,22 +18,37 @@ import java.util.Map;
 public class IngestConfigService {
 
     private static final String DEFAULT_CONFIG_KEY = "default";
+    private static final String LOCAL_KNOWLEDGE_INDEX_CONFIG_KEY = "local_knowledge_index";
 
     private final IngestConfigMapper ingestConfigMapper;
     private final String defaultPaths;
     private final String defaultImagePath;
     private final String defaultIgnoreDirs;
+    private final String defaultIndexFilePath;
+    private final KnowledgeRetrievalProperties knowledgeRetrievalProperties;
 
     public IngestConfigService(
             IngestConfigMapper ingestConfigMapper,
             @Value("${app.ingestion.config.paths:}") String defaultPaths,
             @Value("${app.ingestion.config.image-path:}") String defaultImagePath,
-            @Value("${app.ingestion.config.ignore-dirs:}") String defaultIgnoreDirs
+            @Value("${app.ingestion.config.ignore-dirs:}") String defaultIgnoreDirs,
+            @Value("${app.knowledge.retrieval.index-file-path:}") String defaultIndexFilePath,
+            KnowledgeRetrievalProperties knowledgeRetrievalProperties
     ) {
         this.ingestConfigMapper = ingestConfigMapper;
         this.defaultPaths = defaultPaths == null ? "" : defaultPaths;
         this.defaultImagePath = defaultImagePath == null ? "" : defaultImagePath;
         this.defaultIgnoreDirs = defaultIgnoreDirs == null ? "" : defaultIgnoreDirs;
+        this.defaultIndexFilePath = defaultIndexFilePath == null ? "" : defaultIndexFilePath;
+        this.knowledgeRetrievalProperties = knowledgeRetrievalProperties;
+    }
+
+    @PostConstruct
+    public void initializeLocalIndexPath() {
+        String persistedPath = getLocalKnowledgeIndexPath();
+        if (!persistedPath.isBlank()) {
+            knowledgeRetrievalProperties.setIndexFilePath(persistedPath);
+        }
     }
 
     /**
@@ -52,7 +69,8 @@ public class IngestConfigService {
         return Map.of(
                 "paths", normalize(configDO.getPaths()),
                 "imagePath", normalize(configDO.getImagePath()),
-                "ignoreDirs", normalize(configDO.getIgnoreDirs())
+                "ignoreDirs", normalize(configDO.getIgnoreDirs()),
+                "indexFilePath", getLocalKnowledgeIndexPath()
         );
     }
 
@@ -83,8 +101,38 @@ public class IngestConfigService {
         return Map.of(
                 "paths", paths,
                 "imagePath", imagePath,
-                "ignoreDirs", ignoreDirs
+                "ignoreDirs", ignoreDirs,
+                "indexFilePath", getLocalKnowledgeIndexPath()
         );
+    }
+
+    public String getLocalKnowledgeIndexPath() {
+        IngestConfigDO configDO = ingestConfigMapper.selectOne(
+                Wrappers.<IngestConfigDO>lambdaQuery().eq(IngestConfigDO::getConfigKey, LOCAL_KNOWLEDGE_INDEX_CONFIG_KEY)
+        );
+        if (configDO == null) {
+            return normalize(defaultIndexFilePath);
+        }
+        return normalize(configDO.getPaths());
+    }
+
+    public void saveLocalKnowledgeIndexPath(String indexFilePath) {
+        String normalizedPath = normalize(indexFilePath);
+        IngestConfigDO existing = ingestConfigMapper.selectOne(
+                Wrappers.<IngestConfigDO>lambdaQuery().eq(IngestConfigDO::getConfigKey, LOCAL_KNOWLEDGE_INDEX_CONFIG_KEY)
+        );
+        if (existing == null) {
+            IngestConfigDO created = new IngestConfigDO();
+            created.setConfigKey(LOCAL_KNOWLEDGE_INDEX_CONFIG_KEY);
+            created.setPaths(normalizedPath);
+            created.setImagePath("");
+            created.setIgnoreDirs("");
+            ingestConfigMapper.insert(created);
+        } else {
+            existing.setPaths(normalizedPath);
+            ingestConfigMapper.updateById(existing);
+        }
+        knowledgeRetrievalProperties.setIndexFilePath(normalizedPath);
     }
 
     private String normalize(String value) {

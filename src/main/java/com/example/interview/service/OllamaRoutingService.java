@@ -73,6 +73,7 @@ public class OllamaRoutingService {
                     properties.getOllamaModel(),
                     candidates.size(),
                     compactForLog(prompt));
+            logger.debug("Ollama routing full prompt:\n{}", prompt);
             String raw = restClient.post()
                     .uri("/api/generate")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -82,6 +83,7 @@ public class OllamaRoutingService {
             logger.info("Ollama routing response: model={}, raw={}",
                     properties.getOllamaModel(),
                     compactForLog(raw));
+            logger.debug("Ollama routing full response:\n{}", raw);
             return parseMatches(raw, candidates);
         } catch (LocalGraphRetrievalException e) {
             throw e;

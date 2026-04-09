@@ -21,14 +21,18 @@ public class KnowledgeMapService {
 
     private final KnowledgeRetrievalProperties properties;
     private final ObjectMapper objectMapper;
+    private final IngestConfigService ingestConfigService;
 
-    public KnowledgeMapService(KnowledgeRetrievalProperties properties, ObjectMapper objectMapper) {
+    public KnowledgeMapService(KnowledgeRetrievalProperties properties,
+                               ObjectMapper objectMapper,
+                               IngestConfigService ingestConfigService) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.ingestConfigService = ingestConfigService;
     }
 
     public KnowledgeMapSnapshot loadValidatedIndex() {
-        String indexFilePath = properties.getIndexFilePath();
+        String indexFilePath = resolveIndexFilePath();
         if (indexFilePath == null || indexFilePath.isBlank()) {
             throw new LocalGraphRetrievalException(
                     LocalGraphFailureReason.INDEX_NOT_CONFIGURED,
@@ -97,6 +101,19 @@ public class KnowledgeMapService {
                     e
             );
         }
+    }
+
+    private String resolveIndexFilePath() {
+        String configured = properties.getIndexFilePath();
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        String persisted = ingestConfigService.getLocalKnowledgeIndexPath();
+        if (persisted != null && !persisted.isBlank()) {
+            properties.setIndexFilePath(persisted);
+            return persisted;
+        }
+        return configured;
     }
 
     public record KnowledgeMapSnapshot(

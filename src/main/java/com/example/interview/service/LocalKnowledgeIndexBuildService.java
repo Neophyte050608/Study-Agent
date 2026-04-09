@@ -87,7 +87,7 @@ public class LocalKnowledgeIndexBuildService {
         writeIndex(outputPath, vaultRoot, serializedNodes);
 
         if (request.activate()) {
-            properties.setIndexFilePath(outputPath.toString());
+            ingestConfigService.saveLocalKnowledgeIndexPath(outputPath.toString());
         }
 
         return new IndexBuildResult(
@@ -102,7 +102,7 @@ public class LocalKnowledgeIndexBuildService {
     }
 
     public IndexStatus currentStatus() {
-        String configuredIndexPath = properties.getIndexFilePath();
+        String configuredIndexPath = resolveConfiguredIndexPath();
         Map<String, String> ingestConfig = ingestConfigService.getConfig();
         String defaultVaultPath = firstConfiguredPath(ingestConfig.get("paths"));
         String defaultIgnoreDirs = ingestConfig.get("ignoreDirs");
@@ -247,11 +247,25 @@ public class LocalKnowledgeIndexBuildService {
         if (request.outputPath() != null && !request.outputPath().isBlank()) {
             return Path.of(request.outputPath()).toAbsolutePath().normalize();
         }
-        if (properties.getIndexFilePath() != null && !properties.getIndexFilePath().isBlank()) {
-            return Path.of(properties.getIndexFilePath()).toAbsolutePath().normalize();
+        String configuredIndexPath = resolveConfiguredIndexPath();
+        if (configuredIndexPath != null && !configuredIndexPath.isBlank()) {
+            return Path.of(configuredIndexPath).toAbsolutePath().normalize();
         }
         String folderName = sanitizeFileName(vaultRoot.getFileName() == null ? "vault" : vaultRoot.getFileName().toString());
         return Path.of("data", "knowledge-index", folderName + "-local-index.json").toAbsolutePath().normalize();
+    }
+
+    private String resolveConfiguredIndexPath() {
+        String configured = properties.getIndexFilePath();
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        String persisted = ingestConfigService.getLocalKnowledgeIndexPath();
+        if (persisted != null && !persisted.isBlank()) {
+            properties.setIndexFilePath(persisted);
+            return persisted;
+        }
+        return configured;
     }
 
     private void writeIndex(Path outputPath, Path vaultRoot, List<Map<String, Object>> nodes) {

@@ -249,7 +249,7 @@ app:
       max-note-chars: ${APP_KNOWLEDGE_RETRIEVAL_MAX_NOTE_CHARS:4000}
       local-context-budget-chars: ${APP_KNOWLEDGE_RETRIEVAL_LOCAL_CONTEXT_BUDGET_CHARS:12000}
       ollama-base-url: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_BASE_URL:http://localhost:11434}
-      ollama-model: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_MODEL:qwen2.5:0.5b-instruct}
+      ollama-model: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_MODEL:qwen2.5:3b}
       ollama-timeout-ms: ${APP_KNOWLEDGE_RETRIEVAL_OLLAMA_TIMEOUT_MS:5000}
 
   mcp:
