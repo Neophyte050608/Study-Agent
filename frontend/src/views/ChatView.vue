@@ -190,7 +190,7 @@
                     <div v-html="renderMarkdown(msg.content)"></div>
                     <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${idx}-${imageIdx}`" :image="image" />
                     <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
-                    <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason" class="mt-3 flex flex-wrap gap-2">
+                    <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason || msg.routeLabel || msg.routeSource" class="mt-3 flex flex-wrap gap-2">
                       <span v-if="msg.generationStatus === 'RUNNING'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900">
                         generating
                       </span>
@@ -212,6 +212,12 @@
                       <span v-if="msg.fallbackReason" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
                         fallback: {{ msg.fallbackReason }}
                       </span>
+                      <span v-if="msg.routeLabel" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900">
+                        route: {{ formatRouteLabel(msg.routeLabel) }}
+                      </span>
+                      <span v-if="msg.routeSource" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-200 dark:border-fuchsia-900">
+                        via: {{ formatRouteLabel(msg.routeSource) }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -230,7 +236,7 @@
                    <div v-else class="markdown-body text-[15px] leading-relaxed">
                      <span v-html="renderMarkdown(streamingContent)"></span>
                      <ImageCard v-for="(image, imageIdx) in streamingImages" :key="`stream-${imageIdx}`" :image="image" />
-                     <div v-if="streamingMeta.retrievalModeResolved || streamingMeta.localGraphUsed || streamingMeta.ragUsed || streamingMeta.fallbackReason" class="mt-3 flex flex-wrap gap-2">
+                     <div v-if="streamingMeta.retrievalModeResolved || streamingMeta.localGraphUsed || streamingMeta.ragUsed || streamingMeta.fallbackReason || streamingMeta.routeLabel || streamingMeta.routeSource" class="mt-3 flex flex-wrap gap-2">
                        <span v-if="streamingMeta.retrievalModeResolved" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
                          mode: {{ formatRetrievalMode(streamingMeta.retrievalModeResolved) }}
                        </span>
@@ -242,6 +248,12 @@
                        </span>
                        <span v-if="streamingMeta.fallbackReason" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
                          fallback: {{ streamingMeta.fallbackReason }}
+                       </span>
+                       <span v-if="streamingMeta.routeLabel" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900">
+                         route: {{ formatRouteLabel(streamingMeta.routeLabel) }}
+                       </span>
+                       <span v-if="streamingMeta.routeSource" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-200 dark:border-fuchsia-900">
+                         via: {{ formatRouteLabel(streamingMeta.routeSource) }}
                        </span>
                      </div>
                      <span class="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse align-middle"></span>
@@ -353,7 +365,9 @@ const streamingMeta = ref({
   retrievalModeResolved: '',
   fallbackReason: '',
   localGraphUsed: false,
-  ragUsed: false
+  ragUsed: false,
+  routeLabel: '',
+  routeSource: ''
 })
 
 const editingId = ref(null)
@@ -384,7 +398,9 @@ const cleanupStreamingState = () => {
     retrievalModeResolved: '',
     fallbackReason: '',
     localGraphUsed: false,
-    ragUsed: false
+    ragUsed: false,
+    routeLabel: '',
+    routeSource: ''
   }
   isStreaming.value = false
   streamHandle.value = null
@@ -631,6 +647,12 @@ const formatRetrievalMode = (mode) => {
   return normalized.replaceAll('_', ' ')
 }
 
+const formatRouteLabel = (label) => {
+  const normalized = typeof label === 'string' ? label.trim() : ''
+  if (!normalized) return 'unknown'
+  return normalized.replaceAll('-', ' ')
+}
+
 const handleSendFromEmpty = async () => {
   const content = inputContent.value.trim()
   if (!content || isStreaming.value) return
@@ -676,7 +698,9 @@ const handleSend = async () => {
     retrievalModeResolved: '',
     fallbackReason: '',
     localGraphUsed: false,
-    ragUsed: false
+    ragUsed: false,
+    routeLabel: '',
+    routeSource: ''
   }
 
   const targetSessionId = currentSessionId.value
@@ -718,7 +742,9 @@ const handleSend = async () => {
           retrievalModeResolved: result?.retrievalModeResolved || '',
           fallbackReason: result?.fallbackReason || '',
           localGraphUsed: !!result?.localGraphUsed,
-          ragUsed: !!result?.ragUsed
+          ragUsed: !!result?.ragUsed,
+          routeLabel: result?.routeLabel || '',
+          routeSource: result?.routeSource || ''
         }
         messages.value.push({ 
           role: 'assistant', 

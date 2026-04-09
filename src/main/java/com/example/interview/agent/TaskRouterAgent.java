@@ -6,35 +6,29 @@ import com.example.interview.agent.a2a.A2AMessage;
 import com.example.interview.agent.a2a.A2AMetadata;
 import com.example.interview.agent.a2a.A2AStatus;
 import com.example.interview.agent.a2a.A2ATrace;
+import com.example.interview.agent.router.TaskHandler;
+import com.example.interview.agent.router.TaskHandlerRegistry;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
-import com.example.interview.core.InterviewSession;
 import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.modelrouting.TimeoutHint;
+import com.example.interview.core.RAGTraceContext;
 import com.example.interview.service.IntentTreeRoutingService;
-import com.example.interview.service.KnowledgeRetrievalMode;
-import com.example.interview.service.LearningEvent;
 import com.example.interview.service.LearningProfileAgent;
-import com.example.interview.service.LearningSource;
 import com.example.interview.service.PromptManager;
-import com.example.interview.service.TrainingProfileSnapshot;
+import com.example.interview.service.RAGObservabilityService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import com.example.interview.service.RAGObservabilityService;
-import com.example.interview.core.RAGTraceContext;
 
 /**
  * 任务路由智能体 (TaskRouterAgent)
@@ -57,6 +51,7 @@ public class TaskRouterAgent {
     private final A2ABus a2aBus;
     private final RoutingChatService routingChatService;
     private final RAGObservabilityService ragObservabilityService;
+    private final TaskHandlerRegistry taskHandlerRegistry;
 
     @Autowired
     public TaskRouterAgent(
@@ -69,7 +64,8 @@ public class TaskRouterAgent {
             IntentTreeRoutingService intentTreeRoutingService,
             A2ABus a2aBus,
             RoutingChatService routingChatService,
-            RAGObservabilityService ragObservabilityService
+            RAGObservabilityService ragObservabilityService,
+            TaskHandlerRegistry taskHandlerRegistry
     ) {
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
         this.codingPracticeAgent = codingPracticeAgent;
@@ -81,6 +77,7 @@ public class TaskRouterAgent {
         this.a2aBus = a2aBus;
         this.routingChatService = routingChatService;
         this.ragObservabilityService = ragObservabilityService;
+        this.taskHandlerRegistry = taskHandlerRegistry;
     }
 
     /**
@@ -110,33 +107,21 @@ public class TaskRouterAgent {
         String nodeId = UUID.randomUUID().toString();
         ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + request.taskType());
         
-        // 3. 发布任务状态：PENDING（通知 A2A 总线任务已接收）
-        publish(request, receiverOf(request.taskType()), A2AStatus.PENDING, correlationId, traceId, parentMessageId);
-        
+        TaskHandler handler = null;
         TaskResponse response;
         try {
+            handler = taskHandlerRegistry.require(request.taskType());
+
+            // 3. 发布任务状态：PENDING（通知 A2A 总线任务已接收）
+            publish(request, handler.receiverName(), A2AStatus.PENDING, correlationId, traceId, parentMessageId);
+
             // 4. 发布任务状态：PROCESSING（通知 A2A 总线任务开始处理）
-            publish(request, receiverOf(request.taskType()), A2AStatus.PROCESSING, correlationId, traceId, parentMessageId);
-            
-            // 5. 核心路由逻辑：使用 Java 21+ 的现代 Switch 表达式，根据 TaskType 将请求负载路由给具体的处理方法
-            response = switch (request.taskType()) {
-                case INTERVIEW_START -> TaskResponse.ok(routeInterviewStart(request.payload())); // 开始模拟面试
-                case INTERVIEW_ANSWER -> TaskResponse.ok(routeInterviewAnswer(request.payload())); // 提交面试回答
-                case INTERVIEW_REPORT -> TaskResponse.ok(routeInterviewReport(request.payload())); // 生成面试报告
-                case LEARNING_PLAN -> TaskResponse.ok(noteMakingAgent.execute(safePayload(request.payload()))); // 生成学习计划
-                case CODING_PRACTICE -> TaskResponse.ok(codingPracticeAgent.execute(enrichCodingPayload(request.payload(), request.context()))); // 算法/编程刷题
-                case PROFILE_EVENT_UPSERT -> TaskResponse.ok(routeProfileEventUpsert(request.payload(), request.context())); // 更新学习画像事件
-                case PROFILE_SNAPSHOT_QUERY -> TaskResponse.ok(routeProfileSnapshot(request.payload(), request.context())); // 查询学习画像快照
-                case PROFILE_TRAINING_PLAN_QUERY -> TaskResponse.ok(routeProfileTrainingPlan(request.payload(), request.context())); // 查询训练计划
-                case KNOWLEDGE_QA -> TaskResponse.ok(knowledgeQaAgent.execute(
-                        readText(request.payload(), "query"),
-                        readText(request.context(), "history"),
-                        resolveKnowledgeRetrievalMode(request.context())
-                ));
-            };
+            publish(request, handler.receiverName(), A2AStatus.PROCESSING, correlationId, traceId, parentMessageId);
+
+            response = TaskResponse.ok(handler.handle(request));
             
             // 6. 发布任务状态：DONE/FAILED（根据响应结果通知 A2A 总线任务结束）
-            publish(request, receiverOf(request.taskType()), response.success() ? A2AStatus.DONE : A2AStatus.FAILED, correlationId, traceId, parentMessageId);
+            publish(request, handler.receiverName(), response.success() ? A2AStatus.DONE : A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             
             // 7. 处理异步回传请求（如果请求方要求异步通知结果，例如 Webhook 模式）
             publishReply(response, request.taskType(), replyTo, correlationId, traceId);
@@ -146,7 +131,9 @@ public class TaskRouterAgent {
             return response;
         } catch (Exception e) {
             // 异常兜底：发布失败状态、回传失败消息，并记录 RAG 观测节点的错误信息
-            publish(request, receiverOf(request.taskType()), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
+            if (handler != null) {
+                publish(request, handler.receiverName(), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
+            }
             publishReply(TaskResponse.fail(e.getMessage()), request.taskType(), replyTo, correlationId, traceId);
             ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), null, e.getMessage());
             return TaskResponse.fail("任务路由失败: " + e.getMessage());
@@ -160,6 +147,7 @@ public class TaskRouterAgent {
      * ReAct 推理模式分发
      */
     private TaskResponse treeIntentDispatch(TaskRequest request) {
+        markRouteSource(request.context(), "intent-tree");
         String naturalLanguageQuery = readText(request.payload(), "query");
         String history = readText(request.context(), "history");
         if (naturalLanguageQuery.isBlank()) {
@@ -194,7 +182,7 @@ public class TaskRouterAgent {
         } catch (Exception ex) {
             return reactDispatch(request);
         }
-        Map<String, Object> newPayload = new LinkedHashMap<>(safePayload(request.payload()));
+        Map<String, Object> newPayload = new LinkedHashMap<>(request.payload() == null ? Map.of() : request.payload());
         if (decision.slots() != null && !decision.slots().isEmpty()) {
             newPayload.putAll(decision.slots());
         }
@@ -239,6 +227,7 @@ public class TaskRouterAgent {
      * ReAct 推理模式分发
      */
     private TaskResponse reactDispatch(TaskRequest request) {
+        markRouteSource(request.context(), "react-router");
         String naturalLanguageQuery = readText(request.payload(), "query");
         String history = readText(request.context(), "history");
         if (naturalLanguageQuery.isBlank()) {
@@ -293,7 +282,7 @@ public class TaskRouterAgent {
                         return TaskResponse.ok(Map.of("question", fallbackMessage));
                     }
 
-                    Map<String, Object> newPayload = new LinkedHashMap<>(safePayload(request.payload()));
+                    Map<String, Object> newPayload = new LinkedHashMap<>(request.payload() == null ? Map.of() : request.payload());
                     if (!topic.isBlank()) newPayload.put("topic", topic);
                     if (!questionType.isBlank()) {
                         newPayload.put("questionType", questionType);
@@ -317,90 +306,12 @@ public class TaskRouterAgent {
         }
     }
 
-    // --- 路由处理子方法 ---
-
-    private InterviewSession routeInterviewStart(Map<String, Object> payload) {
-        boolean skipIntro = false;
-        if (payload != null && payload.containsKey("skipIntro")) {
-            Object val = payload.get("skipIntro");
-            if (val instanceof Boolean b) skipIntro = b;
-            else if (val instanceof String s) skipIntro = Boolean.parseBoolean(s);
-        }
-        return interviewOrchestratorAgent.startSession(
-            readText(payload, "userId"), 
-            readText(payload, "topic"), 
-            readText(payload, "resumePath"), 
-            readInt(payload, "totalQuestions"),
-            skipIntro
-        );
-    }
-
-    private InterviewOrchestratorAgent.AnswerResult routeInterviewAnswer(Map<String, Object> payload) {
-        return interviewOrchestratorAgent.submitAnswer(readText(payload, "sessionId"), readText(payload, "userAnswer"));
-    }
-
-    private InterviewOrchestratorAgent.FinalReport routeInterviewReport(Map<String, Object> payload) {
-        return interviewOrchestratorAgent.generateFinalReport(readText(payload, "sessionId"), readText(payload, "userId"));
-    }
-
-    private Map<String, Object> routeProfileEventUpsert(Map<String, Object> payload, Map<String, Object> context) {
-        LearningEvent event = new LearningEvent(
-                readText(payload, "eventId"),
-                resolveUserId(payload, context),
-                parseSource(readText(payload, "source")),
-                readText(payload, "topic"),
-                readInt(payload, "score") == null ? 60 : readInt(payload, "score"),
-                readTextList(payload, "weakPoints"),
-                readTextList(payload, "familiarPoints"),
-                readText(payload, "evidence"),
-                parseTimestamp(readText(payload, "timestamp"))
-        );
-        boolean inserted = learningProfileAgent.upsertEvent(event);
-        return Map.of("agent", "LearningProfileAgent", "status", inserted ? "inserted" : "duplicated", "eventId", event.eventId());
-    }
-
-    private TrainingProfileSnapshot routeProfileSnapshot(Map<String, Object> payload, Map<String, Object> context) {
-        return learningProfileAgent.snapshot(resolveUserId(payload, context));
-    }
-
-    private Map<String, Object> routeProfileTrainingPlan(Map<String, Object> payload, Map<String, Object> context) {
-        String mode = readText(payload, "mode");
-        String userId = resolveUserId(payload, context);
-        return Map.of("agent", "LearningProfileAgent", "mode", mode.isBlank() ? "interview" : mode.toLowerCase(), "recommendation", learningProfileAgent.recommend(userId, mode));
-    }
-
     // --- 辅助工具方法 ---
 
     private String readText(Map<String, Object> payload, String key) {
         if (payload == null) return "";
         Object value = payload.get(key);
         return value == null ? "" : String.valueOf(value);
-    }
-
-    private Integer readInt(Map<String, Object> payload, String key) {
-        if (payload == null) return null;
-        Object raw = payload.get(key);
-        if (raw instanceof Number number) return number.intValue();
-        if (raw instanceof String text && !text.isBlank()) {
-            try { return Integer.parseInt(text.trim()); } catch (NumberFormatException ignored) {}
-        }
-        return null;
-    }
-
-    private Map<String, Object> safePayload(Map<String, Object> payload) {
-        return payload == null ? Map.of() : payload;
-    }
-
-    private Map<String, Object> enrichCodingPayload(Map<String, Object> payload, Map<String, Object> context) {
-        Map<String, Object> merged = new LinkedHashMap<>(safePayload(payload));
-        if (!merged.containsKey("userId")) {
-            merged.put("userId", resolveUserId(payload, context));
-        }
-        // 确保从 payload 中透传 type (选择题/填空题/算法题)
-        if (payload != null && payload.containsKey("type")) {
-            merged.put("type", payload.get("type"));
-        }
-        return merged;
     }
 
     /**
@@ -452,45 +363,6 @@ public class TaskRouterAgent {
         payload.put("type", typeName);
     }
 
-    private String receiverOf(TaskType taskType) {
-        return switch (taskType) {
-            case INTERVIEW_START, INTERVIEW_ANSWER, INTERVIEW_REPORT -> "InterviewOrchestratorAgent";
-            case LEARNING_PLAN -> "NoteAgent";
-            case CODING_PRACTICE -> "CodingAgent";
-            case PROFILE_EVENT_UPSERT, PROFILE_SNAPSHOT_QUERY, PROFILE_TRAINING_PLAN_QUERY -> "LearningProfileAgent";
-            case KNOWLEDGE_QA -> "KnowledgeQaAgent";
-        };
-    }
-
-    private String resolveUserId(Map<String, Object> payload, Map<String, Object> context) {
-        String fromPayload = readText(payload, "userId");
-        if (!fromPayload.isBlank()) return learningProfileAgent.normalizeUserId(fromPayload);
-        return learningProfileAgent.normalizeUserId(readText(context, "userId"));
-    }
-
-    private List<String> readTextList(Map<String, Object> payload, String key) {
-        if (payload == null) return List.of();
-        Object raw = payload.get(key);
-        if (raw instanceof List<?> list) {
-            List<String> data = new ArrayList<>();
-            for (Object item : list) {
-                if (item != null && !item.toString().isBlank()) data.add(item.toString().trim());
-            }
-            return data;
-        }
-        return List.of();
-    }
-
-    private LearningSource parseSource(String raw) {
-        if (raw == null || raw.isBlank()) return LearningSource.INTERVIEW;
-        try { return LearningSource.valueOf(raw.trim().toUpperCase()); } catch (IllegalArgumentException ignored) { return LearningSource.INTERVIEW; }
-    }
-
-    private Instant parseTimestamp(String raw) {
-        if (raw == null || raw.isBlank()) return Instant.now();
-        try { return Instant.parse(raw.trim()); } catch (DateTimeParseException ignored) { return Instant.now(); }
-    }
-
     private void publish(TaskRequest request, String receiver, A2AStatus status, String correlationId, String traceId, String parentMessageId) {
         String messageId = UUID.randomUUID().toString();
         a2aBus.publish(new A2AMessage(
@@ -520,10 +392,6 @@ public class TaskRouterAgent {
         return readText(context, "replyTo");
     }
 
-    private KnowledgeRetrievalMode resolveKnowledgeRetrievalMode(Map<String, Object> context) {
-        return KnowledgeRetrievalMode.fromNullable(readText(context, "retrievalMode"), null);
-    }
-
     private void publishReply(TaskResponse response, TaskType taskType, String replyTo, String correlationId, String traceId) {
         if (replyTo == null || replyTo.isBlank()) return;
         String messageId = UUID.randomUUID().toString();
@@ -535,5 +403,15 @@ public class TaskRouterAgent {
                 new A2AMetadata("task-routing-reply", "TaskRouterAgent", Map.of("taskType", taskType.name())),
                 new A2ATrace(traceId, messageId), Instant.now()
         ));
+    }
+
+    private void markRouteSource(Map<String, Object> context, String routeSource) {
+        if (context == null || routeSource == null || routeSource.isBlank()) {
+            return;
+        }
+        try {
+            context.put("routeSource", routeSource);
+        } catch (UnsupportedOperationException ignored) {
+        }
     }
 }
