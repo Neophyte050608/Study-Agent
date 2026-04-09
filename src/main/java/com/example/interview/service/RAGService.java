@@ -45,6 +45,17 @@ import java.util.stream.Collectors;
 @Service
 public class RAGService {
 
+    /**
+     * 结构化查询改写结果。
+     * <p>coreTerms 用于高精度检索通道（词法、图谱），
+     * fullQuery（core + expand 拼接）用于语义向量检索。</p>
+     */
+    record RewrittenQuery(String coreTerms, String expandTerms, String fullQuery) {
+        static RewrittenQuery fallback(String raw) {
+            return new RewrittenQuery(raw, "", raw);
+        }
+    }
+
     private static final Logger logger = LoggerFactory.getLogger(RAGService.class);
     private static final Pattern EVIDENCE_LINE_PATTERN = Pattern.compile("^(\\d+)\\.\\s+(.*)$");
     private static final Pattern INDEX_PATTERN = Pattern.compile("(\\d+)");
@@ -137,35 +148,36 @@ public class RAGService {
             String rewriteNodeId = UUID.randomUUID().toString();
             observabilityService.startNode(traceId, rewriteNodeId, RAGTraceContext.getCurrentNodeId(), "REWRITE", "Query Rewrite");
 
-            String retrievalQuery = question + " " + userAnswer;
+            RewrittenQuery rewrittenQuery = RewrittenQuery.fallback(question + " " + userAnswer);
             try {
-                retrievalQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
-                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "RW: " + retrievalQuery, null);
+                rewrittenQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
+                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question,
+                        "CORE: " + rewrittenQuery.coreTerms() + " | EXPAND: " + rewrittenQuery.expandTerms(), null);
             } catch (RuntimeException e) {
                 logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
-                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question, "FALLBACK: " + retrievalQuery, e.getMessage());
+                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question,
+                        "FALLBACK: " + rewrittenQuery.fullQuery(), e.getMessage());
             }
-            // 注意：retrievalQuery 可能包含用户原话，日志里只用于排障；必要时可将该日志级别改为 DEBUG。
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
-                logger.info("Rewritten Query: {}", retrievalQuery);
+                logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
             }
 
             String retrievalNodeId = UUID.randomUUID().toString();
             observabilityService.startNode(traceId, retrievalNodeId, RAGTraceContext.getCurrentNodeId(), "RETRIEVAL", "Hybrid Retrieval");
 
-            List<Document> retrievedDocs = retrieveHybridDocuments(retrievalQuery, 5);
+            List<Document> retrievedDocs = retrieveHybridDocuments(rewrittenQuery, 5);
             String context = retrievedDocs.stream()
                     .map(Document::getText)
                     .collect(Collectors.joining("\n\n"));
             List<ImageService.ImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
-            List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(retrievalQuery, containsVisualIntent(retrievalQuery));
+            List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), containsVisualIntent(rewrittenQuery.fullQuery()));
             List<ImageService.ImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
             String imageContext = buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
-            double bestRetrievalScore = bestRetrievalScore(retrievalQuery, retrievedDocs);
+            double bestRetrievalScore = bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
             boolean webFallbackUsed = false;
-            if (shouldUseWebFallback(allowWebFallback, retrievalQuery, retrievedDocs, context, bestRetrievalScore)) {
-                List<String> webContext = webSearchTool.run(new WebSearchTool.Query(retrievalQuery, 3));
+            if (shouldUseWebFallback(allowWebFallback, rewrittenQuery.fullQuery(), retrievedDocs, context, bestRetrievalScore)) {
+                List<String> webContext = webSearchTool.run(new WebSearchTool.Query(rewrittenQuery.fullQuery(), 3));
                 context = webContext.stream().collect(Collectors.joining("\n\n"));
                 retrievalEvidence = buildWebEvidence(webContext);
                 webFallbackUsed = true;
@@ -174,13 +186,13 @@ public class RAGService {
             observabilityService.endNode(
                     traceId,
                     retrievalNodeId,
-                    retrievalQuery,
+                    rewrittenQuery.fullQuery(),
                     retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed + ", best score: " + String.format(Locale.ROOT, "%.3f", bestRetrievalScore),
                     null,
                     new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), webFallbackUsed)
             );
 
-            return new KnowledgePacket(retrievalQuery, retrievedDocs, retrievedImages, context, imageContext, retrievalEvidence, webFallbackUsed);
+            return new KnowledgePacket(rewrittenQuery.fullQuery(), retrievedDocs, retrievedImages, context, imageContext, retrievalEvidence, webFallbackUsed);
         });
     }
 
@@ -391,12 +403,12 @@ public class RAGService {
      * 
      * 实现：意图定向检索 + 全局向量检索 + 图谱关联检索 并行执行。
      */
-    private List<Document> retrieveHybridDocuments(String retrievalQuery, int topK) {
-        List<String> intentFocusTerms = buildIntentFocusTerms(retrievalQuery);
+    private List<Document> retrieveHybridDocuments(RewrittenQuery query, int topK) {
+        List<String> intentFocusTerms = buildIntentFocusTerms(query.coreTerms());
         // 通道 A：意图定向检索（利用词法索引服务进行高精度标签/路径匹配）
         java.util.concurrent.CompletableFuture<List<Document>> intentDirectedFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
-                List<Document> docs = lexicalIndexService.searchIntentDirected(retrievalQuery, intentFocusTerms, Math.max(topK + 3, 8));
+                List<Document> docs = lexicalIndexService.searchIntentDirected(query.coreTerms(), intentFocusTerms, Math.max(topK + 3, 8));
                 return markRetrieveChannel(docs, "intent_directed");
             } catch (RuntimeException e) {
                 logger.warn("意图定向检索失败，返回空列表。原因: {}", summarizeError(e));
@@ -408,7 +420,7 @@ public class RAGService {
         java.util.concurrent.CompletableFuture<List<Document>> vectorFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
                 List<Document> docs = vectorStore.similaritySearch(
-                        SearchRequest.builder().query(retrievalQuery).topK(Math.max(topK + 3, 8)).build()
+                        SearchRequest.builder().query(query.fullQuery()).topK(Math.max(topK + 3, 8)).build()
                 );
                 return markRetrieveChannel(docs, "global_vector");
             } catch (RuntimeException e) {
@@ -421,7 +433,7 @@ public class RAGService {
         java.util.concurrent.CompletableFuture<List<Document>> graphFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
                 List<Document> graphDocs = new ArrayList<>();
-                List<String> queryTokens = intentFocusTerms.isEmpty() ? lexicalIndexService.tokenize(retrievalQuery) : intentFocusTerms;
+                List<String> queryTokens = intentFocusTerms.isEmpty() ? lexicalIndexService.tokenize(query.coreTerms()) : intentFocusTerms;
                 for (String token : queryTokens) {
                     // 这里先兼容旧的概念名拼装语句，随后统一覆写为描述型 GraphRAG 上下文。
                     List relatedConcepts =
@@ -455,7 +467,7 @@ public class RAGService {
         List<Document> fused = reciprocalRankFuse(intentDocs, vectorDocs);
         fused.addAll(graphDocs);
         List<Document> hydrated = maybeHydrateParentDocuments(fused, topK);
-        return rerankByQueryOverlap(retrievalQuery, hydrated, topK);
+        return rerankByQueryOverlap(query, hydrated, topK);
     }
 
     /**
@@ -871,22 +883,27 @@ public class RAGService {
         return 1.0;
     }
 
-    private List<Document> rerankByQueryOverlap(String query, List<Document> docs, int topK) {
+    private List<Document> rerankByQueryOverlap(RewrittenQuery query, List<Document> docs, int topK) {
         if (docs == null || docs.isEmpty()) {
             return List.of();
         }
-        // 为了和词法检索统一分词标准，这里借用了更优的分词逻辑（见下方 tokenize 的优化）
-        List<String> queryTokens = lexicalIndexService.tokenize(query);
-        if (queryTokens.isEmpty()) {
+        List<String> coreTokens = lexicalIndexService.tokenize(query.coreTerms());
+        List<String> expandTokens = query.expandTerms().isBlank()
+                ? List.of()
+                : lexicalIndexService.tokenize(query.expandTerms());
+        if (coreTokens.isEmpty() && expandTokens.isEmpty()) {
             return docs.stream().limit(topK).collect(Collectors.toList());
         }
+        int totalTokens = coreTokens.size() + expandTokens.size();
         Map<Document, Double> scoreMap = new HashMap<>();
         for (int i = 0; i < docs.size(); i++) {
             Document doc = docs.get(i);
             List<String> docTokens = lexicalIndexService.tokenize(doc.getText());
-            long overlap = queryTokens.stream().filter(docTokens::contains).count();
-            double overlapRatio = docTokens.isEmpty() ? 0.0 : (double) overlap / (double) Math.min(queryTokens.size(), Math.max(1, docTokens.size()));
-            double score = (overlapRatio * 0.7 + (1.0 / (i + 1)) * 0.3) * sourceTypeBoost(doc);
+            long coreHits = coreTokens.stream().filter(docTokens::contains).count();
+            long expandHits = expandTokens.stream().filter(docTokens::contains).count();
+            double weightedOverlap = totalTokens == 0 ? 0.0
+                    : (coreHits * 1.0 + expandHits * 0.4) / totalTokens;
+            double score = (weightedOverlap * 0.7 + (1.0 / (i + 1)) * 0.3) * sourceTypeBoost(doc);
             doc.getMetadata().put("retrieval_score", score);
             scoreMap.put(doc, score);
         }
@@ -1014,24 +1031,43 @@ public class RAGService {
         throw last == null ? new IllegalStateException(stage + "失败") : last;
     }
 
-    private String rewriteQuery(String question, String userAnswer) {
-        // 使用新抽离的 query-optimizer 技能来优化检索关键词
+    private RewrittenQuery rewriteQuery(String question, String userAnswer) {
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("query-optimizer"));
         String prompt = skillBlock + "\n" +
                 "请从下面的面试问答中提取用于知识检索的关键词。\n" +
-                "如果回答过短，请运用 HyDE（假设性文档嵌入）策略，推测并补充几项理想答案中该有的技术专有名词。\n" +
+                "严格按 CORE/EXPAND 两行格式输出。\n" +
                 "问题：" + question + "\n" +
                 "回答：" + userAnswer + "\n" +
-                "只返回关键词或检索短语，不要返回其他解释。";
-        return routingChatService.callWithFirstPacketProbeSupplier(
+                "只返回 CORE 和 EXPAND 两行，不要返回其他解释。";
+        String raw = routingChatService.callWithFirstPacketProbeSupplier(
             () -> question,
             prompt, ModelRouteType.GENERAL, TimeoutHint.NORMAL, "关键词提取"
         );
+        return parseRewrittenQuery(raw);
     }
 
-    private String callWithRetry(Supplier<String> action, int maxAttempts, String stage) {
-        // 统一重试包装：用于模型调用/改写等“外部依赖”步骤，降低偶发超时/抖动对整体流程的影响。
-        // 退避策略：线性 sleep（400ms * attempt），避免短时间内连续打满下游。
+    private RewrittenQuery parseRewrittenQuery(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return RewrittenQuery.fallback("");
+        }
+        String core = "";
+        String expand = "";
+        for (String line : raw.split("\\r?\\n")) {
+            String trimmed = line.trim();
+            if (trimmed.toUpperCase(Locale.ROOT).startsWith("CORE:")) {
+                core = trimmed.substring(5).trim();
+            } else if (trimmed.toUpperCase(Locale.ROOT).startsWith("EXPAND:")) {
+                expand = trimmed.substring(7).trim();
+            }
+        }
+        if (core.isEmpty()) {
+            return RewrittenQuery.fallback(raw.replaceAll("\\s+", " ").trim());
+        }
+        String full = expand.isEmpty() ? core : core + " " + expand;
+        return new RewrittenQuery(core, expand, full);
+    }
+
+    private <T> T callWithRetry(Supplier<T> action, int maxAttempts, String stage) {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {

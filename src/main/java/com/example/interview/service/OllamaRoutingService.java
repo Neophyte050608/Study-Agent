@@ -169,6 +169,9 @@ public class OllamaRoutingService {
             List<String> results = new ArrayList<>();
             for (JsonNode match : matches) {
                 String id = match.asText("").trim();
+                if (id.startsWith("id=")) {
+                    id = id.substring(3).trim();
+                }
                 if (!id.isBlank() && allowedIds.contains(id) && !results.contains(id)) {
                     results.add(id);
                 }

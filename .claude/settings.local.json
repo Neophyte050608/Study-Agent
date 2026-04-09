@@ -22,7 +22,8 @@
       "Bash(python3:*)",
       "Bash(ccb-mounted)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python:*)"
     ],
     "additionalDirectories": [
       "D:\\Practice\\claude-code-main\\claude-code-main"
