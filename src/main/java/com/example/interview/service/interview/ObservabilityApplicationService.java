@@ -56,8 +56,12 @@ public class ObservabilityApplicationService {
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
+        return runRetrievalOfflineEval(null);
+    }
+
+    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval(String dataset) {
         ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.runDefaultEval();
+        return retrievalEvaluationService.runEvalByDataset(dataset);
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(List<RetrievalEvaluationService.EvalCase> cases) {
@@ -103,14 +107,23 @@ public class ObservabilityApplicationService {
         return retrievalEvaluationService.listParameterTemplates();
     }
 
+    public List<RetrievalEvaluationService.EvalDatasetDefinition> listRetrievalEvalDatasets() {
+        ensureRetrievalEvalEnabled();
+        return retrievalEvaluationService.listBuiltInDatasets();
+    }
+
     public List<RetrievalEvaluationService.EvalCase> parseRetrievalEvalCsv(String csvText) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.parseCasesFromCsv(csvText);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRagQualityEval(String engine) {
+        return runRagQualityEval(null, engine);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalReport runRagQualityEval(String dataset, String engine) {
         ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.runDefaultEval(engine);
+        return ragQualityEvaluationService.runEvalByDataset(dataset, engine);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRagQualityEvalWithCases(
@@ -145,6 +158,11 @@ public class ObservabilityApplicationService {
     public Map<String, Object> getRagQualityEvalEngineStatus() {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.getEngineStatus();
+    }
+
+    public List<RAGQualityEvaluationService.EvalDatasetDefinition> listRagQualityEvalDatasets() {
+        ensureRagQualityEvalEnabled();
+        return ragQualityEvaluationService.listBuiltInDatasets();
     }
 
     public boolean isRagTraceEnabled() {

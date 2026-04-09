@@ -16,8 +16,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
@@ -27,6 +25,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +41,13 @@ import java.util.stream.Collectors;
 public class RetrievalEvaluationService {
 
     private static final int MAX_REPORT_HISTORY = 100;
+    private static final String DEFAULT_DATASET_FILE = "rag_ground_truth.json";
+    private static final Map<String, String> DATASET_FILE_MAPPING = Map.of(
+            "default", DEFAULT_DATASET_FILE,
+            "baseline", "rag_ground_truth_baseline.json",
+            "advanced", "rag_ground_truth_advanced.json",
+            "project", "rag_ground_truth_project.json"
+    );
 
     private final RAGService ragService;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
@@ -104,11 +111,22 @@ public class RetrievalEvaluationService {
      * @return 默认评测报告
      */
     public RetrievalEvalReport runDefaultEval() {
+        return runEvalByDataset(null);
+    }
+
+    /**
+     * 运行指定数据集的检索评测。
+     *
+     * @param dataset 数据集别名或文件名
+     * @return 评测报告
+     */
+    public RetrievalEvalReport runEvalByDataset(String dataset) {
         ensureEvalEnabled();
+        String datasetFile = resolveDatasetFilename(dataset);
         try {
-            InputStream inputStream = resourceLoader.getResource("classpath:eval/rag_ground_truth.json").getInputStream();
+            InputStream inputStream = resourceLoader.getResource("classpath:eval/" + datasetFile).getInputStream();
             List<EvalCase> cases = objectMapper.readValue(inputStream, new TypeReference<List<EvalCase>>() {});
-            return runCustomEval(cases, new EvalRunOptions("default", "default-ground-truth", "default-benchmark", Map.of(), "默认基准评测集"));
+            return runCustomEval(cases, buildDatasetRunOptions(datasetFile, "default-benchmark", "默认基准评测集"));
         } catch (Exception ignored) {
             // 当默认评测文件不可用时，保留一组最小兜底用例，避免评测入口完全不可用。
             List<EvalCase> cases = List.of(
@@ -116,8 +134,21 @@ public class RetrievalEvaluationService {
                     new EvalCase("Redis为什么快", List.of("redis", "内存"), "default"),
                     new EvalCase("JVM垃圾收集器对比", List.of("gc", "垃圾回收"), "default")
             );
-            return runCustomEval(cases, new EvalRunOptions("default", "default-fallback", "default-benchmark", Map.of(), "默认评测集缺失时的兜底样本"));
+            return runCustomEval(cases, new EvalRunOptions(datasetFile, datasetFile + "-fallback", "default-benchmark", Map.of(), "评测集缺失时的兜底样本"));
         }
+    }
+
+    /**
+     * 返回内置可选数据集列表。
+     */
+    public List<EvalDatasetDefinition> listBuiltInDatasets() {
+        ensureEvalEnabled();
+        return List.of(
+                new EvalDatasetDefinition("default", DEFAULT_DATASET_FILE, "默认全集", "完整检索黄金集"),
+                new EvalDatasetDefinition("baseline", "rag_ground_truth_baseline.json", "基础档", "基础知识召回评测"),
+                new EvalDatasetDefinition("advanced", "rag_ground_truth_advanced.json", "进阶档", "RAG/Agent/架构能力评测"),
+                new EvalDatasetDefinition("project", "rag_ground_truth_project.json", "项目档", "项目实战知识召回评测")
+        );
     }
 
     /**
@@ -834,6 +865,50 @@ public class RetrievalEvaluationService {
         return retrievalEvalRunMapper != null && retrievalEvalCaseMapper != null;
     }
 
+    private EvalRunOptions buildDatasetRunOptions(String datasetFile, String experimentTag, String notes) {
+        String normalizedDatasetFile = normalizeDatasetFilename(datasetFile);
+        String datasetSource = stripJsonSuffix(normalizedDatasetFile);
+        return new EvalRunOptions(
+                normalizedDatasetFile,
+                datasetSource,
+                experimentTag,
+                Map.of("dataset", datasetSource, "datasetFile", normalizedDatasetFile),
+                notes
+        );
+    }
+
+    private String resolveDatasetFilename(String dataset) {
+        if (dataset == null || dataset.isBlank()) {
+            return DEFAULT_DATASET_FILE;
+        }
+        String normalized = dataset.trim().toLowerCase(Locale.ROOT);
+        if (DATASET_FILE_MAPPING.containsKey(normalized)) {
+            return DATASET_FILE_MAPPING.get(normalized);
+        }
+        return normalizeDatasetFilename(dataset);
+    }
+
+    private String normalizeDatasetFilename(String dataset) {
+        String candidate = dataset == null ? DEFAULT_DATASET_FILE : dataset.trim();
+        if (candidate.isBlank()) {
+            return DEFAULT_DATASET_FILE;
+        }
+        if (!candidate.endsWith(".json")) {
+            candidate = candidate + ".json";
+        }
+        if (!candidate.startsWith("rag_ground_truth")) {
+            throw new IllegalArgumentException("不支持的检索评测数据集: " + dataset);
+        }
+        return candidate;
+    }
+
+    private String stripJsonSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.endsWith(".json") ? value.substring(0, value.length() - 5) : value;
+    }
+
     /**
      * 评测运行完整报告。
      *
@@ -990,6 +1065,17 @@ public class RetrievalEvaluationService {
             String title,
             String description,
             Map<String, Object> parameterSnapshot
+    ) {
+    }
+
+    /**
+     * 内置数据集定义。
+     */
+    public record EvalDatasetDefinition(
+            String datasetId,
+            String fileName,
+            String title,
+            String description
     ) {
     }
 }

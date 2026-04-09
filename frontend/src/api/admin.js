@@ -28,6 +28,23 @@ export function replayDlq() {
   return httpPostJson('/api/observability/a2a/dlq/replay', {})
 }
 
+export function runRetrievalEval(dataset) {
+  const params = dataset ? `?dataset=${encodeURIComponent(dataset)}` : ''
+  return httpGet(`/api/observability/retrieval-eval${params}`)
+}
+
+export function loadRetrievalEvalDatasets() {
+  return httpGet('/api/observability/retrieval-eval/datasets')
+}
+
+export function loadRetrievalEvalRuns(limit = 20) {
+  return httpGet(`/api/observability/retrieval-eval/runs?limit=${limit}`)
+}
+
+export function loadRagQualityEvalDatasets() {
+  return httpGet('/api/observability/rag-quality-eval/datasets')
+}
+
 export function loadAgentSettings() {
   return httpGet('/api/settings/agents')
 }
@@ -109,6 +126,14 @@ export function reloadPromptCache() {
 export function runRagQualityEval(engine) {
   const params = engine ? `?engine=${engine}` : ''
   return httpGet(`/api/observability/rag-quality-eval${params}`)
+}
+
+export function runRagQualityEvalWithDataset(dataset, engine) {
+  const params = new URLSearchParams()
+  if (dataset) params.set('dataset', dataset)
+  if (engine) params.set('engine', engine)
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return httpGet(`/api/observability/rag-quality-eval${suffix}`)
 }
 
 export function runRagQualityEvalCustom(cases, options, engine) {

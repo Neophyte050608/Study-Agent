@@ -28,6 +28,118 @@
 
       <!-- Content Grid: Bento Style -->
       <div class="grid grid-cols-12 gap-6">
+        <div class="col-span-12 bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm border border-slate-200">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h3 class="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                <span class="material-symbols-outlined text-indigo-700">tune</span>
+                评测数据集控制台
+              </h3>
+              <p class="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                直接在 /ops 页面选择分层黄金集并触发检索评测或生成质量评测。
+              </p>
+            </div>
+            <button @click="loadEvalDatasets" :disabled="datasetLoading" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-200 transition-all disabled:opacity-50 flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm" :class="datasetLoading ? 'animate-spin' : ''">{{ datasetLoading ? 'progress_activity' : 'sync' }}</span>
+              {{ datasetLoading ? '加载中...' : '刷新数据集' }}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <section class="rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/50 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">检索评测</h4>
+                <span v-if="retrievalEvalReport" class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  {{ retrievalEvalReport.totalCases || 0 }} 样本
+                </span>
+              </div>
+              <select v-model="selectedRetrievalDataset" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option v-for="item in retrievalDatasets" :key="item.datasetId" :value="item.datasetId">
+                  {{ item.title }} / {{ item.datasetId }}
+                </option>
+              </select>
+              <p class="mt-2 min-h-10 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                {{ selectedRetrievalDatasetDescription }}
+              </p>
+              <div class="mt-4 flex items-center gap-3">
+                <button @click="runRetrievalEvalAction" :disabled="retrievalEvalLoading || !selectedRetrievalDataset" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm" :class="retrievalEvalLoading ? 'animate-spin' : ''">{{ retrievalEvalLoading ? 'progress_activity' : 'play_arrow' }}</span>
+                  {{ retrievalEvalLoading ? '评测中...' : '运行检索评测' }}
+                </button>
+                <button @click="loadRetrievalEvalHistoryAction" class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-all">
+                  历史记录
+                </button>
+              </div>
+              <div v-if="retrievalEvalReport" class="mt-4 grid grid-cols-4 gap-3">
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Recall@1</div>
+                  <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ formatPercent(retrievalEvalReport.recallAt1) }}</div>
+                </div>
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Recall@3</div>
+                  <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ formatPercent(retrievalEvalReport.recallAt3) }}</div>
+                </div>
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Recall@5</div>
+                  <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ formatPercent(retrievalEvalReport.recallAt5) }}</div>
+                </div>
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">MRR</div>
+                  <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ formatPercent(retrievalEvalReport.mrr) }}</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/50 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">RAG 生成质量评测</h4>
+                <span v-if="qualityEvalReport" class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  {{ qualityEvalReport.totalCases || 0 }} 样本
+                </span>
+              </div>
+              <div class="grid grid-cols-[1fr_auto] gap-3">
+                <select v-model="selectedQualityDataset" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option v-for="item in qualityDatasets" :key="item.datasetId" :value="item.datasetId">
+                    {{ item.title }} / {{ item.datasetId }}
+                  </option>
+                </select>
+                <select v-model="selectedEngine" class="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">自动</option>
+                  <option value="java">Java</option>
+                  <option value="ragas">Ragas</option>
+                </select>
+              </div>
+              <p class="mt-2 min-h-10 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                {{ selectedQualityDatasetDescription }}
+              </p>
+              <div class="mt-4 flex items-center gap-3">
+                <button @click="runQualityEval" :disabled="qualityEvalLoading || !selectedQualityDataset" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm" :class="qualityEvalLoading ? 'animate-spin' : ''">{{ qualityEvalLoading ? 'progress_activity' : 'play_arrow' }}</span>
+                  {{ qualityEvalLoading ? '评测中...' : '运行质量评测' }}
+                </button>
+                <button @click="loadQualityEvalHistory" class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-all">
+                  历史记录
+                </button>
+                <span v-if="engineStatus" class="text-xs px-2 py-1 rounded-full" :class="engineStatus.ragasEngineAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500'">
+                  Ragas: {{ engineStatus.ragasEngineAvailable ? '可用' : '不可用' }}
+                </span>
+              </div>
+            </section>
+          </div>
+
+          <div v-if="retrievalEvalRuns.length" class="mt-6">
+            <h4 class="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">检索评测历史</h4>
+            <div class="grid grid-cols-4 gap-3">
+              <div v-for="run in retrievalEvalRuns.slice(0, 4)" :key="run.runId" class="rounded-lg border border-slate-200 bg-slate-50 dark:bg-slate-800/50 p-4">
+                <div class="text-xs font-mono text-indigo-600">{{ run.runId?.substring(0, 8) || '-' }}</div>
+                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ run.datasetSource || '-' }}</div>
+                <div class="mt-3 text-sm font-bold text-slate-900 dark:text-slate-100">Recall@5 {{ formatPercent(run.recallAt5) }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">MRR {{ formatPercent(run.mrr) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Key Metrics Summary -->
         <div class="col-span-12 grid grid-cols-4 gap-6">
           <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-all">
@@ -196,18 +308,9 @@
               RAG 生成质量评测
             </h3>
             <div class="flex items-center gap-3">
-              <select v-model="selectedEngine" class="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="">自动（默认配置）</option>
-                <option value="java">Java 原生引擎</option>
-                <option value="ragas">Ragas 框架</option>
-              </select>
               <span v-if="engineStatus" class="text-xs px-2 py-1 rounded-full" :class="engineStatus.ragasEngineAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500'">
                 Ragas: {{ engineStatus.ragasEngineAvailable ? '可用' : '不可用' }}
               </span>
-              <button @click="runQualityEval" :disabled="qualityEvalLoading" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
-                <span class="material-symbols-outlined text-sm" :class="qualityEvalLoading ? 'animate-spin' : ''">{{ qualityEvalLoading ? 'progress_activity' : 'play_arrow' }}</span>
-                {{ qualityEvalLoading ? '评测中...' : '运行评测' }}
-              </button>
               <button @click="loadQualityEvalHistory" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm">history</span>
                 历史记录
@@ -342,7 +445,7 @@
 import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq, runRagQualityEval, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus } from '../api/admin'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: {
@@ -364,6 +467,14 @@ const displayedTraces = computed(() => {
 const audits = ref([])
 const idempotency = ref({})
 const showAdvancedOps = ref(false)
+const datasetLoading = ref(false)
+const retrievalDatasets = ref([])
+const qualityDatasets = ref([])
+const selectedRetrievalDataset = ref('default')
+const selectedQualityDataset = ref('default')
+const retrievalEvalLoading = ref(false)
+const retrievalEvalReport = ref(null)
+const retrievalEvalRuns = ref([])
 
 // ===== RAG 生成质量评测 =====
 const selectedEngine = ref('')
@@ -377,6 +488,18 @@ const expandedSamples = ref([])
 const qualityChartRef = ref(null)
 const qualityChartInstance = ref(null)
 const showQualityHistory = ref(false)
+
+const selectedRetrievalDatasetDescription = computed(() => {
+  const current = retrievalDatasets.value.find(item => item.datasetId === selectedRetrievalDataset.value)
+  if (!current) return '请选择检索评测使用的数据集。'
+  return `${current.description || ''}${current.fileName ? ` | ${current.fileName}` : ''}`
+})
+
+const selectedQualityDatasetDescription = computed(() => {
+  const current = qualityDatasets.value.find(item => item.datasetId === selectedQualityDataset.value)
+  if (!current) return '请选择质量评测使用的数据集。'
+  return `${current.description || ''}${current.fileName ? ` | ${current.fileName}` : ''}`
+})
 
 const qualityMetrics = computed(() => {
   if (!qualityEvalReport.value) return []
@@ -456,15 +579,41 @@ const runQualityEval = async () => {
   qualityEvalLoading.value = true
   try {
     const engine = selectedEngine.value || undefined
-    const data = await runRagQualityEval(engine)
+    const dataset = selectedQualityDataset.value || undefined
+    const data = await runRagQualityEvalWithDataset(dataset, engine)
     qualityEvalReport.value = data
     qualityEvalDetail.value = data // 默认评测的 detail 就是 report 本身
     await nextTick()
     renderQualityChart(data)
+    hint.value = `质量评测完成: ${data.runLabel || data.runId || dataset || 'default'}`
   } catch (error) {
     hint.value = `评测失败: ${error.message || 'unknown'}`
   } finally {
     qualityEvalLoading.value = false
+  }
+}
+
+const runRetrievalEvalAction = async () => {
+  retrievalEvalLoading.value = true
+  try {
+    const dataset = selectedRetrievalDataset.value || undefined
+    const data = await runRetrievalEval(dataset)
+    retrievalEvalReport.value = data
+    hint.value = `检索评测完成: ${data.runLabel || data.runId || dataset || 'default'}`
+    await loadRetrievalEvalHistoryAction()
+  } catch (error) {
+    hint.value = `检索评测失败: ${error.message || 'unknown'}`
+  } finally {
+    retrievalEvalLoading.value = false
+  }
+}
+
+const loadRetrievalEvalHistoryAction = async () => {
+  try {
+    const resp = await loadRetrievalEvalRuns(8)
+    retrievalEvalRuns.value = Array.isArray(resp) ? resp : (resp?.records || [])
+  } catch (error) {
+    hint.value = `加载检索评测历史失败: ${error.message || 'unknown'}`
   }
 }
 
@@ -500,6 +649,30 @@ const loadEngineStatus = async () => {
     // 静默失败，引擎状态不影响主流程
   }
 }
+
+const loadEvalDatasets = async () => {
+  datasetLoading.value = true
+  try {
+    const [retrievalResp, qualityResp] = await Promise.all([
+      loadRetrievalEvalDatasets(),
+      loadRagQualityEvalDatasets()
+    ])
+    retrievalDatasets.value = Array.isArray(retrievalResp) ? retrievalResp : (retrievalResp?.records || [])
+    qualityDatasets.value = Array.isArray(qualityResp) ? qualityResp : (qualityResp?.records || [])
+    if (!retrievalDatasets.value.some(item => item.datasetId === selectedRetrievalDataset.value) && retrievalDatasets.value.length) {
+      selectedRetrievalDataset.value = retrievalDatasets.value[0].datasetId
+    }
+    if (!qualityDatasets.value.some(item => item.datasetId === selectedQualityDataset.value) && qualityDatasets.value.length) {
+      selectedQualityDataset.value = qualityDatasets.value[0].datasetId
+    }
+  } catch (error) {
+    hint.value = `加载评测数据集失败: ${error.message || 'unknown'}`
+  } finally {
+    datasetLoading.value = false
+  }
+}
+
+const formatPercent = (value) => `${(((typeof value === 'number' ? value : 0) || 0) * 100).toFixed(1)}%`
 
 const toggleSample = (idx) => {
   const pos = expandedSamples.value.indexOf(idx)
@@ -659,5 +832,7 @@ const replay = async () => {
 onMounted(() => {
   reload()
   loadEngineStatus()
+  loadEvalDatasets()
+  loadRetrievalEvalHistoryAction()
 })
 </script>

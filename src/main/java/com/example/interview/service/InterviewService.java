@@ -136,7 +136,11 @@ public class InterviewService {
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
-        return observabilityApplicationService.runRetrievalOfflineEval();
+        return runRetrievalOfflineEval(null);
+    }
+
+    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval(String dataset) {
+        return observabilityApplicationService.runRetrievalOfflineEval(dataset);
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(java.util.List<RetrievalEvaluationService.EvalCase> cases) {
@@ -217,6 +221,10 @@ public class InterviewService {
         return observabilityApplicationService.listRetrievalEvalParameterTemplates();
     }
 
+    public java.util.List<RetrievalEvaluationService.EvalDatasetDefinition> listRetrievalEvalDatasets() {
+        return observabilityApplicationService.listRetrievalEvalDatasets();
+    }
+
     public TaskResponse dispatchTask(TaskType taskType, Map<String, Object> payload, Map<String, Object> context) {
         // 通用任务分发入口：供 /task/dispatch 与其他内部调用复用。
         return taskRouterAgent.dispatch(new TaskRequest(
@@ -231,11 +239,15 @@ public class InterviewService {
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval() {
-        return runRAGQualityEval(null);
+        return runRAGQualityEval(null, null);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval(String engine) {
-        return observabilityApplicationService.runRagQualityEval(engine);
+        return runRAGQualityEval(null, engine);
+    }
+
+    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval(String dataset, String engine) {
+        return observabilityApplicationService.runRagQualityEval(dataset, engine);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
@@ -267,6 +279,10 @@ public class InterviewService {
 
     public RAGQualityEvaluationService.QualityEvalTrend getRAGQualityEvalTrend(int limit) {
         return observabilityApplicationService.getRagQualityEvalTrend(limit);
+    }
+
+    public java.util.List<RAGQualityEvaluationService.EvalDatasetDefinition> listRAGQualityEvalDatasets() {
+        return observabilityApplicationService.listRagQualityEvalDatasets();
     }
 
     public Map<String, Object> getRAGQualityEvalEngineStatus() {

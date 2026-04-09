@@ -502,9 +502,13 @@ public class InterviewController {
      * 运行检索离线评测（默认用例）。
      */
     @GetMapping("/observability/retrieval-eval")
-    public ResponseEntity<?> retrievalEval() {
+    public ResponseEntity<?> retrievalEval(
+            @RequestParam(value = "dataset", required = false) String dataset
+    ) {
         try {
-            return ResponseEntity.ok(interviewService.runRetrievalOfflineEval());
+            return ResponseEntity.ok(interviewService.runRetrievalOfflineEval(dataset));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }
@@ -612,6 +616,20 @@ public class InterviewController {
     }
 
     /**
+     * 获取检索评测内置数据集列表。
+     */
+    @GetMapping("/observability/retrieval-eval/datasets")
+    public ResponseEntity<?> listRetrievalEvalDatasets() {
+        try {
+            return ResponseEntity.ok(Map.of(
+                    "records", interviewService.listRetrievalEvalDatasets()
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
      * 运行带自定义用例的检索评测。
      */
     @PostMapping("/observability/retrieval-eval/run")
@@ -661,10 +679,27 @@ public class InterviewController {
      */
     @GetMapping("/observability/rag-quality-eval")
     public ResponseEntity<?> runRagQualityEval(
+            @RequestParam(value = "dataset", required = false) String dataset,
             @RequestParam(value = "engine", required = false) String engine
     ) {
         try {
-            return ResponseEntity.ok(interviewService.runRAGQualityEval(engine));
+            return ResponseEntity.ok(interviewService.runRAGQualityEval(dataset, engine));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取 RAG 生成质量评测内置数据集列表。
+     */
+    @GetMapping("/observability/rag-quality-eval/datasets")
+    public ResponseEntity<?> listRagQualityEvalDatasets() {
+        try {
+            return ResponseEntity.ok(Map.of(
+                    "records", interviewService.listRAGQualityEvalDatasets()
+            ));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
         }

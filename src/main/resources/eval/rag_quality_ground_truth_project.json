@@ -1,0 +1,44 @@
+[
+  {
+    "query": "高级查询为什么适合用责任链模式重构",
+    "groundTruthAnswer": "在你的实习方案里，高级查询有多个可选筛选条件，比如产品大类、系列、型号、封装、数量等级。用责任链模式后，每个条件处理器只关心自己的一段查询拼装逻辑，执行器统一按Order排序串起来，对外只暴露一个上下文执行入口。这样做能降低条件分支耦合，新增筛选项时只需要加处理器，不必反复改主流程。",
+    "groundTruthKeyConcepts": ["责任链模式", "查询上下文", "按Order排序", "低耦合扩展"],
+    "tag": "career-pattern"
+  },
+  {
+    "query": "多级缓存重构方案的核心读取和更新流程是什么",
+    "groundTruthAnswer": "你的多级缓存抽象类采用Caffeine、Redis、MySQL三级结构。读取时先查本地缓存，再查Redis，最后查数据库，然后把结果按需回填到本地和Redis；更新时先执行业务更新，再删Redis，再清当前节点本地缓存，必要时再扩展成通知其他节点失效。这个流程把读性能和一致性控制放在一个统一抽象里了。",
+    "groundTruthKeyConcepts": ["Caffeine", "Redis", "MySQL", "本地缓存", "回填", "失效删除"],
+    "tag": "career-cache"
+  },
+  {
+    "query": "为什么你的用户查询优化最后选了装饰器模式来解决N+1问题",
+    "groundTruthAnswer": "你当时没有直接把XML改成大连表，是因为那样虽然能短期解决查询次数问题，但后续数据量上来可能带来笛卡尔积风险，而且一旦关联表分库就难以维持。装饰器模式可以在不侵入原Mapper接口的前提下，先查主表，再批量查用户角色和岗位关联，最后在内存里组装结果，既规避N+1，又保留后续扩展空间。",
+    "groundTruthKeyConcepts": ["装饰器模式", "N+1", "批量查询", "内存组装", "无侵入替换"],
+    "tag": "career-pattern"
+  },
+  {
+    "query": "长对话记忆优化为什么要用滚动式总结加MQ异步化",
+    "groundTruthAnswer": "你的方案不是简单截最近N轮，而是把旧Profile和新增对话重新压缩成新的Profile，这样能保留长程上下文又控制Token。为了不阻塞主对话请求，总结任务通过RocketMQ异步执行，主流程只负责回答用户并投递消息。这样同时解决了记忆丢失、Token成本过高和同步总结拖慢接口的问题。",
+    "groundTruthKeyConcepts": ["滚动式总结", "旧Profile+新增对话", "RocketMQ", "异步解耦", "Token控制"],
+    "tag": "career-llm"
+  },
+  {
+    "query": "长对话记忆为什么用对话轮数做版本控制",
+    "groundTruthAnswer": "你把dialogue_count和profile_version绑定起来，本质上是让Profile只能向更高轮次推进。消费端收到总结任务后，只有目标轮数大于数据库当前版本时才更新，这样天然避免了消息重复投递和乱序消费导致的Profile回退问题。这个版本控制规则简单，但非常适合异步总结链路。",
+    "groundTruthKeyConcepts": ["dialogue_count", "profile_version", "只向未来更新", "重复投递", "顺序错乱"],
+    "tag": "career-llm"
+  },
+  {
+    "query": "抽象批量处理能力类的设计价值是什么",
+    "groundTruthAnswer": "你的批量处理抽象类把“大任务拆批次、每批异步执行、最终汇总结果”这套模式固化下来。实现上用线程池和CompletableFuture，把N个任务拆成若干批，再并发提交，最后通过allOf统一等待。它的价值在于把并发处理模板抽象成公共能力，多个业务模块只需提供线程池和单任务处理函数即可复用。",
+    "groundTruthKeyConcepts": ["批次拆分", "线程池", "CompletableFuture", "公共能力抽象", "结果汇总"],
+    "tag": "career-concurrency"
+  },
+  {
+    "query": "大Excel导入方案为什么最终演进成分片上传加通用导入框架",
+    "groundTruthAnswer": "你最初直接沿用旧实现，但面对十五万级数据时会出现请求超时、失败重传成本高和内存压力大的问题。后来逐步演进成分片上传、后台异步合并与导入、EasyExcel流式逐行解析、每1000条批量落库、Redis记录任务进度，并通过通用监听器和策略接口把不同物料的导入逻辑抽象出来。这样既解决性能问题，也形成了可复用的导入框架。",
+    "groundTruthKeyConcepts": ["分片上传", "异步导入", "EasyExcel流式解析", "批量落库", "策略模式", "通用监听器"],
+    "tag": "career-import"
+  }
+]

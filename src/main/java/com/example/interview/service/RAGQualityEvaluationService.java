@@ -42,6 +42,13 @@ import java.util.stream.Collectors;
 public class RAGQualityEvaluationService {
 
     private static final int MAX_REPORT_HISTORY = 100;
+    private static final String DEFAULT_DATASET_FILE = "rag_quality_ground_truth.json";
+    private static final Map<String, String> DATASET_FILE_MAPPING = Map.of(
+            "default", DEFAULT_DATASET_FILE,
+            "baseline", "rag_quality_ground_truth_baseline.json",
+            "advanced", "rag_quality_ground_truth_advanced.json",
+            "project", "rag_quality_ground_truth_project.json"
+    );
 
     private final RAGService ragService;
     private final RoutingChatService routingChatService;
@@ -93,12 +100,17 @@ public class RAGQualityEvaluationService {
     }
 
     public QualityEvalReport runDefaultEval(String engine) {
+        return runEvalByDataset(null, engine);
+    }
+
+    public QualityEvalReport runEvalByDataset(String dataset, String engine) {
         ensureEvalEnabled();
+        String datasetFile = resolveDatasetFilename(dataset);
         try {
-            InputStream inputStream = resourceLoader.getResource("classpath:eval/rag_quality_ground_truth.json").getInputStream();
+            InputStream inputStream = resourceLoader.getResource("classpath:eval/" + datasetFile).getInputStream();
             List<QualityEvalCase> cases = objectMapper.readValue(inputStream, new TypeReference<List<QualityEvalCase>>() {
             });
-            return runCustomEval(cases, new EvalRunOptions("default", "rag-quality-default", "default-benchmark", Map.of(), "RAG生成质量默认评测集"), engine);
+            return runCustomEval(cases, buildDatasetRunOptions(datasetFile, "default-benchmark", "RAG生成质量默认评测集"), engine);
         } catch (Exception ignored) {
             List<QualityEvalCase> cases = List.of(
                     new QualityEvalCase(
@@ -120,12 +132,22 @@ public class RAGQualityEvaluationService {
                             "mysql"
                     )
             );
-            return runCustomEval(cases, new EvalRunOptions("default", "rag-quality-fallback", "default-benchmark", Map.of(), "默认评测集缺失时的兜底样本"), engine);
+            return runCustomEval(cases, new EvalRunOptions(datasetFile, datasetFile + "-fallback", "default-benchmark", Map.of(), "评测集缺失时的兜底样本"), engine);
         }
     }
 
     public QualityEvalReport runDefaultEval() {
         return runDefaultEval(null);
+    }
+
+    public List<EvalDatasetDefinition> listBuiltInDatasets() {
+        ensureEvalEnabled();
+        return List.of(
+                new EvalDatasetDefinition("default", DEFAULT_DATASET_FILE, "默认全集", "完整生成质量黄金集"),
+                new EvalDatasetDefinition("baseline", "rag_quality_ground_truth_baseline.json", "基础档", "基础问答质量评测"),
+                new EvalDatasetDefinition("advanced", "rag_quality_ground_truth_advanced.json", "进阶档", "RAG/Agent 架构质量评测"),
+                new EvalDatasetDefinition("project", "rag_quality_ground_truth_project.json", "项目档", "项目实战问答质量评测")
+        );
     }
 
     public QualityEvalReport runCustomEval(List<QualityEvalCase> cases) {
@@ -886,6 +908,50 @@ public class RAGQualityEvaluationService {
         return score;
     }
 
+    private EvalRunOptions buildDatasetRunOptions(String datasetFile, String experimentTag, String notes) {
+        String normalizedDatasetFile = normalizeDatasetFilename(datasetFile);
+        String datasetSource = stripJsonSuffix(normalizedDatasetFile);
+        return new EvalRunOptions(
+                normalizedDatasetFile,
+                datasetSource,
+                experimentTag,
+                Map.of("dataset", datasetSource, "datasetFile", normalizedDatasetFile),
+                notes
+        );
+    }
+
+    private String resolveDatasetFilename(String dataset) {
+        if (dataset == null || dataset.isBlank()) {
+            return DEFAULT_DATASET_FILE;
+        }
+        String normalized = dataset.trim().toLowerCase();
+        if (DATASET_FILE_MAPPING.containsKey(normalized)) {
+            return DATASET_FILE_MAPPING.get(normalized);
+        }
+        return normalizeDatasetFilename(dataset);
+    }
+
+    private String normalizeDatasetFilename(String dataset) {
+        String candidate = dataset == null ? DEFAULT_DATASET_FILE : dataset.trim();
+        if (candidate.isBlank()) {
+            return DEFAULT_DATASET_FILE;
+        }
+        if (!candidate.endsWith(".json")) {
+            candidate = candidate + ".json";
+        }
+        if (!candidate.startsWith("rag_quality_ground_truth")) {
+            throw new IllegalArgumentException("不支持的质量评测数据集: " + dataset);
+        }
+        return candidate;
+    }
+
+    private String stripJsonSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.endsWith(".json") ? value.substring(0, value.length() - 5) : value;
+    }
+
     private record MetricScore(double score, String reason) {
     }
 
@@ -982,6 +1048,14 @@ public class RAGQualityEvaluationService {
             double avgContextPrecision,
             double avgContextRecall,
             double bestFaithfulness
+    ) {
+    }
+
+    public record EvalDatasetDefinition(
+            String datasetId,
+            String fileName,
+            String title,
+            String description
     ) {
     }
 }

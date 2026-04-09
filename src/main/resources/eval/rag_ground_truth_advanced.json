@@ -1,0 +1,57 @@
+[
+  {
+    "query": "RAG切分时为什么要在上下文完整性和信息密度之间做平衡",
+    "expectedKeywords": ["上下文完整性", "信息密度", "切分", "平衡"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "RAG基础固定长度切分有哪些方式",
+    "expectedKeywords": ["固定字符", "固定token", "固定句子", "固定段落"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "RAG里结构感知切分有哪些常见方案",
+    "expectedKeywords": ["markdown标题", "html标签", "递归字符", "语义相似", "正则"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "为什么Parent-Child父子切分适合Obsidian笔记",
+    "expectedKeywords": ["小块检索", "大块返回", "上下文", "obsidian"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "RAG高级检索增强切分有哪些",
+    "expectedKeywords": ["滑动窗口", "parent-child", "summary-child", "hybrid"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "RRF在混合检索里的作用是什么",
+    "expectedKeywords": ["reciprocal rank fusion", "只看排名", "结果融合", "bm25", "向量"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "向量检索里的向量本质是什么",
+    "expectedKeywords": ["embedding", "向量", "点积", "语义相似度"],
+    "tag": "ai-rag"
+  },
+  {
+    "query": "Agent通用方案的核心执行链路是什么",
+    "expectedKeywords": ["意图理解", "槽位填充", "工具调用", "逻辑推理", "结果生产"],
+    "tag": "ai-agent"
+  },
+  {
+    "query": "订单查询Agent设计时为什么要先做身份校验",
+    "expectedKeywords": ["校验身份", "user_id", "手机号", "不泄露", "脱敏"],
+    "tag": "ai-agent"
+  },
+  {
+    "query": "Agent死循环有哪些治理手段",
+    "expectedKeywords": ["最大步数", "哈希去重", "token限制", "相似度检测", "supervisor", "反思"],
+    "tag": "ai-agent"
+  },
+  {
+    "query": "MCP在你的笔记里被定位成什么角色",
+    "expectedKeywords": ["连接中枢", "模型控制协议", "开发工具"],
+    "tag": "ai-agent"
+  }
+]

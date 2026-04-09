@@ -1,0 +1,67 @@
+[
+  {
+    "query": "高级查询为什么适合用责任链模式重构",
+    "expectedKeywords": ["责任链", "查询上下文", "处理器", "按order排序", "扩展"],
+    "tag": "career-pattern"
+  },
+  {
+    "query": "高级查询责任链方案里的上下文对象承载了什么",
+    "expectedKeywords": ["querywrapper", "partClass", "partSeries", "partModel", "pack", "qtyLevel"],
+    "tag": "career-pattern"
+  },
+  {
+    "query": "多级缓存重构方案的缓存链路是什么",
+    "expectedKeywords": ["caffeine", "redis", "mysql", "多级缓存"],
+    "tag": "career-cache"
+  },
+  {
+    "query": "多级缓存抽象类的读取流程是什么",
+    "expectedKeywords": ["本地缓存", "redis缓存", "数据库查询", "缓存填充"],
+    "tag": "career-cache"
+  },
+  {
+    "query": "多级缓存方案是如何处理空值缓存的",
+    "expectedKeywords": ["空值缓存", "缓存穿透", "null", "空字符串"],
+    "tag": "career-cache"
+  },
+  {
+    "query": "用户管理查询慢为什么最后选择装饰器模式消除N+1",
+    "expectedKeywords": ["装饰器模式", "n+1", "延迟加载", "批量组装", "无侵入"],
+    "tag": "career-pattern"
+  },
+  {
+    "query": "Wrapper装饰器方案是如何批量回填角色和岗位数据的",
+    "expectedKeywords": ["userid", "role", "post", "批量查询", "内存组装", "groupingby"],
+    "tag": "career-pattern"
+  },
+  {
+    "query": "长对话记忆优化的三大核心设计是什么",
+    "expectedKeywords": ["滚动式总结", "异步解耦", "版本控制"],
+    "tag": "career-llm"
+  },
+  {
+    "query": "长对话记忆为什么使用对话轮数做版本号",
+    "expectedKeywords": ["dialogue_count", "profile_version", "顺序错乱", "重复投递", "只向未来更新"],
+    "tag": "career-llm"
+  },
+  {
+    "query": "抽象批量处理能力类为什么使用线程池和CompletableFuture",
+    "expectedKeywords": ["线程池", "completablefuture", "批次拆分", "并发处理"],
+    "tag": "career-concurrency"
+  },
+  {
+    "query": "大Excel导入设计里为什么从直接导入改成分片上传加异步处理",
+    "expectedKeywords": ["分片上传", "异步处理", "大文件", "超时", "失败重传"],
+    "tag": "career-import"
+  },
+  {
+    "query": "大Excel导入方案里GenericImportListener承担了什么职责",
+    "expectedKeywords": ["监听器", "校验", "批量入库", "进度更新", "错误日志"],
+    "tag": "career-import"
+  },
+  {
+    "query": "大Excel导入为什么要引入importBatchId批次号",
+    "expectedKeywords": ["importbatchid", "批次号", "逻辑删除", "全量清洗", "update"],
+    "tag": "career-import"
+  }
+]
