@@ -2,11 +2,9 @@ package com.example.interview.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.example.interview.agent.InterviewOrchestratorAgent;
 import com.example.interview.agent.TaskRouterAgent;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
-import com.example.interview.core.InterviewSession;
 import com.example.interview.entity.ChatMessageDO;
 import com.example.interview.entity.ChatSessionDO;
 import com.example.interview.mapper.ChatMessageMapper;
@@ -31,15 +29,18 @@ public class WebChatService {
     private final ChatMessageMapper messageMapper;
     private final TaskRouterAgent taskRouterAgent;
     private final ChatContextCompressor chatContextCompressor;
+    private final TaskResponsePresentationService taskResponsePresentationService;
 
     public WebChatService(ChatSessionMapper sessionMapper,
                           ChatMessageMapper messageMapper,
                           TaskRouterAgent taskRouterAgent,
-                          ChatContextCompressor chatContextCompressor) {
+                          ChatContextCompressor chatContextCompressor,
+                          TaskResponsePresentationService taskResponsePresentationService) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.taskRouterAgent = taskRouterAgent;
         this.chatContextCompressor = chatContextCompressor;
+        this.taskResponsePresentationService = taskResponsePresentationService;
     }
 
     // ======== Session CRUD ========
@@ -190,55 +191,7 @@ public class WebChatService {
     }
 
     public String extractReplyText(TaskResponse response) {
-        if (!response.success()) {
-            return "抱歉，处理您的请求时遇到了问题：" + response.message();
-        }
-        Object data = response.data();
-        if (data == null) {
-            return response.message() != null ? response.message() : "处理完毕。";
-        }
-        if (data instanceof InterviewSession session) {
-            return session.getCurrentQuestion();
-        }
-        if (data instanceof InterviewOrchestratorAgent.AnswerResult result) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("【评分】").append(result.score()).append("\n\n");
-            sb.append("【反馈】\n").append(result.feedback()).append("\n\n");
-            if (result.finished()) {
-                sb.append("本次模拟面试已结束。你可以说\"生成报告\"查看最终评估。");
-            } else {
-                sb.append("【下一题】\n").append(result.nextQuestion());
-            }
-            return sb.toString();
-        }
-        if (data instanceof InterviewOrchestratorAgent.FinalReport report) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("====== 面试复盘报告 ======\n\n");
-            sb.append("【总评】\n").append(report.summary()).append("\n\n");
-            sb.append("【薄弱环节】\n").append(report.weak()).append("\n\n");
-            sb.append("【错误点】\n").append(report.wrong()).append("\n\n");
-            sb.append("【后续建议】\n").append(report.nextFocus());
-            return sb.toString();
-        }
-        if (data instanceof Map<?, ?> map) {
-            // 编码练习结果：专门格式化
-            if ("CodingPracticeAgent".equals(map.get("agent"))) {
-                return formatCodingResult(map);
-            }
-            if (map.containsKey("answer")) return String.valueOf(map.get("answer"));
-            if (map.containsKey("question")) return String.valueOf(map.get("question"));
-            if (map.containsKey("recommendation")) return String.valueOf(map.get("recommendation"));
-            if (map.containsKey("summary")) return String.valueOf(map.get("summary"));
-            StringBuilder sb = new StringBuilder();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String key = String.valueOf(entry.getKey());
-                if (List.of("agent", "sessionId", "userId", "status", "traceId").contains(key)) continue;
-                sb.append("• ").append(key).append(": ").append(entry.getValue()).append("\n");
-            }
-            String result = sb.toString().trim();
-            return result.isEmpty() ? "处理成功。" : result;
-        }
-        return String.valueOf(data);
+        return taskResponsePresentationService.format(response, TaskResponsePresentationService.PresentationChannel.WEB);
     }
 
     public void autoTitleIfNeeded(String sessionId, String firstUserContent) {
@@ -261,53 +214,6 @@ public class WebChatService {
 
     public TaskRouterAgent getTaskRouterAgent() {
         return taskRouterAgent;
-    }
-
-    /**
-     * 格式化编码练习返回的 Map 结果，区分出题和评估两种场景。
-     */
-    private String formatCodingResult(Map<?, ?> map) {
-        Object statusObj = map.get("status");
-        String status = statusObj == null ? "" : String.valueOf(statusObj);
-        StringBuilder sb = new StringBuilder();
-
-        if ("evaluated".equals(status)) {
-            // 答题评估结果
-            Object score = map.get("score");
-            Object feedback = map.get("feedback");
-            Object nextHint = map.get("nextHint");
-            Object progress = map.get("progress");
-            if (score != null) sb.append("【得分】").append(score).append("\n\n");
-            if (feedback != null && !String.valueOf(feedback).isBlank()) {
-                sb.append("【解析与反馈】\n").append(feedback).append("\n\n");
-            }
-            if (nextHint != null && !String.valueOf(nextHint).isBlank()) {
-                sb.append("【提示】").append(nextHint).append("\n\n");
-            }
-            if (Boolean.TRUE.equals(map.get("isLast"))) {
-                sb.append("本轮练习已完成！");
-            } else if (progress != null) {
-                sb.append("进度：").append(progress);
-            }
-        } else if ("question_generated".equals(status) || "started".equals(status)) {
-            // 出题结果
-            Object question = map.get("question");
-            Object progress = map.get("progress");
-            if (question != null) sb.append(question);
-            if (progress != null) sb.append("\n\n(进度：").append(progress).append(")");
-        } else if ("completed".equals(status)) {
-            Object message = map.get("message");
-            sb.append(message != null ? message : "练习已完成！");
-        } else {
-            // fallback: 取 question 或 message
-            Object question = map.get("question");
-            Object message = map.get("message");
-            if (question != null) return String.valueOf(question);
-            if (message != null) return String.valueOf(message);
-            return "处理完毕。";
-        }
-        String result = sb.toString().trim();
-        return result.isEmpty() ? "处理完毕。" : result;
     }
 
     /**

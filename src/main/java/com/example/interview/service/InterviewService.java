@@ -7,11 +7,16 @@ import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
 import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.core.InterviewSession;
-import com.example.interview.core.RAGTraceContext;
+import com.example.interview.service.interview.InterviewAnswerView;
+import com.example.interview.service.interview.InterviewFinalReportView;
+import com.example.interview.service.interview.InterviewSessionApplicationService;
+import com.example.interview.service.interview.McpApplicationService;
+import com.example.interview.service.interview.ObservabilityApplicationService;
+import com.example.interview.service.interview.ProfileApplicationService;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 面试业务逻辑门面服务。
@@ -20,167 +25,90 @@ import java.util.stream.Collectors;
 public class InterviewService {
 
     private final TaskRouterAgent taskRouterAgent;
-    private final InterviewOrchestratorAgent orchestratorAgent;
-    private final LearningProfileAgent learningProfileAgent;
-    private final McpGatewayService mcpGatewayService;
-    private final RAGObservabilityService ragObservabilityService;
-    private final RetrievalEvaluationService retrievalEvaluationService;
-    private final RAGQualityEvaluationService ragQualityEvaluationService;
-    private final ObservabilitySwitchProperties observabilitySwitchProperties;
+    private final InterviewSessionApplicationService interviewSessionApplicationService;
+    private final ProfileApplicationService profileApplicationService;
+    private final McpApplicationService mcpApplicationService;
+    private final ObservabilityApplicationService observabilityApplicationService;
 
     public InterviewService(
             TaskRouterAgent taskRouterAgent,
-            InterviewOrchestratorAgent orchestratorAgent,
-            LearningProfileAgent learningProfileAgent,
-            McpGatewayService mcpGatewayService,
-            RAGObservabilityService ragObservabilityService,
-            RetrievalEvaluationService retrievalEvaluationService,
-            RAGQualityEvaluationService ragQualityEvaluationService,
-            ObservabilitySwitchProperties observabilitySwitchProperties
+            InterviewSessionApplicationService interviewSessionApplicationService,
+            ProfileApplicationService profileApplicationService,
+            McpApplicationService mcpApplicationService,
+            ObservabilityApplicationService observabilityApplicationService
     ) {
-        this.orchestratorAgent = orchestratorAgent;
         this.taskRouterAgent = taskRouterAgent;
-        this.learningProfileAgent = learningProfileAgent;
-        this.mcpGatewayService = mcpGatewayService;
-        this.ragObservabilityService = ragObservabilityService;
-        this.retrievalEvaluationService = retrievalEvaluationService;
-        this.ragQualityEvaluationService = ragQualityEvaluationService;
-        this.observabilitySwitchProperties = observabilitySwitchProperties;
+        this.interviewSessionApplicationService = interviewSessionApplicationService;
+        this.profileApplicationService = profileApplicationService;
+        this.mcpApplicationService = mcpApplicationService;
+        this.observabilityApplicationService = observabilityApplicationService;
     }
 
     /**
      * 启动会话：通过 TaskRouterAgent 统一路由到编排 Agent，便于状态消息发布与扩展到异步链路。
      */
     public InterviewSession startSession(String userId, String topic, String resumePath, Integer totalQuestions) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("userId", userId == null ? "" : userId);
-        payload.put("topic", topic == null ? "" : topic);
-        payload.put("resumePath", resumePath == null ? "" : resumePath);
-        payload.put("totalQuestions", totalQuestions);
-        
-        Map<String, Object> context = new LinkedHashMap<>();
-        context.put("source", "InterviewService.startSession");
-        context.put("traceId", RAGTraceContext.getTraceId());
-        
-        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
-                TaskType.INTERVIEW_START,
-                payload,
-                context
-        ));
-        if (!response.success() || !(response.data() instanceof InterviewSession session)) {
-            throw new IllegalStateException(response.message());
-        }
-        return session;
+        return interviewSessionApplicationService.startSession(userId, topic, resumePath, totalQuestions);
     }
 
     /**
      * 提交回答：将外部字段映射为编排 Agent 期望的 payload 结构，并把编排结果裁剪为前端展示模型。
      */
     public AnswerResult submitAnswer(String sessionId, String userAnswer) {
-        Map<String, Object> context = new LinkedHashMap<>();
-        context.put("source", "InterviewService.submitAnswer");
-        context.put("traceId", RAGTraceContext.getTraceId());
-        
-        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
-                TaskType.INTERVIEW_ANSWER,
-                Map.of(
-                        "sessionId", sessionId == null ? "" : sessionId,
-                        "userAnswer", userAnswer == null ? "" : userAnswer
-                ),
-                context
-        ));
-        if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.AnswerResult result)) {
-            throw new IllegalStateException(response.message());
-        }
+        InterviewAnswerView result = interviewSessionApplicationService.submitAnswer(sessionId, userAnswer);
         return new AnswerResult(
-                result.score(),
-                result.feedback(),
-                result.nextQuestion(),
-                result.averageScore(),
-                result.finished(),
-                result.answeredCount(),
-                result.totalQuestions(),
-                result.difficultyLevel(),
-                result.followUpState(),
-                result.topicMastery(),
-                result.accuracy(),
-                result.logic(),
-                result.depth(),
-                result.boundary(),
-                result.deductions(),
-                result.citations(),
-                result.conflicts()
+                result.score(), result.feedback(), result.nextQuestion(), result.averageScore(), result.finished(),
+                result.answeredCount(), result.totalQuestions(), result.difficultyLevel(), result.followUpState(),
+                result.topicMastery(), result.accuracy(), result.logic(), result.depth(), result.boundary(),
+                result.deductions(), result.citations(), result.conflicts()
         );
     }
     
     public InterviewSession getSession(String sessionId) {
-        return orchestratorAgent.getSession(sessionId);
+        return interviewSessionApplicationService.getSession(sessionId);
     }
 
     /**
      * 生成最终报告：同样走任务路由，以便记录状态并与画像更新/审计链路保持一致。
      */
     public FinalReport generateFinalReport(String sessionId, String userId) {
-        Map<String, Object> context = new LinkedHashMap<>();
-        context.put("source", "InterviewService.generateFinalReport");
-        context.put("traceId", RAGTraceContext.getTraceId());
-        
-        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
-                TaskType.INTERVIEW_REPORT,
-                Map.of(
-                        "sessionId", sessionId == null ? "" : sessionId,
-                        "userId", userId == null ? "" : userId
-                ),
-                context
-        ));
-        if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.FinalReport report)) {
-            throw new IllegalStateException(response.message());
-        }
+        InterviewFinalReportView report = interviewSessionApplicationService.generateFinalReport(sessionId, userId);
         return new FinalReport(
-                report.summary(),
-                report.incomplete(),
-                report.weak(),
-                report.wrong(),
-                report.obsidianUpdates(),
-                report.nextFocus(),
-                report.averageScore(),
-                report.answeredCount()
+                report.summary(), report.incomplete(), report.weak(), report.wrong(),
+                report.obsidianUpdates(), report.nextFocus(), report.averageScore(), report.answeredCount()
         );
     }
 
     public LearningProfileAgent.TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
-        return learningProfileAgent.getTopicCapabilityCurve(userId, topic);
+        return profileApplicationService.getTopicCapabilityCurve(userId, topic);
     }
 
     public Map<String, Object> getProfileOverview(String userId) {
-        return learningProfileAgent.overview(userId);
+        return profileApplicationService.getProfileOverview(userId);
     }
 
     public String getProfileRecommendation(String userId, String mode) {
-        return learningProfileAgent.recommend(userId, mode);
+        return profileApplicationService.getProfileRecommendation(userId, mode);
     }
 
     public java.util.List<Map<String, Object>> getProfileEvents(String userId, int limit) {
-        return learningProfileAgent.listEvents(userId, limit);
+        return profileApplicationService.getProfileEvents(userId, limit);
     }
 
     public java.util.List<String> discoverMcpCapabilities(String userId) {
-        return mcpGatewayService.discoverCapabilities(userId);
+        return mcpApplicationService.discoverCapabilities(userId);
     }
 
     public java.util.List<String> discoverMcpCapabilities(String userId, String traceId) {
-        return mcpGatewayService.discoverCapabilities(userId, traceId);
+        return mcpApplicationService.discoverCapabilities(userId, traceId);
     }
 
     public Map<String, Object> invokeMcpCapability(String userId, String capability, Map<String, Object> params, Map<String, Object> context) {
-        return mcpGatewayService.invoke(userId, capability, params, context);
+        return mcpApplicationService.invokeCapability(userId, capability, params, context);
     }
 
     public java.util.List<RAGObservabilityService.RAGTrace> getRecentRagTraces(int limit) {
-        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
-            return java.util.List.of();
-        }
-        return ragObservabilityService.listRecent(limit);
+        return observabilityApplicationService.getRecentRagTraces(limit);
     }
 
     /**
@@ -190,10 +118,7 @@ public class InterviewService {
      * @return 活动态 Trace 列表
      */
     public java.util.List<RAGObservabilityService.RAGTrace> getActiveRagTraces(int limit) {
-        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
-            return java.util.List.of();
-        }
-        return ragObservabilityService.listActive(limit);
+        return observabilityApplicationService.getActiveRagTraces(limit);
     }
 
     /**
@@ -203,32 +128,19 @@ public class InterviewService {
      * @return Trace 详情；不存在时返回 null
      */
     public RAGObservabilityService.RAGTrace getRagTraceDetail(String traceId) {
-        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
-            return null;
-        }
-        return ragObservabilityService.getTraceDetail(traceId);
+        return observabilityApplicationService.getRagTraceDetail(traceId);
     }
 
     public java.util.Map<String, Object> getRagOverview() {
-        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
-            return java.util.Map.of(
-                    "enabled", false,
-                    "avgLatencyMs", 0,
-                    "avgRetrievedDocs", 0.0,
-                    "cacheHitRate", "0.0%"
-            );
-        }
-        return ragObservabilityService.getOverview();
+        return observabilityApplicationService.getRagOverview();
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.runDefaultEval();
+        return observabilityApplicationService.runRetrievalOfflineEval();
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(java.util.List<RetrievalEvaluationService.EvalCase> cases) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.runCustomEval(cases);
+        return observabilityApplicationService.runRetrievalEvalWithCases(cases);
     }
 
     /**
@@ -242,8 +154,7 @@ public class InterviewService {
             java.util.List<RetrievalEvaluationService.EvalCase> cases,
             RetrievalEvaluationService.EvalRunOptions options
     ) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.runCustomEval(cases, options);
+        return observabilityApplicationService.runRetrievalEvalWithCases(cases, options);
     }
 
     /**
@@ -253,8 +164,7 @@ public class InterviewService {
      * @return 评测运行摘要列表
      */
     public java.util.List<RetrievalEvaluationService.RetrievalEvalRunSummary> listRecentRetrievalEvalRuns(int limit) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.listRecentRuns(limit);
+        return observabilityApplicationService.listRecentRetrievalEvalRuns(limit);
     }
 
     /**
@@ -264,8 +174,7 @@ public class InterviewService {
      * @return 评测详情；不存在时返回 null
      */
     public RetrievalEvaluationService.RetrievalEvalReport getRetrievalEvalRunDetail(String runId) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.getRunDetail(runId);
+        return observabilityApplicationService.getRetrievalEvalRunDetail(runId);
     }
 
     /**
@@ -276,8 +185,7 @@ public class InterviewService {
      * @return 对比结果；任一运行不存在时返回 null
      */
     public RetrievalEvaluationService.RetrievalEvalComparison compareRetrievalEvalRuns(String baselineRunId, String candidateRunId) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.compareRuns(baselineRunId, candidateRunId);
+        return observabilityApplicationService.compareRetrievalEvalRuns(baselineRunId, candidateRunId);
     }
 
     /**
@@ -287,8 +195,7 @@ public class InterviewService {
      * @return 趋势结果
      */
     public RetrievalEvaluationService.RetrievalEvalTrend getRetrievalEvalTrend(int limit) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.getTrend(limit);
+        return observabilityApplicationService.getRetrievalEvalTrend(limit);
     }
 
     /**
@@ -298,8 +205,7 @@ public class InterviewService {
      * @return 聚类结果；运行不存在时返回 null
      */
     public java.util.List<RetrievalEvaluationService.RetrievalEvalFailureCluster> clusterRetrievalEvalFailures(String runId) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.clusterFailures(runId);
+        return observabilityApplicationService.clusterRetrievalEvalFailures(runId);
     }
 
     /**
@@ -308,8 +214,7 @@ public class InterviewService {
      * @return 参数模板列表
      */
     public java.util.List<RetrievalEvaluationService.RetrievalEvalParameterTemplate> listRetrievalEvalParameterTemplates() {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.listParameterTemplates();
+        return observabilityApplicationService.listRetrievalEvalParameterTemplates();
     }
 
     public TaskResponse dispatchTask(TaskType taskType, Map<String, Object> payload, Map<String, Object> context) {
@@ -322,8 +227,7 @@ public class InterviewService {
     }
 
     public java.util.List<RetrievalEvaluationService.EvalCase> parseRetrievalEvalCsv(String csvText) {
-        ensureRetrievalEvalEnabled();
-        return retrievalEvaluationService.parseCasesFromCsv(csvText);
+        return observabilityApplicationService.parseRetrievalEvalCsv(csvText);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval() {
@@ -331,8 +235,7 @@ public class InterviewService {
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval(String engine) {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.runDefaultEval(engine);
+        return observabilityApplicationService.runRagQualityEval(engine);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
@@ -347,78 +250,49 @@ public class InterviewService {
             RAGQualityEvaluationService.EvalRunOptions options,
             String engine
     ) {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.runCustomEval(cases, options, engine);
+        return observabilityApplicationService.runRagQualityEvalWithCases(cases, options, engine);
     }
 
     public List<RAGQualityEvaluationService.QualityEvalRunSummary> listRecentRAGQualityEvalRuns(int limit) {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.listRecentRuns(limit);
+        return observabilityApplicationService.listRecentRagQualityEvalRuns(limit);
     }
 
     public RAGQualityEvaluationService.QualityEvalReport getRAGQualityEvalRunDetail(String runId) {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.getRunDetail(runId);
+        return observabilityApplicationService.getRagQualityEvalRunDetail(runId);
     }
 
     public RAGQualityEvaluationService.QualityEvalComparison compareRAGQualityEvalRuns(String baselineId, String candidateId) {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.compareRuns(baselineId, candidateId);
+        return observabilityApplicationService.compareRagQualityEvalRuns(baselineId, candidateId);
     }
 
     public RAGQualityEvaluationService.QualityEvalTrend getRAGQualityEvalTrend(int limit) {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.getTrend(limit);
+        return observabilityApplicationService.getRagQualityEvalTrend(limit);
     }
 
     public Map<String, Object> getRAGQualityEvalEngineStatus() {
-        ensureRagQualityEvalEnabled();
-        return ragQualityEvaluationService.getEngineStatus();
+        return observabilityApplicationService.getRagQualityEvalEngineStatus();
     }
 
     public boolean isRagTraceEnabled() {
-        return observabilitySwitchProperties.isRagTraceEnabled();
+        return observabilityApplicationService.isRagTraceEnabled();
     }
 
     public boolean isRetrievalEvalEnabled() {
-        return observabilitySwitchProperties.isRetrievalEvalEnabled();
+        return observabilityApplicationService.isRetrievalEvalEnabled();
     }
 
     public boolean isRagQualityEvalEnabled() {
-        return observabilitySwitchProperties.isRagQualityEvalEnabled();
+        return observabilityApplicationService.isRagQualityEvalEnabled();
     }
 
     public java.util.Map<String, Object> getObservabilitySwitches() {
-        return java.util.Map.of(
-                "ragTraceEnabled", observabilitySwitchProperties.isRagTraceEnabled(),
-                "retrievalEvalEnabled", observabilitySwitchProperties.isRetrievalEvalEnabled(),
-                "ragQualityEvalEnabled", observabilitySwitchProperties.isRagQualityEvalEnabled()
-        );
+        return observabilityApplicationService.getObservabilitySwitches();
     }
 
     public java.util.Map<String, Object> updateObservabilitySwitches(Boolean ragTraceEnabled, Boolean retrievalEvalEnabled, Boolean ragQualityEvalEnabled) {
-        if (ragTraceEnabled != null) {
-            observabilitySwitchProperties.setRagTraceEnabled(ragTraceEnabled);
-        }
-        if (retrievalEvalEnabled != null) {
-            observabilitySwitchProperties.setRetrievalEvalEnabled(retrievalEvalEnabled);
-        }
-        if (ragQualityEvalEnabled != null) {
-            observabilitySwitchProperties.setRagQualityEvalEnabled(ragQualityEvalEnabled);
-        }
-        return getObservabilitySwitches();
-    }
-
-    private void ensureRetrievalEvalEnabled() {
-        if (!observabilitySwitchProperties.isRetrievalEvalEnabled()) {
-            throw new IllegalStateException("召回率评测已关闭，请设置 app.observability.retrieval-eval-enabled=true 后重试");
-        }
-    }
-
-    private void ensureRagQualityEvalEnabled() {
-        if (!observabilitySwitchProperties.isRagQualityEvalEnabled()) {
-            throw new IllegalStateException("RAG 生成质量评测已关闭，请设置 app.observability.rag-quality-eval-enabled=true 后重试");
-        }
+        return observabilityApplicationService.updateObservabilitySwitches(
+                ragTraceEnabled, retrievalEvalEnabled, ragQualityEvalEnabled
+        );
     }
 
     public record AnswerResult(

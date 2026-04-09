@@ -5,6 +5,7 @@ import com.example.interview.agent.a2a.A2AIdempotencyStore;
 import com.example.interview.agent.a2a.RocketMqA2ABus;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
+import com.example.interview.controller.support.RequestPayloadMapper;
 import com.example.interview.core.InterviewSession;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.ingestion.IngestionTaskExecutionResult;
@@ -70,6 +71,7 @@ public class InterviewController {
     private final A2ABus a2aBus;
     private final A2AIdempotencyStore a2AIdempotencyStore;
     private final IngestConfigService ingestConfigService;
+    private final RequestPayloadMapper requestPayloadMapper;
 
     public InterviewController(
             InterviewService interviewService,
@@ -81,7 +83,8 @@ public class InterviewController {
             RetrievalEvaluationService retrievalEvaluationService,
             A2ABus a2aBus,
             A2AIdempotencyStore a2AIdempotencyStore,
-            IngestConfigService ingestConfigService
+            IngestConfigService ingestConfigService,
+            RequestPayloadMapper requestPayloadMapper
     ) {
         this.interviewService = interviewService;
         this.ingestionService = ingestionService;
@@ -93,6 +96,7 @@ public class InterviewController {
         this.a2aBus = a2aBus;
         this.a2AIdempotencyStore = a2AIdempotencyStore;
         this.ingestConfigService = ingestConfigService;
+        this.requestPayloadMapper = requestPayloadMapper;
     }
 
     /**
@@ -331,35 +335,14 @@ public class InterviewController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "不支持的 taskType: " + taskTypeRaw));
         }
-        Map<String, Object> taskPayload = payload.get("payload") instanceof Map<?, ?> map
-                ? map.entrySet().stream().collect(Collectors.toMap(
-                entry -> String.valueOf(entry.getKey()),
-                Map.Entry::getValue,
-                (left, right) -> right
-        ))
-                : Map.of();
-        Map<String, Object> context = payload.get("context") instanceof Map<?, ?> map
-                ? map.entrySet().stream().collect(Collectors.toMap(
-                entry -> String.valueOf(entry.getKey()),
-                Map.Entry::getValue,
-                (left, right) -> right
-        ))
-                : Map.of();
-
-        String traceId = context.get("traceId") == null ? UUID.randomUUID().toString() : context.get("traceId").toString();
+        Map<String, Object> taskPayload = requestPayloadMapper.toObjectMap(payload.get("payload"));
+        Map<String, Object> context = requestPayloadMapper.toObjectMap(payload.get("context"));
+        String traceId = requestPayloadMapper.resolveTraceId(context);
         RAGTraceContext.setTraceId(traceId);
 
         try {
-            if (!context.containsKey("userId")) {
-                // 兼容外部调用：如果未显式传业务 userId，则默认用 operator 作为 userId（便于画像归集）。
-                context = new java.util.LinkedHashMap<>(context);
-                context.put("userId", operator);
-            }
-            // 确保 context 中包含 traceId
-            if (!context.containsKey("traceId")) {
-                context = new java.util.LinkedHashMap<>(context);
-                context.put("traceId", traceId);
-            }
+            context = requestPayloadMapper.ensureUserId(context, operator);
+            context = requestPayloadMapper.ensureTraceId(context, traceId);
 
             TaskResponse response = interviewService.dispatchTask(taskType, taskPayload, context);
             opsAuditService.record(
@@ -415,27 +398,11 @@ public class InterviewController {
         if (capability.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "capability 不能为空"));
         }
-        Map<String, Object> params = payload.get("params") instanceof Map<?, ?> map
-                ? map.entrySet().stream().collect(Collectors.toMap(
-                e -> String.valueOf(e.getKey()),
-                Map.Entry::getValue,
-                (left, right) -> right,
-                java.util.LinkedHashMap::new
-        ))
-                : Map.of();
-        Map<String, Object> context = payload.get("context") instanceof Map<?, ?> map
-                ? map.entrySet().stream().collect(Collectors.toMap(
-                e -> String.valueOf(e.getKey()),
-                Map.Entry::getValue,
-                (left, right) -> right,
-                java.util.LinkedHashMap::new
-        ))
-                : Map.of();
-        if (!context.containsKey("traceId")) {
-            // 若上游未透传 traceId，自动补齐以保证观测链路完整。
-            context = new java.util.LinkedHashMap<>(context);
-            context.put("traceId", UUID.randomUUID().toString());
-        }
+        Map<String, Object> params = requestPayloadMapper.toObjectMap(payload.get("params"));
+        Map<String, Object> context = requestPayloadMapper.ensureTraceId(
+                requestPayloadMapper.toObjectMap(payload.get("context")),
+                null
+        );
         Map<String, Object> result = interviewService.invokeMcpCapability(userId, capability, params, context);
         return ResponseEntity.ok(result);
     }
