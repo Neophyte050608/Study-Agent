@@ -27,5 +27,8 @@
     "additionalDirectories": [
       "D:\\Practice\\claude-code-main\\claude-code-main"
     ]
+  },
+  "enabledPlugins": {
+    "double-shot-latte@superpowers-marketplace": true
   }
 }

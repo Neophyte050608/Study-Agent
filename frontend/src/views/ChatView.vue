@@ -136,10 +136,19 @@
             <h3 class="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-8">有什么我能帮你的吗？</h3>
             
             <!-- 底部输入框 (空状态下) -->
-            <div class="w-full max-w-4xl mx-auto px-6">
+            <div class="w-full max-w-4xl mx-auto px-6 relative">
+              <AutocompleteDropdown
+                :suggestions="acSuggestions"
+                :visible="acVisible"
+                :highlight-index="acHighlightIndex"
+                :query="inputContent.trim()"
+                @select="handleAcSelect"
+                @hover="handleAcHover"
+              />
               <div class="relative flex flex-col bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden">
                 <textarea
                   v-model="inputContent"
+                  @keydown="handleAcKeydown"
                   @keydown.enter.exact.prevent="handleSendFromEmpty"
                   rows="1"
                   placeholder="发送消息，Enter 发送，Shift + Enter 换行..."
@@ -279,32 +288,43 @@
                 当前请求级模式
               </div>
             </div>
-            <div class="relative flex flex-col bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden">
-              <textarea
-                v-model="inputContent"
-                @keydown.enter.exact.prevent="handleSend"
-                rows="1"
-                placeholder="发送消息，Enter 发送，Shift + Enter 换行..."
-                class="w-full max-h-[200px] bg-transparent border-none focus:ring-0 resize-none px-5 pt-4 pb-12 text-[15px] text-slate-700 dark:text-slate-200 placeholder-slate-400"
-                style="min-height: 56px;"
-              ></textarea>
-              <div class="absolute bottom-3 right-3 flex items-center gap-2">
-                <button
-                  v-if="isStreaming"
-                  @click="handleStop"
-                  class="h-9 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors flex items-center gap-1"
-                >
-                  <span class="material-symbols-outlined text-[18px]">stop_circle</span>
-                  停止
-                </button>
-                <button
-                  v-else
-                  @click="handleSend"
-                  :disabled="!inputContent.trim()"
-                  class="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-xl transition-colors"
-                >
-                  <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
-                </button>
+            <div class="relative">
+              <AutocompleteDropdown
+                :suggestions="acSuggestions"
+                :visible="acVisible"
+                :highlight-index="acHighlightIndex"
+                :query="inputContent.trim()"
+                @select="handleAcSelect"
+                @hover="handleAcHover"
+              />
+              <div class="relative flex flex-col bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] focus-within:border-indigo-500/50 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden">
+                <textarea
+                  v-model="inputContent"
+                  @keydown="handleAcKeydown"
+                  @keydown.enter.exact.prevent="handleSend"
+                  rows="1"
+                  placeholder="发送消息，Enter 发送，Shift + Enter 换行..."
+                  class="w-full max-h-[200px] bg-transparent border-none focus:ring-0 resize-none px-5 pt-4 pb-12 text-[15px] text-slate-700 dark:text-slate-200 placeholder-slate-400"
+                  style="min-height: 56px;"
+                ></textarea>
+                <div class="absolute bottom-3 right-3 flex items-center gap-2">
+                  <button
+                    v-if="isStreaming"
+                    @click="handleStop"
+                    class="h-9 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors flex items-center gap-1"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">stop_circle</span>
+                    停止
+                  </button>
+                  <button
+                    v-else
+                    @click="handleSend"
+                    :disabled="!inputContent.trim()"
+                    class="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-xl transition-colors"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+                  </button>
+                </div>
               </div>
             </div>
             <div class="text-center mt-3 text-xs text-slate-400 dark:text-slate-500">
@@ -323,6 +343,8 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import QuizCard from './chat/QuizCard.vue'
 import ImageCard from './chat/ImageCard.vue'
+import AutocompleteDropdown from './chat/AutocompleteDropdown.vue'
+import { fetchSuggestions, recordClick } from '../api/autocomplete'
 import {
   createChatSession,
   listChatSessions,
@@ -360,6 +382,13 @@ const streamTaskId = ref(null)
 const streamHandle = ref(null)
 const messagesContainer = ref(null)
 const selectedRetrievalMode = ref('LOCAL_GRAPH_FIRST')
+const acSuggestions = ref([])
+const acVisible = ref(false)
+const acHighlightIndex = ref(-1)
+let acDebounceTimer = null
+let acAbortController = null
+let acSuppressEnterOnce = false
+let acSkipNextQuery = false
 const streamingMeta = ref({
   retrievalModeRequested: '',
   retrievalModeResolved: '',
@@ -539,6 +568,7 @@ const normalizeRetrievalMode = (value) => {
 
 // Load sessions on mount
 onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
   window.addEventListener('pagehide', handlePageLeave)
   window.addEventListener('beforeunload', handlePageLeave)
   try {
@@ -550,8 +580,10 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
   window.removeEventListener('pagehide', handlePageLeave)
   window.removeEventListener('beforeunload', handlePageLeave)
+  if (acDebounceTimer) clearTimeout(acDebounceTimer)
   cancelActiveStream({ expected: true })
   stopRunningMessagePolling()
 })
@@ -654,8 +686,14 @@ const formatRouteLabel = (label) => {
 }
 
 const handleSendFromEmpty = async () => {
+  if (acSuppressEnterOnce) {
+    acSuppressEnterOnce = false
+    return
+  }
   const content = inputContent.value.trim()
   if (!content || isStreaming.value) return
+  acVisible.value = false
+  acHighlightIndex.value = -1
 
   // Create new session first
   try {
@@ -679,8 +717,14 @@ const handleSendFromEmpty = async () => {
 }
 
 const handleSend = async () => {
+  if (acSuppressEnterOnce) {
+    acSuppressEnterOnce = false
+    return
+  }
   const content = inputContent.value.trim()
   if (!content || isStreaming.value || !currentSessionId.value) return
+  acVisible.value = false
+  acHighlightIndex.value = -1
 
   // Optimistic update
   messages.value.push({ role: 'user', content })
@@ -817,6 +861,50 @@ const handleStop = async () => {
   scrollToBottom()
 }
 
+function handleAcSelect(item) {
+  if (!item) return
+  acSkipNextQuery = true
+  inputContent.value = item.phrase || ''
+  acSuggestions.value = []
+  acVisible.value = false
+  acHighlightIndex.value = -1
+  if (item.id) recordClick(item.id).catch(() => {})
+}
+
+function handleAcHover(index) {
+  acHighlightIndex.value = index
+}
+
+function handleAcKeydown(e) {
+  if (!acVisible.value) return
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    acHighlightIndex.value = Math.min(acHighlightIndex.value + 1, acSuggestions.value.length - 1)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    acHighlightIndex.value = Math.max(acHighlightIndex.value - 1, -1)
+  } else if (e.key === 'Enter' && acHighlightIndex.value >= 0) {
+    e.preventDefault()
+    acSuppressEnterOnce = true
+    handleAcSelect(acSuggestions.value[acHighlightIndex.value])
+  } else if (e.key === 'Escape') {
+    acVisible.value = false
+    acHighlightIndex.value = -1
+  }
+}
+
+function handleClickOutside(e) {
+  const target = e.target
+  if (!(target instanceof Element)) {
+    acVisible.value = false
+    return
+  }
+  if (!target.closest('.autocomplete-dropdown') && target.tagName !== 'TEXTAREA') {
+    acVisible.value = false
+  }
+}
+
 watch(() => messages.value.length, () => {
   scrollToBottom()
 })
@@ -843,6 +931,47 @@ watch(selectedRetrievalMode, (value) => {
   } catch (err) {
     console.warn('Failed to persist retrieval mode to localStorage', err)
   }
+})
+
+watch(inputContent, (val) => {
+  if (acDebounceTimer) clearTimeout(acDebounceTimer)
+
+  if (acSkipNextQuery) {
+    acSkipNextQuery = false
+    return
+  }
+
+  const trimmed = val.trim()
+  if (trimmed.length < 2) {
+    acSuggestions.value = []
+    acVisible.value = false
+    acHighlightIndex.value = -1
+    return
+  }
+
+  if (acAbortController) {
+    acAbortController.abort()
+  }
+  acAbortController = new AbortController()
+  const currentController = acAbortController
+
+  acDebounceTimer = setTimeout(async () => {
+    try {
+      const data = await fetchSuggestions(trimmed, 10)
+      if (currentController !== acAbortController || currentController.signal.aborted) {
+        return
+      }
+      acSuggestions.value = Array.isArray(data) ? data : []
+      acVisible.value = acSuggestions.value.length > 0
+      acHighlightIndex.value = -1
+    } catch (e) {
+      if (currentController !== acAbortController || currentController.signal.aborted) {
+        return
+      }
+      acSuggestions.value = []
+      acVisible.value = false
+    }
+  }, 300)
 })
 
 </script>

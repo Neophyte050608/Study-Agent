@@ -547,3 +547,21 @@ CREATE TABLE IF NOT EXISTS `t_rag_quality_eval_case` (
     PRIMARY KEY (`id`),
     KEY `idx_run_id` (`run_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG生成质量评测样本结果';
+
+CREATE TABLE IF NOT EXISTS `t_autocomplete_dict` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `phrase` VARCHAR(200) NOT NULL COMMENT '补全短语',
+    `intent_code` VARCHAR(100) DEFAULT NULL COMMENT '关联意图码',
+    `category` VARCHAR(50) DEFAULT NULL COMMENT '分类标签(面试/刷题/知识问答/学习计划)',
+    `source` VARCHAR(30) NOT NULL COMMENT '来源: INTENT_EXAMPLE/LLM_EXPAND/KNOWLEDGE/USER_LEARNED',
+    `global_heat` INT NOT NULL DEFAULT 0 COMMENT '全局点击热度',
+    `enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (`id`),
+    INDEX `idx_phrase` (`phrase`(50)),
+    INDEX `idx_source` (`source`),
+    INDEX `idx_heat` (`global_heat` DESC),
+    INDEX `idx_intent_code` (`intent_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自动补全词典表';
