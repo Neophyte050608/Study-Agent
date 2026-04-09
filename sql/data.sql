@@ -219,3 +219,35 @@ content=VALUES(content),
 title=VALUES(title),
 description=VALUES(description),
 category=VALUES(category);
+
+INSERT INTO `t_prompt_template` (`name`, `category`, `type`, `title`, `description`, `content`, `is_builtin`)
+VALUES
+('turn-analyzer', 'knowledge-routing', 'SYSTEM', '轮次分析系统提示词',
+ '分析多轮对话的话题切换信号与对话行为',
+ '你是一个对话分析专家。分析用户的当前问题与之前的对话历史，判断对话中的话题变化信号。\n\n你需要输出以下 4 个字段的 JSON：\n- topicSwitch (boolean)：当前问题是否切换了话题。如果用户在延续同一技术领域的深入讨论，则为 false。\n- dialogAct (string)：对话行为类型，必须是以下之一：\n  - FOLLOW_UP：追问或深入同一话题\n  - CLARIFICATION：请求澄清某个细节\n  - NEW_QUESTION：完全不同的新话题\n  - COMPARISON：对比两个技术概念\n  - RETURN：回到之前讨论过的话题\n  - SUMMARY：请求总结\n- infoNovelty (number 0.0~1.0)：当前问题引入的信息新鲜度。追问同一小点为 0.1~0.3，同话题新角度为 0.4~0.6，全新话题为 0.7~1.0。\n- currentTopic (string)：当前问题的话题标签，用简短的中文描述（不超过 10 个字）。\n\n只输出 JSON，不要输出其他内容。',
+ 1),
+('turn-analyzer', 'knowledge-routing', 'TASK', '轮次分析用户提示词',
+ '结合历史话题与最近对话分析当前轮的对话信号',
+ '之前讨论过的话题：\n{{ topicList }}\n\n上一个话题：{{ previousTopic }}\n\n最近对话历史：\n{{ recentHistory }}\n\n当前用户问题：{{ currentQuestion }}\n\n请分析当前问题的话题变化信号，输出 JSON。',
+ 1),
+('knowledge-digest', 'knowledge-routing', 'SYSTEM', '知识摘要系统提示词',
+ '从 RAG 检索结果提炼话题知识摘要',
+ '你是一个知识提炼专家。将检索到的知识内容浓缩为一段精简的摘要，保留最关键的技术要点。\n\n要求：\n- 摘要不超过 200 字\n- 保留关键技术术语和核心概念\n- 去除冗余的上下文描述\n- 输出纯文本，不要使用 markdown 格式',
+ 1),
+('knowledge-digest', 'knowledge-routing', 'TASK', '知识摘要用户提示词',
+ '根据当前话题和检索内容生成短摘要',
+ '当前话题：{{ topic }}\n\n以下是检索到的知识内容：\n{{ knowledgeContext }}\n\n请提炼一段不超过 200 字的知识摘要。',
+ 1)
+ON DUPLICATE KEY UPDATE
+content=VALUES(content),
+title=VALUES(title),
+description=VALUES(description),
+category=VALUES(category),
+is_builtin=VALUES(is_builtin);
+
+-- ==================== knowledge-qa 模板注入 dialogSignal ====================
+-- 在 knowledge-qa TASK 模板末尾追加对话信号块，使动态知识筛选的信号能传递给 LLM
+UPDATE `t_prompt_template`
+SET `content` = CONCAT(`content`, '\n\n{% if dialogSignal is not empty %}\n【对话信号】{{ dialogSignal }}\n{% endif %}')
+WHERE `name` = 'knowledge-qa' AND `type` = 'TASK'
+  AND `content` NOT LIKE '%dialogSignal%';

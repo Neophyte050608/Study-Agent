@@ -31,7 +31,8 @@ public class KnowledgeQaTaskHandler implements TaskHandler {
         return knowledgeQaAgent.execute(
                 TaskHandlerSupport.readText(request.payload(), "query"),
                 TaskHandlerSupport.readText(request.context(), "history"),
-                TaskHandlerSupport.resolveKnowledgeRetrievalMode(request)
+                TaskHandlerSupport.resolveKnowledgeRetrievalMode(request),
+                TaskHandlerSupport.readText(request.context(), "sessionId")
         );
     }
 }

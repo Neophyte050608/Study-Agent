@@ -50,6 +50,7 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
                 context.content(),
                 context.history(),
                 context.retrievalMode(),
+                context.sessionId(),
                 token -> {
                     if (!chatStreamingSupport.isCancelled(context.taskId())) {
                         fullAnswer.append(token);
