@@ -565,3 +565,25 @@ CREATE TABLE IF NOT EXISTS `t_autocomplete_dict` (
     INDEX `idx_heat` (`global_heat` DESC),
     INDEX `idx_intent_code` (`intent_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自动补全词典表';
+
+-- 模型路由候选池
+CREATE TABLE IF NOT EXISTS `t_model_candidate` (
+    `id`                BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `name`              VARCHAR(64)  NOT NULL COMMENT '候选模型唯一标识',
+    `display_name`      VARCHAR(128) NOT NULL COMMENT '显示名称',
+    `provider`          VARCHAR(32)  NOT NULL DEFAULT 'openai' COMMENT '提供商标识',
+    `model`             VARCHAR(64)  NOT NULL COMMENT '模型标识 (如 deepseek-chat, gpt-4o)',
+    `base_url`          VARCHAR(512) NOT NULL COMMENT 'API 地址',
+    `api_key_encrypted` VARCHAR(1024) DEFAULT NULL COMMENT 'AES 加密后的 API Key',
+    `priority`          INT          NOT NULL DEFAULT 100 COMMENT '优先级 (越小越优先)',
+    `is_primary`        TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否主模型 (控制主动健康监控)',
+    `supports_thinking` TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否支持深度推理',
+    `enabled`           TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '是否启用',
+    `route_type`        VARCHAR(16)  NOT NULL DEFAULT 'GENERAL' COMMENT 'GENERAL / THINKING / ALL',
+    `deleted`           TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    `created_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_model_candidate_name` (`name`, `deleted`),
+    KEY `idx_model_candidate_priority` (`priority`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型路由候选池';

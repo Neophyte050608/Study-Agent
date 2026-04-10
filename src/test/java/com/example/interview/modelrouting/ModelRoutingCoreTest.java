@@ -24,7 +24,7 @@ class ModelRoutingCoreTest {
         c2.setPriority(10);
         c2.setEnabled(true);
         properties.setCandidates(List.of(c1, c2));
-        ModelSelector selector = new ModelSelector(properties);
+        ModelSelector selector = new ModelSelector(properties, new YamlCandidateProvider(properties));
 
         List<ModelRoutingCandidate> selected = selector.select(ModelRouteType.GENERAL);
 
@@ -57,8 +57,8 @@ class ModelRoutingCoreTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         ModelHealthStore store = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(store);
-        ModelRoutingCandidate first = new ModelRoutingCandidate("m1", "openai", "", "", 10, false);
-        ModelRoutingCandidate second = new ModelRoutingCandidate("m2", "openai", "", "", 20, false);
+        ModelRoutingCandidate first = new ModelRoutingCandidate("m1", "openai", "", "", 10, false, "", "", "", "TEST");
+        ModelRoutingCandidate second = new ModelRoutingCandidate("m2", "openai", "", "", 20, false, "", "", "", "TEST");
         AtomicInteger attempt = new AtomicInteger(0);
 
         String result = executor.execute(List.of(first, second), candidate -> {
@@ -76,7 +76,7 @@ class ModelRoutingCoreTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         ModelHealthStore store = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(store);
-        ModelRoutingCandidate first = new ModelRoutingCandidate("m1", "openai", "", "", 10, false);
+        ModelRoutingCandidate first = new ModelRoutingCandidate("m1", "openai", "", "", 10, false, "", "", "", "TEST");
 
         assertThrows(ModelRoutingException.class, () -> executor.execute(List.of(first), ignored -> {
             throw new IllegalStateException("fail");
@@ -98,5 +98,25 @@ class ModelRoutingCoreTest {
         assertEquals(1L, metrics.get("openTransitionCount"));
         assertEquals(1L, metrics.get("openRejectCount"));
         assertEquals("OPEN", String.valueOf(details.get("m1").get("state")));
+    }
+
+    @Test
+    void shouldRespectRouteTypeBeforeThinkingCapabilityFilter() {
+        ModelRoutingProperties properties = new ModelRoutingProperties();
+        CandidateProvider candidateProvider = () -> List.of(
+                new ModelRoutingCandidate("general-only", "openai", "g1", "", 10, true, "", "", "GENERAL", "TEST"),
+                new ModelRoutingCandidate("thinking-only", "openai", "t1", "", 20, true, "", "", "THINKING", "TEST"),
+                new ModelRoutingCandidate("all-routes", "openai", "a1", "", 30, true, "", "", "ALL", "TEST"),
+                new ModelRoutingCandidate("legacy", "openai", "l1", "", 40, false, "", "", "", "TEST")
+        );
+        ModelSelector selector = new ModelSelector(properties, candidateProvider);
+
+        List<ModelRoutingCandidate> general = selector.select(ModelRouteType.GENERAL);
+        List<ModelRoutingCandidate> thinking = selector.select(ModelRouteType.THINKING);
+
+        assertEquals(List.of("general-only", "all-routes", "legacy"),
+                general.stream().map(ModelRoutingCandidate::name).toList());
+        assertEquals(List.of("thinking-only", "all-routes"),
+                thinking.stream().map(ModelRoutingCandidate::name).toList());
     }
 }

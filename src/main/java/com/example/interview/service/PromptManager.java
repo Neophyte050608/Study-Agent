@@ -24,6 +24,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PromptManager {
 
     private static final Logger log = LoggerFactory.getLogger(PromptManager.class);
+    private static final Set<String> REQUIRED_SYSTEM_TEMPLATES = Set.of(
+            "router",
+            "interviewer",
+            "coding-coach",
+            "knowledge-assistant",
+            "context-compressor",
+            "turn-analyzer-system",
+            "knowledge-digest-system"
+    );
     private static final Set<String> REQUIRED_TASK_TEMPLATES = Set.of(
             "task-router",
             "intent-tree-classifier",
@@ -38,6 +47,9 @@ public class PromptManager {
             "coding-next-question",
             "learning-plan",
             "knowledge-qa",
+            "turn-analyzer-task",
+            "knowledge-digest-task",
+            "batch-quiz-question",
             "ollama-local-route",
             "chat-context-compress",
             "cross-session-memorize",
@@ -169,14 +181,21 @@ public class PromptManager {
     }
 
     private void validateRequiredTemplates() {
+        Set<String> missingSystems = new HashSet<>();
+        for (String templateName : REQUIRED_SYSTEM_TEMPLATES) {
+            if (!systemTemplateCache.containsKey(templateName)) {
+                missingSystems.add(templateName);
+            }
+        }
         Set<String> missing = new HashSet<>();
         for (String templateName : REQUIRED_TASK_TEMPLATES) {
             if (!templateCache.containsKey(templateName)) {
                 missing.add(templateName);
             }
         }
-        if (!missing.isEmpty()) {
-            String message = "提示词模板缺失，请先在 t_prompt_template 补齐后重试，缺失模板: " + missing;
+        if (!missingSystems.isEmpty() || !missing.isEmpty()) {
+            String message = "提示词模板缺失，请先在 t_prompt_template 补齐后重试，缺失系统模板: "
+                    + missingSystems + "，缺失任务模板: " + missing;
             log.error(message);
             throw new IllegalStateException(message);
         }

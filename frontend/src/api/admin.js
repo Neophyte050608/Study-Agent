@@ -159,3 +159,36 @@ export function loadRagQualityEvalTrend(limit = 20) {
 export function loadRagasEngineStatus() {
   return httpGet('/api/observability/rag-quality-eval/engine-status')
 }
+
+// ===== 模型候选管理 =====
+export function loadModelCandidates() {
+  return httpGet('/api/model-routing/candidates')
+}
+
+export function createModelCandidate(data) {
+  return httpPostJson('/api/model-routing/candidates', data)
+}
+
+export function updateModelCandidate(id, data) {
+  return httpPut(`/api/model-routing/candidates/${id}`, data)
+}
+
+export function deleteModelCandidate(id) {
+  return httpDelete(`/api/model-routing/candidates/${id}`)
+}
+
+export function toggleModelCandidate(id) {
+  return httpPostJson(`/api/model-routing/candidates/${id}/toggle`, {})
+}
+
+export function probeModelCandidate(id) {
+  return httpPostJson(`/api/model-routing/candidates/${id}/probe`, {})
+}
+
+export function copyModelCandidateKey(id) {
+  return httpPostJson(`/api/model-routing/candidates/${id}/copy-key`, {})
+}
+
+export function loadModelRoutingStats() {
+  return httpGet('/api/model-routing/stats')
+}

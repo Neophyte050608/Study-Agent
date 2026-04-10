@@ -68,7 +68,7 @@ public class ConversationTopicTracker {
             vars.put("previousTopic", previousTopic);
             vars.put("topicList", topicList.toString());
 
-            PromptManager.PromptPair pair = promptManager.renderSplit("turn-analyzer", "turn-analyzer", vars);
+            PromptManager.PromptPair pair = promptManager.renderSplit("turn-analyzer-system", "turn-analyzer-task", vars);
             String raw = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "轮次分析");
             return parseTurnAnalysis(raw, previousTopic, currentQuestion);
         } catch (Exception ex) {
@@ -151,7 +151,7 @@ public class ConversationTopicTracker {
             vars.put("topic", analysis.currentTopic());
             vars.put("knowledgeContext", truncate(knowledgeContext, DIGEST_CONTEXT_LIMIT));
 
-            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-digest", "knowledge-digest", vars);
+            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-digest-system", "knowledge-digest-task", vars);
             String digest = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "知识摘要");
             if (digest != null && !digest.isBlank()) {
                 updateTopicState(sessionId, analysis, digest.trim());

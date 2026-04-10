@@ -14,9 +14,11 @@ import java.util.Locale;
 public class ModelSelector {
 
     private final ModelRoutingProperties properties;
+    private final CandidateProvider candidateProvider;
 
-    public ModelSelector(ModelRoutingProperties properties) {
+    public ModelSelector(ModelRoutingProperties properties, CandidateProvider candidateProvider) {
         this.properties = properties;
+        this.candidateProvider = candidateProvider;
     }
 
     /**
@@ -31,22 +33,22 @@ public class ModelSelector {
      */
     public List<ModelRoutingCandidate> select(ModelRouteType routeType) {
         String preferred = routeType == ModelRouteType.THINKING ? properties.getDeepThinkingModel() : properties.getDefaultModel();
-        return properties.getCandidates().stream()
-                .filter(ModelRoutingProperties.Candidate::isEnabled)
-                .filter(candidate -> routeType != ModelRouteType.THINKING || candidate.isSupportsThinking())
-                .map(candidate -> new ModelRoutingCandidate(
-                        normalizeName(candidate.getName()),
-                        normalizeName(candidate.getProvider()),
-                        normalizeName(candidate.getModel()),
-                        normalizeName(candidate.getBeanName()),
-                        candidate.getPriority(),
-                        candidate.isSupportsThinking()
-                ))
+        return candidateProvider.getCandidates().stream()
+                .filter(candidate -> supportsRouteType(candidate, routeType))
+                .filter(candidate -> routeType != ModelRouteType.THINKING || candidate.supportsThinking())
                 .sorted(Comparator
                         .comparingInt(ModelRoutingCandidate::priority)
                         .thenComparingInt(candidate -> isPreferred(candidate, preferred) ? 0 : 1)
                         .thenComparing(ModelRoutingCandidate::name))
                 .toList();
+    }
+
+    private boolean supportsRouteType(ModelRoutingCandidate candidate, ModelRouteType routeType) {
+        String normalizedRouteType = normalizeRouteType(candidate.routeType());
+        if (normalizedRouteType.isBlank() || "ALL".equals(normalizedRouteType)) {
+            return true;
+        }
+        return normalizedRouteType.equals(routeType.name());
     }
 
     private boolean isPreferred(ModelRoutingCandidate candidate, String preferred) {
@@ -58,7 +60,8 @@ public class ModelSelector {
                 || normalizedPreferred.equals(candidate.model().toLowerCase(Locale.ROOT));
     }
 
-    private String normalizeName(String value) {
-        return value == null ? "" : value.trim();
+    private String normalizeRouteType(String routeType) {
+        return routeType == null ? "" : routeType.trim().toUpperCase(Locale.ROOT);
     }
+
 }

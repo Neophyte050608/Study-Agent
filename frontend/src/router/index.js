@@ -16,6 +16,7 @@ import PlaceholderView from '../views/PlaceholderView.vue'
 import IntentListView from '../views/IntentListView.vue'
 import IntentEditView from '../views/IntentEditView.vue'
 import RagTraceDetailView from '../views/RagTraceDetailView.vue'
+import ModelProvidersView from '../views/ModelProvidersView.vue'
 
 const routes = [
   {
@@ -66,6 +67,12 @@ const routes = [
         path: 'ops/:traceId',
         name: 'rag-trace-detail',
         component: RagTraceDetailView
+      },
+      {
+        path: 'model-providers',
+        name: 'model-providers',
+        component: ModelProvidersView,
+        alias: ['model-providers.html']
       },
       {
         path: 'settings',

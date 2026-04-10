@@ -1,8 +1,14 @@
 package com.example.interview.controller;
 
+import com.example.interview.dto.ModelCandidateDTO;
+import com.example.interview.entity.ModelCandidateDO;
+import com.example.interview.modelrouting.FirstTokenProbeInvoker;
+import com.example.interview.modelrouting.ModelHealthStore;
 import com.example.interview.modelrouting.ModelRoutingProperties;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.service.DynamicModelFactory;
 import com.example.interview.service.OllamaHealthService;
+import com.example.interview.service.model.ModelCandidateService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
@@ -27,15 +33,29 @@ class ModelRoutingControllerTest {
         ));
         ModelRoutingProperties properties = new ModelRoutingProperties();
         OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
+        ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
+        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
+        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
+        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
         when(ollamaHealthService.getHealthInfo()).thenReturn(Map.of("status", "UP", "serviceUp", true, "modelReady", true));
         properties.setEnabled(true);
         properties.setDefaultModel("deepseek-chat");
         properties.setDeepThinkingModel("deepseek-reasoner");
-        ModelRoutingProperties.Candidate candidate = new ModelRoutingProperties.Candidate();
+        ModelCandidateDO candidate = new ModelCandidateDO();
+        candidate.setId(1L);
         candidate.setName("deepseek-chat");
-        properties.setCandidates(List.of(candidate));
+        when(modelCandidateService.listAll()).thenReturn(List.of(candidate));
 
-        ModelRoutingController controller = new ModelRoutingController(routingChatService, properties, ollamaHealthService);
+        ModelRoutingController controller = new ModelRoutingController(
+                routingChatService,
+                properties,
+                ollamaHealthService,
+                modelCandidateService,
+                modelHealthStore,
+                dynamicModelFactory,
+                firstTokenProbeInvoker,
+                false
+        );
         ResponseEntity<Map<String, Object>> response = controller.stats();
 
         assertEquals(200, response.getStatusCode().value());
@@ -45,5 +65,136 @@ class ModelRoutingControllerTest {
         assertEquals(1, body.get("candidateCount"));
         assertTrue(body.containsKey("runtime"));
         assertTrue(body.containsKey("ollama"));
+    }
+
+    @Test
+    void shouldReturnMaskedCandidates() {
+        RoutingChatService routingChatService = mock(RoutingChatService.class);
+        ModelRoutingProperties properties = new ModelRoutingProperties();
+        OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
+        ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
+        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
+        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
+        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+
+        ModelCandidateDO entity = new ModelCandidateDO();
+        entity.setId(1L);
+        entity.setName("deepseek-chat");
+        ModelCandidateDTO dto = new ModelCandidateDTO();
+        dto.setId(1L);
+        dto.setName("deepseek-chat");
+        dto.setApiKeyMasked("sk-a****z");
+        dto.setApiKeyConfigured(true);
+        dto.setApiKeyReadable(true);
+        when(modelCandidateService.listAll()).thenReturn(List.of(entity));
+        when(modelCandidateService.toMaskedDto(entity)).thenReturn(dto);
+
+        ModelRoutingController controller = new ModelRoutingController(
+                routingChatService,
+                properties,
+                ollamaHealthService,
+                modelCandidateService,
+                modelHealthStore,
+                dynamicModelFactory,
+                firstTokenProbeInvoker,
+                false
+        );
+
+        ResponseEntity<List<ModelCandidateDTO>> response = controller.listCandidates();
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().size());
+        assertEquals("sk-a****z", response.getBody().getFirst().getApiKeyMasked());
+        assertEquals(Boolean.FALSE, response.getBody().getFirst().getApiKeyCopyAllowed());
+    }
+
+    @Test
+    void shouldRejectPlaintextKeyExportWhenDisabled() {
+        RoutingChatService routingChatService = mock(RoutingChatService.class);
+        ModelRoutingProperties properties = new ModelRoutingProperties();
+        OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
+        ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
+        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
+        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
+        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+
+        ModelRoutingController controller = new ModelRoutingController(
+                routingChatService,
+                properties,
+                ollamaHealthService,
+                modelCandidateService,
+                modelHealthStore,
+                dynamicModelFactory,
+                firstTokenProbeInvoker,
+                false
+        );
+
+        ResponseEntity<Map<String, String>> response = controller.copyKey(1L);
+
+        assertEquals(403, response.getStatusCode().value());
+        assertTrue(response.getBody().get("message").contains("默认关闭"));
+    }
+
+    @Test
+    void shouldReturnPlaintextKeyWhenExportExplicitlyEnabled() {
+        RoutingChatService routingChatService = mock(RoutingChatService.class);
+        ModelRoutingProperties properties = new ModelRoutingProperties();
+        OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
+        ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
+        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
+        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
+        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        when(modelCandidateService.decryptApiKey(1L)).thenReturn("sk-live");
+
+        ModelRoutingController controller = new ModelRoutingController(
+                routingChatService,
+                properties,
+                ollamaHealthService,
+                modelCandidateService,
+                modelHealthStore,
+                dynamicModelFactory,
+                firstTokenProbeInvoker,
+                true
+        );
+
+        ResponseEntity<Map<String, String>> response = controller.copyKey(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("sk-live", response.getBody().get("apiKey"));
+    }
+
+    @Test
+    void shouldExposeCopyPermissionOnCandidateDto() {
+        RoutingChatService routingChatService = mock(RoutingChatService.class);
+        ModelRoutingProperties properties = new ModelRoutingProperties();
+        OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
+        ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
+        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
+        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
+        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+
+        ModelCandidateDO entity = new ModelCandidateDO();
+        entity.setId(1L);
+        ModelCandidateDTO dto = new ModelCandidateDTO();
+        dto.setId(1L);
+        dto.setApiKeyConfigured(true);
+        dto.setApiKeyReadable(true);
+        when(modelCandidateService.listAll()).thenReturn(List.of(entity));
+        when(modelCandidateService.toMaskedDto(entity)).thenReturn(dto);
+
+        ModelRoutingController controller = new ModelRoutingController(
+                routingChatService,
+                properties,
+                ollamaHealthService,
+                modelCandidateService,
+                modelHealthStore,
+                dynamicModelFactory,
+                firstTokenProbeInvoker,
+                true
+        );
+
+        ResponseEntity<List<ModelCandidateDTO>> response = controller.listCandidates();
+
+        assertEquals(Boolean.TRUE, response.getBody().getFirst().getApiKeyCopyAllowed());
     }
 }

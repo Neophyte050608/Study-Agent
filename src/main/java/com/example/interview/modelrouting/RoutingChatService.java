@@ -272,7 +272,7 @@ public class RoutingChatService {
     }
 
     private ChatModel resolveChatModel(ModelRoutingCandidate candidate) {
-        ChatModel chatModel = dynamicModelFactory.getByRoutingCandidate(candidate.provider(), candidate.beanName());
+        ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
         if (chatModel == null) {
             throw new ModelRoutingException("找不到可用模型实例: " + candidate.name());
         }

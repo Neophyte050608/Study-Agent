@@ -7,12 +7,13 @@ VALUES
 ('CODING', '算法刷题', '针对薄弱点进行专项算法训练', '/coding', 'code', 'SIDEBAR', 4, 0),
 ('PROFILE', '能力画像', '查看你的技术掌握度曲线', '/profile', 'analytics', 'SIDEBAR', 5, 0),
 ('MONITORING', '系统监控', '模型路由、熔断状态与调用统计', '/monitoring', 'monitoring', 'SIDEBAR', 6, 0),
-('OPS', '运维中心', '查看 RAG 运行态与审计信息', '/ops', 'build', 'EXTENSION', 7, 0),
-('SETTINGS', '模型配置', '统一配置 Agent 的模型参数', '/settings', 'tune', 'EXTENSION', 8, 0),
-('MCP', 'MCP 工具台', '查看能力并发起 MCP 调用', '/mcp', 'hub', 'EXTENSION', 9, 0),
-('INTENT_TREE', '意图树配置', '在线维护意图树阈值与策略', '/intent-tree', 'account_tree', 'EXTENSION', 10, 0),
-('WORKSPACE', '扩展空间', '管理菜单布局与扩展模块入口', '/workspace', 'dashboard_customize', 'EXTENSION', 11, 0),
-('PROMPTS', '提示词管理', '浏览、编辑和预览 AI 提示词模板', '/prompts', 'edit_note', 'EXTENSION', 12, 0)
+('MODEL_PROVIDERS', '模型管理', '多模型候补与健康监控管理', '/model-providers', 'hub', 'SIDEBAR', 7, 0),
+('OPS', '运维中心', '查看 RAG 运行态与审计信息', '/ops', 'build', 'EXTENSION', 8, 0),
+('SETTINGS', '模型配置', '统一配置 Agent 的模型参数', '/settings', 'tune', 'EXTENSION', 9, 0),
+('MCP', 'MCP 工具台', '查看能力并发起 MCP 调用', '/mcp', 'hub', 'EXTENSION', 10, 0),
+('INTENT_TREE', '意图树配置', '在线维护意图树阈值与策略', '/intent-tree', 'account_tree', 'EXTENSION', 11, 0),
+('WORKSPACE', '扩展空间', '管理菜单布局与扩展模块入口', '/workspace', 'dashboard_customize', 'EXTENSION', 12, 0),
+('PROMPTS', '提示词管理', '浏览、编辑和预览 AI 提示词模板', '/prompts', 'edit_note', 'EXTENSION', 13, 0)
 ON DUPLICATE KEY UPDATE 
 title=VALUES(title), 
 description=VALUES(description), 
@@ -222,19 +223,19 @@ category=VALUES(category);
 
 INSERT INTO `t_prompt_template` (`name`, `category`, `type`, `title`, `description`, `content`, `is_builtin`)
 VALUES
-('turn-analyzer', 'knowledge-routing', 'SYSTEM', '轮次分析系统提示词',
+('turn-analyzer-system', 'knowledge-routing', 'SYSTEM', '轮次分析系统提示词',
  '分析多轮对话的话题切换信号与对话行为',
  '你是一个对话分析专家。分析用户的当前问题与之前的对话历史，判断对话中的话题变化信号。\n\n你需要输出以下 4 个字段的 JSON：\n- topicSwitch (boolean)：当前问题是否切换了话题。如果用户在延续同一技术领域的深入讨论，则为 false。\n- dialogAct (string)：对话行为类型，必须是以下之一：\n  - FOLLOW_UP：追问或深入同一话题\n  - CLARIFICATION：请求澄清某个细节\n  - NEW_QUESTION：完全不同的新话题\n  - COMPARISON：对比两个技术概念\n  - RETURN：回到之前讨论过的话题\n  - SUMMARY：请求总结\n- infoNovelty (number 0.0~1.0)：当前问题引入的信息新鲜度。追问同一小点为 0.1~0.3，同话题新角度为 0.4~0.6，全新话题为 0.7~1.0。\n- currentTopic (string)：当前问题的话题标签，用简短的中文描述（不超过 10 个字）。\n\n只输出 JSON，不要输出其他内容。',
  1),
-('turn-analyzer', 'knowledge-routing', 'TASK', '轮次分析用户提示词',
+('turn-analyzer-task', 'knowledge-routing', 'TASK', '轮次分析用户提示词',
  '结合历史话题与最近对话分析当前轮的对话信号',
  '之前讨论过的话题：\n{{ topicList }}\n\n上一个话题：{{ previousTopic }}\n\n最近对话历史：\n{{ recentHistory }}\n\n当前用户问题：{{ currentQuestion }}\n\n请分析当前问题的话题变化信号，输出 JSON。',
  1),
-('knowledge-digest', 'knowledge-routing', 'SYSTEM', '知识摘要系统提示词',
+('knowledge-digest-system', 'knowledge-routing', 'SYSTEM', '知识摘要系统提示词',
  '从 RAG 检索结果提炼话题知识摘要',
  '你是一个知识提炼专家。将检索到的知识内容浓缩为一段精简的摘要，保留最关键的技术要点。\n\n要求：\n- 摘要不超过 200 字\n- 保留关键技术术语和核心概念\n- 去除冗余的上下文描述\n- 输出纯文本，不要使用 markdown 格式',
  1),
-('knowledge-digest', 'knowledge-routing', 'TASK', '知识摘要用户提示词',
+('knowledge-digest-task', 'knowledge-routing', 'TASK', '知识摘要用户提示词',
  '根据当前话题和检索内容生成短摘要',
  '当前话题：{{ topic }}\n\n以下是检索到的知识内容：\n{{ knowledgeContext }}\n\n请提炼一段不超过 200 字的知识摘要。',
  1)
@@ -251,3 +252,18 @@ UPDATE `t_prompt_template`
 SET `content` = CONCAT(`content`, '\n\n{% if dialogSignal != "" %}\n【对话信号】{{ dialogSignal }}\n{% endif %}')
 WHERE `name` = 'knowledge-qa' AND `type` = 'TASK'
   AND `content` NOT LIKE '%dialogSignal%';
+
+-- 模型候选池种子数据
+INSERT INTO `t_model_candidate` (`name`, `display_name`, `provider`, `model`, `base_url`, `priority`, `is_primary`, `supports_thinking`, `route_type`)
+VALUES
+    ('deepseek-chat', 'DeepSeek Chat', 'openai', 'deepseek-chat', 'https://api.deepseek.com', 10, 1, 0, 'GENERAL'),
+    ('deepseek-reasoner', 'DeepSeek Reasoner', 'openai', 'deepseek-reasoner', 'https://api.deepseek.com', 20, 0, 1, 'THINKING')
+ON DUPLICATE KEY UPDATE
+    display_name = VALUES(display_name),
+    provider = VALUES(provider),
+    model = VALUES(model),
+    base_url = VALUES(base_url),
+    priority = VALUES(priority),
+    is_primary = VALUES(is_primary),
+    supports_thinking = VALUES(supports_thinking),
+    route_type = VALUES(route_type);

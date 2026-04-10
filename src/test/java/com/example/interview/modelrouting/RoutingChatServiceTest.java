@@ -25,12 +25,12 @@ class RoutingChatServiceTest {
         candidate.setPriority(1);
         properties.setCandidates(java.util.List.of(candidate));
 
-        ModelSelector selector = new ModelSelector(properties);
+        ModelSelector selector = new ModelSelector(properties, new YamlCandidateProvider(properties));
         ModelHealthStore healthStore = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(healthStore);
         ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties, Runnable::run);
         DynamicModelFactory factory = mock(DynamicModelFactory.class);
-        when(factory.getByRoutingCandidate("openai", "")).thenReturn(null);
+        when(factory.getByCandidate(new ModelRoutingCandidate("m1", "openai", "", "", 1, false, "", "", "", "YAML"))).thenReturn(null);
         ChatModel fallbackModel = mock(ChatModel.class);
         Executor asyncExecutor = Runnable::run;
         RoutingChatService service = new RoutingChatService(asyncExecutor, properties, selector, executor, healthStore, factory, awaiter, fallbackModel);
@@ -52,7 +52,7 @@ class RoutingChatServiceTest {
     @Test
     void shouldExposeHealthStateSnapshotInStats() {
         ModelRoutingProperties properties = new ModelRoutingProperties();
-        ModelSelector selector = new ModelSelector(properties);
+        ModelSelector selector = new ModelSelector(properties, new YamlCandidateProvider(properties));
         ModelHealthStore healthStore = new ModelHealthStore(properties);
         ModelRoutingExecutor executor = new ModelRoutingExecutor(healthStore);
         ModelProbeAwaiter awaiter = new ModelProbeAwaiter(properties, Runnable::run);

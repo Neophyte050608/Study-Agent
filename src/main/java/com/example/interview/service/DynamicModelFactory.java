@@ -1,6 +1,9 @@
 package com.example.interview.service;
 
 import com.example.interview.config.AgentConfig;
+import com.example.interview.modelrouting.ModelRoutingCandidate;
+import com.example.interview.service.model.ApiKeyEncryptor;
+import com.example.interview.service.model.DynamicChatModelRegistry;
 import com.example.interview.service.model.ModelBeanResolver;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.ApplicationContext;
@@ -18,13 +21,19 @@ public class DynamicModelFactory {
     private final AgentConfigService agentConfigService;
     private final ApplicationContext applicationContext;
     private final ModelBeanResolver modelBeanResolver;
+    private final DynamicChatModelRegistry dynamicChatModelRegistry;
+    private final ApiKeyEncryptor apiKeyEncryptor;
 
     public DynamicModelFactory(AgentConfigService agentConfigService,
                                ApplicationContext applicationContext,
-                               ModelBeanResolver modelBeanResolver) {
+                               ModelBeanResolver modelBeanResolver,
+                               DynamicChatModelRegistry dynamicChatModelRegistry,
+                               ApiKeyEncryptor apiKeyEncryptor) {
         this.agentConfigService = agentConfigService;
         this.applicationContext = applicationContext;
         this.modelBeanResolver = modelBeanResolver;
+        this.dynamicChatModelRegistry = dynamicChatModelRegistry;
+        this.apiKeyEncryptor = apiKeyEncryptor;
     }
 
     /**
@@ -38,6 +47,22 @@ public class DynamicModelFactory {
 
     public ChatModel getByRoutingCandidate(String provider, String beanName) {
         return getByBeanNameOrDefault(modelBeanResolver.resolveByRoutingCandidate(provider, beanName));
+    }
+
+    public ChatModel getByCandidate(ModelRoutingCandidate candidate) {
+        if (candidate.baseUrl() != null && !candidate.baseUrl().isBlank()) {
+            String apiKey = "";
+            if (candidate.apiKeyRef() != null && !candidate.apiKeyRef().isBlank()) {
+                apiKey = apiKeyEncryptor.decrypt(candidate.apiKeyRef());
+            }
+            return dynamicChatModelRegistry.getOrCreate(
+                    candidate.name(),
+                    candidate.baseUrl(),
+                    apiKey,
+                    candidate.model()
+            );
+        }
+        return getByRoutingCandidate(candidate.provider(), candidate.beanName());
     }
 
     private ChatModel getByBeanNameOrDefault(String beanName) {
