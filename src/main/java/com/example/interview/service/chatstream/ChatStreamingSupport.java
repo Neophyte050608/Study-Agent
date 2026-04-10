@@ -83,24 +83,43 @@ public class ChatStreamingSupport {
             List<Map<String, Object>> normalizedImages = new java.util.ArrayList<>();
             int position = text == null ? 0 : text.length();
             for (Object image : images) {
-                if (image instanceof Map<?, ?> map) {
-                    Map<String, Object> normalized = new LinkedHashMap<>();
-                    normalized.put("imageId", map.get("imageId"));
-                    normalized.put("imageName", map.get("imageName"));
-                    normalized.put("accessUrl", map.get("accessUrl"));
-                    normalized.put("thumbnailUrl", map.get("thumbnailUrl"));
-                    normalized.put("summaryText", map.get("summaryText"));
-                    normalized.put("retrieveChannel", map.get("retrieveChannel"));
-                    normalized.put("position", position);
+                Map<String, Object> normalized = normalizeImagePayload(image, position);
+                if (normalized != null && !normalized.isEmpty()) {
                     normalizedImages.add(normalized);
-                } else {
-                    normalizedImages.add(Map.of("position", position, "value", image));
                 }
             }
             payload.put("images", normalizedImages);
             return OBJECT_MAPPER.writeValueAsString(payload);
         } catch (Exception ignored) {
             return text;
+        }
+    }
+
+    private Map<String, Object> normalizeImagePayload(Object image, int position) {
+        if (image == null) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> raw = image instanceof Map<?, ?> map
+                    ? OBJECT_MAPPER.convertValue(map, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {})
+                    : OBJECT_MAPPER.convertValue(image, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+
+            Object nestedValue = raw.get("value");
+            if (nestedValue != null) {
+                raw = OBJECT_MAPPER.convertValue(nestedValue, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            }
+
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            normalized.put("imageId", raw.get("imageId"));
+            normalized.put("imageName", raw.get("imageName"));
+            normalized.put("accessUrl", raw.get("accessUrl"));
+            normalized.put("thumbnailUrl", raw.get("thumbnailUrl"));
+            normalized.put("summaryText", raw.get("summaryText"));
+            normalized.put("retrieveChannel", raw.get("retrieveChannel"));
+            normalized.put("position", position);
+            return normalized;
+        } catch (Exception ignored) {
+            return Map.of("position", position);
         }
     }
 

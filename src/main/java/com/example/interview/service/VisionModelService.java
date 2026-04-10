@@ -40,12 +40,12 @@ public class VisionModelService {
         this.model = model;
     }
 
-    public String summarize(Path imagePath, String fallbackName) {
+    public String summarize(Path imagePath, String fallbackName, String sectionPath, String nearbyContext) {
         if (imagePath == null) {
-            return fallback(fallbackName);
+            return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
         }
         if (!enabled || apiKey.isBlank()) {
-            return fallback(fallbackName);
+            return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
         }
         try {
             byte[] bytes = java.nio.file.Files.readAllBytes(imagePath);
@@ -59,12 +59,7 @@ public class VisionModelService {
             body.put("messages", List.of(Map.of(
                     "role", "user",
                     "content", List.of(
-                            Map.of("type", "text", "text", """
-                                    你是技术文档图片分析专家。请分析这张图片并输出 JSON：
-                                    1. type: 图片类型（架构图/代码截图/流程图/配置截图/其他）
-                                    2. keywords: 核心技术关键词数组
-                                    3. description: 50-150字描述
-                                    """),
+                            Map.of("type", "text", "text", buildVlmPrompt(sectionPath, nearbyContext)),
                             Map.of("type", "image_url", "image_url", Map.of("url", "data:" + mimeType + ";base64," + base64))
                     )
             )));
@@ -75,21 +70,21 @@ public class VisionModelService {
                     .body(body)
                     .retrieve()
                     .body(String.class);
-            String summary = parseSummary(raw, fallbackName);
-            return summary == null || summary.isBlank() ? fallback(fallbackName) : summary;
+            String summary = parseSummary(raw, fallbackName, sectionPath, nearbyContext);
+            return summary == null || summary.isBlank() ? fallbackWithContext(fallbackName, sectionPath, nearbyContext) : summary;
         } catch (Exception e) {
             logger.warn("Vision summary failed for {}", imagePath, e);
-            return fallback(fallbackName);
+            return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
         }
     }
 
-    private String parseSummary(String raw, String fallbackName) {
+    private String parseSummary(String raw, String fallbackName, String sectionPath, String nearbyContext) {
         try {
             JsonNode root = objectMapper.readTree(raw);
             JsonNode content = root.path("choices").path(0).path("message").path("content");
             String text = content.asText("");
             if (text.isBlank()) {
-                return fallback(fallbackName);
+                return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
             }
             JsonNode node = objectMapper.readTree(text);
             String type = node.path("type").asText("其他");
@@ -98,11 +93,52 @@ public class VisionModelService {
             String joined = (keywords == null || keywords.isEmpty()) ? "" : String.join("、", keywords);
             return ("[" + type + "] " + description + (joined.isBlank() ? "" : " 关键词: " + joined)).trim();
         } catch (Exception ignored) {
-            return fallback(fallbackName);
+            return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
         }
     }
 
     private String fallback(String fallbackName) {
         return "图片：" + (fallbackName == null || fallbackName.isBlank() ? "未命名图片" : fallbackName);
+    }
+
+    private String buildVlmPrompt(String sectionPath, String nearbyContext) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("你是技术文档图片分析专家。请分析这张图片并输出 JSON：\n");
+        prompt.append("1. type: 图片类型（架构图/代码截图/流程图/配置截图/其他）\n");
+        prompt.append("2. keywords: 核心技术关键词数组\n");
+        prompt.append("3. description: 50-150字描述，需准确反映图片内容与其在文档中的作用\n");
+        if (sectionPath != null && !sectionPath.isBlank()) {
+            prompt.append("\n该图片出现在文档章节：").append(sectionPath).append("\n");
+        }
+        if (nearbyContext != null && !nearbyContext.isBlank()) {
+            String trimmed = nearbyContext.length() > 200 ? nearbyContext.substring(0, 200) : nearbyContext;
+            prompt.append("图片周围的文档内容：").append(trimmed).append("\n");
+        }
+        if ((sectionPath != null && !sectionPath.isBlank()) || (nearbyContext != null && !nearbyContext.isBlank())) {
+            prompt.append("请结合以上文档上下文，让 description 和 keywords 更贴合文档语境。\n");
+        }
+        return prompt.toString();
+    }
+
+    /**
+     * 增强版 fallback：利用文档上下文构建有语义的摘要文本。
+     * 当 VLM 不可用时调用，确保 embedding 有内容可索引。
+     */
+    private String fallbackWithContext(String fallbackName, String sectionPath, String nearbyContext) {
+        StringBuilder sb = new StringBuilder();
+        if (sectionPath != null && !sectionPath.isBlank()) {
+            sb.append("图片（").append(sectionPath).append("）");
+        } else {
+            sb.append("图片");
+        }
+        if (nearbyContext != null && !nearbyContext.isBlank()) {
+            String trimmed = nearbyContext.length() > 80 ? nearbyContext.substring(0, 80) : nearbyContext;
+            sb.append("：").append(trimmed);
+        } else if (fallbackName != null && !fallbackName.isBlank()) {
+            sb.append("：").append(fallbackName);
+        } else {
+            sb.append("：未命名图片");
+        }
+        return sb.toString();
     }
 }

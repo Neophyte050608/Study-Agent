@@ -446,6 +446,15 @@ const hasRunningMessages = (items) => {
   return Array.isArray(items) && items.some(msg => msg?.generationStatus === 'RUNNING')
 }
 
+const normalizeImageItem = (item) => {
+  if (!item || typeof item !== 'object') return null
+  const source = item.value && typeof item.value === 'object' ? item.value : item
+  return {
+    ...source,
+    position: item.position ?? source.position
+  }
+}
+
 const normalizeMessages = (rawMessages) => {
   return rawMessages.map(msg => {
     const metadata = msg?.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}
@@ -464,7 +473,9 @@ const normalizeMessages = (rawMessages) => {
           ...msg,
           ...metadata,
           content: richPayload?.text || '',
-          images: Array.isArray(richPayload?.images) ? richPayload.images : []
+          images: Array.isArray(richPayload?.images)
+            ? richPayload.images.map(normalizeImageItem).filter(Boolean)
+            : []
         }
       } catch (e) {
         return { ...msg, ...metadata }

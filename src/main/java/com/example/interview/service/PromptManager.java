@@ -145,13 +145,27 @@ public class PromptManager {
             templates = Collections.emptyList();
         }
         for (PromptTemplateDO t : templates) {
+            String normalizedContent = normalizeTemplateSyntax(t.getContent());
             if ("SYSTEM".equals(t.getType())) {
-                systemTemplateCache.put(t.getName(), t.getContent());
+                systemTemplateCache.put(t.getName(), normalizedContent);
             } else {
-                templateCache.put(t.getName(), t.getContent());
+                templateCache.put(t.getName(), normalizedContent);
             }
         }
         validateRequiredTemplates();
+    }
+
+    /**
+     * Jinjava 2.7.x 不支持 "is empty / is not empty" 这类测试语法，
+     * 这里在加载模板时做一次兼容替换，避免线上因历史模板数据报错。
+     */
+    private String normalizeTemplateSyntax(String template) {
+        if (template == null || template.isBlank()) {
+            return template;
+        }
+        return template
+                .replaceAll("\\bis\\s+not\\s+empty\\b", "!= \"\"")
+                .replaceAll("\\bis\\s+empty\\b", "== \"\"");
     }
 
     private void validateRequiredTemplates() {

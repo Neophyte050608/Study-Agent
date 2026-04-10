@@ -39,7 +39,7 @@ public class ImageService {
     private static final Path BROWSER_ASSET_ROOT = Paths.get("uploads", "browser-assets");
     private static final Pattern TOKEN_SPLIT_PATTERN = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final int MAX_CONTEXT_TOKENS = 8;
-    private static final double MIN_ASSOCIATION_SCORE = 0.35d;
+    private static final double MIN_ASSOCIATION_SCORE = 0.25d;
 
     private final ImageReferenceExtractor imageReferenceExtractor;
     private final ImageIngestionPipeline imageIngestionPipeline;
@@ -60,8 +60,8 @@ public class ImageService {
                         RagParentMapper ragParentMapper,
                         IngestConfigService ingestConfigService,
                         @org.springframework.beans.factory.annotation.Value("${app.multimodal.image-search-top-k:3}") int imageSearchTopK,
-                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.associated-image-min-score:0.62}") double associatedImageMinScore,
-                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.semantic-image-min-score:0.80}") double semanticImageMinScore) {
+                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.associated-image-min-score:0.45}") double associatedImageMinScore,
+                        @org.springframework.beans.factory.annotation.Value("${app.multimodal.semantic-image-min-score:0.60}") double semanticImageMinScore) {
         this.imageReferenceExtractor = imageReferenceExtractor;
         this.imageIngestionPipeline = imageIngestionPipeline;
         this.imageIndexService = imageIndexService;
@@ -265,6 +265,55 @@ public class ImageService {
         return result;
     }
 
+    /**
+     * 批量重索引图片：重新跑 VLM 摘要 + 向量索引。
+     * @param force true=包含已 COMPLETED 的图片，false=只处理 PENDING/FAILED
+     * @return 处理统计 {total, success, failed, skipped}
+     */
+    @org.springframework.scheduling.annotation.Async("imageIngestionExecutor")
+    public java.util.concurrent.CompletableFuture<Map<String, Object>> reindexImages(boolean force) {
+        List<ImageMetadataDO> targets;
+        if (force) {
+            targets = imageMetadataMapper.selectList(
+                    new LambdaQueryWrapper<ImageMetadataDO>()
+                            .orderByAsc(ImageMetadataDO::getId)
+            );
+        } else {
+            targets = imageMetadataMapper.selectList(
+                    new LambdaQueryWrapper<ImageMetadataDO>()
+                            .in(ImageMetadataDO::getSummaryStatus, List.of("PENDING", "FAILED"))
+                            .orderByAsc(ImageMetadataDO::getId)
+            );
+        }
+
+        int success = 0;
+        int failed = 0;
+        int skipped = 0;
+        for (ImageMetadataDO metadata : targets) {
+            try {
+                ImageMetadataDO result = imageIngestionPipeline.reprocessImage(metadata);
+                if (result == null) {
+                    skipped++;
+                } else if ("COMPLETED".equals(result.getSummaryStatus())) {
+                    success++;
+                } else {
+                    failed++;
+                }
+            } catch (Exception e) {
+                logger.warn("Reindex image failed: {}", metadata.getImageId(), e);
+                failed++;
+            }
+        }
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("total", targets.size());
+        stats.put("success", success);
+        stats.put("failed", failed);
+        stats.put("skipped", skipped);
+        logger.info("Image reindex completed: {}", stats);
+        return java.util.concurrent.CompletableFuture.completedFuture(stats);
+    }
+
     public ImageMetadataDO getImageById(String imageId) {
         return imageMetadataMapper.selectOne(
                 new LambdaQueryWrapper<ImageMetadataDO>()
@@ -391,32 +440,48 @@ public class ImageService {
         double score = 0.0d;
         List<String> reasons = new ArrayList<>();
 
+        // 1. 精确引用匹配（图片语法出现在 chunk 中）
         if (chunkText.contains(normalizeText(ref.refSyntax()))) {
             score += 0.60d;
             reasons.add("exact_ref");
         }
+
+        // 2. 图片摘要文本匹配（enrichMarkdownWithImageSummaries 替换后的 [图片摘要] 文本）
+        String summaryMarker = normalizeText("[图片摘要] " + (ref.summaryText() == null ? "" : ref.summaryText()));
+        if (!summaryMarker.isBlank() && chunkText.contains(summaryMarker)) {
+            score += 0.50d;
+            reasons.add("summary_marker");
+        }
+
+        // 3. 文件名匹配
         if (chunkText.contains(normalizeText(ref.imageName()))) {
             score += 0.30d;
             reasons.add("image_name");
         }
 
+        // 4. 章节路径匹配（增强版：分级比较）
         String refSection = normalizeText(ref.sectionPath());
         if (!refSection.isBlank() && !sectionPath.isBlank()) {
             if (sectionPath.equals(refSection)) {
-                score += 0.25d;
+                score += 0.30d;
                 reasons.add("same_section");
+            } else if (sectionPath.startsWith(refSection) || refSection.startsWith(sectionPath)) {
+                score += 0.20d;
+                reasons.add("parent_section");
             } else if (sectionPath.contains(refSection) || refSection.contains(sectionPath)) {
                 score += 0.12d;
                 reasons.add("near_section");
             }
         }
 
+        // 5. 上下文词汇重叠
         double contextOverlap = overlapScore(chunkBody, ref.nearbyContext(), MAX_CONTEXT_TOKENS);
         if (contextOverlap > 0) {
             score += 0.25d * contextOverlap;
             reasons.add("near_context");
         }
 
+        // 6. VLM 摘要与 chunk 内容重叠
         double summaryOverlap = overlapScore(chunkBody, ref.summaryText(), MAX_CONTEXT_TOKENS);
         if (summaryOverlap > 0) {
             score += 0.20d * summaryOverlap;

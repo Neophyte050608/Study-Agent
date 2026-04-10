@@ -248,6 +248,6 @@ is_builtin=VALUES(is_builtin);
 -- ==================== knowledge-qa 模板注入 dialogSignal ====================
 -- 在 knowledge-qa TASK 模板末尾追加对话信号块，使动态知识筛选的信号能传递给 LLM
 UPDATE `t_prompt_template`
-SET `content` = CONCAT(`content`, '\n\n{% if dialogSignal is not empty %}\n【对话信号】{{ dialogSignal }}\n{% endif %}')
+SET `content` = CONCAT(`content`, '\n\n{% if dialogSignal != "" %}\n【对话信号】{{ dialogSignal }}\n{% endif %}')
 WHERE `name` = 'knowledge-qa' AND `type` = 'TASK'
   AND `content` NOT LIKE '%dialogSignal%';

@@ -36,10 +36,14 @@ public class ImageIngestionPipeline {
 
     @Async("imageIngestionExecutor")
     public CompletableFuture<ImageMetadataDO> processImage(ImageReferenceExtractor.ImageReference ref, String vaultPath, String notePath) {
-        return CompletableFuture.completedFuture(processImageSync(ref, vaultPath, notePath));
+        return CompletableFuture.completedFuture(processImageSync(ref, vaultPath, notePath, false));
     }
 
     public ImageMetadataDO processImageSync(ImageReferenceExtractor.ImageReference ref, String vaultPath, String notePath) {
+        return processImageSync(ref, vaultPath, notePath, false);
+    }
+
+    public ImageMetadataDO processImageSync(ImageReferenceExtractor.ImageReference ref, String vaultPath, String notePath, boolean forceResummarize) {
         try {
             if (ref.resolvedPath() == null || !Files.exists(ref.resolvedPath())) {
                 logger.warn("Referenced image not found, notePath={}, target={}", notePath, ref.referencedPath());
@@ -52,7 +56,8 @@ public class ImageIngestionPipeline {
                             .eq(ImageMetadataDO::getImageId, collected.imageId())
                             .last("LIMIT 1")
             );
-            if (existing != null
+            if (!forceResummarize
+                    && existing != null
                     && collected.fileHash().equals(existing.getFileHash())
                     && "COMPLETED".equals(existing.getSummaryStatus())) {
                 logger.debug("Image unchanged, skipping: {}", ref.resolvedPath());
@@ -61,7 +66,8 @@ public class ImageIngestionPipeline {
             ImageMetadataDO metadata = createOrUpdatePendingMetadata(collected);
             metadata.setSummaryStatus("PROCESSING");
             imageMetadataMapper.updateById(metadata);
-            String summary = visionModelService.summarize(ref.resolvedPath(), ref.imageName());
+            String summary = visionModelService.summarize(
+                    ref.resolvedPath(), ref.imageName(), ref.sectionPath(), ref.nearbyContext());
             metadata.setSummaryText(summary);
             metadata.setSummaryStatus("COMPLETED");
             imageMetadataMapper.updateById(metadata);
@@ -73,6 +79,39 @@ public class ImageIngestionPipeline {
         } catch (Exception e) {
             logger.warn("Image async processing failed, notePath={}, target={}", notePath, ref.referencedPath(), e);
             return markFailed(ref);
+        }
+    }
+
+    /**
+     * 根据已有 metadata 记录重新跑 VLM 摘要 + 向量索引。
+     * 用于批量重索引场景，不需要 ImageReference。
+     */
+    public ImageMetadataDO reprocessImage(ImageMetadataDO metadata) {
+        if (metadata == null || metadata.getFilePath() == null) {
+            return null;
+        }
+        try {
+            java.nio.file.Path imagePath = java.nio.file.Path.of(metadata.getFilePath());
+            if (!Files.exists(imagePath)) {
+                logger.warn("Image file not found during reindex: {}", metadata.getFilePath());
+                metadata.setSummaryStatus("FAILED");
+                metadata.setSummaryText("文件不存在: " + metadata.getImageName());
+                imageMetadataMapper.updateById(metadata);
+                return metadata;
+            }
+            metadata.setSummaryStatus("PROCESSING");
+            imageMetadataMapper.updateById(metadata);
+            String summary = visionModelService.summarize(imagePath, metadata.getImageName(), null, null);
+            metadata.setSummaryText(summary);
+            metadata.setSummaryStatus("COMPLETED");
+            imageMetadataMapper.updateById(metadata);
+            imageIndexService.indexImage(metadata, imagePath);
+            return metadata;
+        } catch (Exception e) {
+            logger.warn("Reprocess image failed: {}", metadata.getImageId(), e);
+            metadata.setSummaryStatus("FAILED");
+            imageMetadataMapper.updateById(metadata);
+            return metadata;
         }
     }
 

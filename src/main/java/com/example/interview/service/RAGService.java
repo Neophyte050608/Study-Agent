@@ -63,9 +63,14 @@ public class RAGService {
     private static final Pattern RAW_API_KEY_PATTERN = Pattern.compile("(?i)(\"?api[-_ ]?key\"?\\s*[:=]\\s*\"?)([^\",\\s]+)");
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*bearer\\s+)([A-Za-z0-9._-]{8,})");
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
-    private static final double FINAL_IMAGE_MIN_SCORE = 0.72d;
-    private static final double SECOND_IMAGE_MIN_SCORE = 0.82d;
-    private static final double ADDITIONAL_IMAGE_SCORE_GAP = 0.12d;
+    private static final double FINAL_IMAGE_MIN_SCORE = 0.55d;
+    private static final double SECOND_IMAGE_MIN_SCORE = 0.68d;
+    private static final double ADDITIONAL_IMAGE_SCORE_GAP = 0.18d;
+    private static final Set<String> VISUAL_INTENT_KEYWORDS = Set.of(
+            "图", "截图", "架构", "流程图", "拓扑", "示意图", "类图", "时序图",
+            "部署图", "结构图", "原理图", "对比图", "配置图", "界面", "效果图",
+            "看看", "展示", "图解", "diagram", "topology", "layout", "screenshot"
+    );
 
     private final RoutingChatService routingChatService;
     private final VectorStore vectorStore;
@@ -918,7 +923,7 @@ public class RAGService {
             return false;
         }
         String normalized = query.toLowerCase(Locale.ROOT);
-        return normalized.contains("图") || normalized.contains("截图") || normalized.contains("架构") || normalized.contains("流程图");
+        return VISUAL_INTENT_KEYWORDS.stream().anyMatch(normalized::contains);
     }
 
     private List<String> tokenize(String text) {

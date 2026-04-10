@@ -147,13 +147,15 @@ app:
       ignore-dirs: ${APP_INGESTION_CONFIG_IGNORE_DIRS:}
   multimodal:
     image-search-top-k: ${APP_MULTIMODAL_IMAGE_SEARCH_TOP_K:3}
+    associated-image-min-score: ${APP_MULTIMODAL_ASSOCIATED_IMAGE_MIN_SCORE:0.45}
+    semantic-image-min-score: ${APP_MULTIMODAL_SEMANTIC_IMAGE_MIN_SCORE:0.60}
     milvus:
       image-collection: ${APP_MULTIMODAL_MILVUS_IMAGE_COLLECTION:interview_images}
     clip:
       service-url: ${APP_MULTIMODAL_CLIP_SERVICE_URL:http://localhost:8200}
     vlm:
-      enabled: ${APP_MULTIMODAL_VLM_ENABLED:false}
-      api-key: ${APP_MULTIMODAL_VLM_API_KEY:}
+      enabled: ${APP_MULTIMODAL_VLM_ENABLED:true}
+      api-key: ${APP_MULTIMODAL_VLM_API_KEY:d8d1f2022f7e494c864862f12a6bf2fc.xjw1LjRZkEze2rTC}
       base-url: ${APP_MULTIMODAL_VLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
       model: ${APP_MULTIMODAL_VLM_MODEL:glm-4v}
     visual:

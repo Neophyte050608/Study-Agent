@@ -118,6 +118,16 @@ public class ImageController {
         return ResponseEntity.ok(imageService.getImagesByIds(imageIds).stream().map(this::toView).toList());
     }
 
+    @PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindexImages(
+            @RequestParam(defaultValue = "false") boolean force) {
+        imageService.reindexImages(force);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("message", "图片重索引任务已提交，请通过 GET /api/images/status 查看进度");
+        response.put("force", force);
+        return ResponseEntity.accepted().body(response);
+    }
+
     private ImageMetadataDO requireImage(String imageId) {
         return imageService.getImageById(imageId);
     }
