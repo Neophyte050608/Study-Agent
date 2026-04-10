@@ -19,6 +19,13 @@ public class DynamicChatModelRegistry {
 
     private final ConcurrentHashMap<String, ChatModel> modelCache = new ConcurrentHashMap<>();
 
+    public ChatModel getIfPresent(String candidateName) {
+        if (candidateName == null || candidateName.isBlank()) {
+            return null;
+        }
+        return modelCache.get(candidateName);
+    }
+
     public ChatModel getOrCreate(String candidateName, String baseUrl, String apiKey, String modelId) {
         return modelCache.computeIfAbsent(candidateName, ignored -> createChatModel(candidateName, baseUrl, apiKey, modelId));
     }

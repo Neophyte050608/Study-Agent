@@ -24,7 +24,9 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -66,10 +68,17 @@ public class RAGService {
     private static final double FINAL_IMAGE_MIN_SCORE = 0.55d;
     private static final double SECOND_IMAGE_MIN_SCORE = 0.68d;
     private static final double ADDITIONAL_IMAGE_SCORE_GAP = 0.18d;
+    private static final Duration REWRITE_CACHE_TTL = Duration.ofMinutes(10);
+    private static final int REWRITE_CACHE_MAX_SIZE = 256;
     private static final Set<String> VISUAL_INTENT_KEYWORDS = Set.of(
             "图", "截图", "架构", "流程图", "拓扑", "示意图", "类图", "时序图",
             "部署图", "结构图", "原理图", "对比图", "配置图", "界面", "效果图",
             "看看", "展示", "图解", "diagram", "topology", "layout", "screenshot"
+    );
+    private static final Set<String> REWRITE_TRIGGER_KEYWORDS = Set.of(
+            "为什么", "怎么", "如何", "原理", "区别", "对比", "场景", "实现",
+            "设计", "优化", "排查", "分析", "步骤", "问题", "异常", "报错",
+            "以及", "并且", "但是", "不过", "是否", "还是", "包括", "比如"
     );
 
     private final RoutingChatService routingChatService;
@@ -92,6 +101,7 @@ public class RAGService {
     private final ParentChildRetrievalProperties parentChildRetrievalProperties;
     private final ParentChildIndexService parentChildIndexService;
     private final ImageService imageService;
+    private final ConcurrentHashMap<String, CachedRewrite> rewriteCache = new ConcurrentHashMap<>();
 
     public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService) {
         this.agentSkillService = agentSkillService;
@@ -153,16 +163,9 @@ public class RAGService {
             String rewriteNodeId = UUID.randomUUID().toString();
             observabilityService.startNode(traceId, rewriteNodeId, RAGTraceContext.getCurrentNodeId(), "REWRITE", "Query Rewrite");
 
-            RewrittenQuery rewrittenQuery = RewrittenQuery.fallback(question + " " + userAnswer);
-            try {
-                rewrittenQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
-                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question,
-                        "CORE: " + rewrittenQuery.coreTerms() + " | EXPAND: " + rewrittenQuery.expandTerms(), null);
-            } catch (RuntimeException e) {
-                logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
-                observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question,
-                        "FALLBACK: " + rewrittenQuery.fullQuery(), e.getMessage());
-            }
+            RewrittenQuery rewrittenQuery = buildRewrittenQuery(question, userAnswer);
+            observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question,
+                    "CORE: " + rewrittenQuery.coreTerms() + " | EXPAND: " + rewrittenQuery.expandTerms(), null);
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
             }
@@ -1049,6 +1052,80 @@ public class RAGService {
             prompt, ModelRouteType.GENERAL, TimeoutHint.NORMAL, "关键词提取"
         );
         return parseRewrittenQuery(raw);
+    }
+
+    private RewrittenQuery buildRewrittenQuery(String question, String userAnswer) {
+        String fallbackRaw = normalizeRewriteSource(question, userAnswer);
+        if (!shouldRewriteQuery(question, userAnswer)) {
+            return RewrittenQuery.fallback(fallbackRaw);
+        }
+        String cacheKey = buildRewriteCacheKey(question, userAnswer);
+        CachedRewrite cachedRewrite = rewriteCache.get(cacheKey);
+        if (cachedRewrite != null && !cachedRewrite.isExpired()) {
+            return cachedRewrite.query();
+        }
+        try {
+            RewrittenQuery rewrittenQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
+            putRewriteCache(cacheKey, rewrittenQuery);
+            return rewrittenQuery;
+        } catch (RuntimeException e) {
+            logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
+            return RewrittenQuery.fallback(fallbackRaw);
+        }
+    }
+
+    private boolean shouldRewriteQuery(String question, String userAnswer) {
+        String normalizedQuestion = question == null ? "" : question.trim();
+        String normalizedAnswer = userAnswer == null ? "" : userAnswer.trim();
+        if (!normalizedAnswer.isBlank()) {
+            return true;
+        }
+        if (normalizedQuestion.length() >= 28) {
+            return true;
+        }
+        if (normalizedQuestion.contains("，")
+                || normalizedQuestion.contains(",")
+                || normalizedQuestion.contains("；")
+                || normalizedQuestion.contains(";")
+                || normalizedQuestion.contains("：")
+                || normalizedQuestion.contains(":")
+                || normalizedQuestion.contains("（")
+                || normalizedQuestion.contains("(")) {
+            return true;
+        }
+        for (String keyword : REWRITE_TRIGGER_KEYWORDS) {
+            if (normalizedQuestion.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String buildRewriteCacheKey(String question, String userAnswer) {
+        return normalizeRewriteSource(question, userAnswer).toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeRewriteSource(String question, String userAnswer) {
+        String combined = ((question == null ? "" : question.trim()) + " " + (userAnswer == null ? "" : userAnswer.trim())).trim();
+        return combined.replaceAll("\\s+", " ");
+    }
+
+    private void putRewriteCache(String cacheKey, RewrittenQuery query) {
+        if (rewriteCache.size() >= REWRITE_CACHE_MAX_SIZE) {
+            cleanupExpiredRewriteCache();
+            if (rewriteCache.size() >= REWRITE_CACHE_MAX_SIZE) {
+                String firstKey = rewriteCache.keys().hasMoreElements() ? rewriteCache.keys().nextElement() : null;
+                if (firstKey != null) {
+                    rewriteCache.remove(firstKey);
+                }
+            }
+        }
+        rewriteCache.put(cacheKey, new CachedRewrite(query, System.currentTimeMillis() + REWRITE_CACHE_TTL.toMillis()));
+    }
+
+    private void cleanupExpiredRewriteCache() {
+        long now = System.currentTimeMillis();
+        rewriteCache.entrySet().removeIf(entry -> entry.getValue().expireAtMs() <= now);
     }
 
     private RewrittenQuery parseRewrittenQuery(String raw) {
@@ -1985,5 +2062,11 @@ public class RAGService {
             String nextHint,
             String nextQuestion
     ) {
+    }
+
+    private record CachedRewrite(RewrittenQuery query, long expireAtMs) {
+        private boolean isExpired() {
+            return expireAtMs <= System.currentTimeMillis();
+        }
     }
 }

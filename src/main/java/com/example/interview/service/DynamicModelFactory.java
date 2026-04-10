@@ -51,6 +51,10 @@ public class DynamicModelFactory {
 
     public ChatModel getByCandidate(ModelRoutingCandidate candidate) {
         if (candidate.baseUrl() != null && !candidate.baseUrl().isBlank()) {
+            ChatModel cachedModel = dynamicChatModelRegistry.getIfPresent(candidate.name());
+            if (cachedModel != null) {
+                return cachedModel;
+            }
             String apiKey = "";
             if (candidate.apiKeyRef() != null && !candidate.apiKeyRef().isBlank()) {
                 apiKey = apiKeyEncryptor.decrypt(candidate.apiKeyRef());

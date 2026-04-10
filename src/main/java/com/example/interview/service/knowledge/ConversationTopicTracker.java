@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -28,6 +29,7 @@ public class ConversationTopicTracker {
     private static final int HISTORY_LIMIT = 800;
     private static final int DIGEST_CONTEXT_LIMIT = 1500;
     private static final int DIGEST_MAX_LENGTH = 600;
+    private static final int FAST_PATH_MAX_QUESTION_LENGTH = 30;
 
     private final StringRedisTemplate redisTemplate;
     private final RoutingChatService routingChatService;
@@ -49,6 +51,10 @@ public class ConversationTopicTracker {
         List<TopicState> recentTopics = getRecentTopics(sessionId, TOPIC_WINDOW);
         if (recentTopics.isEmpty() && (recentHistory == null || recentHistory.isBlank())) {
             return TurnAnalysis.firstTurn(extractSimpleTopic(currentQuestion));
+        }
+        TurnAnalysis fastPathAnalysis = tryFastAnalyze(currentQuestion, recentTopics);
+        if (fastPathAnalysis != null) {
+            return fastPathAnalysis;
         }
 
         try {
@@ -78,6 +84,76 @@ public class ConversationTopicTracker {
                     : recentTopics.get(0).topicId();
             return TurnAnalysis.defaultContinuation(fallbackTopic);
         }
+    }
+
+    private TurnAnalysis tryFastAnalyze(String currentQuestion, List<TopicState> recentTopics) {
+        if (recentTopics == null || recentTopics.isEmpty()) {
+            return null;
+        }
+        String question = currentQuestion == null ? "" : currentQuestion.trim();
+        if (question.isBlank()) {
+            String currentTopic = recentTopics.get(0).topicId();
+            return TurnAnalysis.defaultContinuation(currentTopic);
+        }
+        String previousTopic = recentTopics.get(0).topicId();
+        String lowerQuestion = question.toLowerCase(Locale.ROOT);
+
+        if (isSummaryRequest(question)) {
+            return new TurnAnalysis(false, DialogAct.SUMMARY, 0.2, previousTopic, previousTopic);
+        }
+        if (isExplicitFollowUp(lowerQuestion, question)) {
+            return new TurnAnalysis(false, resolveFastDialogAct(lowerQuestion), 0.3, previousTopic, previousTopic);
+        }
+        return null;
+    }
+
+    private boolean isExplicitFollowUp(String lowerQuestion, String originalQuestion) {
+        if (originalQuestion.length() > FAST_PATH_MAX_QUESTION_LENGTH) {
+            return false;
+        }
+        return lowerQuestion.startsWith("那")
+                || lowerQuestion.startsWith("这个")
+                || lowerQuestion.startsWith("这个的话")
+                || lowerQuestion.startsWith("它")
+                || lowerQuestion.startsWith("那它")
+                || lowerQuestion.startsWith("那这个")
+                || lowerQuestion.startsWith("然后")
+                || lowerQuestion.startsWith("如果")
+                || lowerQuestion.startsWith("所以")
+                || lowerQuestion.startsWith("比如")
+                || lowerQuestion.startsWith("例如")
+                || lowerQuestion.startsWith("再")
+                || lowerQuestion.startsWith("继续")
+                || lowerQuestion.contains("详细说")
+                || lowerQuestion.contains("展开说")
+                || lowerQuestion.contains("再讲")
+                || lowerQuestion.contains("具体一点")
+                || lowerQuestion.contains("什么意思")
+                || lowerQuestion.contains("为什么")
+                || lowerQuestion.contains("为啥")
+                || lowerQuestion.contains("怎么做")
+                || lowerQuestion.contains("怎么理解")
+                || lowerQuestion.contains("举个例子");
+    }
+
+    private DialogAct resolveFastDialogAct(String lowerQuestion) {
+        if (lowerQuestion.contains("什么意思")
+                || lowerQuestion.contains("怎么理解")
+                || lowerQuestion.contains("详细说")
+                || lowerQuestion.contains("展开说")
+                || lowerQuestion.contains("具体一点")
+                || lowerQuestion.contains("举个例子")) {
+            return DialogAct.CLARIFICATION;
+        }
+        return DialogAct.FOLLOW_UP;
+    }
+
+    private boolean isSummaryRequest(String question) {
+        return question.length() <= FAST_PATH_MAX_QUESTION_LENGTH
+                && (question.contains("总结")
+                || question.contains("汇总")
+                || question.contains("概括")
+                || question.contains("归纳"));
     }
 
     public void updateTopicState(String sessionId, TurnAnalysis analysis, String knowledgeDigest) {
