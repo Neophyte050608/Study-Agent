@@ -28,6 +28,9 @@ public class KnowledgeRetrievalProperties {
     private String ollamaBaseUrl = "http://localhost:11434";
     private String ollamaModel = "";
     private long ollamaTimeoutMs = 5000L;
+    private boolean retrievalCacheEnabled = true;
+    private int retrievalCacheTtlSeconds = 20;
+    private boolean warmupEnabled = true;
 
     public KnowledgeRetrievalMode getDefaultMode() {
         return defaultMode;
@@ -139,5 +142,29 @@ public class KnowledgeRetrievalProperties {
 
     public void setOllamaTimeoutMs(long ollamaTimeoutMs) {
         this.ollamaTimeoutMs = Math.max(1000L, ollamaTimeoutMs);
+    }
+
+    public boolean isRetrievalCacheEnabled() {
+        return retrievalCacheEnabled;
+    }
+
+    public void setRetrievalCacheEnabled(boolean retrievalCacheEnabled) {
+        this.retrievalCacheEnabled = retrievalCacheEnabled;
+    }
+
+    public int getRetrievalCacheTtlSeconds() {
+        return retrievalCacheTtlSeconds;
+    }
+
+    public void setRetrievalCacheTtlSeconds(int retrievalCacheTtlSeconds) {
+        this.retrievalCacheTtlSeconds = Math.max(1, retrievalCacheTtlSeconds);
+    }
+
+    public boolean isWarmupEnabled() {
+        return warmupEnabled;
+    }
+
+    public void setWarmupEnabled(boolean warmupEnabled) {
+        this.warmupEnabled = warmupEnabled;
     }
 }

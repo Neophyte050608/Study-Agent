@@ -442,23 +442,36 @@ public class RAGService {
             try {
                 List<Document> graphDocs = new ArrayList<>();
                 List<String> queryTokens = intentFocusTerms.isEmpty() ? lexicalIndexService.tokenize(query.coreTerms()) : intentFocusTerms;
-                for (String token : queryTokens) {
-                    // 这里先兼容旧的概念名拼装语句，随后统一覆写为描述型 GraphRAG 上下文。
-                    List relatedConcepts =
-                            techConceptRepository.findRelatedConceptSnippetsWithinTwoHops(token);
-                    if (relatedConcepts != null && !relatedConcepts.isEmpty()) {
-                        String graphContext = "知识图谱关联提示：与【" + token + "】存在深度技术关联的概念包括 -> " + String.join(", ", relatedConcepts);
-                        graphContext = buildGraphConceptContext(token, relatedConcepts);
-                        if (graphContext.isBlank()) {
-                            continue;
-                        }
-                        Document doc = new Document(graphContext);
-                        doc.getMetadata().put("source_type", "graph_rag");
-                        doc.getMetadata().put("retrieve_channel", "graph_rag");
-                        doc.getMetadata().put("graph_anchor", token);
-                        doc.getMetadata().put("evidence_snippet", truncate(graphContext, 90));
-                        graphDocs.add(doc);
+                if (queryTokens.isEmpty()) {
+                    return graphDocs;
+                }
+
+                List<com.example.interview.graph.BatchedConceptSnippetView> batchResults =
+                        techConceptRepository.findRelatedConceptSnippetsBatch(queryTokens);
+                if (batchResults == null || batchResults.isEmpty()) {
+                    return graphDocs;
+                }
+
+                Map<String, List<com.example.interview.graph.TechConceptSnippetView>> grouped = batchResults.stream()
+                        .collect(Collectors.groupingBy(
+                                com.example.interview.graph.BatchedConceptSnippetView::getAnchor,
+                                LinkedHashMap::new,
+                                Collectors.mapping(item -> (com.example.interview.graph.TechConceptSnippetView) item, Collectors.toList())
+                        ));
+
+                for (Map.Entry<String, List<com.example.interview.graph.TechConceptSnippetView>> entry : grouped.entrySet()) {
+                    String token = entry.getKey();
+                    List<com.example.interview.graph.TechConceptSnippetView> relatedConcepts = entry.getValue();
+                    String graphContext = buildGraphConceptContext(token, relatedConcepts);
+                    if (graphContext.isBlank()) {
+                        continue;
                     }
+                    Document doc = new Document(graphContext);
+                    doc.getMetadata().put("source_type", "graph_rag");
+                    doc.getMetadata().put("retrieve_channel", "graph_rag");
+                    doc.getMetadata().put("graph_anchor", token);
+                    doc.getMetadata().put("evidence_snippet", truncate(graphContext, 90));
+                    graphDocs.add(doc);
                 }
                 return graphDocs;
             } catch (Exception e) {

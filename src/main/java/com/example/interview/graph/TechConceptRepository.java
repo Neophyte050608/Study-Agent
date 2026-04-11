@@ -27,4 +27,22 @@ public interface TechConceptRepository extends Neo4jRepository<TechConcept, Stri
            "WHERE n <> m " +
            "RETURN DISTINCT m.name AS name, m.description AS description, m.type AS type LIMIT 10")
     List<TechConceptSnippetView> findRelatedConceptSnippetsWithinTwoHops(@Param("conceptName") String conceptName);
+
+    /**
+     * 批量 GraphRAG 查询：批量查找多个技术名词在 1-2 跳范围内的关联概念摘要。
+     *
+     * @param conceptNames 中心技术名词列表
+     * @return 关联概念摘要（含 anchor 锚点名称用于分组）
+     */
+    @Query("UNWIND $conceptNames AS conceptName " +
+           "MATCH (n:TechConcept {name: conceptName}) " +
+           "CALL { " +
+           "  WITH n " +
+           "  MATCH (n)-[*1..2]-(m:TechConcept) " +
+           "  WHERE n <> m " +
+           "  RETURN DISTINCT m.name AS name, m.description AS description, m.type AS type " +
+           "  LIMIT 10 " +
+           "} " +
+           "RETURN n.name AS anchor, name, description, type")
+    List<BatchedConceptSnippetView> findRelatedConceptSnippetsBatch(@Param("conceptNames") List<String> conceptNames);
 }

@@ -4,6 +4,7 @@ import com.example.interview.config.KnowledgeRetrievalProperties;
 import com.example.interview.core.RAGTraceContext;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 
 /**
@@ -15,10 +16,13 @@ import java.util.UUID;
 @Service
 public class KnowledgeRetrievalCoordinator {
 
+    private static final int RETRIEVAL_CACHE_MAX_SIZE = 128;
+
     private final KnowledgeRetrievalProperties properties;
     private final RagKnowledgeService ragKnowledgeService;
     private final LocalGraphKnowledgeService localGraphKnowledgeService;
     private final RAGObservabilityService ragObservabilityService;
+    private final ConcurrentHashMap<String, CachedRetrieval> retrievalCache = new ConcurrentHashMap<>();
 
     public KnowledgeRetrievalCoordinator(KnowledgeRetrievalProperties properties,
                                          RagKnowledgeService ragKnowledgeService,
@@ -40,31 +44,61 @@ public class KnowledgeRetrievalCoordinator {
         KnowledgeRetrievalMode effectiveRequestedMode = requestedMode == null
                 ? properties.getDefaultMode()
                 : requestedMode;
+        if (properties.isRetrievalCacheEnabled()) {
+            String cacheKey = buildCacheKey(question, userAnswer, effectiveRequestedMode);
+            CachedRetrieval cached = retrievalCache.get(cacheKey);
+            if (cached != null && !cached.isExpired()) {
+                return cached.packet();
+            }
+        }
         if (effectiveRequestedMode == KnowledgeRetrievalMode.RAG_ONLY) {
-            return ragKnowledgeService.retrieve(
+            return cacheAndReturn(question, userAnswer, effectiveRequestedMode, ragKnowledgeService.retrieve(
                     question,
                     userAnswer,
                     effectiveRequestedMode,
                     KnowledgeRetrievalMode.RAG_ONLY,
                     ""
-            );
+            ));
         }
 
         try {
-            return localGraphKnowledgeService.retrieve(question, effectiveRequestedMode);
+            return cacheAndReturn(question, userAnswer, effectiveRequestedMode,
+                    localGraphKnowledgeService.retrieve(question, effectiveRequestedMode));
         } catch (LocalGraphRetrievalException e) {
             if (effectiveRequestedMode == KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY) {
                 throw e;
             }
             traceFallback(e);
-            return ragKnowledgeService.retrieve(
+            return cacheAndReturn(question, userAnswer, effectiveRequestedMode, ragKnowledgeService.retrieve(
                     question,
                     userAnswer,
                     effectiveRequestedMode,
                     KnowledgeRetrievalMode.RAG_ONLY,
                     e.getFailureReason().name()
-            );
+            ));
         }
+    }
+
+    private KnowledgeContextPacket cacheAndReturn(String question,
+                                                  String userAnswer,
+                                                  KnowledgeRetrievalMode mode,
+                                                  KnowledgeContextPacket packet) {
+        if (properties.isRetrievalCacheEnabled()) {
+            String cacheKey = buildCacheKey(question, userAnswer, mode);
+            long expireAt = System.currentTimeMillis() + properties.getRetrievalCacheTtlSeconds() * 1000L;
+            retrievalCache.put(cacheKey, new CachedRetrieval(packet, expireAt));
+            if (retrievalCache.size() > RETRIEVAL_CACHE_MAX_SIZE) {
+                retrievalCache.entrySet().removeIf(entry -> entry.getValue().isExpired());
+            }
+        }
+        return packet;
+    }
+
+    private String buildCacheKey(String question, String userAnswer, KnowledgeRetrievalMode mode) {
+        String normalizedQuestion = question == null ? "" : question.trim().toLowerCase();
+        String normalizedAnswer = userAnswer == null ? "" : userAnswer.trim().toLowerCase();
+        String modeStr = mode == null ? "RAG_ONLY" : mode.name();
+        return normalizedQuestion + "|" + normalizedAnswer + "|" + modeStr;
     }
 
     private void traceFallback(LocalGraphRetrievalException exception) {
@@ -78,5 +112,11 @@ public class KnowledgeRetrievalCoordinator {
                 "fallbackTo=RAG_ONLY",
                 exception.getFailureReason().name()
         );
+    }
+
+    private record CachedRetrieval(KnowledgeContextPacket packet, long expireAtMs) {
+        private boolean isExpired() {
+            return System.currentTimeMillis() >= expireAtMs;
+        }
     }
 }

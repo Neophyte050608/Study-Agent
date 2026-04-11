@@ -13,8 +13,11 @@ import com.example.interview.service.knowledge.DynamicKnowledgeContextBuilder;
 import com.example.interview.service.knowledge.TurnAnalysis;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -31,19 +34,22 @@ public class KnowledgeQaAgent {
     private final RAGObservabilityService ragObservabilityService;
     private final ConversationTopicTracker topicTracker;
     private final DynamicKnowledgeContextBuilder dynamicContextBuilder;
+    private final Executor ragRetrieveExecutor;
 
     public KnowledgeQaAgent(KnowledgeRetrievalCoordinator knowledgeRetrievalCoordinator,
                             RoutingChatService routingChatService,
                             PromptManager promptManager,
                             RAGObservabilityService ragObservabilityService,
                             ConversationTopicTracker topicTracker,
-                            DynamicKnowledgeContextBuilder dynamicContextBuilder) {
+                            DynamicKnowledgeContextBuilder dynamicContextBuilder,
+                            @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor) {
         this.knowledgeRetrievalCoordinator = knowledgeRetrievalCoordinator;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.ragObservabilityService = ragObservabilityService;
         this.topicTracker = topicTracker;
         this.dynamicContextBuilder = dynamicContextBuilder;
+        this.ragRetrieveExecutor = ragRetrieveExecutor;
     }
 
     public Map<String, Object> execute(String question, String history) {
@@ -70,8 +76,19 @@ public class KnowledgeQaAgent {
         ragObservabilityService.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A");
 
         try {
-            TurnAnalysis analysis = analyzeTurnSafe(sessionId, question, history);
-            KnowledgeContextPacket packet = knowledgeRetrievalCoordinator.retrieve(question, "", retrievalMode);
+            String currentTraceId = RAGTraceContext.getTraceId();
+            String currentNodeId = RAGTraceContext.getCurrentNodeId();
+            CompletableFuture<TurnAnalysis> analysisFuture = CompletableFuture.supplyAsync(
+                    wrapWithTraceContext(currentTraceId, currentNodeId, () -> analyzeTurnSafe(sessionId, question, history)),
+                    ragRetrieveExecutor
+            );
+            CompletableFuture<KnowledgeContextPacket> packetFuture = CompletableFuture.supplyAsync(
+                    wrapWithTraceContext(currentTraceId, currentNodeId,
+                            () -> knowledgeRetrievalCoordinator.retrieve(question, "", retrievalMode)),
+                    ragRetrieveExecutor
+            );
+            TurnAnalysis analysis = analysisFuture.join();
+            KnowledgeContextPacket packet = packetFuture.join();
             String combinedContext;
             String dialogSignal = "";
             if (sessionId != null && !sessionId.isBlank()) {
@@ -150,8 +167,19 @@ public class KnowledgeQaAgent {
         ragObservabilityService.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A Streaming");
 
         try {
-            TurnAnalysis analysis = analyzeTurnSafe(sessionId, question, history);
-            KnowledgeContextPacket packet = knowledgeRetrievalCoordinator.retrieve(question, "", retrievalMode);
+            String currentTraceId = RAGTraceContext.getTraceId();
+            String currentNodeId = RAGTraceContext.getCurrentNodeId();
+            CompletableFuture<TurnAnalysis> analysisFuture = CompletableFuture.supplyAsync(
+                    wrapWithTraceContext(currentTraceId, currentNodeId, () -> analyzeTurnSafe(sessionId, question, history)),
+                    ragRetrieveExecutor
+            );
+            CompletableFuture<KnowledgeContextPacket> packetFuture = CompletableFuture.supplyAsync(
+                    wrapWithTraceContext(currentTraceId, currentNodeId,
+                            () -> knowledgeRetrievalCoordinator.retrieve(question, "", retrievalMode)),
+                    ragRetrieveExecutor
+            );
+            TurnAnalysis analysis = analysisFuture.join();
+            KnowledgeContextPacket packet = packetFuture.join();
             String combinedContext;
             String dialogSignal = "";
             if (sessionId != null && !sessionId.isBlank()) {
@@ -208,6 +236,22 @@ public class KnowledgeQaAgent {
             contextBuilder.append("\n注意：你的回答可以引用上述图片，使用 [图N] 标记。系统会自动将对应图片内联展示给用户。");
         }
         return contextBuilder.toString();
+    }
+
+    private <T> java.util.function.Supplier<T> wrapWithTraceContext(String traceId,
+                                                                    String parentNodeId,
+                                                                    java.util.function.Supplier<T> action) {
+        return () -> {
+            RAGTraceContext.setTraceId(traceId);
+            if (parentNodeId != null && !parentNodeId.isBlank()) {
+                RAGTraceContext.pushNode(parentNodeId);
+            }
+            try {
+                return action.get();
+            } finally {
+                RAGTraceContext.clear();
+            }
+        };
     }
 
     private TurnAnalysis analyzeTurnSafe(String sessionId, String question, String history) {
