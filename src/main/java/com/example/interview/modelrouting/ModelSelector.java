@@ -32,15 +32,29 @@ public class ModelSelector {
      * @return 排序后的候选模型列表
      */
     public List<ModelRoutingCandidate> select(ModelRouteType routeType) {
-        String preferred = routeType == ModelRouteType.THINKING ? properties.getDeepThinkingModel() : properties.getDefaultModel();
+        return select(routeType, preferredFor(routeType, null));
+    }
+
+    public List<ModelRoutingCandidate> select(ModelRouteType routeType, String preferredCandidateName) {
+        String preferred = preferredFor(routeType, preferredCandidateName);
         return candidateProvider.getCandidates().stream()
                 .filter(candidate -> supportsRouteType(candidate, routeType))
                 .filter(candidate -> routeType != ModelRouteType.THINKING || candidate.supportsThinking())
                 .sorted(Comparator
-                        .comparingInt(ModelRoutingCandidate::priority)
-                        .thenComparingInt(candidate -> isPreferred(candidate, preferred) ? 0 : 1)
+                        .comparingInt((ModelRoutingCandidate candidate) -> isPreferred(candidate, preferred) ? 0 : 1)
+                        .thenComparingInt(ModelRoutingCandidate::priority)
                         .thenComparing(ModelRoutingCandidate::name))
                 .toList();
+    }
+
+    private String preferredFor(ModelRouteType routeType, String preferredCandidateName) {
+        if (preferredCandidateName != null && !preferredCandidateName.isBlank()) {
+            return preferredCandidateName;
+        }
+        if (routeType == ModelRouteType.THINKING) {
+            return properties.getDeepThinkingModel();
+        }
+        return properties.getDefaultModel();
     }
 
     private boolean supportsRouteType(ModelRoutingCandidate candidate, ModelRouteType routeType) {

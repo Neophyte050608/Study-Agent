@@ -279,12 +279,15 @@
                 :class="inputClass"
                 class="w-full border-none rounded-lg p-3 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                 :type="showApiKey ? 'text' : 'password'"
-                :placeholder="editingId === null ? '创建时必填' : '留空表示不修改'"
+                :placeholder="apiKeyPlaceholder"
               />
               <button class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300" @click="showApiKey = !showApiKey" type="button">
                 <span class="material-symbols-outlined text-[18px]">{{ showApiKey ? 'visibility_off' : 'visibility' }}</span>
               </button>
             </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              {{ apiKeyHelperText }}
+            </p>
           </div>
 
           <div class="space-y-2">
@@ -403,6 +406,22 @@ const hintTypeClass = computed(() => {
   return 'text-indigo-600 dark:text-indigo-400'
 })
 
+const isOllamaProvider = computed(() => String(form.value.provider || '').trim().toLowerCase() === 'ollama')
+
+const apiKeyPlaceholder = computed(() => {
+  if (editingId.value === null) {
+    return isOllamaProvider.value ? '本地 Ollama 可留空' : '创建时必填'
+  }
+  return isOllamaProvider.value ? '本地 Ollama 可留空，保留为空不修改' : '留空表示不修改'
+})
+
+const apiKeyHelperText = computed(() => {
+  if (isOllamaProvider.value) {
+    return '本地 Ollama 一般无需 API Key；使用 openai/zhipuai 等云提供商时再填写。'
+  }
+  return '云提供商通常要求 API Key；编辑已有模型时留空表示不修改原密钥。'
+})
+
 const sortedCandidates = computed(() => {
   return [...candidates.value].sort((a, b) => {
     const priorityDiff = (a.priority ?? 100) - (b.priority ?? 100)
@@ -487,7 +506,7 @@ const validateForm = () => {
     setHint('API 地址不能为空', 'error')
     return false
   }
-  if (editingId.value === null && !form.value.apiKey.trim()) {
+  if (editingId.value === null && !isOllamaProvider.value && !form.value.apiKey.trim()) {
     setHint('创建模型时必须填写 API Key', 'error')
     return false
   }

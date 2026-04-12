@@ -25,10 +25,18 @@ public class RoutingExecutionTemplate {
                          String stage,
                          Supplier<T> fallbackSupplier,
                          Function<ModelRoutingCandidate, T> candidateExecutor) {
+        return execute(routeType, null, stage, fallbackSupplier, candidateExecutor);
+    }
+
+    public <T> T execute(ModelRouteType routeType,
+                         String preferredCandidateName,
+                         String stage,
+                         Supplier<T> fallbackSupplier,
+                         Function<ModelRoutingCandidate, T> candidateExecutor) {
         if (!properties.isEnabled()) {
             return fallbackSupplier.get();
         }
-        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType);
+        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType, preferredCandidateName);
         if (candidates.isEmpty()) {
             return fallbackSupplier.get();
         }

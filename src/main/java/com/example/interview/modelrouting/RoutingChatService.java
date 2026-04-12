@@ -81,7 +81,11 @@ public class RoutingChatService {
     }
 
     public String call(String prompt, ModelRouteType routeType, String stage) {
-        return routingExecutionTemplate.execute(routeType, stage,
+        return call(prompt, routeType, null, stage);
+    }
+
+    public String call(String prompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
+        return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
                 () -> callWithModel(fallbackChatModel, prompt),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -97,7 +101,11 @@ public class RoutingChatService {
     }
 
     public String call(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage) {
-        return routingExecutionTemplate.execute(routeType, stage,
+        return call(systemPrompt, userPrompt, routeType, null, stage);
+    }
+
+    public String call(String systemPrompt, String userPrompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
+        return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
                 () -> callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content(),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);

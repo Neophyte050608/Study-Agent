@@ -13,6 +13,7 @@ public class ModelRoutingProperties {
     private boolean enabled = false;
     private String defaultModel = "";
     private String deepThinkingModel = "";
+    private String intentModel = "";
     private List<Candidate> candidates = new ArrayList<>();
     private CircuitBreaker circuitBreaker = new CircuitBreaker();
     private Stream stream = new Stream();
@@ -39,6 +40,14 @@ public class ModelRoutingProperties {
 
     public void setDeepThinkingModel(String deepThinkingModel) {
         this.deepThinkingModel = deepThinkingModel;
+    }
+
+    public String getIntentModel() {
+        return intentModel;
+    }
+
+    public void setIntentModel(String intentModel) {
+        this.intentModel = intentModel;
     }
 
     public List<Candidate> getCandidates() {

@@ -5,6 +5,7 @@ import com.example.interview.intent.IntentCandidate;
 import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.intent.IntentTreeNode;
 import com.example.interview.modelrouting.ModelRouteType;
+import com.example.interview.modelrouting.ModelRoutingProperties;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ public class IntentTreeRoutingService {
     private final IntentTreeService intentTreeService;
     private final IntentSlotRefineCaseService intentSlotRefineCaseService;
     private final RoutingChatService routingChatService;
+    private final String intentPreferredModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public IntentTreeRoutingService(
@@ -35,6 +37,7 @@ public class IntentTreeRoutingService {
             IntentTreeProperties properties,
             IntentTreeService intentTreeService,
             IntentSlotRefineCaseService intentSlotRefineCaseService,
+            ModelRoutingProperties modelRoutingProperties,
             RoutingChatService routingChatService
     ) {
         this.promptManager = promptManager;
@@ -42,6 +45,7 @@ public class IntentTreeRoutingService {
         this.intentTreeService = intentTreeService;
         this.intentSlotRefineCaseService = intentSlotRefineCaseService;
         this.routingChatService = routingChatService;
+        this.intentPreferredModel = modelRoutingProperties.getIntentModel();
     }
 
     /**
@@ -85,7 +89,8 @@ public class IntentTreeRoutingService {
             vars.put("minGap", properties.getMinGap());
             vars.put("ambiguityRatio", properties.getAmbiguityRatio());
             PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
-            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "意图树分类");
+            String response = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, intentPreferredModel, "意图树分类");
             // 解析并归一化模型返回结果
             return normalizeDecision(response, query, history);
         } catch (Exception ex) {
@@ -120,7 +125,8 @@ public class IntentTreeRoutingService {
             vars.put("history", history == null ? "" : history);
             vars.put("cases", loadSlotRefineCases(taskType));
             PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-slot-refine", vars);
-            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "意图槽位精炼");
+            String response = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, intentPreferredModel, "意图槽位精炼");
             if (response == null || response.isBlank()) {
                 return Map.of();
             }
@@ -317,7 +323,8 @@ public class IntentTreeRoutingService {
             vars.put("history", history == null ? "" : history);
             vars.put("candidates", candidates.stream().limit(Math.max(1, properties.getMaxCandidates())).toList());
             PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-clarification", vars);
-            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "意图澄清");
+            String response = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, intentPreferredModel, "意图澄清");
             if (response != null && !response.isBlank()) {
                 return response.trim();
             }
