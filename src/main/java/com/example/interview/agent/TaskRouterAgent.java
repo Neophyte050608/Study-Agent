@@ -11,7 +11,9 @@ import com.example.interview.agent.router.TaskHandlerRegistry;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
+import com.example.interview.intent.IntentPreFilter;
 import com.example.interview.intent.IntentRoutingDecision;
+import com.example.interview.intent.PreFilterResult;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.modelrouting.TimeoutHint;
@@ -28,6 +30,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -48,6 +51,7 @@ public class TaskRouterAgent {
     private final KnowledgeQaAgent knowledgeQaAgent;
     private final PromptManager promptManager;
     private final IntentTreeRoutingService intentTreeRoutingService;
+    private final IntentPreFilter intentPreFilter;
     private final A2ABus a2aBus;
     private final RoutingChatService routingChatService;
     private final RAGObservabilityService ragObservabilityService;
@@ -62,6 +66,7 @@ public class TaskRouterAgent {
             KnowledgeQaAgent knowledgeQaAgent,
             PromptManager promptManager,
             IntentTreeRoutingService intentTreeRoutingService,
+            IntentPreFilter intentPreFilter,
             A2ABus a2aBus,
             RoutingChatService routingChatService,
             RAGObservabilityService ragObservabilityService,
@@ -74,6 +79,7 @@ public class TaskRouterAgent {
         this.knowledgeQaAgent = knowledgeQaAgent;
         this.promptManager = promptManager;
         this.intentTreeRoutingService = intentTreeRoutingService;
+        this.intentPreFilter = intentPreFilter;
         this.a2aBus = a2aBus;
         this.routingChatService = routingChatService;
         this.ragObservabilityService = ragObservabilityService;
@@ -147,12 +153,66 @@ public class TaskRouterAgent {
      * ReAct 推理模式分发
      */
     private TaskResponse treeIntentDispatch(TaskRequest request) {
-        markRouteSource(request.context(), "intent-tree");
         String naturalLanguageQuery = readText(request.payload(), "query");
         String history = readText(request.context(), "history");
         if (naturalLanguageQuery.isBlank()) {
             return TaskResponse.fail("未指定 taskType 且 query 为空，无法进行意图识别");
         }
+
+        Optional<PreFilterResult> preFilterOpt = intentPreFilter == null
+                ? Optional.empty()
+                : intentPreFilter.filter(naturalLanguageQuery);
+        if (preFilterOpt.isPresent()) {
+            PreFilterResult preFilterResult = preFilterOpt.get();
+            markRouteSource(request.context(), "pre-filter");
+
+            if ("CLEAR_CONTEXT".equals(preFilterResult.taskType())) {
+                if (request.context() != null) {
+                    try {
+                        request.context().put("clearSession", true);
+                    } catch (UnsupportedOperationException ignored) {
+                    }
+                }
+                return immediateSuccessResponse(
+                        request,
+                        "PRE_FILTER_REPLY",
+                        Map.of("question", preFilterResult.directReply(), "clearSession", true)
+                );
+            }
+
+            if (preFilterResult.directReply() != null && preFilterResult.taskType() == null) {
+                return immediateSuccessResponse(
+                        request,
+                        "PRE_FILTER_REPLY",
+                        Map.of("question", preFilterResult.directReply())
+                );
+            }
+
+            try {
+                TaskType taskType = TaskType.valueOf(preFilterResult.taskType().toUpperCase());
+                Map<String, Object> newPayload = new LinkedHashMap<>(request.payload() == null ? Map.of() : request.payload());
+                if (preFilterResult.slots() != null && !preFilterResult.slots().isEmpty()) {
+                    newPayload.putAll(preFilterResult.slots());
+                }
+                fillMissingSlotsFromQuery(naturalLanguageQuery, newPayload);
+                if (requiresIntentTreeClarification(taskType, newPayload)) {
+                    markRouteSource(request.context(), "intent-tree");
+                    return routeByIntentTree(request, naturalLanguageQuery, history);
+                }
+                normalizeQuestionType(newPayload);
+
+                TaskRequest newRequest = new TaskRequest(taskType, newPayload, request.context());
+                return dispatch(newRequest);
+            } catch (IllegalArgumentException ignored) {
+                // taskType 不合法时，静默降级到 Layer 2。
+            }
+        }
+
+        markRouteSource(request.context(), "intent-tree");
+        return routeByIntentTree(request, naturalLanguageQuery, history);
+    }
+
+    private TaskResponse routeByIntentTree(TaskRequest request, String naturalLanguageQuery, String history) {
         if (intentTreeRoutingService == null || !intentTreeRoutingService.enabled()) {
             return reactDispatch(request);
         }
@@ -199,15 +259,8 @@ public class TaskRouterAgent {
             }
         }
 
+        fillMissingSlotsFromQuery(naturalLanguageQuery, newPayload);
         normalizeQuestionType(newPayload);
-
-        // 兜底：如果 LLM 未提取 count，从原始 query 中通过正则提取中文/阿拉伯数字
-        if (!newPayload.containsKey("count") || newPayload.get("count") == null) {
-            int extracted = extractCountFromQuery(naturalLanguageQuery);
-            if (extracted > 0) {
-                newPayload.put("count", extracted);
-            }
-        }
 
         // 兜底：如果 LLM 未提取 type/questionType，从原始 query 中推断题型
         if (!newPayload.containsKey("type") || String.valueOf(newPayload.get("type")).isBlank()) {
@@ -216,11 +269,14 @@ public class TaskRouterAgent {
             }
         }
 
-        if (naturalLanguageQuery.contains("跳过自我介绍") || naturalLanguageQuery.contains("直接出题") || naturalLanguageQuery.contains("跳过介绍")) {
-            newPayload.put("skipIntro", true);
-        }
         TaskRequest newRequest = new TaskRequest(taskType, newPayload, request.context());
         return dispatch(newRequest);
+    }
+
+    private boolean requiresIntentTreeClarification(TaskType taskType, Map<String, Object> payload) {
+        return taskType == TaskType.CODING_PRACTICE
+                && readText(payload, "topic").isBlank()
+                && readText(payload, "questionType").isBlank();
     }
 
     /**
@@ -314,36 +370,6 @@ public class TaskRouterAgent {
         return value == null ? "" : String.valueOf(value);
     }
 
-    /**
-     * 从用户原始 query 中提取数量（支持中文数字和阿拉伯数字）。
-     * 匹配模式："来N道"、"出N道"、"做N道"、"N道"、"N题" 等。
-     */
-    private int extractCountFromQuery(String query) {
-        if (query == null || query.isBlank()) return 0;
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("([一二三四五六七八九十两\\d]+)\\s*[道题个]")
-                .matcher(query);
-        if (m.find()) {
-            String num = m.group(1);
-            return parseChineseNumber(num);
-        }
-        return 0;
-    }
-
-    private int parseChineseNumber(String s) {
-        if (s == null || s.isBlank()) return 0;
-        try {
-            return Integer.parseInt(s);
-        } catch (NumberFormatException ignored) {}
-        return switch (s) {
-            case "一" -> 1; case "两", "二" -> 2; case "三" -> 3;
-            case "四" -> 4; case "五" -> 5; case "六" -> 6;
-            case "七" -> 7; case "八" -> 8; case "九" -> 9;
-            case "十" -> 10;
-            default -> 0;
-        };
-    }
-
     private void normalizeQuestionType(Map<String, Object> payload) {
         String questionType = readText(payload, "questionType");
         if (questionType.isBlank()) {
@@ -361,6 +387,12 @@ public class TaskRouterAgent {
             typeName = "算法题";
         }
         payload.put("type", typeName);
+    }
+
+    private void fillMissingSlotsFromQuery(String naturalLanguageQuery, Map<String, Object> payload) {
+        if (intentPreFilter != null) {
+            intentPreFilter.fillMissingSlots(naturalLanguageQuery, payload);
+        }
     }
 
     private void publish(TaskRequest request, String receiver, A2AStatus status, String correlationId, String traceId, String parentMessageId) {
@@ -393,16 +425,37 @@ public class TaskRouterAgent {
     }
 
     private void publishReply(TaskResponse response, TaskType taskType, String replyTo, String correlationId, String traceId) {
+        publishReply(response, taskType == null ? "" : taskType.name(), replyTo, correlationId, traceId);
+    }
+
+    private void publishReply(TaskResponse response, String taskTypeName, String replyTo, String correlationId, String traceId) {
         if (replyTo == null || replyTo.isBlank()) return;
         String messageId = UUID.randomUUID().toString();
         a2aBus.publish(new A2AMessage(
                 "1.0", messageId, correlationId, "TaskRouterAgent", replyTo, "", A2AIntent.RETURN_RESULT,
-                Map.of("taskType", taskType.name(), "success", response.success(), "message", response.message() == null ? "" : response.message(), "data", response.data() == null ? Map.of() : response.data()),
+                Map.of("taskType", taskTypeName, "success", response.success(), "message", response.message() == null ? "" : response.message(), "data", response.data() == null ? Map.of() : response.data()),
                 Map.of(), response.success() ? A2AStatus.DONE : A2AStatus.FAILED,
                 response.success() ? null : new com.example.interview.agent.a2a.A2AError("TASK_FAILED", response.message()),
-                new A2AMetadata("task-routing-reply", "TaskRouterAgent", Map.of("taskType", taskType.name())),
+                new A2AMetadata("task-routing-reply", "TaskRouterAgent", Map.of("taskType", taskTypeName)),
                 new A2ATrace(traceId, messageId), Instant.now()
         ));
+    }
+
+    private TaskResponse immediateSuccessResponse(TaskRequest request, String taskTypeName, Object data) {
+        String correlationId = resolveCorrelationId(request.context());
+        String traceId = resolveTraceId(request.context());
+        String replyTo = resolveReplyTo(request.context());
+        String nodeId = UUID.randomUUID().toString();
+        RAGTraceContext.setTraceId(traceId);
+        TaskResponse response = TaskResponse.ok(data);
+        try {
+            ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + taskTypeName);
+            publishReply(response, taskTypeName, replyTo, correlationId, traceId);
+            ragObservabilityService.endNode(traceId, nodeId, request.payload() == null ? "{}" : request.payload().toString(), response.message(), null);
+            return response;
+        } finally {
+            RAGTraceContext.clear();
+        }
     }
 
     private void markRouteSource(Map<String, Object> context, String routeSource) {

@@ -78,6 +78,9 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("traceId", context.traceId());
         String routeLabel = "task-router";
+        if (webChatService.shouldClearSession(response)) {
+            webChatService.clearSessionContext(context.sessionId(), context.assistantMessageId());
+        }
         if (response.data() instanceof InterviewSession session) {
             metadata.put("interviewSessionId", session.getId());
             metadata.put("type", "interview_start");

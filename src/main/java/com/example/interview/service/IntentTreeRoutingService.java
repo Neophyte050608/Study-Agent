@@ -85,7 +85,7 @@ public class IntentTreeRoutingService {
             vars.put("minGap", properties.getMinGap());
             vars.put("ambiguityRatio", properties.getAmbiguityRatio());
             PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
-            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "意图树分类");
+            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "意图树分类");
             // 解析并归一化模型返回结果
             return normalizeDecision(response, query, history);
         } catch (Exception ex) {
@@ -120,7 +120,7 @@ public class IntentTreeRoutingService {
             vars.put("history", history == null ? "" : history);
             vars.put("cases", loadSlotRefineCases(taskType));
             PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-slot-refine", vars);
-            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "意图槽位精炼");
+            String response = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "意图槽位精炼");
             if (response == null || response.isBlank()) {
                 return Map.of();
             }

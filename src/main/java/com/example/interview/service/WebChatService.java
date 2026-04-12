@@ -82,6 +82,29 @@ public class WebChatService {
         );
     }
 
+    public void clearSessionContext(String sessionId) {
+        clearSessionContext(sessionId, null);
+    }
+
+    public void clearSessionContext(String sessionId, String preserveMessageId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        LambdaQueryWrapper<ChatMessageDO> deleteWrapper = new LambdaQueryWrapper<ChatMessageDO>()
+                .eq(ChatMessageDO::getSessionId, sessionId);
+        if (preserveMessageId != null && !preserveMessageId.isBlank()) {
+            deleteWrapper.ne(ChatMessageDO::getMessageId, preserveMessageId);
+        }
+        messageMapper.delete(deleteWrapper);
+        sessionMapper.update(null,
+                new LambdaUpdateWrapper<ChatSessionDO>()
+                        .eq(ChatSessionDO::getSessionId, sessionId)
+                        .set(ChatSessionDO::getContextSummary, null)
+                        .set(ChatSessionDO::getSummaryUpToMsgId, null)
+                        .set(ChatSessionDO::getUpdatedAt, LocalDateTime.now())
+        );
+    }
+
     // ======== Message Operations ========
 
     public List<ChatMessageDO> listMessages(String sessionId, int limit, Long beforeId) {
@@ -179,6 +202,9 @@ public class WebChatService {
         String replyText = extractReplyText(response);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("traceId", traceId);
+        if (shouldClearSession(response)) {
+            clearSessionContext(sessionId);
+        }
         saveAssistantMessage(sessionId, replyText, metadata);
         autoTitleIfNeeded(sessionId, userContent);
         return response;
@@ -214,6 +240,13 @@ public class WebChatService {
 
     public TaskRouterAgent getTaskRouterAgent() {
         return taskRouterAgent;
+    }
+
+    public boolean shouldClearSession(TaskResponse response) {
+        if (!(response != null && response.data() instanceof Map<?, ?> dataMap)) {
+            return false;
+        }
+        return Boolean.TRUE.equals(dataMap.get("clearSession"));
     }
 
     /**
