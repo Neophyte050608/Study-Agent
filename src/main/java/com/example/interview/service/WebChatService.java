@@ -3,7 +3,6 @@ package com.example.interview.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.interview.agent.TaskRouterAgent;
-import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.entity.ChatMessageDO;
 import com.example.interview.entity.ChatSessionDO;
@@ -14,8 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -184,36 +181,6 @@ public class WebChatService {
         }
         messageMapper.updateById(existing);
         touchSession(existing.getSessionId());
-    }
-
-    // ======== Chat Dispatch ========
-
-    public TaskResponse dispatchChat(String sessionId, String userId, String userContent) {
-        saveUserMessage(sessionId, userContent);
-        String history = buildHistoryContext(sessionId);
-        String traceId = UUID.randomUUID().toString();
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("query", userContent);
-
-        Map<String, Object> context = new HashMap<>();
-        context.put("sessionId", sessionId);
-        context.put("userId", userId);
-        context.put("history", history);
-        context.put("traceId", traceId);
-
-        TaskRequest request = new TaskRequest(null, payload, context);
-        TaskResponse response = taskRouterAgent.dispatch(request);
-
-        String replyText = extractReplyText(response);
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("traceId", traceId);
-        ChatMessageDO assistantMessage = saveAssistantMessage(sessionId, replyText, metadata);
-        if (shouldClearSession(response)) {
-            clearSessionContext(sessionId, assistantMessage == null ? null : assistantMessage.getMessageId());
-        }
-        autoTitleIfNeeded(sessionId, userContent);
-        return response;
     }
 
     // ======== Public helpers (used by ChatStreamingService) ========
