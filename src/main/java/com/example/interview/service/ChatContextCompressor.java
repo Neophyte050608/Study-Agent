@@ -57,26 +57,28 @@ public class ChatContextCompressor {
     }
 
     public String buildCompressedContext(String sessionId) {
+        ChatSessionDO session = sessionMapper.selectOne(
+                new LambdaQueryWrapper<ChatSessionDO>()
+                        .eq(ChatSessionDO::getSessionId, sessionId)
+        );
+        Long contextStartMsgId = session != null ? session.getSummaryUpToMsgId() : null;
         Long total = messageMapper.selectCount(
                 new LambdaQueryWrapper<ChatMessageDO>()
                         .eq(ChatMessageDO::getSessionId, sessionId)
+                        .gt(contextStartMsgId != null, ChatMessageDO::getId, contextStartMsgId)
         );
         if (total == null || total <= COMPRESS_TRIGGER_THRESHOLD) {
-            return prependUserMemory(sessionId, buildVerbatimHistory(sessionId));
+            return prependUserMemory(sessionId, buildVerbatimHistory(sessionId, 0, contextStartMsgId));
         }
 
         List<ChatMessageDO> recent = messageMapper.selectList(
                 new LambdaQueryWrapper<ChatMessageDO>()
                         .eq(ChatMessageDO::getSessionId, sessionId)
+                        .gt(contextStartMsgId != null, ChatMessageDO::getId, contextStartMsgId)
                         .orderByDesc(ChatMessageDO::getCreatedAt)
                         .last("LIMIT " + RECENT_VERBATIM_COUNT)
         );
         Collections.reverse(recent);
-
-        ChatSessionDO session = sessionMapper.selectOne(
-                new LambdaQueryWrapper<ChatSessionDO>()
-                        .eq(ChatSessionDO::getSessionId, sessionId)
-        );
         String existingSummary = session != null ? session.getContextSummary() : null;
         boolean hasSummary = existingSummary != null && !existingSummary.isBlank();
 
@@ -87,7 +89,7 @@ public class ChatContextCompressor {
         // 首次还没有摘要时，降级为取更多消息（避免上下文断崖）
         if (!hasSummary) {
             return prependUserMemory(sessionId,
-                    buildVerbatimHistory(sessionId, COMPRESS_TRIGGER_THRESHOLD + RECENT_VERBATIM_COUNT));
+                    buildVerbatimHistory(sessionId, COMPRESS_TRIGGER_THRESHOLD + RECENT_VERBATIM_COUNT, contextStartMsgId));
         }
 
         String recentText = formatMessages(recent);
@@ -101,12 +103,17 @@ public class ChatContextCompressor {
     }
 
     private String buildVerbatimHistory(String sessionId) {
-        return buildVerbatimHistory(sessionId, 0);
+        return buildVerbatimHistory(sessionId, 0, null);
     }
 
     private String buildVerbatimHistory(String sessionId, int limit) {
+        return buildVerbatimHistory(sessionId, limit, null);
+    }
+
+    private String buildVerbatimHistory(String sessionId, int limit, Long contextStartMsgId) {
         LambdaQueryWrapper<ChatMessageDO> wrapper = new LambdaQueryWrapper<ChatMessageDO>()
                 .eq(ChatMessageDO::getSessionId, sessionId)
+                .gt(contextStartMsgId != null, ChatMessageDO::getId, contextStartMsgId)
                 .orderByDesc(ChatMessageDO::getCreatedAt);
         if (limit > 0) {
             wrapper.last("LIMIT " + limit);
@@ -176,6 +183,7 @@ public class ChatContextCompressor {
             List<ChatMessageDO> recent = messageMapper.selectList(
                     new LambdaQueryWrapper<ChatMessageDO>()
                             .eq(ChatMessageDO::getSessionId, sessionId)
+                            .gt(session.getSummaryUpToMsgId() != null, ChatMessageDO::getId, session.getSummaryUpToMsgId())
                             .orderByDesc(ChatMessageDO::getCreatedAt)
                             .last("LIMIT " + RECENT_VERBATIM_COUNT)
             );

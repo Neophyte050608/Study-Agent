@@ -86,21 +86,27 @@ public class WebChatService {
         clearSessionContext(sessionId, null);
     }
 
-    public void clearSessionContext(String sessionId, String preserveMessageId) {
+    public void clearSessionContext(String sessionId, String boundaryMessageId) {
         if (sessionId == null || sessionId.isBlank()) {
             return;
         }
-        LambdaQueryWrapper<ChatMessageDO> deleteWrapper = new LambdaQueryWrapper<ChatMessageDO>()
-                .eq(ChatMessageDO::getSessionId, sessionId);
-        if (preserveMessageId != null && !preserveMessageId.isBlank()) {
-            deleteWrapper.ne(ChatMessageDO::getMessageId, preserveMessageId);
+        Long boundaryId = null;
+        if (boundaryMessageId != null && !boundaryMessageId.isBlank()) {
+            ChatMessageDO boundaryMessage = messageMapper.selectOne(
+                    new LambdaQueryWrapper<ChatMessageDO>()
+                            .eq(ChatMessageDO::getMessageId, boundaryMessageId)
+                            .eq(ChatMessageDO::getSessionId, sessionId)
+                            .last("LIMIT 1")
+            );
+            if (boundaryMessage != null) {
+                boundaryId = boundaryMessage.getId();
+            }
         }
-        messageMapper.delete(deleteWrapper);
         sessionMapper.update(null,
                 new LambdaUpdateWrapper<ChatSessionDO>()
                         .eq(ChatSessionDO::getSessionId, sessionId)
                         .set(ChatSessionDO::getContextSummary, null)
-                        .set(ChatSessionDO::getSummaryUpToMsgId, null)
+                        .set(ChatSessionDO::getSummaryUpToMsgId, boundaryId)
                         .set(ChatSessionDO::getUpdatedAt, LocalDateTime.now())
         );
     }
@@ -202,10 +208,10 @@ public class WebChatService {
         String replyText = extractReplyText(response);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("traceId", traceId);
+        ChatMessageDO assistantMessage = saveAssistantMessage(sessionId, replyText, metadata);
         if (shouldClearSession(response)) {
-            clearSessionContext(sessionId);
+            clearSessionContext(sessionId, assistantMessage == null ? null : assistantMessage.getMessageId());
         }
-        saveAssistantMessage(sessionId, replyText, metadata);
         autoTitleIfNeeded(sessionId, userContent);
         return response;
     }
