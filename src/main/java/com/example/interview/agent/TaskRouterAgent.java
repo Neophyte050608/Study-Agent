@@ -12,13 +12,13 @@ import com.example.interview.agent.task.ExecutionMode;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
+import com.example.interview.core.RAGTraceContext;
 import com.example.interview.intent.IntentPreFilter;
 import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.intent.PreFilterResult;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.modelrouting.TimeoutHint;
-import com.example.interview.core.RAGTraceContext;
 import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.PromptManager;
@@ -29,18 +29,12 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * 任务路由智能体 (TaskRouterAgent)
- * 
- * 核心职责：作为整个智能体系统的“总调度员”和“消息网关”。
- * 1. 路由分发：将外部输入的 TaskRequest 根据其类型 (TaskType) 路由到具体的业务 Agent。
- * 2. 状态观测：通过 A2A 总线实时发布任务的处理进度。
- * 3. ReAct 模式：支持基于大模型推理的自动意图识别与分发。
  */
 @Component
 public class TaskRouterAgent {
@@ -87,33 +81,24 @@ public class TaskRouterAgent {
         this.taskHandlerRegistry = taskHandlerRegistry;
     }
 
-    /**
-     * 统一调度入口：负责接收任务请求并分发给对应的具体业务 Agent。
-     * 
-     * @param request 任务请求对象，包含任务类型、负载数据和上下文信息。
-     * @return TaskResponse 任务执行的响应结果。
-     */
     public TaskResponse dispatch(TaskRequest request) {
         if (request == null) {
             return TaskResponse.fail("请求不能为空");
         }
 
-        // 0. ReAct 模式增强：如果未指定 taskType（如来自 IM 渠道的自然语言输入），则使用大模型进行意图推理和分类
         if (request.taskType() == null) {
             return treeIntentDispatch(request);
         }
-        
-        // 1. 解析分布式追踪与消息关联相关的上下文 ID
+
         String correlationId = resolveCorrelationId(request.context());
         String traceId = resolveTraceId(request.context());
         String parentMessageId = resolveParentMessageId(request.context());
         String replyTo = resolveReplyTo(request.context());
-        
-        // 2. 初始化 RAG 观测上下文，用于记录整个调度过程的耗时与状态
+
         RAGTraceContext.setTraceId(traceId);
         String nodeId = UUID.randomUUID().toString();
         ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + request.taskType());
-        
+
         TaskHandler handler = null;
         TaskResponse response;
         try {
@@ -125,26 +110,16 @@ public class TaskRouterAgent {
             }
 
             handler = taskHandlerRegistry.require(request.taskType());
-
-            // 3. 发布任务状态：PENDING（通知 A2A 总线任务已接收）
             publish(request, handler.receiverName(), A2AStatus.PENDING, correlationId, traceId, parentMessageId);
-
-            // 4. 发布任务状态：PROCESSING（通知 A2A 总线任务开始处理）
             publish(request, handler.receiverName(), A2AStatus.PROCESSING, correlationId, traceId, parentMessageId);
 
             response = TaskResponse.ok(handler.handle(request));
-            
-            // 6. 发布任务状态：DONE/FAILED（根据响应结果通知 A2A 总线任务结束）
+
             publish(request, handler.receiverName(), response.success() ? A2AStatus.DONE : A2AStatus.FAILED, correlationId, traceId, parentMessageId);
-            
-            // 7. 处理异步回传请求（如果请求方要求异步通知结果，例如 Webhook 模式）
             publishReply(response, request.taskType(), replyTo, correlationId, traceId);
-            
-            // 8. 结束 RAG 观测节点，记录正常结束状态
             ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), response.message(), null);
             return response;
         } catch (Exception e) {
-            // 异常兜底：发布失败状态、回传失败消息，并记录 RAG 观测节点的错误信息
             if (handler != null) {
                 publish(request, handler.receiverName(), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             }
@@ -152,14 +127,10 @@ public class TaskRouterAgent {
             ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), null, e.getMessage());
             return TaskResponse.fail("任务路由失败: " + e.getMessage());
         } finally {
-            // 清理当前线程的 Trace 上下文，防止内存泄漏或污染
             RAGTraceContext.clear();
         }
     }
 
-    /**
-     * ReAct 推理模式分发
-     */
     private TaskResponse treeIntentDispatch(TaskRequest request) {
         String naturalLanguageQuery = readText(request.payload(), "query");
         String history = readText(request.context(), "history");
@@ -188,11 +159,27 @@ public class TaskRouterAgent {
                 );
             }
 
-            if (preFilterResult.directReply() != null && preFilterResult.taskType() == null) {
+            if (preFilterResult.directReply() != null && preFilterResult.taskType() == null && !preFilterResult.isDomainOnly()) {
                 return immediateSuccessResponse(
                         request,
                         "PRE_FILTER_REPLY",
                         Map.of("question", preFilterResult.directReply())
+                );
+            }
+
+            if (preFilterResult.isDomainOnly()) {
+                Map<String, Object> seedPayload = new LinkedHashMap<>(request.payload() == null ? Map.of() : request.payload());
+                if (preFilterResult.slots() != null && !preFilterResult.slots().isEmpty()) {
+                    seedPayload.putAll(preFilterResult.slots());
+                }
+                fillMissingSlotsFromQuery(naturalLanguageQuery, seedPayload);
+                normalizeQuestionType(seedPayload);
+                markRouteSource(request.context(), "intent-tree");
+                return routeByIntentTree(
+                        new TaskRequest(null, seedPayload, request.context()),
+                        naturalLanguageQuery,
+                        history,
+                        preFilterResult.domain()
                 );
             }
 
@@ -203,28 +190,24 @@ public class TaskRouterAgent {
                     newPayload.putAll(preFilterResult.slots());
                 }
                 fillMissingSlotsFromQuery(naturalLanguageQuery, newPayload);
-                if (requiresIntentTreeClarification(taskType, newPayload)) {
-                    markRouteSource(request.context(), "intent-tree");
-                    return routeByIntentTree(request, naturalLanguageQuery, history);
-                }
                 normalizeQuestionType(newPayload);
 
                 TaskRequest newRequest = new TaskRequest(taskType, newPayload, request.context());
                 return dispatch(newRequest);
             } catch (IllegalArgumentException ignored) {
-                // taskType 不合法时，静默降级到 Layer 2。
             }
         }
 
         markRouteSource(request.context(), "intent-tree");
-        return routeByIntentTree(request, naturalLanguageQuery, history);
+        return routeByIntentTree(request, naturalLanguageQuery, history, null);
     }
 
-    private TaskResponse routeByIntentTree(TaskRequest request, String naturalLanguageQuery, String history) {
+    private TaskResponse routeByIntentTree(TaskRequest request, String naturalLanguageQuery,
+                                           String history, String domain) {
         if (intentTreeRoutingService == null || !intentTreeRoutingService.enabled()) {
             return reactDispatch(request);
         }
-        IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history);
+        IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history, domain);
         if (decision.fallbackToLegacy()) {
             return reactDispatch(request);
         }
@@ -241,7 +224,7 @@ public class TaskRouterAgent {
         if ("UNKNOWN".equalsIgnoreCase(decision.taskType())) {
             return TaskResponse.ok(Map.of(
                     "question",
-                    "我没完全理解你的意图。你可以说“开始模拟面试”、“来一道算法题”或“查询学习计划”。"
+                    "我没完全理解你的意图。你可以说\"开始模拟面试\"、\"来一道算法题\"或\"查询学习计划\"。"
             ));
         }
         TaskType taskType;
@@ -255,7 +238,6 @@ public class TaskRouterAgent {
             newPayload.putAll(decision.slots());
         }
 
-        // 槽位补全增强：如果识别到了具体任务类型，但关键槽位可能缺失，尝试二次精炼
         if (!"UNKNOWN".equalsIgnoreCase(decision.taskType()) && !decision.askClarification()) {
             Map<String, Object> refinedSlots = intentTreeRoutingService.refineSlots(decision.taskType(), naturalLanguageQuery, history);
             if (refinedSlots != null && !refinedSlots.isEmpty()) {
@@ -270,7 +252,6 @@ public class TaskRouterAgent {
         fillMissingSlotsFromQuery(naturalLanguageQuery, newPayload);
         normalizeQuestionType(newPayload);
 
-        // 兜底：如果 LLM 未提取 type/questionType，从原始 query 中推断题型
         if (!newPayload.containsKey("type") || String.valueOf(newPayload.get("type")).isBlank()) {
             if (naturalLanguageQuery.contains("选择") || naturalLanguageQuery.contains("单选") || naturalLanguageQuery.contains("多选")) {
                 newPayload.put("type", "选择题");
@@ -281,15 +262,6 @@ public class TaskRouterAgent {
         return dispatch(newRequest);
     }
 
-    private boolean requiresIntentTreeClarification(TaskType taskType, Map<String, Object> payload) {
-        return taskType == TaskType.CODING_PRACTICE
-                && readText(payload, "topic").isBlank()
-                && readText(payload, "questionType").isBlank();
-    }
-
-    /**
-     * ReAct 推理模式分发
-     */
     private TaskResponse reactDispatch(TaskRequest request) {
         markRouteSource(request.context(), "react-router");
         String naturalLanguageQuery = readText(request.payload(), "query");
@@ -305,55 +277,68 @@ public class TaskRouterAgent {
 
         try {
             String reactDecisionStr = routingChatService.callWithFirstPacketProbeSupplier(
-                () -> "{\"taskType\":\"UNKNOWN\"}",
-                prompt, 
-                ModelRouteType.THINKING, 
-                TimeoutHint.FAST,
-                "任务路由ReAct"
+                    () -> "{\"taskType\":\"UNKNOWN\"}",
+                    prompt,
+                    ModelRouteType.THINKING,
+                    TimeoutHint.FAST,
+                    "任务路由ReAct"
             );
 
-            // 简单解析决策结果
             String decidedTaskType = "";
             String topic = "";
             String questionType = "";
             if (reactDecisionStr != null) {
-                if (reactDecisionStr.contains("INTERVIEW_START")) decidedTaskType = "INTERVIEW_START";
-                else if (reactDecisionStr.contains("INTERVIEW_ANSWER")) decidedTaskType = "INTERVIEW_ANSWER";
-                else if (reactDecisionStr.contains("INTERVIEW_REPORT")) decidedTaskType = "INTERVIEW_REPORT";
-                else if (reactDecisionStr.contains("CODING_PRACTICE")) decidedTaskType = "CODING_PRACTICE";
-                else if (reactDecisionStr.contains("LEARNING_PLAN")) decidedTaskType = "LEARNING_PLAN";
-                else if (reactDecisionStr.contains("PROFILE_EVENT_UPSERT")) decidedTaskType = "PROFILE_EVENT_UPSERT";
-                else if (reactDecisionStr.contains("PROFILE_TRAINING_PLAN_QUERY")) decidedTaskType = "PROFILE_TRAINING_PLAN_QUERY";
-                else if (reactDecisionStr.contains("PROFILE_SNAPSHOT_QUERY")) decidedTaskType = "PROFILE_SNAPSHOT_QUERY";
-                else if (reactDecisionStr.contains("KNOWLEDGE_QA")) decidedTaskType = "KNOWLEDGE_QA";
-                else if (reactDecisionStr.contains("UNKNOWN")) decidedTaskType = "UNKNOWN";
+                if (reactDecisionStr.contains("INTERVIEW_START")) {
+                    decidedTaskType = "INTERVIEW_START";
+                } else if (reactDecisionStr.contains("INTERVIEW_ANSWER")) {
+                    decidedTaskType = "INTERVIEW_ANSWER";
+                } else if (reactDecisionStr.contains("INTERVIEW_REPORT")) {
+                    decidedTaskType = "INTERVIEW_REPORT";
+                } else if (reactDecisionStr.contains("CODING_PRACTICE")) {
+                    decidedTaskType = "CODING_PRACTICE";
+                } else if (reactDecisionStr.contains("LEARNING_PLAN")) {
+                    decidedTaskType = "LEARNING_PLAN";
+                } else if (reactDecisionStr.contains("PROFILE_EVENT_UPSERT")) {
+                    decidedTaskType = "PROFILE_EVENT_UPSERT";
+                } else if (reactDecisionStr.contains("PROFILE_TRAINING_PLAN_QUERY")) {
+                    decidedTaskType = "PROFILE_TRAINING_PLAN_QUERY";
+                } else if (reactDecisionStr.contains("PROFILE_SNAPSHOT_QUERY")) {
+                    decidedTaskType = "PROFILE_SNAPSHOT_QUERY";
+                } else if (reactDecisionStr.contains("KNOWLEDGE_QA")) {
+                    decidedTaskType = "KNOWLEDGE_QA";
+                } else if (reactDecisionStr.contains("UNKNOWN")) {
+                    decidedTaskType = "UNKNOWN";
+                }
 
                 java.util.regex.Matcher mTopic = java.util.regex.Pattern.compile("\"topic\"\\s*:\\s*\"([^\"]+)\"").matcher(reactDecisionStr);
-                if (mTopic.find()) topic = mTopic.group(1);
+                if (mTopic.find()) {
+                    topic = mTopic.group(1);
+                }
 
                 java.util.regex.Matcher mType = java.util.regex.Pattern.compile("\"questionType\"\\s*:\\s*\"([^\"]+)\"").matcher(reactDecisionStr);
-                if (mType.find()) questionType = mType.group(1);
+                if (mType.find()) {
+                    questionType = mType.group(1);
+                }
 
                 if (!decidedTaskType.isBlank()) {
-                    // 处理兜底策略
                     if ("UNKNOWN".equals(decidedTaskType)) {
                         String fallbackMessage = "抱歉，我没有理解你的意图。我是你的 AI 面试官助理，你可以尝试以下功能：\n" +
                                 "1. 模拟面试：例如“开启一场 Spring Boot 面试”\n" +
                                 "2. 题目练习：例如“来一道 Java 选择题”或“刷一道算法题”\n" +
                                 "3. 学习画像：例如“查询我的学习计划”\n" +
                                 "请告诉我你想进行哪项操作。";
-                        // 返回通用 Map 结构，ImWebhookService 会提取并展示内容
                         return TaskResponse.ok(Map.of("question", fallbackMessage));
                     }
 
                     Map<String, Object> newPayload = new LinkedHashMap<>(request.payload() == null ? Map.of() : request.payload());
-                    if (!topic.isBlank()) newPayload.put("topic", topic);
+                    if (!topic.isBlank()) {
+                        newPayload.put("topic", topic);
+                    }
                     if (!questionType.isBlank()) {
                         newPayload.put("questionType", questionType);
                     }
                     normalizeQuestionType(newPayload);
 
-                    // 检查是否主动跳过自我介绍
                     if (naturalLanguageQuery.contains("跳过自我介绍") || naturalLanguageQuery.contains("直接出题") || naturalLanguageQuery.contains("跳过介绍")) {
                         newPayload.put("skipIntro", true);
                     }
@@ -370,10 +355,10 @@ public class TaskRouterAgent {
         }
     }
 
-    // --- 辅助工具方法 ---
-
     private String readText(Map<String, Object> payload, String key) {
-        if (payload == null) return "";
+        if (payload == null) {
+            return "";
+        }
         Object value = payload.get(key);
         return value == null ? "" : String.valueOf(value);
     }
@@ -459,7 +444,9 @@ public class TaskRouterAgent {
     }
 
     private void publishReply(TaskResponse response, String taskTypeName, String replyTo, String correlationId, String traceId) {
-        if (replyTo == null || replyTo.isBlank()) return;
+        if (replyTo == null || replyTo.isBlank()) {
+            return;
+        }
         String messageId = UUID.randomUUID().toString();
         a2aBus.publish(new A2AMessage(
                 "1.0", messageId, correlationId, "TaskRouterAgent", replyTo, "", A2AIntent.RETURN_RESULT,

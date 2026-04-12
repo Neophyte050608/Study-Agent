@@ -34,6 +34,7 @@ public class ChatContextCompressor {
     private static final Logger log = LoggerFactory.getLogger(ChatContextCompressor.class);
     private static final int COMPRESS_TRIGGER_THRESHOLD = 12;
     private static final int RECENT_VERBATIM_COUNT = 6;
+    private static final int INTENT_RECENT_MESSAGE_COUNT = 4;
 
     private final ChatMessageMapper messageMapper;
     private final ChatSessionMapper sessionMapper;
@@ -95,6 +96,32 @@ public class ChatContextCompressor {
         String recentText = formatMessages(recent);
         String sessionContext = "【会话摘要】\n" + existingSummary + "\n\n【近期对话】\n" + recentText;
         return prependUserMemory(sessionId, sessionContext);
+    }
+
+    public String buildIntentRoutingContext(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return "";
+        }
+        ChatSessionDO session = sessionMapper.selectOne(
+                new LambdaQueryWrapper<ChatSessionDO>()
+                        .eq(ChatSessionDO::getSessionId, sessionId)
+        );
+        Long contextStartMsgId = session != null ? session.getSummaryUpToMsgId() : null;
+        List<ChatMessageDO> messages = messageMapper.selectList(
+                new LambdaQueryWrapper<ChatMessageDO>()
+                        .eq(ChatMessageDO::getSessionId, sessionId)
+                        .gt(contextStartMsgId != null, ChatMessageDO::getId, contextStartMsgId)
+                        .orderByDesc(ChatMessageDO::getCreatedAt)
+                        .last("LIMIT " + (INTENT_RECENT_MESSAGE_COUNT * 2))
+        );
+        Collections.reverse(messages);
+        List<ChatMessageDO> filteredMessages = messages.stream()
+                .filter(this::shouldIncludeForIntentRouting)
+                .toList();
+        List<ChatMessageDO> filtered = filteredMessages.stream()
+                .skip(Math.max(0, filteredMessages.size() - INTENT_RECENT_MESSAGE_COUNT))
+                .toList();
+        return formatMessages(filtered);
     }
 
     @PostConstruct
@@ -279,5 +306,24 @@ public class ChatContextCompressor {
         return messages.stream()
                 .map(m -> ("user".equals(m.getRole()) ? "User" : "AI") + ": " + m.getContent())
                 .collect(Collectors.joining("\n"));
+    }
+
+    private boolean shouldIncludeForIntentRouting(ChatMessageDO message) {
+        if (message == null) {
+            return false;
+        }
+        String content = message.getContent();
+        if (content == null || content.isBlank()) {
+            return false;
+        }
+        if ("正在生成中...".equals(content.trim())) {
+            return false;
+        }
+        Map<String, Object> metadata = message.getMetadata();
+        if (metadata == null) {
+            return true;
+        }
+        Object generationStatus = metadata.get("generationStatus");
+        return generationStatus == null || !"RUNNING".equalsIgnoreCase(String.valueOf(generationStatus));
     }
 }

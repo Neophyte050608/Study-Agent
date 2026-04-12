@@ -66,6 +66,29 @@ public class IntentPreFilter {
             "我的计划", "训练计划"
     };
 
+    // ===== 域级检测常量（Layer 1 域裁决） =====
+
+    private static final Pattern KNOWLEDGE_QUESTION_PATTERN = Pattern.compile(
+            "(?:^|[，,。.！!？?\\s])(?:请问|请教)?\\s*(?:什么是|如何|怎么|为什么|为啥|讲讲|说说|介绍一?下?|解释一?下?|谈谈|分析)" +
+            "|(?:的?(?:原理|机制|区别|差异|优缺点|底层|实现|概念|含义|定义|作用|特点|特性))\\s*[？?。.]*$" +
+            "|和.*(?:的?(?:区别|差异|对比|比较|不同))"
+    );
+
+    private static final String[] INTERVIEW_DOMAIN_KEYWORDS = {
+            "面试", "面我", "面一面", "面一下", "mock", "模拟面试",
+            "考我", "考考我", "面试报告", "面试总结", "复盘"
+    };
+
+    private static final String[] CODING_DOMAIN_KEYWORDS = {
+            "题", "刷", "做题", "练习", "训练", "编程", "编码",
+            "算法", "选择题", "填空", "场景题"
+    };
+
+    private static final String[] PROFILE_DOMAIN_KEYWORDS = {
+            "学习计划", "画像", "薄弱", "弱项", "水平", "掌握",
+            "推荐学", "能力分析", "进度"
+    };
+
     private static final Pattern TOPIC_PATTERN = Pattern.compile(
             "(?:来|出|刷)\\s*[一二三四五六七八九十两\\d]*\\s*[道题个]?\\s*" +
             "([\\u4e00-\\u9fa5A-Za-z0-9.+#/\\- ]{1,20}?)\\s*" +
@@ -159,6 +182,34 @@ public class IntentPreFilter {
         for (String keyword : PROFILE_KEYWORDS) {
             if (trimmed.contains(keyword) && isProfileRequest(trimmed)) {
                 return Optional.of(PreFilterResult.routed("PROFILE_TRAINING_PLAN_QUERY", Map.of()));
+            }
+        }
+
+        // ===== 域级检测（兜底：无法命中具体意图时，尝试识别业务域） =====
+
+        // INTERVIEW 域（优先于 CODING，因为"面试题"应归 INTERVIEW）
+        for (String keyword : INTERVIEW_DOMAIN_KEYWORDS) {
+            if (trimmed.contains(keyword)) {
+                return Optional.of(PreFilterResult.domainOnly("INTERVIEW"));
+            }
+        }
+
+        // CODING 域
+        for (String keyword : CODING_DOMAIN_KEYWORDS) {
+            if (trimmed.contains(keyword) && !isNegativeCodingIntent(trimmed)) {
+                return Optional.of(PreFilterResult.domainOnly("CODING", extractCodingSlots(trimmed)));
+            }
+        }
+
+        // KNOWLEDGE 域（正则匹配技术问答句式）
+        if (KNOWLEDGE_QUESTION_PATTERN.matcher(trimmed).find()) {
+            return Optional.of(PreFilterResult.domainOnly("KNOWLEDGE"));
+        }
+
+        // PROFILE 域
+        for (String keyword : PROFILE_DOMAIN_KEYWORDS) {
+            if (trimmed.contains(keyword)) {
+                return Optional.of(PreFilterResult.domainOnly("PROFILE"));
             }
         }
 

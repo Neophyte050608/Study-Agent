@@ -38,6 +38,7 @@ public class PromptManager {
             "intent-tree-classifier",
             "intent-clarification",
             "intent-slot-refine",
+            "domain-classifier",
             "first-question",
             "evaluation",
             "final-report",

@@ -33,6 +33,7 @@ public class ChatStreamingService {
     private final Executor streamingExecutor;
     private final ChatStreamingSupport chatStreamingSupport;
     private final ChatScenarioHandlerRegistry chatScenarioHandlerRegistry;
+    private final IntentRoutingContextBuilder intentRoutingContextBuilder;
     private final long timeoutMillis;
 
     public ChatStreamingService(
@@ -41,6 +42,7 @@ public class ChatStreamingService {
             InputSanitizer inputSanitizer,
             ChatStreamingSupport chatStreamingSupport,
             ChatScenarioHandlerRegistry chatScenarioHandlerRegistry,
+            IntentRoutingContextBuilder intentRoutingContextBuilder,
             @Qualifier("interviewStreamingExecutor") Executor streamingExecutor,
             @Value("${app.chat.streaming.timeout-millis:180000}") long timeoutMillis) {
         this.webChatService = webChatService;
@@ -48,6 +50,7 @@ public class ChatStreamingService {
         this.inputSanitizer = inputSanitizer;
         this.chatStreamingSupport = chatStreamingSupport;
         this.chatScenarioHandlerRegistry = chatScenarioHandlerRegistry;
+        this.intentRoutingContextBuilder = intentRoutingContextBuilder;
         this.streamingExecutor = streamingExecutor;
         this.timeoutMillis = timeoutMillis;
     }
@@ -112,6 +115,8 @@ public class ChatStreamingService {
             if (taskManager.isCancelled(taskId)) return;
 
             String history = webChatService.buildHistoryContext(sessionId);
+            String intentRoutingHistory = webChatService.buildIntentRoutingContext(sessionId);
+            String routingSummary = intentRoutingContextBuilder.build(sessionId, content, intentRoutingHistory);
             StreamingChatContext chatContext = new StreamingChatContext(
                     sessionId,
                     userId,
@@ -134,7 +139,7 @@ public class ChatStreamingService {
             Map<String, Object> context = new HashMap<>();
             context.put("sessionId", sessionId);
             context.put("userId", userId);
-            context.put("history", history);
+            context.put("history", routingSummary);
             context.put("traceId", traceId);
             context.put("executionMode", ExecutionMode.STREAM_ROUTE_ONLY.name());
             if (retrievalMode != null) {

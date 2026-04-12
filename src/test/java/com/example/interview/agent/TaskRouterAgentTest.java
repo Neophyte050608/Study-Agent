@@ -128,9 +128,9 @@ class TaskRouterAgentTest {
     void shouldFallbackToIntentTreeClarificationWhenPrefilterCodingSlotsAreInsufficient() {
         IntentPreFilter intentPreFilter = mock(IntentPreFilter.class);
         IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
-        when(intentPreFilter.filter("刷题")).thenReturn(Optional.of(PreFilterResult.routed("CODING_PRACTICE", Map.of())));
+        when(intentPreFilter.filter("刷题")).thenReturn(Optional.of(PreFilterResult.domainOnly("CODING")));
         when(intentTreeRoutingService.enabled()).thenReturn(true);
-        when(intentTreeRoutingService.route("刷题", "history")).thenReturn(new IntentRoutingDecision(
+        when(intentTreeRoutingService.route("刷题", "history", "CODING")).thenReturn(new IntentRoutingDecision(
                 false,
                 "CODING_PRACTICE",
                 0.8,
@@ -171,7 +171,7 @@ class TaskRouterAgentTest {
         Map<String, Object> data = (Map<String, Object>) response.data();
         assertEquals(true, data.get("clarification"));
         assertEquals("你想刷什么题？", data.get("question"));
-        verify(intentTreeRoutingService).route("刷题", "history");
+        verify(intentTreeRoutingService).route("刷题", "history", "CODING");
     }
 
     @Test
@@ -412,5 +412,80 @@ class TaskRouterAgentTest {
         assertEquals("给我介绍一下Redis", data.get("question"));
         assertEquals("RAG", data.get("retrievalModeRequested"));
         verify(handler, never()).handle(any());
+    }
+
+    @Test
+    void shouldCarryDomainOnlyPrefilterSlotsIntoResolvedTaskDispatch() {
+        IntentPreFilter intentPreFilter = mock(IntentPreFilter.class);
+        IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
+        when(intentPreFilter.filter("我想练两道Java选择题")).thenReturn(Optional.of(
+                PreFilterResult.domainOnly("CODING", Map.of(
+                        "topic", "Java",
+                        "questionType", "CHOICE",
+                        "count", 2
+                ))
+        ));
+        when(intentTreeRoutingService.enabled()).thenReturn(true);
+        when(intentTreeRoutingService.route("我想练两道Java选择题", "history", "CODING"))
+                .thenReturn(new IntentRoutingDecision(
+                        false,
+                        "CODING_PRACTICE",
+                        0.91,
+                        "domain-hit",
+                        Map.of(),
+                        List.of(),
+                        false,
+                        "",
+                        List.of()
+                ));
+        when(intentTreeRoutingService.refineSlots("CODING_PRACTICE", "我想练两道Java选择题", "history"))
+                .thenReturn(Map.of());
+
+        TaskHandler handler = new TaskHandler() {
+            @Override
+            public TaskType taskType() {
+                return TaskType.CODING_PRACTICE;
+            }
+
+            @Override
+            public String receiverName() {
+                return "CodingPracticeAgent";
+            }
+
+            @Override
+            public Object handle(TaskRequest request) {
+                return request.payload();
+            }
+        };
+
+        TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
+                mock(InterviewOrchestratorAgent.class),
+                mock(CodingPracticeAgent.class),
+                mock(NoteMakingAgent.class),
+                mock(LearningProfileAgent.class),
+                mock(KnowledgeQaAgent.class),
+                mock(PromptManager.class),
+                intentTreeRoutingService,
+                intentPreFilter,
+                mock(A2ABus.class),
+                mock(RoutingChatService.class),
+                mock(RAGObservabilityService.class),
+                new TaskHandlerRegistry(List.of(handler))
+        );
+
+        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
+                null,
+                Map.of("query", "我想练两道Java选择题"),
+                new java.util.HashMap<>(Map.of("traceId", "trace-domain-slots", "history", "history"))
+        ));
+
+        assertTrue(response.success());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.data();
+        assertEquals("Java", data.get("topic"));
+        assertEquals("CHOICE", data.get("questionType"));
+        assertEquals(2, data.get("count"));
+        assertEquals("选择题", data.get("type"));
+        verify(intentTreeRoutingService).route("我想练两道Java选择题", "history", "CODING");
     }
 }

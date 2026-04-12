@@ -23,6 +23,7 @@ import java.util.Map;
 public class IntentTreeRoutingService {
 
     private static final Logger logger = LoggerFactory.getLogger(IntentTreeRoutingService.class);
+    private static final int LOG_TEXT_LIMIT = 4000;
 
     private final PromptManager promptManager;
     private final IntentTreeProperties properties;
@@ -31,6 +32,11 @@ public class IntentTreeRoutingService {
     private final RoutingChatService routingChatService;
     private final String intentPreferredModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * 域分类结果。
+     */
+    private record DomainClassificationResult(String domainCode, double confidence, String reason) {}
 
     public IntentTreeRoutingService(
             PromptManager promptManager,
@@ -48,72 +54,71 @@ public class IntentTreeRoutingService {
         this.intentPreferredModel = modelRoutingProperties.getIntentModel();
     }
 
-    /**
-     * 判断意图树路由功能是否启用。
-     * @return 如果启用了意图树路由则返回 true，否则返回 false
-     */
     public boolean enabled() {
         return properties.isEnabled();
     }
 
-    /**
-     * 获取主动澄清状态的有效保留时间（分钟）。
-     * 当系统向用户发起意图澄清后，在此时效内用户的回复将被作为澄清选项处理。
-     * @return 存活时间（分钟）
-     */
     public long clarificationTtlMinutes() {
         return properties.getClarificationTtlMinutes();
     }
 
-    /**
-     * 核心意图路由逻辑。
-     * 根据用户输入和历史记录，利用意图树进行分类，并判定是否需要主动向用户发起澄清。
-     * @param query 用户当前输入
-     * @param history 对话历史
-     * @return 意图路由决策 (IntentRoutingDecision)，包含任务类型、置信度及是否需要澄清等状态
-     */
     public IntentRoutingDecision route(String query, String history) {
-        if (query == null || query.isBlank()) {
-            return IntentRoutingDecision.fallback();
-        }
-        List<IntentTreeNode> leafIntents = loadLeafIntents();
-        if (leafIntents.isEmpty()) {
-            return IntentRoutingDecision.fallback();
-        }
-        try {
-            Map<String, Object> vars = new LinkedHashMap<>();
-            vars.put("query", query);
-            vars.put("history", history == null ? "" : history);
-            vars.put("leafIntents", leafIntents);
-            vars.put("confidenceThreshold", properties.getConfidenceThreshold());
-            vars.put("minGap", properties.getMinGap());
-            vars.put("ambiguityRatio", properties.getAmbiguityRatio());
-            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
-            String response = routingChatService.call(
-                    pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, intentPreferredModel, "意图树分类");
-            // 解析并归一化模型返回结果
-            return normalizeDecision(response, query, history);
-        } catch (Exception ex) {
-            if (properties.isFallbackToLegacyTaskRouter()) {
-                return IntentRoutingDecision.fallback();
-            }
-            return new IntentRoutingDecision(
-                    false, "UNKNOWN", 0D, "intent_tree_failed:" + ex.getMessage(),
-                    Map.of(), List.of(), true, "我没有完全理解你的意图，请补充你想进行：面试、刷题还是画像查询？", List.of()
-            );
-        }
+        return route(query, history, null);
     }
 
     /**
-     * 槽位精炼 (Slot Refinement)
-     * 在粗粒度意图识别后，针对特定任务类型，利用动态 Few-shot 样例进行二次参数（槽位）提取。
-     * 这能有效缓解大模型在一次性生成复杂 JSON 时的格式不稳定和过度补全（幻觉）问题。
-     * 
-     * @param taskType 已经识别出的主要任务类型（如 CODING_PRACTICE）
-     * @param query 用户的原始输入
+     * 域优先条件下钻路由。
+     *
+     * @param query   用户输入
      * @param history 对话历史
-     * @return 提取出的精确槽位键值对（如 topic, questionType, difficulty）
+     * @param domain  PreFilter 提供的域提示（可为 null）
+     * @return 意图路由决策
      */
+    public IntentRoutingDecision route(String query, String history, String domain) {
+        if (query == null || query.isBlank()) {
+            return IntentRoutingDecision.fallback();
+        }
+        String sanitizedHistory = sanitizeHistoryForIntentRouting(history);
+
+        String resolvedDomain = domain;
+        double domainConfidence = 1.0;
+        if (resolvedDomain == null || resolvedDomain.isBlank()) {
+            DomainClassificationResult dcr = classifyDomain(query, sanitizedHistory);
+            if (dcr == null || "UNKNOWN".equalsIgnoreCase(dcr.domainCode())) {
+                logger.info("域分类未能稳定收敛，转全局叶子分类回退, query={}, domainResult={}",
+                        query, dcr == null ? "null" : dcr.domainCode() + ":" + dcr.confidence());
+                return classifyAcrossDefaultLeaves(query, sanitizedHistory);
+            }
+            resolvedDomain = dcr.domainCode();
+            domainConfidence = dcr.confidence();
+        }
+
+        List<IntentTreeNode> domainLeaves = intentTreeService.loadLeafIntentsByDomain(resolvedDomain);
+        if (domainLeaves.isEmpty()) {
+            domainLeaves = defaultLeafIntents();
+        }
+        List<IntentTreeNode> nonUnknownLeaves = domainLeaves.stream()
+                .filter(n -> !"UNKNOWN".equalsIgnoreCase(n.intentId()))
+                .toList();
+
+        if (nonUnknownLeaves.size() == 1) {
+            IntentTreeNode leaf = nonUnknownLeaves.get(0);
+            logger.info("单叶子域自动解析: domain={}, leaf={}, taskType={}, query={}",
+                    resolvedDomain, leaf.intentId(), leaf.taskType(), query);
+            return new IntentRoutingDecision(
+                    false, leaf.taskType(), domainConfidence,
+                    "single_leaf_auto_resolve:" + resolvedDomain,
+                    Map.of(), List.of(), false, "", List.of()
+            );
+        }
+
+        if (nonUnknownLeaves.isEmpty()) {
+            logger.warn("域 {} 下无叶子节点, query={}", resolvedDomain, query);
+            return IntentRoutingDecision.fallback();
+        }
+        return classifyWithinDomain(query, sanitizedHistory, domainLeaves, resolvedDomain);
+    }
+
     public Map<String, Object> refineSlots(String taskType, String query, String history) {
         if (taskType == null || taskType.isBlank() || query == null || query.isBlank()) {
             return Map.of();
@@ -156,14 +161,6 @@ public class IntentTreeRoutingService {
         }
     }
 
-    /**
-     * 动态加载并组装用于槽位精炼的 Few-shot（少样本）示例。
-     * 为了防止 Token 爆炸和模型注意力分散（Lost in the middle），这里采用动态剪枝策略，
-     * 仅加载与当前 taskType 强相关的示例。
-     *
-     * @param taskType 任务类型
-     * @return 匹配的示例列表，每个示例包含 user_query 和 ai_response
-     */
     private List<Map<String, String>> loadSlotRefineCases(String taskType) {
         String normalizedTaskType = taskType == null ? "" : taskType.trim().toUpperCase();
         List<Map<String, String>> configuredCases = intentSlotRefineCaseService.listEnabledByTaskType(normalizedTaskType);
@@ -173,13 +170,6 @@ public class IntentTreeRoutingService {
         return defaultSlotRefineCases(normalizedTaskType);
     }
 
-    /**
-     * 提供默认的（硬编码兜底）Few-shot 示例。
-     * 当外部配置文件或数据库中未提供对应 taskType 的示例时，作为降级使用。
-     *
-     * @param taskType 任务类型
-     * @return 默认示例列表
-     */
     private List<Map<String, String>> defaultSlotRefineCases(String taskType) {
         if ("CODING_PRACTICE".equals(taskType)) {
             return List.of(
@@ -212,16 +202,6 @@ public class IntentTreeRoutingService {
         return List.of();
     }
 
-    /**
-     * 将大模型返回的原始 JSON 字符串解析并归一化为系统的 IntentRoutingDecision 对象。
-     * 包含对模型格式幻觉的容错处理（如去除 Markdown 代码块），以及主动澄清逻辑的最终裁定。
-     *
-     * @param raw 模型返回的原始文本
-     * @param query 用户的原始输入
-     * @param history 对话历史
-     * @return 归一化后的意图决策
-     * @throws Exception JSON 解析失败时抛出
-     */
     private IntentRoutingDecision normalizeDecision(String raw, String query, String history) throws Exception {
         if (raw == null || raw.isBlank()) {
             return IntentRoutingDecision.fallback();
@@ -234,7 +214,6 @@ public class IntentTreeRoutingService {
         String reason = readText(root, "reason");
         Map<String, Object> slots = readSlots(root.get("slots"));
         List<IntentCandidate> candidates = readCandidates(root.get("candidates"));
-        boolean askClarification = root.path("askClarification").asBoolean(false);
 
         if (confidence <= 0 && !candidates.isEmpty()) {
             confidence = candidates.getFirst().score();
@@ -246,14 +225,12 @@ public class IntentTreeRoutingService {
             }
         }
 
-        askClarification = askClarification || shouldClarify(candidates, confidence, slots, taskType);
-        List<Map<String, String>> options = readClarificationOptions(root.get("clarificationOptions"), candidates);
-        String clarificationQuestion = readText(root, "clarificationQuestion");
-        if (askClarification && (clarificationQuestion.isBlank() || options.isEmpty())) {
+        boolean askClarification = shouldClarify(candidates, confidence, slots, taskType);
+        List<Map<String, String>> options = List.of();
+        String clarificationQuestion = "";
+        if (askClarification) {
             clarificationQuestion = buildClarificationQuestion(query, history, candidates);
-            if (options.isEmpty()) {
-                options = buildOptionsFromCandidates(candidates);
-            }
+            options = buildOptionsFromCandidates(candidates);
         }
         if (intentId.equalsIgnoreCase("UNKNOWN") && !askClarification) {
             return new IntentRoutingDecision(false, "UNKNOWN", confidence, reason, slots, candidates, false, "", List.of());
@@ -261,34 +238,10 @@ public class IntentTreeRoutingService {
         return new IntentRoutingDecision(false, taskType, confidence, reason, slots, candidates, askClarification, clarificationQuestion, options);
     }
 
-    /**
-     * 判断是否需要主动向用户澄清意图。
-     * 
-     * 【设计思考】
-     * 1. 为什么不用传统的“置信度最高即命中”？
-     *    传统 NLP 或简单的 Prompt 路由遇到模棱两可的输入（如“来两道题”，既可能是选择题也可能是算法题）时，会强行猜一个。
-     *    这会导致极其糟糕的用户体验（比如用户想写算法，系统却丢了一道选择题）。
-     * 2. 本方案的优势：
-     *    引入了“短路澄清机制”。把大模型的不确定性暴露给用户，让用户做选择（1. 算法题 2. 选择题），
-     *    这非常符合真实人类对话的逻辑。
-     * 
-     * 触发条件：
-     * 1. 绝对置信度过低（< 阈值）
-     * 2. Top1 和 Top2 意图分数相近（差距 < 最小差距阈值，或者比值 >= 模糊率阈值）
-     * 3. 特定任务（如刷题）缺少关键槽位（如主题和题型均为空）
-     * 
-     * @param candidates 候选意图列表（按分数倒序）
-     * @param confidence 最终采纳的置信度
-     * @param slots 已提取的槽位
-     * @param taskType 决定的任务类型
-     * @return 是否需要打断流程向用户澄清
-     */
     private boolean shouldClarify(List<IntentCandidate> candidates, double confidence, Map<String, Object> slots, String taskType) {
-        // 1. 绝对置信度过低，直接澄清
         if (confidence < properties.getConfidenceThreshold()) {
             return true;
         }
-        // 2. 意图模糊：前两名候选意图得分相近
         if (candidates.size() >= 2) {
             double top1 = candidates.get(0).score();
             double top2 = candidates.get(1).score();
@@ -299,23 +252,120 @@ public class IntentTreeRoutingService {
                 return true;
             }
         }
-        // 3. 核心槽位缺失（例如刷题没有提供主题和题型），短路阻断并触发澄清
-        if ("CODING_PRACTICE".equals(taskType) && textOf(slots.get("topic")).isBlank() && textOf(slots.get("questionType")).isBlank()) {
-            return true;
-        }
         return false;
     }
 
     /**
-     * 动态生成澄清问题。
-     * 调用大模型，根据用户的上下文和候选意图，生成一句自然友好的反问（例如：“您是想刷算法题还是进行模拟面试？”）。
-     * 如果大模型生成失败，则提供硬编码的后备澄清文本。
-     *
-     * @param query 用户输入
-     * @param history 对话历史
-     * @param candidates 候选意图列表
-     * @return 澄清问题文本
+     * 小模型域分类（4 个候选域）。
      */
+    private DomainClassificationResult classifyDomain(String query, String history) {
+        try {
+            List<IntentTreeNode> domains = intentTreeService.loadDomainNodes();
+            if (domains.isEmpty()) {
+                logger.warn("无可用域节点");
+                return null;
+            }
+            Map<String, Object> vars = new LinkedHashMap<>();
+            vars.put("query", query);
+            vars.put("history", history);
+            vars.put("domains", toTemplateLeafIntents(domains));
+            PromptManager.PromptPair pair = promptManager.renderSplit("router", "domain-classifier", vars);
+
+            logger.info("小模型域分类请求: preferredModel={}, query={}, history={}, domainCount={}, systemPrompt={}, userPrompt={}",
+                    intentPreferredModel,
+                    truncateForLog(query),
+                    truncateForLog(history),
+                    domains.size(),
+                    truncateForLog(pair.systemPrompt()),
+                    truncateForLog(pair.userPrompt()));
+            String response = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(),
+                    ModelRouteType.GENERAL, intentPreferredModel, "域级分类");
+            logger.info("小模型域分类响应: query={}, rawResponse={}",
+                    truncateForLog(query),
+                    truncateForLog(response));
+
+            if (response == null || response.isBlank()) {
+                return null;
+            }
+            String clean = response.replace("```json", "").replace("```", "").trim();
+            JsonNode root = objectMapper.readTree(clean);
+            String domainCode = readText(root, "domainCode").toUpperCase();
+            double confidence = readScore(root, "confidence");
+            String reason = readText(root, "reason");
+
+            if (confidence < properties.getConfidenceThreshold()) {
+                logger.info("域分类置信度过低: domain={}, confidence={}, threshold={}",
+                        domainCode, confidence, properties.getConfidenceThreshold());
+                return new DomainClassificationResult("UNKNOWN", confidence, reason);
+            }
+            return new DomainClassificationResult(domainCode, confidence, reason);
+        } catch (Exception ex) {
+            logger.warn("域分类失败: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private IntentRoutingDecision classifyAcrossDefaultLeaves(String query, String history) {
+        List<IntentTreeNode> fallbackLeaves = defaultLeafIntents();
+        if (fallbackLeaves.isEmpty()) {
+            return properties.isFallbackToLegacyTaskRouter()
+                    ? IntentRoutingDecision.fallback()
+                    : new IntentRoutingDecision(
+                    false, "UNKNOWN", 0D, "global_fallback_no_candidates",
+                    Map.of(), List.of(), false, "", List.of()
+            );
+        }
+        return classifyWithinDomain(query, history, fallbackLeaves, "GLOBAL_FALLBACK");
+    }
+
+    /**
+     * 域内叶子分类（复用 intent-tree-classifier prompt，仅传域内叶子）。
+     */
+    private IntentRoutingDecision classifyWithinDomain(
+            String query, String history,
+            List<IntentTreeNode> domainLeaves, String domainCode) {
+        try {
+            Map<String, Object> vars = new LinkedHashMap<>();
+            vars.put("query", query);
+            vars.put("history", history);
+            vars.put("leafIntents", toTemplateLeafIntents(domainLeaves));
+            vars.put("confidenceThreshold", properties.getConfidenceThreshold());
+            vars.put("minGap", properties.getMinGap());
+            vars.put("ambiguityRatio", properties.getAmbiguityRatio());
+            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
+
+            logger.info("小模型域内分类请求: preferredModel={}, domain={}, query={}, history={}, leafCount={}, systemPrompt={}, userPrompt={}",
+                    intentPreferredModel,
+                    domainCode,
+                    truncateForLog(query),
+                    truncateForLog(history),
+                    domainLeaves.size(),
+                    truncateForLog(pair.systemPrompt()),
+                    truncateForLog(pair.userPrompt()));
+            String response = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(),
+                    ModelRouteType.GENERAL, intentPreferredModel, "域内意图分类");
+            logger.info("小模型域内分类响应: domain={}, query={}, rawResponse={}",
+                    domainCode,
+                    truncateForLog(query),
+                    truncateForLog(response));
+
+            return normalizeDecision(response, query, history);
+        } catch (Exception ex) {
+            logger.warn("域内分类失败, domain={}: {}", domainCode, ex.getMessage());
+            if (properties.isFallbackToLegacyTaskRouter()) {
+                return IntentRoutingDecision.fallback();
+            }
+            return new IntentRoutingDecision(
+                    false, "UNKNOWN", 0D, "domain_classify_failed:" + ex.getMessage(),
+                    Map.of(), List.of(), true,
+                    "我没有完全理解你的意图，请补充你想进行：面试、刷题还是知识问答？",
+                    List.of()
+            );
+        }
+    }
+
     private String buildClarificationQuestion(String query, String history, List<IntentCandidate> candidates) {
         try {
             Map<String, Object> vars = new LinkedHashMap<>();
@@ -343,58 +393,28 @@ public class IntentTreeRoutingService {
         return sb.toString();
     }
 
-    /**
-     * 加载当前系统支持的所有“叶子意图（Leaf Intents）”。
-     * 优先从数据库/缓存（IntentTreeService）中加载配置的意图树，若为空则回退到代码内置的默认意图。
-     *
-     * @return 叶子意图节点列表
-     */
-    private List<IntentTreeNode> loadLeafIntents() {
-        List<IntentTreeNode> configured = intentTreeService.loadAllLeafIntents();
-        if (!configured.isEmpty()) {
-            return configured;
-        }
-        return defaultLeafIntents();
-    }
-
-    /**
-     * 提供默认的内置意图树。
-     * 包含核心业务：开启面试、生成报告、刷题（选择/填空/算法/场景）、查询学习计划等。
-     *
-     * @return 默认意图列表
-     */
     private List<IntentTreeNode> defaultLeafIntents() {
         return List.of(
-                new IntentTreeNode("INTERVIEW.START.GENERAL", "interview/start/general", "开启模拟面试", "开始一场模拟面试", "INTERVIEW_START",
-                        List.of("开始一场 Java 面试", "我们来一场 Spring Boot 模拟面试"), List.of("topic", "skipIntro")),
-                new IntentTreeNode("INTERVIEW.REPORT.GENERAL", "interview/report/general", "生成面试报告", "生成已结束面试的复盘报告", "INTERVIEW_REPORT",
-                        List.of("生成报告", "给我这次面试总结"), List.of("sessionId")),
-                new IntentTreeNode("CODING.PRACTICE.CHOICE", "coding/practice/choice", "刷选择题", "编程选择题训练请求", "CODING_PRACTICE",
-                        List.of("来一道 Redis 选择题", "出一道 Java 单选题"), List.of("topic", "questionType=CHOICE", "difficulty", "count")),
-                new IntentTreeNode("CODING.PRACTICE.FILL", "coding/practice/fill", "刷填空题", "编程填空题训练请求", "CODING_PRACTICE",
-                        List.of("来一道 JVM 填空题", "出一道并发补全题"), List.of("topic", "questionType=FILL", "difficulty", "count")),
-                new IntentTreeNode("CODING.PRACTICE.ALGORITHM", "coding/practice/algorithm", "刷算法题", "算法实现题训练请求", "CODING_PRACTICE",
-                        List.of("来一道数组算法题", "出一道链表算法题"), List.of("topic", "questionType=ALGORITHM", "difficulty", "count")),
-                new IntentTreeNode("CODING.PRACTICE.SCENARIO", "coding/practice/scenario", "刷场景题", "工程场景分析题训练请求", "CODING_PRACTICE",
-                        List.of("来一道缓存击穿场景题", "出一道 Redis 场景题"), List.of("topic", "difficulty", "count")),
-                new IntentTreeNode("PROFILE.TRAINING.QUERY", "profile/training/query", "查询学习计划", "查询学习画像或学习建议", "PROFILE_TRAINING_PLAN_QUERY",
-                        List.of("查询我的学习计划", "我最近薄弱点是什么"), List.of("mode")),
-                new IntentTreeNode("KNOWLEDGE.QA.GENERAL", "knowledge/qa/general", "知识问答",
-                        "用户直接询问技术知识、概念解释、原理分析，如'什么是XXX'、'如何实现XXX'、'XXX和YYY的区别'等", "KNOWLEDGE_QA",
-                        List.of("什么是Redis的持久化机制", "Java的垃圾回收是怎么工作的", "解释一下Spring的IOC原理", "HashMap和ConcurrentHashMap的区别"),
-                        List.of("topic")),
-                new IntentTreeNode("UNKNOWN", "unknown", "未知意图", "无法判定具体业务意图", "UNKNOWN",
+                new IntentTreeNode("INTERVIEW.START.GENERAL", "interview/start/general",
+                        "开启模拟面试", "开始一场模拟面试", "INTERVIEW_START",
+                        List.of("开始一场 Java 面试", "模拟面试"), List.of("topic", "skipIntro")),
+                new IntentTreeNode("INTERVIEW.REPORT.GENERAL", "interview/report/general",
+                        "生成面试报告", "生成面试复盘报告", "INTERVIEW_REPORT",
+                        List.of("生成报告", "面试总结"), List.of("sessionId")),
+                new IntentTreeNode("CODING.PRACTICE.GENERAL", "coding/practice/general",
+                        "刷题练习", "编程刷题训练", "CODING_PRACTICE",
+                        List.of("刷题", "来道题", "做一道算法题"), List.of("topic", "questionType", "difficulty", "count")),
+                new IntentTreeNode("KNOWLEDGE.QA.GENERAL", "knowledge/qa/general",
+                        "知识问答", "技术知识查询与概念解释", "KNOWLEDGE_QA",
+                        List.of("什么是Redis持久化", "HashMap原理"), List.of("topic")),
+                new IntentTreeNode("PROFILE.TRAINING.QUERY", "profile/training/query",
+                        "查询学习计划", "学习画像与建议查询", "PROFILE_TRAINING_PLAN_QUERY",
+                        List.of("查询学习计划", "我的薄弱点"), List.of("mode")),
+                new IntentTreeNode("UNKNOWN", "unknown", "未知意图", "无法判定意图", "UNKNOWN",
                         List.of("你好", "今天天气不错"), List.of())
         );
     }
 
-    /**
-     * 从 JSON 节点中读取并解析大模型返回的候选意图列表。
-     * 按置信度分数倒序排列，并根据配置的最大候选数（MaxCandidates）进行截断。
-     *
-     * @param node JSON节点
-     * @return 解析后的候选意图列表
-     */
     private List<IntentCandidate> readCandidates(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -415,13 +435,6 @@ public class IntentTreeRoutingService {
                 .toList();
     }
 
-    /**
-     * 从 JSON 节点中提取并规范化业务槽位参数。
-     * 包括对布尔值、整数的转换，以及字符串的去空处理。
-     *
-     * @param slotsNode JSON节点
-     * @return 槽位键值对集合
-     */
     private Map<String, Object> readSlots(JsonNode slotsNode) {
         if (slotsNode == null || !slotsNode.isObject()) {
             return Map.of();
@@ -437,8 +450,11 @@ public class IntentTreeRoutingService {
             } else if (countNode.isTextual()) {
                 try {
                     int c = Integer.parseInt(countNode.asText().trim());
-                    if (c > 0) slots.put("count", c);
-                } catch (NumberFormatException ignored) {}
+                    if (c > 0) {
+                        slots.put("count", c);
+                    }
+                } catch (NumberFormatException ignored) {
+                }
             }
         }
         if (slotsNode.has("skipIntro") && !slotsNode.get("skipIntro").isNull()) {
@@ -448,44 +464,6 @@ public class IntentTreeRoutingService {
         return slots;
     }
 
-    /**
-     * 读取澄清选项（选项卡片）。
-     * 如果模型明确返回了选项数组，则直接使用；否则根据候选意图列表兜底生成。
-     *
-     * @param node JSON节点
-     * @param candidates 候选意图列表
-     * @return 选项列表（含标签、意图ID、提示等）
-     */
-    private List<Map<String, String>> readClarificationOptions(JsonNode node, List<IntentCandidate> candidates) {
-        if (node == null || !node.isArray()) {
-            return buildOptionsFromCandidates(candidates);
-        }
-        List<Map<String, String>> options = new ArrayList<>();
-        for (JsonNode item : node) {
-            String label = readText(item, "label");
-            String intentId = readText(item, "intentId");
-            String hint = readText(item, "hint");
-            String taskType = readText(item, "taskType").toUpperCase();
-            if (label.isBlank() && intentId.isBlank()) {
-                continue;
-            }
-            Map<String, String> option = new LinkedHashMap<>();
-            option.put("label", label.isBlank() ? intentId : label);
-            option.put("intentId", intentId);
-            option.put("hint", hint);
-            option.put("taskType", taskType);
-            options.add(option);
-        }
-        return options;
-    }
-
-    /**
-     * 基于候选意图列表，组装默认的澄清选项卡片。
-     * 用于大模型未能按格式返回选项时的兜底保护。
-     *
-     * @param candidates 候选意图列表
-     * @return 选项列表
-     */
     private List<Map<String, String>> buildOptionsFromCandidates(List<IntentCandidate> candidates) {
         if (candidates.isEmpty()) {
             return List.of();
@@ -502,19 +480,12 @@ public class IntentTreeRoutingService {
         return options;
     }
 
-    /**
-     * 安全地将非空字符串放入槽位 Map 中。
-     */
     private void putSlot(Map<String, Object> slots, String key, String value) {
         if (!value.isBlank()) {
             slots.put(key, value);
         }
     }
 
-    /**
-     * 安全读取 JSON 节点中的文本字段。
-     * 防御 NullNode 及字段缺失。
-     */
     private String readText(JsonNode node, String field) {
         if (node == null || field == null || !node.has(field) || node.get(field).isNull()) {
             return "";
@@ -522,9 +493,6 @@ public class IntentTreeRoutingService {
         return node.get(field).asText("").trim();
     }
 
-    /**
-     * 安全读取 JSON 节点中的数值评分（置信度），并将其截断在 [0, 1] 之间。
-     */
     private double readScore(JsonNode node, String field) {
         if (node == null || !node.has(field) || node.get(field).isNull()) {
             return 0D;
@@ -532,9 +500,6 @@ public class IntentTreeRoutingService {
         return Math.max(0D, Math.min(1D, node.get(field).asDouble(0D)));
     }
 
-    /**
-     * 安全读取 JSON 节点中的文本数组（如缺失的槽位列表）。
-     */
     private List<String> readTextArray(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -549,10 +514,67 @@ public class IntentTreeRoutingService {
         return data;
     }
 
-    /**
-     * 将 Object 安全转换为 String 并去除前后空格。
-     */
     private String textOf(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String sanitizeHistoryForIntentRouting(String history) {
+        if (history == null || history.isBlank()) {
+            return "";
+        }
+        String sanitized = history;
+        int profileIndex = sanitized.indexOf("【用户画像】");
+        if (profileIndex >= 0) {
+            int sessionIndex = sanitized.indexOf("【会话摘要】", profileIndex);
+            int recentIndex = sanitized.indexOf("【近期对话】", profileIndex);
+            int nextSectionIndex = -1;
+            if (sessionIndex >= 0 && recentIndex >= 0) {
+                nextSectionIndex = Math.min(sessionIndex, recentIndex);
+            } else if (sessionIndex >= 0) {
+                nextSectionIndex = sessionIndex;
+            } else if (recentIndex >= 0) {
+                nextSectionIndex = recentIndex;
+            }
+            sanitized = nextSectionIndex >= 0
+                    ? sanitized.substring(nextSectionIndex)
+                    : "";
+        }
+        sanitized = sanitized.replace("AI: 正在生成中...", "");
+        sanitized = sanitized.replace("AI: 正在生成中…", "");
+        sanitized = sanitized.replaceAll("(?m)^\\s*$\\R?", "");
+        return sanitized.trim();
+    }
+
+    private List<Map<String, Object>> toTemplateLeafIntents(List<IntentTreeNode> leafIntents) {
+        if (leafIntents == null || leafIntents.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (IntentTreeNode leafIntent : leafIntents) {
+            if (leafIntent == null) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("intentId", leafIntent.intentId());
+            item.put("path", leafIntent.path());
+            item.put("name", leafIntent.name());
+            item.put("description", leafIntent.description());
+            item.put("taskType", leafIntent.taskType());
+            item.put("examples", leafIntent.examples() == null ? List.of() : leafIntent.examples());
+            item.put("slotHints", leafIntent.slotHints() == null ? List.of() : leafIntent.slotHints());
+            items.add(item);
+        }
+        return items;
+    }
+
+    private String truncateForLog(String text) {
+        if (text == null) {
+            return "";
+        }
+        String trimmed = text.trim();
+        if (trimmed.length() <= LOG_TEXT_LIMIT) {
+            return trimmed;
+        }
+        return trimmed.substring(0, LOG_TEXT_LIMIT) + "...(truncated)";
     }
 }

@@ -189,6 +189,10 @@ public class WebChatService {
         return chatContextCompressor.buildCompressedContext(sessionId);
     }
 
+    public String buildIntentRoutingContext(String sessionId) {
+        return chatContextCompressor.buildIntentRoutingContext(sessionId);
+    }
+
     public String extractReplyText(TaskResponse response) {
         return taskResponsePresentationService.format(response, TaskResponsePresentationService.PresentationChannel.WEB);
     }
