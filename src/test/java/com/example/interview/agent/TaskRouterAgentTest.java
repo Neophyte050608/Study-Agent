@@ -4,6 +4,7 @@ import com.example.interview.agent.a2a.A2ABus;
 import com.example.interview.agent.a2a.A2AMessage;
 import com.example.interview.agent.router.TaskHandler;
 import com.example.interview.agent.router.TaskHandlerRegistry;
+import com.example.interview.agent.task.ExecutionMode;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -368,5 +370,47 @@ class TaskRouterAgentTest {
         Map<String, Object> data = (Map<String, Object>) response.data();
         assertEquals(true, data.get("clearSession"));
         assertEquals(true, context.get("clearSession"));
+    }
+
+    @Test
+    void shouldDelegateKnowledgeQaForStreamRouteOnlyExecutionMode() {
+        TaskHandler handler = mock(TaskHandler.class);
+        when(handler.taskType()).thenReturn(TaskType.KNOWLEDGE_QA);
+
+        TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
+                mock(InterviewOrchestratorAgent.class),
+                mock(CodingPracticeAgent.class),
+                mock(NoteMakingAgent.class),
+                mock(LearningProfileAgent.class),
+                mock(KnowledgeQaAgent.class),
+                mock(PromptManager.class),
+                mock(IntentTreeRoutingService.class),
+                mock(IntentPreFilter.class),
+                mock(A2ABus.class),
+                mock(RoutingChatService.class),
+                mock(RAGObservabilityService.class),
+                new TaskHandlerRegistry(List.of(handler))
+        );
+
+        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
+                TaskType.KNOWLEDGE_QA,
+                Map.of("query", "给我介绍一下Redis"),
+                new java.util.HashMap<>(Map.of(
+                        "traceId", "trace-stream-qa",
+                        "executionMode", ExecutionMode.STREAM_ROUTE_ONLY.name(),
+                        "retrievalMode", "RAG"
+                ))
+        ));
+
+        assertTrue(response.success());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.data();
+        assertEquals("KnowledgeQaAgent", data.get("agent"));
+        assertEquals(true, data.get("delegated"));
+        assertEquals("STREAM_EXECUTION", data.get("delegationType"));
+        assertEquals("KNOWLEDGE_QA", data.get("taskType"));
+        assertEquals("给我介绍一下Redis", data.get("question"));
+        assertEquals("RAG", data.get("retrievalModeRequested"));
+        verify(handler, never()).handle(any());
     }
 }

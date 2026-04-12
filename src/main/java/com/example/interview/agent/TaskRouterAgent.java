@@ -8,6 +8,7 @@ import com.example.interview.agent.a2a.A2AStatus;
 import com.example.interview.agent.a2a.A2ATrace;
 import com.example.interview.agent.router.TaskHandler;
 import com.example.interview.agent.router.TaskHandlerRegistry;
+import com.example.interview.agent.task.ExecutionMode;
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.agent.task.TaskType;
@@ -116,6 +117,13 @@ public class TaskRouterAgent {
         TaskHandler handler = null;
         TaskResponse response;
         try {
+            if (shouldDelegateKnowledgeQaStream(request)) {
+                response = TaskResponse.ok(buildKnowledgeQaStreamDelegation(request));
+                publishReply(response, request.taskType(), replyTo, correlationId, traceId);
+                ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), "delegated", null);
+                return response;
+            }
+
             handler = taskHandlerRegistry.require(request.taskType());
 
             // 3. 发布任务状态：PENDING（通知 A2A 总线任务已接收）
@@ -393,6 +401,28 @@ public class TaskRouterAgent {
         if (intentPreFilter != null) {
             intentPreFilter.fillMissingSlots(naturalLanguageQuery, payload);
         }
+    }
+
+    private boolean shouldDelegateKnowledgeQaStream(TaskRequest request) {
+        if (request == null || request.taskType() != TaskType.KNOWLEDGE_QA) {
+            return false;
+        }
+        String executionMode = readText(request.context(), "executionMode");
+        return ExecutionMode.STREAM_ROUTE_ONLY.name().equalsIgnoreCase(executionMode);
+    }
+
+    private Map<String, Object> buildKnowledgeQaStreamDelegation(TaskRequest request) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("agent", "KnowledgeQaAgent");
+        data.put("delegated", true);
+        data.put("delegationType", "STREAM_EXECUTION");
+        data.put("taskType", TaskType.KNOWLEDGE_QA.name());
+        data.put("question", readText(request.payload(), "query"));
+        String retrievalMode = readText(request.context(), "retrievalMode");
+        if (!retrievalMode.isBlank()) {
+            data.put("retrievalModeRequested", retrievalMode);
+        }
+        return data;
     }
 
     private void publish(TaskRequest request, String receiver, A2AStatus status, String correlationId, String traceId, String parentMessageId) {

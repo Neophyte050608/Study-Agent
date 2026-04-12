@@ -2,6 +2,7 @@ package com.example.interview.service;
 
 import com.example.interview.agent.task.TaskRequest;
 import com.example.interview.agent.task.TaskResponse;
+import com.example.interview.agent.task.ExecutionMode;
 import com.example.interview.core.RAGTraceContext;
 import com.example.interview.security.InputSanitizer;
 import com.example.interview.service.chatstream.ChatScenarioHandlerRegistry;
@@ -135,6 +136,7 @@ public class ChatStreamingService {
             context.put("userId", userId);
             context.put("history", history);
             context.put("traceId", traceId);
+            context.put("executionMode", ExecutionMode.STREAM_ROUTE_ONLY.name());
             if (retrievalMode != null) {
                 context.put("retrievalMode", retrievalMode.name());
             }

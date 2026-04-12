@@ -131,7 +131,10 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
         if (data instanceof Map<?, ?> map) {
-            return map.containsKey("answer") && !map.containsKey("clarification");
+            return "KnowledgeQaAgent".equals(String.valueOf(map.get("agent")))
+                    && Boolean.TRUE.equals(map.get("delegated"))
+                    && "STREAM_EXECUTION".equals(String.valueOf(map.get("delegationType")))
+                    && "KNOWLEDGE_QA".equals(String.valueOf(map.get("taskType")));
         }
         return false;
     }
