@@ -40,9 +40,9 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
 
-        context.sender().sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "RETRIEVING", "label", "正在检索知识", "status", "running", "percent", 50));
-        context.sender().sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成回答", "status", "running", "percent", 70));
 
         StringBuilder fullAnswer = new StringBuilder();
@@ -54,7 +54,7 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
                 token -> {
                     if (!chatStreamingSupport.isCancelled(context.taskId())) {
                         fullAnswer.append(token);
-                        context.sender().sendEvent(InterviewStreamEventType.MESSAGE.value(), Map.of(
+                        context.emitter().emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
                                 "channel", "answer",
                                 "delta", token));
                     }
@@ -91,7 +91,7 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
         Object images = result.get("images");
         if (images instanceof List<?> imageList && !imageList.isEmpty()) {
             metadata.put("images", images);
-            chatStreamingSupport.sendImageEvents(context.sender(), imageList, context.taskId());
+            chatStreamingSupport.sendImageEvents(context.emitter(), imageList, context.taskId());
             chatStreamingSupport.updateAssistantPlaceholder(
                     context.assistantMessageId(),
                     chatStreamingSupport.buildRichContent(replyText, imageList),
@@ -111,11 +111,11 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
         }
 
         webChatService.autoTitleIfNeeded(context.sessionId(), context.content());
-        context.sender().sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", finishResult));
-        context.sender().sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
-        chatStreamingSupport.completeTask(context.taskId(), context.sender());
+        context.emitter().done();
+        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
         return true;
     }
 

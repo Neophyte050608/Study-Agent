@@ -1,7 +1,7 @@
 package com.example.interview.service.chatstream;
 
-import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
+import com.example.interview.stream.StreamEventEmitter;
 
 import java.util.Map;
 import java.util.function.BooleanSupplier;
@@ -20,7 +20,7 @@ public class ChunkedTextStreamer {
         this.delayMillis = Math.max(0L, delayMillis);
     }
 
-    public void stream(InterviewSseEmitterSender sender, String text, BooleanSupplier shouldStop) {
+    public void stream(StreamEventEmitter emitter, String text, BooleanSupplier shouldStop) {
         if (text == null || text.isEmpty()) {
             return;
         }
@@ -30,7 +30,7 @@ public class ChunkedTextStreamer {
                 return;
             }
             int end = Math.min(text.length(), index + chunkSize);
-            sender.sendEvent(InterviewStreamEventType.MESSAGE.value(), Map.of(
+            emitter.emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
                     "channel", "answer",
                     "delta", text.substring(index, end)));
             index = end;

@@ -5,13 +5,18 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class InterviewSseEmitterSender {
+public class InterviewSseEmitterSender implements StreamEventEmitter {
     private final SseEmitter emitter;
     private final Object lock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public InterviewSseEmitterSender(SseEmitter emitter) {
         this.emitter = emitter;
+    }
+
+    @Override
+    public void emit(String eventName, Object data) {
+        sendEvent(eventName, data);
     }
 
     public void sendEvent(String eventName, Object data) {
@@ -30,6 +35,7 @@ public class InterviewSseEmitterSender {
         }
     }
 
+    @Override
     public void complete() {
         if (!closed.compareAndSet(false, true)) {
             return;
@@ -43,6 +49,7 @@ public class InterviewSseEmitterSender {
         }
     }
 
+    @Override
     public void fail(Throwable throwable) {
         if (!closed.compareAndSet(false, true)) {
             return;

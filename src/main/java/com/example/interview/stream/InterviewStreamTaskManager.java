@@ -16,8 +16,8 @@ public class InterviewStreamTaskManager {
         return "stream-" + UUID.randomUUID();
     }
 
-    public void register(String taskId, InterviewSseEmitterSender sender) {
-        tasks.put(taskId, new StreamTask(sender));
+    public void register(String taskId, StreamEventEmitter emitter) {
+        tasks.put(taskId, new StreamTask(emitter));
     }
 
     public void bindLifecycle(String taskId, SseEmitter emitter) {
@@ -37,14 +37,14 @@ public class InterviewStreamTaskManager {
             return false;
         }
         task.cancelled.set(true);
-        InterviewSseEmitterSender sender = task.sender;
-        if (sender != null) {
-            sender.sendEvent(InterviewStreamEventType.CANCEL.value(), Map.of(
+        StreamEventEmitter emitter = task.emitter;
+        if (emitter != null) {
+            emitter.emit(InterviewStreamEventType.CANCEL.value(), Map.of(
                     "streamTaskId", taskId,
                     "message", message == null || message.isBlank() ? "已停止生成" : message
             ));
-            sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
-            sender.complete();
+            emitter.done();
+            emitter.complete();
         }
         return true;
     }
@@ -68,17 +68,17 @@ public class InterviewStreamTaskManager {
     public void detach(String taskId) {
         StreamTask task = tasks.get(taskId);
         if (task != null) {
-            task.sender = null;
+            task.emitter = null;
         }
     }
 
     private static final class StreamTask {
-        private volatile InterviewSseEmitterSender sender;
+        private volatile StreamEventEmitter emitter;
         private volatile String messageId = "";
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
-        private StreamTask(InterviewSseEmitterSender sender) {
-            this.sender = sender;
+        private StreamTask(StreamEventEmitter emitter) {
+            this.emitter = emitter;
         }
     }
 }

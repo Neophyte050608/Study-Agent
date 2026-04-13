@@ -8,9 +8,11 @@ import com.example.interview.security.InputSanitizer;
 import com.example.interview.service.chatstream.ChatScenarioHandlerRegistry;
 import com.example.interview.service.chatstream.ChatStreamingSupport;
 import com.example.interview.service.chatstream.StreamingChatContext;
+import com.example.interview.stream.ObservableStreamEmitter;
 import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
+import com.example.interview.stream.StreamEventEmitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -67,11 +69,11 @@ public class ChatStreamingService {
         String traceId = UUID.randomUUID().toString();
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         String taskId = taskManager.newTaskId();
-        InterviewSseEmitterSender sender = new InterviewSseEmitterSender(emitter);
-        taskManager.register(taskId, sender);
+        StreamEventEmitter streamEmitter = new ObservableStreamEmitter(new InterviewSseEmitterSender(emitter));
+        taskManager.register(taskId, streamEmitter);
         taskManager.bindLifecycle(taskId, emitter);
 
-        sender.sendEvent(InterviewStreamEventType.META.value(), Map.of(
+        streamEmitter.emit(InterviewStreamEventType.META.value(), Map.of(
                 "streamTaskId", taskId,
                 "action", "chat",
                 "traceId", traceId,
@@ -79,7 +81,7 @@ public class ChatStreamingService {
                 "retrievalModeRequested", retrievalMode == null ? "" : retrievalMode.name()
         ));
 
-        streamingExecutor.execute(() -> runChat(sessionId, userId, sanitizedContent, retrievalMode, traceId, taskId, sender));
+        streamingExecutor.execute(() -> runChat(sessionId, userId, sanitizedContent, retrievalMode, traceId, taskId, streamEmitter));
         return emitter;
     }
 
@@ -100,7 +102,7 @@ public class ChatStreamingService {
 
     private void runChat(String sessionId, String userId, String content,
                          KnowledgeRetrievalMode retrievalMode,
-                         String traceId, String taskId, InterviewSseEmitterSender sender) {
+                         String traceId, String taskId, StreamEventEmitter emitter) {
         RAGTraceContext.setTraceId(traceId);
         String assistantMessageId = "";
         try {
@@ -109,7 +111,7 @@ public class ChatStreamingService {
             webChatService.saveUserMessage(sessionId, content);
             assistantMessageId = chatStreamingSupport.createRunningAssistantPlaceholder(sessionId, traceId, taskId).getMessageId();
             taskManager.attachMessage(taskId, assistantMessageId);
-            sender.sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+            emitter.emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                     "stage", "THINKING", "label", "正在思考", "status", "running", "percent", 20));
 
             if (taskManager.isCancelled(taskId)) return;
@@ -124,7 +126,7 @@ public class ChatStreamingService {
                     retrievalMode,
                     traceId,
                     taskId,
-                    sender
+                    emitter
             );
             chatContext.assistantMessageId(assistantMessageId);
             chatContext.history(history);
@@ -165,12 +167,12 @@ public class ChatStreamingService {
                         "text",
                         "FAILED"
                 );
-                sender.sendEvent(InterviewStreamEventType.ERROR.value(), Map.of(
+                emitter.emit(InterviewStreamEventType.ERROR.value(), Map.of(
                         "code", "CHAT_STREAM_FAILED",
                         "message", ex.getMessage() != null ? ex.getMessage() : "处理失败"));
-                sender.sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
+                emitter.done();
             }
-            chatStreamingSupport.completeTask(taskId, sender);
+            chatStreamingSupport.completeTask(taskId, emitter);
         } finally {
             RAGTraceContext.clear();
         }

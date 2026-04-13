@@ -2,9 +2,9 @@ package com.example.interview.service.chatstream;
 
 import com.example.interview.entity.ChatMessageDO;
 import com.example.interview.service.WebChatService;
-import com.example.interview.stream.InterviewSseEmitterSender;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
+import com.example.interview.stream.StreamEventEmitter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
@@ -63,16 +63,16 @@ public class ChatStreamingSupport {
         return metadata;
     }
 
-    public void sendChunkedText(InterviewSseEmitterSender sender, String text, String taskId) {
-        chunkedTextStreamer.stream(sender, text, () -> taskManager.isCancelled(taskId));
+    public void sendChunkedText(StreamEventEmitter emitter, String text, String taskId) {
+        chunkedTextStreamer.stream(emitter, text, () -> taskManager.isCancelled(taskId));
     }
 
-    public void sendImageEvents(InterviewSseEmitterSender sender, List<?> images, String taskId) {
+    public void sendImageEvents(StreamEventEmitter emitter, List<?> images, String taskId) {
         for (Object image : images) {
             if (taskManager.isCancelled(taskId)) {
                 return;
             }
-            sender.sendEvent(InterviewStreamEventType.IMAGE.value(), image);
+            emitter.emit(InterviewStreamEventType.IMAGE.value(), image);
         }
     }
 
@@ -135,8 +135,8 @@ public class ChatStreamingSupport {
         return taskManager.isCancelled(taskId);
     }
 
-    public void completeTask(String taskId, InterviewSseEmitterSender sender) {
+    public void completeTask(String taskId, StreamEventEmitter emitter) {
         taskManager.unregister(taskId);
-        sender.complete();
+        emitter.complete();
     }
 }

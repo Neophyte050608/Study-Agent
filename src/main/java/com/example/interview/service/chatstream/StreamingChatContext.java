@@ -2,7 +2,7 @@ package com.example.interview.service.chatstream;
 
 import com.example.interview.agent.task.TaskResponse;
 import com.example.interview.service.KnowledgeRetrievalMode;
-import com.example.interview.stream.InterviewSseEmitterSender;
+import com.example.interview.stream.StreamEventEmitter;
 
 public class StreamingChatContext {
 
@@ -12,7 +12,7 @@ public class StreamingChatContext {
     private final KnowledgeRetrievalMode retrievalMode;
     private final String traceId;
     private final String taskId;
-    private final InterviewSseEmitterSender sender;
+    private final StreamEventEmitter emitter;
     private String assistantMessageId = "";
     private String history = "";
     private TaskResponse routeResponse;
@@ -24,14 +24,14 @@ public class StreamingChatContext {
                                 KnowledgeRetrievalMode retrievalMode,
                                 String traceId,
                                 String taskId,
-                                InterviewSseEmitterSender sender) {
+                                StreamEventEmitter emitter) {
         this.sessionId = sessionId;
         this.userId = userId;
         this.content = content;
         this.retrievalMode = retrievalMode;
         this.traceId = traceId;
         this.taskId = taskId;
-        this.sender = sender;
+        this.emitter = emitter;
     }
 
     public String sessionId() {
@@ -58,8 +58,8 @@ public class StreamingChatContext {
         return taskId;
     }
 
-    public InterviewSseEmitterSender sender() {
-        return sender;
+    public StreamEventEmitter emitter() {
+        return emitter;
     }
 
     public String assistantMessageId() {

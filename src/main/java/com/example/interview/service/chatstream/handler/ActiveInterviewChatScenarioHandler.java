@@ -64,9 +64,9 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         }
 
         String replyText = webChatService.extractReplyText(answerResponse);
-        context.sender().sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成评价", "status", "running", "percent", 70));
-        chatStreamingSupport.sendChunkedText(context.sender(), replyText, context.taskId());
+        chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
 
         if (chatStreamingSupport.isCancelled(context.taskId())) {
             return true;
@@ -84,7 +84,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         }
         chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
 
-        context.sender().sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", Map.of(
                         "content", replyText,
@@ -92,8 +92,8 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
                         "routeLabel", "interview-answer",
                         "routeSource", "active-session"
                 )));
-        context.sender().sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
-        chatStreamingSupport.completeTask(context.taskId(), context.sender());
+        context.emitter().done();
+        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
         return true;
     }
 }

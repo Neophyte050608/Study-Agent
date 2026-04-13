@@ -89,9 +89,9 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             }
         }
 
-        context.sender().sendEvent(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在评估答案", "status", "running", "percent", 70));
-        chatStreamingSupport.sendChunkedText(context.sender(), replyText, context.taskId());
+        chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
 
         if (chatStreamingSupport.isCancelled(context.taskId())) {
             return true;
@@ -113,7 +113,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
         finishResult.put("routeSource", "active-session");
 
         if (nextQuizGenerated) {
-            context.sender().sendEvent(InterviewStreamEventType.QUIZ.value(), nextQuizPayload);
+            context.emitter().emit(InterviewStreamEventType.QUIZ.value(), nextQuizPayload);
             String quizJson = chatStreamingSupport.toJson(
                     nextQuizPayload,
                     "已为您生成批量选择题，请在答题卡中作答。"
@@ -125,11 +125,11 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
         }
 
-        context.sender().sendEvent(InterviewStreamEventType.FINISH.value(), Map.of(
+        context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", finishResult));
-        context.sender().sendEvent(InterviewStreamEventType.DONE.value(), "[DONE]");
-        chatStreamingSupport.completeTask(context.taskId(), context.sender());
+        context.emitter().done();
+        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
         return true;
     }
 }
