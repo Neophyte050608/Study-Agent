@@ -6,11 +6,14 @@ import com.example.interview.service.RAGQualityEvaluationService;
 import com.example.interview.service.RetrievalEvaluationService;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 @Service
 public class ObservabilityApplicationService {
+    private static final int TRACE_FILTER_SCAN_LIMIT = 1_000;
 
     private final RAGObservabilityService ragObservabilityService;
     private final RetrievalEvaluationService retrievalEvaluationService;
@@ -27,25 +30,58 @@ public class ObservabilityApplicationService {
         this.observabilitySwitchProperties = observabilitySwitchProperties;
     }
 
-    public List<RAGObservabilityService.RAGTrace> getRecentRagTraces(int limit) {
+    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
+        return getRecentRagTraces(limit, null, false, false, false, false, null, null, null);
+    }
+
+    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+                                                                         String status,
+                                                                         boolean riskyOnly,
+                                                                         boolean fallbackOnly,
+                                                                         boolean emptyRetrievalOnly,
+                                                                         boolean slowOnly,
+                                                                         String query) {
+        return getRecentRagTraces(limit, status, riskyOnly, fallbackOnly, emptyRetrievalOnly, slowOnly, query, null, null);
+    }
+
+    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+                                                                         String status,
+                                                                         boolean riskyOnly,
+                                                                         boolean fallbackOnly,
+                                                                         boolean emptyRetrievalOnly,
+                                                                         boolean slowOnly,
+                                                                         String query,
+                                                                         Instant startedAfter,
+                                                                         Instant endedBefore) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return List.of();
         }
-        return ragObservabilityService.listRecent(limit);
+        int effectiveLimit = limit <= 0 ? 20 : limit;
+        int scanLimit = Math.max(effectiveLimit, TRACE_FILTER_SCAN_LIMIT);
+        return ragObservabilityService.listRecentSummaries(scanLimit).stream()
+                .filter(item -> matchesStatus(item, status))
+                .filter(item -> !riskyOnly || item.riskCount() != null && item.riskCount() > 0)
+                .filter(item -> !fallbackOnly || containsRisk(item, "fallback_triggered"))
+                .filter(item -> !emptyRetrievalOnly || containsRisk(item, "retrieval_empty"))
+                .filter(item -> !slowOnly || containsRisk(item, "slow_trace") || containsRisk(item, "slow_first_token"))
+                .filter(item -> matchesQuery(item, query))
+                .filter(item -> matchesTimeWindow(item, startedAfter, endedBefore))
+                .limit(effectiveLimit)
+                .toList();
     }
 
-    public List<RAGObservabilityService.RAGTrace> getActiveRagTraces(int limit) {
+    public List<RAGObservabilityService.TraceSummary> getActiveRagTraces(int limit) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return List.of();
         }
-        return ragObservabilityService.listActive(limit);
+        return ragObservabilityService.listActiveSummaries(limit);
     }
 
-    public RAGObservabilityService.RAGTrace getRagTraceDetail(String traceId) {
+    public RAGObservabilityService.TraceDetailView getRagTraceDetail(String traceId) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return null;
         }
-        return ragObservabilityService.getTraceDetail(traceId);
+        return ragObservabilityService.getTraceDetailView(traceId);
     }
 
     public Map<String, Object> getRagOverview() {
@@ -208,5 +244,45 @@ public class ObservabilityApplicationService {
         if (!observabilitySwitchProperties.isRagQualityEvalEnabled()) {
             throw new IllegalStateException("RAG 生成质量评测已关闭，请设置 app.observability.rag-quality-eval-enabled=true 后重试");
         }
+    }
+
+    private boolean matchesStatus(RAGObservabilityService.TraceSummary item, String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
+            return true;
+        }
+        String requested = status.trim().toUpperCase(Locale.ROOT);
+        String traceStatus = item.traceStatus() == null ? "" : item.traceStatus().trim().toUpperCase(Locale.ROOT);
+        String displayStatus = "COMPLETED".equals(traceStatus)
+                ? (Boolean.TRUE.equals(item.slowTrace()) ? "SLOW" : "SUCCESS")
+                : traceStatus;
+        return requested.equals(displayStatus);
+    }
+
+    private boolean containsRisk(RAGObservabilityService.TraceSummary item, String riskTag) {
+        return item.riskTags() != null && item.riskTags().contains(riskTag);
+    }
+
+    private boolean matchesQuery(RAGObservabilityService.TraceSummary item, String query) {
+        if (query == null || query.isBlank()) {
+            return true;
+        }
+        String normalized = query.trim().toLowerCase(Locale.ROOT);
+        String haystack = (item.traceId() == null ? "" : item.traceId()) + " "
+                + String.join(" ", item.riskTags() == null ? List.of() : item.riskTags());
+        return haystack.toLowerCase(Locale.ROOT).contains(normalized);
+    }
+
+    private boolean matchesTimeWindow(RAGObservabilityService.TraceSummary item, Instant startedAfter, Instant endedBefore) {
+        Instant traceTime = item.endedAt() != null ? item.endedAt() : item.startedAt();
+        if (traceTime == null) {
+            return startedAfter == null && endedBefore == null;
+        }
+        if (startedAfter != null && traceTime.isBefore(startedAfter)) {
+            return false;
+        }
+        if (endedBefore != null && traceTime.isAfter(endedBefore)) {
+            return false;
+        }
+        return true;
     }
 }

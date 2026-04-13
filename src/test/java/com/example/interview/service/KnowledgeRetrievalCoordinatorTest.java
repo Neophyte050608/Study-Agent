@@ -2,11 +2,13 @@ package com.example.interview.service;
 
 import com.example.interview.config.KnowledgeRetrievalProperties;
 import com.example.interview.config.ObservabilitySwitchProperties;
+import com.example.interview.core.RAGTraceContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class KnowledgeRetrievalCoordinatorTest {
 
@@ -68,6 +70,84 @@ class KnowledgeRetrievalCoordinatorTest {
         throw new AssertionError("Expected LocalGraphRetrievalException");
     }
 
+    @Test
+    void shouldTraceLocalGraphRetrievalWithRetrievedDocCount() {
+        KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
+        properties.setDefaultMode(KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST);
+        properties.setRetrievalCacheEnabled(false);
+        ObservabilitySwitchProperties observabilityProperties = new ObservabilitySwitchProperties();
+        observabilityProperties.setRagTraceEnabled(true);
+        RAGObservabilityService observabilityService = new RAGObservabilityService(observabilityProperties);
+        KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
+                properties,
+                new FakeRagKnowledgeService(),
+                new FakeLocalGraphKnowledgeService(),
+                observabilityService
+        );
+
+        RAGTraceContext.setTraceId("trace-local-graph");
+        try {
+            coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST);
+            RAGObservabilityService.RAGTrace trace = observabilityService.getTraceDetail("trace-local-graph");
+            assertNotNull(trace);
+            RAGObservabilityService.RAGTraceNode node = trace.nodes().stream()
+                    .filter(item -> "RETRIEVAL".equals(item.nodeType()))
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(node);
+            assertEquals("LOCAL_GRAPH_RETRIEVE", node.nodeName());
+            assertEquals(3, node.metrics().retrievedDocs());
+            assertNotNull(node.details());
+            assertEquals(KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST.name(), node.details().retrievalMode());
+            assertEquals(2, node.details().retrievedDocumentRefs().size());
+        } finally {
+            RAGTraceContext.clear();
+        }
+    }
+
+    @Test
+    void shouldTraceCacheHitWithRetrievedDocCount() {
+        KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
+        properties.setDefaultMode(KnowledgeRetrievalMode.RAG_ONLY);
+        properties.setRetrievalCacheEnabled(true);
+        properties.setRetrievalCacheTtlSeconds(60);
+        ObservabilitySwitchProperties observabilityProperties = new ObservabilitySwitchProperties();
+        observabilityProperties.setRagTraceEnabled(true);
+        RAGObservabilityService observabilityService = new RAGObservabilityService(observabilityProperties);
+        KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
+                properties,
+                new FakeRagKnowledgeService(),
+                new FakeLocalGraphKnowledgeService(),
+                observabilityService
+        );
+
+        RAGTraceContext.setTraceId("trace-cache-prime");
+        try {
+            coordinator.retrieve("什么是缓存雪崩", "", KnowledgeRetrievalMode.RAG_ONLY);
+        } finally {
+            RAGTraceContext.clear();
+        }
+
+        RAGTraceContext.setTraceId("trace-cache-hit");
+        try {
+            coordinator.retrieve("什么是缓存雪崩", "", KnowledgeRetrievalMode.RAG_ONLY);
+            RAGObservabilityService.RAGTrace trace = observabilityService.getTraceDetail("trace-cache-hit");
+            assertNotNull(trace);
+            RAGObservabilityService.RAGTraceNode node = trace.nodes().stream()
+                    .filter(item -> "RETRIEVAL".equals(item.nodeType()))
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(node);
+            assertEquals("RETRIEVAL_CACHE_HIT", node.nodeName());
+            assertEquals(5, node.metrics().retrievedDocs());
+            assertNotNull(node.details());
+            assertEquals(Boolean.TRUE, node.details().cacheHit());
+            assertEquals(2, node.details().retrievedDocumentRefs().size());
+        } finally {
+            RAGTraceContext.clear();
+        }
+    }
+
     private static final class FakeRagKnowledgeService extends RagKnowledgeService {
 
         FakeRagKnowledgeService() {
@@ -91,7 +171,9 @@ class KnowledgeRetrievalCoordinatorTest {
                     "",
                     "evidence",
                     List.of(),
-                    false
+                    false,
+                    5,
+                    List.of("redis.md | Redis缓存", "java.md | Java集合")
             );
         }
     }
@@ -134,7 +216,9 @@ class KnowledgeRetrievalCoordinatorTest {
                     "",
                     "local evidence",
                     List.of(),
-                    false
+                    false,
+                    3,
+                    List.of("[primary] Redis/AOF", "[backlink] Redis/RDB")
             );
         }
     }

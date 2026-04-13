@@ -39,10 +39,10 @@
 
       <div v-else class="space-y-6">
         <!-- Trace Metadata Cards -->
-        <div class="grid grid-cols-4 gap-6">
+        <div class="grid grid-cols-6 gap-6">
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">总耗时</div>
-            <div class="text-xl font-black text-slate-900">{{ trace.durationMs }} <span class="text-xs font-medium opacity-50">ms</span></div>
+            <div class="text-xl font-black text-slate-900">{{ traceSummaryResponse?.businessDurationMs ?? trace.durationMs }} <span class="text-xs font-medium opacity-50">ms</span></div>
           </div>
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">节点总数</div>
@@ -50,11 +50,19 @@
           </div>
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">检索文档</div>
-            <div class="text-xl font-black text-slate-900">{{ trace.totalRetrievedDocs || 0 }}</div>
+            <div class="text-xl font-black text-slate-900">{{ retrievedDocumentCount }}</div>
           </div>
           <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">开始时间</div>
-            <div class="text-sm font-bold text-slate-700 mt-1">{{ formatTime(trace.startTime) }}</div>
+            <div class="text-sm font-bold text-slate-700 mt-1">{{ formatTime(traceSummaryResponse?.startedAt || trace.startTime) }}</div>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">首 Token</div>
+            <div class="text-xl font-black text-slate-900">{{ traceSummaryResponse?.firstTokenMs ?? 0 }} <span class="text-xs font-medium opacity-50">ms</span></div>
+          </div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">风险数</div>
+            <div class="text-xl font-black text-slate-900">{{ traceSummaryResponse?.riskCount ?? 0 }}</div>
           </div>
         </div>
 
@@ -97,7 +105,7 @@
           </div>
         </div>
 
-        <div v-if="traceSummary.fallbackNodes.length || traceSummary.failedNodes.length" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div v-if="traceSummary.fallbackNodes.length || traceSummary.failedNodes.length || traceRiskTags.length" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
             <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
               <span class="material-symbols-outlined text-amber-600 text-lg">warning</span>
@@ -105,6 +113,11 @@
             </h3>
           </div>
           <div class="p-5 space-y-3">
+            <div v-if="traceRiskTags.length" class="flex flex-wrap gap-2">
+              <span v-for="tag in traceRiskTags" :key="tag" class="px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase bg-amber-50 text-amber-700 border border-amber-200">
+                {{ formatRiskTag(tag) }}
+              </span>
+            </div>
             <div v-if="traceSummary.fallbackNodes.length" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               本次链路发生 fallback，节点：
               {{ traceSummary.fallbackNodes.map(node => node.nodeName).join(' / ') }}
@@ -246,6 +259,29 @@
             </div>
           </div>
 
+          <div v-if="selectedNodeDetailEntries.length" class="space-y-2">
+            <h4 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">data_object</span> Structured Details
+            </h4>
+            <div class="grid grid-cols-2 gap-3">
+              <div v-for="([key, value]) in selectedNodeDetailEntries" :key="`${selectedNode.nodeId}-${key}`" class="p-3 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-start gap-2">
+                <span class="text-[10px] font-bold text-slate-400 uppercase">{{ key }}</span>
+                <span class="text-xs font-black text-slate-700 break-all text-right">{{ Array.isArray(value) ? value.join(', ') : value }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedNodeDocumentRefs.length" class="space-y-2">
+            <h4 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm">description</span> Retrieved Documents
+            </h4>
+            <div class="space-y-2">
+              <div v-for="(ref, index) in selectedNodeDocumentRefs" :key="`${selectedNode.nodeId}-${index}`" class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed break-all">
+                {{ ref }}
+              </div>
+            </div>
+          </div>
+
           <div v-if="selectedNode.errorSummary" class="space-y-2">
             <h4 class="text-xs font-black text-red-500 uppercase tracking-widest flex items-center gap-2">
               <span class="material-symbols-outlined text-sm">error</span> Error Message
@@ -290,6 +326,7 @@ const route = useRoute()
 const traceId = ref(route.params.traceId)
 const loading = ref(false)
 const trace = ref(null)
+const traceSummaryResponse = ref(null)
 const selectedNode = ref(null)
 const SLOW_THRESHOLD_MS = Number(import.meta.env.VITE_RAG_SLOW_THRESHOLD_MS || 20000)
 
@@ -322,9 +359,14 @@ const resolveDisplayTraceStatus = (traceStatus, durationMs, nodes) => {
 
 const displayTraceStatus = computed(() => {
   if (!trace.value) return 'UNKNOWN'
-  const durationMs = typeof trace.value.durationMs === 'number' ? trace.value.durationMs : 0
+  const durationMs = typeof traceSummaryResponse.value?.businessDurationMs === 'number'
+    ? traceSummaryResponse.value.businessDurationMs
+    : (typeof trace.value.durationMs === 'number' ? trace.value.durationMs : 0)
+  const traceStatus = typeof traceSummaryResponse.value?.traceStatus === 'string'
+    ? traceSummaryResponse.value.traceStatus
+    : trace.value.traceStatus
   const nodes = Array.isArray(trace.value.nodes) ? trace.value.nodes : []
-  return resolveDisplayTraceStatus(trace.value.traceStatus, durationMs, nodes)
+  return resolveDisplayTraceStatus(traceStatus, durationMs, nodes)
 })
 
 const statusClass = computed(() => {
@@ -370,9 +412,56 @@ const traceSummary = computed(() => {
   }
 })
 
+const extractDocCount = (node) => {
+  if (!node) return 0
+  const detailCount = Number(node.details?.retrievedDocCount)
+  if (Number.isFinite(detailCount) && detailCount > 0) return detailCount
+  const metricCount = Number(node.metrics?.retrievedDocs)
+  if (Number.isFinite(metricCount) && metricCount > 0) return metricCount
+  const summary = typeof node.outputSummary === 'string' ? node.outputSummary : ''
+  const docCountMatch = summary.match(/docCount=(\d+)/i) || summary.match(/retrievedDocs=(\d+)/i)
+  if (docCountMatch) return Number(docCountMatch[1]) || 0
+  return 0
+}
+
+const extractDocRefs = (node) => {
+  if (Array.isArray(node?.details?.retrievedDocumentRefs) && node.details.retrievedDocumentRefs.length) {
+    return node.details.retrievedDocumentRefs
+  }
+  const summary = typeof node?.outputSummary === 'string' ? node.outputSummary : ''
+  if (!summary) return []
+  const docRefsMatch = summary.match(/docRefs=\[(.*)\]\}?$/s)
+  if (!docRefsMatch || !docRefsMatch[1]) return []
+  return docRefsMatch[1]
+    .split(/,\s*(?=(?:\[[a-z]+]|[A-Za-z]:\\|[A-Za-z0-9_./-]+\s*\|))/i)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+const retrievalNodes = computed(() => {
+  const nodes = Array.isArray(trace.value?.nodes) ? trace.value.nodes : []
+  return nodes.filter(node => String(node?.nodeType || '').trim().toUpperCase() === 'RETRIEVAL')
+})
+
+const retrievedDocumentCount = computed(() => {
+  const explicitTotal = Number(traceSummaryResponse.value?.retrievedDocCount ?? trace.value?.totalRetrievedDocs)
+  if (Number.isFinite(explicitTotal) && explicitTotal > 0) return explicitTotal
+  return retrievalNodes.value.reduce((sum, node) => sum + extractDocCount(node), 0)
+})
+
+const selectedNodeDocumentRefs = computed(() => extractDocRefs(selectedNode.value))
+const selectedNodeDetailEntries = computed(() => {
+  const details = selectedNode.value?.details
+  if (!details || typeof details !== 'object') return []
+  return Object.entries(details)
+    .filter(([_, value]) => value !== null && value !== undefined && value !== '' && (!Array.isArray(value) || value.length))
+    .filter(([key]) => key !== 'retrievedDocumentRefs')
+})
+const traceRiskTags = computed(() => Array.isArray(traceSummaryResponse.value?.riskTags) ? traceSummaryResponse.value.riskTags : [])
+
 const windowDuration = computed(() => {
   if (!trace.value?.nodes?.length) return 0
-  return trace.value.durationMs || 1
+  return traceSummaryResponse.value?.businessDurationMs || trace.value.durationMs || 1
 })
 
 const timelineNodes = computed(() => {
@@ -424,7 +513,8 @@ const loadDetail = async () => {
   try {
     const data = await loadOpsTraceDetail(traceId.value)
     if (data) {
-      trace.value = data
+      trace.value = data.trace || data
+      traceSummaryResponse.value = data.summary || null
     }
   } catch (err) {
     console.error('Failed to load trace detail:', err)
@@ -441,6 +531,14 @@ const formatTime = (ts) => {
 const formatNodeType = (nodeType) => {
   if (!nodeType) return 'UNKNOWN'
   return String(nodeType).replaceAll('_', ' ')
+}
+
+const formatRiskTag = (tag) => {
+  if (tag === 'slow_trace') return 'slow trace'
+  if (tag === 'slow_first_token') return 'slow first token'
+  if (tag === 'fallback_triggered') return 'fallback'
+  if (tag === 'retrieval_empty') return 'empty retrieval'
+  return tag || 'risk'
 }
 
 const getNodePathLabel = (nodeType) => {

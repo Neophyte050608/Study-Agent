@@ -36,6 +36,7 @@ public class ChatStreamingService {
     private final ChatStreamingSupport chatStreamingSupport;
     private final ChatScenarioHandlerRegistry chatScenarioHandlerRegistry;
     private final IntentRoutingContextBuilder intentRoutingContextBuilder;
+    private final TraceService traceService;
     private final long timeoutMillis;
 
     public ChatStreamingService(
@@ -45,6 +46,7 @@ public class ChatStreamingService {
             ChatStreamingSupport chatStreamingSupport,
             ChatScenarioHandlerRegistry chatScenarioHandlerRegistry,
             IntentRoutingContextBuilder intentRoutingContextBuilder,
+            TraceService traceService,
             @Qualifier("interviewStreamingExecutor") Executor streamingExecutor,
             @Value("${app.chat.streaming.timeout-millis:180000}") long timeoutMillis) {
         this.webChatService = webChatService;
@@ -53,6 +55,7 @@ public class ChatStreamingService {
         this.chatStreamingSupport = chatStreamingSupport;
         this.chatScenarioHandlerRegistry = chatScenarioHandlerRegistry;
         this.intentRoutingContextBuilder = intentRoutingContextBuilder;
+        this.traceService = traceService;
         this.streamingExecutor = streamingExecutor;
         this.timeoutMillis = timeoutMillis;
     }
@@ -105,8 +108,26 @@ public class ChatStreamingService {
                          String traceId, String taskId, StreamEventEmitter emitter) {
         RAGTraceContext.setTraceId(traceId);
         String assistantMessageId = "";
+        TraceNodeHandle rootTrace = null;
+        String terminalState = "RUNNING";
+        String terminalError = null;
         try {
-            if (taskManager.isCancelled(taskId)) return;
+            rootTrace = traceService.startRoot(
+                    traceId,
+                    TraceNodeDefinitions.CHAT_STREAM_ROOT,
+                    Map.of(
+                            "scene", "chat",
+                            "sessionId", sessionId,
+                            "taskId", taskId,
+                            "userId", userId,
+                            "retrievalMode", retrievalMode == null ? "" : retrievalMode.name(),
+                            "status", "RUNNING"
+                    )
+            );
+            if (taskManager.isCancelled(taskId)) {
+                terminalState = "CANCELLED";
+                return;
+            }
 
             webChatService.saveUserMessage(sessionId, content);
             assistantMessageId = chatStreamingSupport.createRunningAssistantPlaceholder(sessionId, traceId, taskId).getMessageId();
@@ -114,7 +135,10 @@ public class ChatStreamingService {
             emitter.emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                     "stage", "THINKING", "label", "正在思考", "status", "running", "percent", 20));
 
-            if (taskManager.isCancelled(taskId)) return;
+            if (taskManager.isCancelled(taskId)) {
+                terminalState = "CANCELLED";
+                return;
+            }
 
             String history = webChatService.buildHistoryContext(sessionId);
             String intentRoutingHistory = webChatService.buildIntentRoutingContext(sessionId);
@@ -132,6 +156,7 @@ public class ChatStreamingService {
             chatContext.history(history);
 
             if (chatScenarioHandlerRegistry.handle(chatContext)) {
+                terminalState = taskManager.isCancelled(taskId) ? "CANCELLED" : "COMPLETED";
                 return;
             }
 
@@ -153,29 +178,68 @@ public class ChatStreamingService {
             chatContext.routeResponse(response);
             chatContext.routeSource(String.valueOf(context.getOrDefault("routeSource", "")));
 
-            if (taskManager.isCancelled(taskId)) return;
+            if (taskManager.isCancelled(taskId)) {
+                terminalState = "CANCELLED";
+                return;
+            }
             if (chatScenarioHandlerRegistry.handle(chatContext)) {
+                terminalState = taskManager.isCancelled(taskId) ? "CANCELLED" : "COMPLETED";
                 return;
             }
         } catch (Exception ex) {
             log.warn("chat stream failed, taskId={}", taskId, ex);
+            terminalState = "FAILED";
+            terminalError = ex.getMessage() != null ? ex.getMessage() : "处理失败";
             if (!taskManager.isCancelled(taskId)) {
                 chatStreamingSupport.updateAssistantPlaceholder(
                         assistantMessageId,
-                        "抱歉，处理您的请求时遇到了问题：" + (ex.getMessage() != null ? ex.getMessage() : "处理失败"),
-                        chatStreamingSupport.buildTerminalMetadata(traceId, taskId, "FAILED", ex.getMessage()),
+                        "抱歉，处理您的请求时遇到了问题：" + terminalError,
+                        chatStreamingSupport.buildTerminalMetadata(traceId, taskId, "FAILED", terminalError),
                         "text",
                         "FAILED"
                 );
                 emitter.emit(InterviewStreamEventType.ERROR.value(), Map.of(
                         "code", "CHAT_STREAM_FAILED",
-                        "message", ex.getMessage() != null ? ex.getMessage() : "处理失败"));
+                        "message", terminalError));
                 emitter.done();
             }
             chatStreamingSupport.completeTask(taskId, emitter);
         } finally {
+            completeChatTrace(rootTrace, terminalState, terminalError, sessionId, taskId, userId, retrievalMode);
             RAGTraceContext.clear();
         }
+    }
+
+    private void completeChatTrace(TraceNodeHandle rootTrace,
+                                   String terminalState,
+                                   String terminalError,
+                                   String sessionId,
+                                   String taskId,
+                                   String userId,
+                                   KnowledgeRetrievalMode retrievalMode) {
+        if (rootTrace == null) {
+            return;
+        }
+        Map<String, Object> result = Map.of(
+                "scene", "chat",
+                "sessionId", sessionId,
+                "taskId", taskId,
+                "userId", userId,
+                "retrievalMode", retrievalMode == null ? "" : retrievalMode.name(),
+                "status", terminalState
+        );
+        if ("FAILED".equals(terminalState)) {
+            TraceNodeHandle errorNode = traceService.startChild(rootTrace.traceId(), rootTrace.nodeId(), TraceNodeDefinitions.ERROR, result);
+            traceService.fail(errorNode, terminalError, result);
+            traceService.fail(rootTrace, terminalError, result);
+            return;
+        }
+        TraceNodeDefinition terminalDefinition = "CANCELLED".equals(terminalState)
+                ? TraceNodeDefinitions.CANCEL
+                : TraceNodeDefinitions.FINISH;
+        TraceNodeHandle terminalNode = traceService.startChild(rootTrace.traceId(), rootTrace.nodeId(), terminalDefinition, result);
+        traceService.success(terminalNode, result);
+        traceService.success(rootTrace, result);
     }
 
 }

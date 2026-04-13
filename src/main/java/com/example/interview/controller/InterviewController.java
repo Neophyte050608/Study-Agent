@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -448,11 +449,29 @@ public class InterviewController {
      * 获取最近的 RAG (检索增强生成) 调用链路追踪。
      */
     @GetMapping("/observability/rag-traces")
-    public ResponseEntity<?> ragTraces(@RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit) {
+    public ResponseEntity<?> ragTraces(@RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit,
+                                       @RequestParam(value = "status", required = false) String status,
+                                       @RequestParam(value = "riskyOnly", required = false, defaultValue = "false") boolean riskyOnly,
+                                       @RequestParam(value = "fallbackOnly", required = false, defaultValue = "false") boolean fallbackOnly,
+                                       @RequestParam(value = "emptyRetrievalOnly", required = false, defaultValue = "false") boolean emptyRetrievalOnly,
+                                       @RequestParam(value = "slowOnly", required = false, defaultValue = "false") boolean slowOnly,
+                                       @RequestParam(value = "q", required = false) String query,
+                                       @RequestParam(value = "startedAfter", required = false) Instant startedAfter,
+                                       @RequestParam(value = "endedBefore", required = false) Instant endedBefore) {
         if (!interviewService.isRagTraceEnabled()) {
             return ResponseEntity.ok(List.of());
         }
-        return ResponseEntity.ok(interviewService.getRecentRagTraces(limit == null ? 20 : limit));
+        return ResponseEntity.ok(interviewService.getRecentRagTraces(
+                limit == null ? 20 : limit,
+                status,
+                riskyOnly,
+                fallbackOnly,
+                emptyRetrievalOnly,
+                slowOnly,
+                query,
+                startedAfter,
+                endedBefore
+        ));
     }
 
     /**

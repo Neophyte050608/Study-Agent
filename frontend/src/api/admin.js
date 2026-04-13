@@ -4,8 +4,19 @@ export function loadOpsOverview() {
   return httpGet('/api/observability/rag/overview')
 }
 
-export function loadOpsTraces() {
-  return httpGet('/api/observability/rag-traces')
+export function loadOpsTraces(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.limit) params.set('limit', String(filters.limit))
+  if (filters.status && filters.status !== 'ALL') params.set('status', filters.status)
+  if (filters.riskyOnly) params.set('riskyOnly', 'true')
+  if (filters.fallbackOnly) params.set('fallbackOnly', 'true')
+  if (filters.emptyRetrievalOnly) params.set('emptyRetrievalOnly', 'true')
+  if (filters.slowOnly) params.set('slowOnly', 'true')
+  if (filters.q) params.set('q', filters.q)
+  if (filters.startedAfter) params.set('startedAfter', filters.startedAfter)
+  if (filters.endedBefore) params.set('endedBefore', filters.endedBefore)
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return httpGet(`/api/observability/rag-traces${suffix}`)
 }
 
 export function loadOpsTraceDetail(traceId) {

@@ -184,6 +184,155 @@
           </div>
         </div>
 
+        <div class="col-span-12 grid grid-cols-4 gap-6">
+          <button class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 shadow-sm text-left transition-all hover:border-indigo-300"
+                  @click="applyOverviewPreset('active')">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">活跃链路</div>
+            <div class="mt-2 text-2xl font-black text-slate-900 dark:text-slate-100">{{ overview.activeTraceCount ?? 0 }}</div>
+            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">当前仍在运行的 Trace</div>
+          </button>
+          <button class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 shadow-sm text-left transition-all hover:border-indigo-300"
+                  @click="applyOverviewPreset('risky')">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">风险链路</div>
+            <div class="mt-2 text-2xl font-black text-amber-700">{{ overview.riskyTraceCount ?? 0 }}</div>
+            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">最近窗口内带风险标签的 Trace</div>
+          </button>
+          <button class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 shadow-sm text-left transition-all hover:border-indigo-300"
+                  @click="applyOverviewPreset('fallback')">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">Fallback 次数</div>
+            <div class="mt-2 text-2xl font-black text-orange-700">{{ overview.fallbackTraceCount ?? 0 }}</div>
+            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">最近窗口内触发 fallback 的 Trace</div>
+          </button>
+          <button class="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 shadow-sm text-left transition-all hover:border-indigo-300"
+                  @click="applyOverviewPreset('emptyRetrieval')">
+            <div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500 uppercase tracking-wider">空召回链路</div>
+            <div class="mt-2 text-2xl font-black text-rose-700">{{ overview.emptyRetrievalTraceCount ?? 0 }}</div>
+            <div class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">最近窗口内召回为空的 Trace</div>
+          </button>
+        </div>
+
+        <div class="col-span-12 rounded-xl border p-5 shadow-sm"
+             :class="overviewAlertLevel === 'HIGH'
+               ? 'bg-red-50 border-red-200'
+               : overviewAlertLevel === 'MEDIUM'
+                 ? 'bg-amber-50 border-amber-200'
+                 : overviewAlertLevel === 'INFO'
+                   ? 'bg-indigo-50 border-indigo-200'
+                   : 'bg-emerald-50 border-emerald-200'">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-widest"
+                   :class="overviewAlertLevel === 'HIGH'
+                     ? 'text-red-700'
+                     : overviewAlertLevel === 'MEDIUM'
+                       ? 'text-amber-700'
+                       : overviewAlertLevel === 'INFO'
+                         ? 'text-indigo-700'
+                         : 'text-emerald-700'">
+                观测告警
+              </div>
+              <div class="mt-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                {{ overviewAlertHeadline }}
+              </div>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+              <button v-for="tag in overviewAlertTags" :key="tag" class="px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:opacity-85"
+                    @click="applyAlertPreset(tag)"
+                    :class="overviewAlertLevel === 'HIGH'
+                      ? 'bg-white text-red-700 border-red-200'
+                      : overviewAlertLevel === 'MEDIUM'
+                        ? 'bg-white text-amber-700 border-amber-200'
+                        : overviewAlertLevel === 'INFO'
+                          ? 'bg-white text-indigo-700 border-indigo-200'
+                          : 'bg-white text-emerald-700 border-emerald-200'">
+                {{ formatAlertTag(tag) }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-12 grid grid-cols-[1.2fr_1fr] gap-6">
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">状态分布</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1">最近窗口内已完成链路的状态结构</p>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <button v-for="item in overviewStatusEntries" :key="item.key" class="grid grid-cols-[88px_1fr_48px] gap-3 items-center w-full text-left transition-all hover:opacity-85"
+                      @click="applyStatusPreset(item.key)">
+                <span class="text-xs font-bold" :class="item.textClass">{{ item.label }}</span>
+                <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-500" :class="item.barClass" :style="{ width: `${item.percent}%` }"></div>
+                </div>
+                <span class="text-xs font-mono text-slate-500 dark:text-slate-400 dark:text-slate-500 text-right">{{ item.value }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">风险标签分布</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1">最近窗口内风险触发次数</p>
+              </div>
+            </div>
+            <div v-if="overviewRiskEntries.length" class="flex flex-wrap gap-2">
+              <button
+                v-for="item in overviewRiskEntries"
+                :key="item.key"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold border bg-amber-50 text-amber-800 border-amber-200 transition-all hover:opacity-85"
+                @click="applyRiskTagPreset(item.key)"
+              >
+                {{ item.label }} · {{ item.value }}
+              </button>
+            </div>
+            <div v-else class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+              最近窗口内未发现风险标签
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-12 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">近期退化趋势</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500 mt-1">基于最近窗口分桶观察慢链路、Fallback、空召回与失败趋势</p>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              <span>峰值风险桶: {{ trendPeakRisk }}</span>
+              <span>峰值慢链路桶: {{ trendPeakSlow }}</span>
+            </div>
+          </div>
+          <div v-if="overviewTrendBuckets.length" class="grid grid-cols-8 gap-3">
+            <button v-for="bucket in overviewTrendBuckets" :key="bucket.key" class="rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/40 p-4 text-left transition-all hover:border-indigo-300"
+                    @click="applyTrendBucketPreset(bucket)">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black tracking-widest uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">{{ bucket.label }}</span>
+                <span class="text-[10px] font-mono text-slate-400">{{ bucket.total }}</span>
+              </div>
+              <div class="mt-3 h-24 flex items-end gap-1">
+                <div class="flex-1 rounded-t bg-amber-400/80" :style="{ height: `${bucket.riskyPercent}%` }" title="风险链路"></div>
+                <div class="flex-1 rounded-t bg-orange-400/80" :style="{ height: `${bucket.fallbackPercent}%` }" title="Fallback"></div>
+                <div class="flex-1 rounded-t bg-rose-400/80" :style="{ height: `${bucket.emptyRetrievalPercent}%` }" title="空召回"></div>
+                <div class="flex-1 rounded-t bg-red-500/80" :style="{ height: `${bucket.failedPercent}%` }" title="失败"></div>
+                <div class="flex-1 rounded-t bg-indigo-500/80" :style="{ height: `${bucket.slowPercent}%` }" title="慢链路"></div>
+              </div>
+              <div class="mt-3 space-y-1 text-[10px] text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                <div>risk {{ bucket.risky }}</div>
+                <div>slow {{ bucket.slow }}</div>
+                <div>fallback {{ bucket.fallback }}</div>
+                <div>empty {{ bucket.emptyRetrieval }}</div>
+                <div>failed {{ bucket.failed }}</div>
+              </div>
+            </button>
+          </div>
+          <div v-else class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            当前样本不足，暂无趋势分桶数据
+          </div>
+        </div>
+
         <!-- RAG Trace Table -->
         <div id="section-rag" class="col-span-8 bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm border border-slate-200">
           <div class="flex items-center justify-between mb-8">
@@ -192,7 +341,7 @@
               RAG 链路实时追踪
             </h3>
             <div class="flex items-center gap-4">
-              <button class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1" @click="showFullTraces = !showFullTraces" v-if="traces.length > 5">
+              <button class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1" @click="toggleTraceExpansion" v-if="traces.length > 5 || showFullTraces">
                 {{ showFullTraces ? '收起' : '展开全部' }}
                 <span class="material-symbols-outlined text-[14px] transition-transform duration-300" :class="showFullTraces ? 'rotate-180' : ''">expand_more</span>
               </button>
@@ -202,13 +351,59 @@
               </div>
             </div>
           </div>
+          <div class="mb-6 grid grid-cols-[1.4fr_repeat(5,auto)] gap-3 items-center">
+            <input
+              v-model.trim="traceSearch"
+              type="text"
+              placeholder="筛选 Trace ID / 风险标签"
+              class="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <select v-model="traceStatusFilter" class="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="ALL">全部状态</option>
+              <option value="SUCCESS">SUCCESS</option>
+              <option value="SLOW">SLOW</option>
+              <option value="FAILED">FAILED</option>
+              <option value="RUNNING">RUNNING</option>
+            </select>
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <input v-model="onlyRiskyTraces" type="checkbox" class="w-4 h-4 accent-indigo-600">
+              只看异常
+            </label>
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <input v-model="onlyFallbackTraces" type="checkbox" class="w-4 h-4 accent-indigo-600">
+              只看 Fallback
+            </label>
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <input v-model="onlyEmptyRetrievalTraces" type="checkbox" class="w-4 h-4 accent-indigo-600">
+              只看空召回
+            </label>
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+              <input v-model="onlySlowTraces" type="checkbox" class="w-4 h-4 accent-indigo-600">
+              只看慢链路
+            </label>
+          </div>
+          <div class="mb-6 flex items-center gap-3">
+            <button @click="applyTraceFilters" :disabled="loading" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
+              应用筛选
+            </button>
+            <button @click="resetTraceFilters" :disabled="loading" class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-all disabled:opacity-50">
+              清空筛选
+            </button>
+          </div>
+          <div v-if="activeTimeWindowLabel" class="mb-4">
+            <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border border-indigo-200 bg-indigo-50 text-indigo-700">
+              时间窗口: {{ activeTimeWindowLabel }}
+            </span>
+          </div>
           <div class="overflow-hidden">
             <table class="w-full text-left">
               <thead>
                 <tr class="text-slate-500 dark:text-slate-400 dark:text-slate-500 text-xs uppercase tracking-widest font-bold border-b border-slate-100">
                   <th class="pb-4 font-bold">Trace ID</th>
                   <th class="pb-4 font-bold">耗时 (Latency)</th>
+                  <th class="pb-4 font-bold">首 Token</th>
                   <th class="pb-4 font-bold">召回数量</th>
+                  <th class="pb-4 font-bold">风险</th>
                   <th class="pb-4 font-bold">状态</th>
                   <th class="pb-4 text-right font-bold">操作</th>
                 </tr>
@@ -217,7 +412,16 @@
                 <tr v-for="item in displayedTraces" :key="item.traceId" class="group hover:bg-slate-50 dark:bg-slate-800/50 transition-all">
                   <td class="py-4 text-sm font-mono text-indigo-600">{{ item.traceId || '-' }}</td>
                   <td class="py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">{{ item.latencyMs ?? 0 }} ms</td>
+                  <td class="py-4 text-sm text-slate-700 dark:text-slate-300">{{ item.firstTokenMs ?? 0 }} ms</td>
                   <td class="py-4 text-sm text-slate-700 dark:text-slate-300">{{ item.retrievedCount ?? 0 }}</td>
+                  <td class="py-4">
+                    <div v-if="item.riskTags?.length" class="flex flex-wrap gap-1">
+                      <span v-for="tag in item.riskTags.slice(0, 2)" :key="`${item.traceId}-${tag}`" class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter bg-amber-100 text-amber-700">
+                        {{ formatRiskTag(tag) }}
+                      </span>
+                    </div>
+                    <span v-else class="text-xs text-emerald-600 font-semibold">none</span>
+                  </td>
                   <td class="py-4">
                     <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tighter"
                           :class="getTraceStatusClass(item.status)">
@@ -230,8 +434,10 @@
                     </button>
                   </td>
                 </tr>
-                <tr v-if="!traces.length">
-                  <td colspan="5" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">暂无轨迹数据</td>
+                <tr v-if="!displayedTraces.length">
+                  <td colspan="7" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    {{ traces.length ? '当前筛选条件下暂无轨迹数据' : '暂无轨迹数据' }}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -459,6 +665,14 @@ const loading = ref(false)
 const hint = ref('可执行清理与重放操作')
 const overview = ref({})
 const traces = ref([])
+const traceSearch = ref('')
+const traceStatusFilter = ref('ALL')
+const onlyRiskyTraces = ref(false)
+const onlyFallbackTraces = ref(false)
+const onlyEmptyRetrievalTraces = ref(false)
+const onlySlowTraces = ref(false)
+const traceStartedAfter = ref('')
+const traceEndedBefore = ref('')
 const showFullTraces = ref(false)
 const displayedTraces = computed(() => {
   if (showFullTraces.value) return traces.value
@@ -705,6 +919,136 @@ const successRate = computed(() => {
   return ((successCount / traces.value.length) * 100).toFixed(1) + '%'
 })
 
+const statusVisualMap = {
+  SUCCESS: {
+    label: 'SUCCESS',
+    barClass: 'bg-emerald-500',
+    textClass: 'text-emerald-700'
+  },
+  SLOW: {
+    label: 'SLOW',
+    barClass: 'bg-amber-500',
+    textClass: 'text-amber-700'
+  },
+  FAILED: {
+    label: 'FAILED',
+    barClass: 'bg-red-500',
+    textClass: 'text-red-700'
+  },
+  RUNNING: {
+    label: 'RUNNING',
+    barClass: 'bg-indigo-500',
+    textClass: 'text-indigo-700'
+  },
+  UNKNOWN: {
+    label: 'UNKNOWN',
+    barClass: 'bg-slate-400',
+    textClass: 'text-slate-700'
+  }
+}
+
+const overviewStatusEntries = computed(() => {
+  const counts = overview.value?.statusCounts && typeof overview.value.statusCounts === 'object'
+    ? overview.value.statusCounts
+    : {}
+  const keys = Object.keys(counts)
+  const total = keys.reduce((sum, key) => sum + Number(counts[key] || 0), 0)
+  return keys.map(key => {
+    const visual = statusVisualMap[key] || statusVisualMap.UNKNOWN
+    const value = Number(counts[key] || 0)
+    return {
+      key,
+      label: visual.label,
+      value,
+      percent: total > 0 ? Math.max((value / total) * 100, value > 0 ? 6 : 0) : 0,
+      barClass: visual.barClass,
+      textClass: visual.textClass
+    }
+  }).filter(item => item.value > 0)
+})
+
+const overviewRiskEntries = computed(() => {
+  const counts = overview.value?.riskTagCounts && typeof overview.value.riskTagCounts === 'object'
+    ? overview.value.riskTagCounts
+    : {}
+  return Object.entries(counts)
+    .map(([key, value]) => ({
+      key,
+      label: formatRiskTag(key),
+      value: Number(value || 0)
+    }))
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+})
+
+const overviewAlertLevel = computed(() => String(overview.value?.alertLevel || 'NONE').toUpperCase())
+
+const overviewAlertTags = computed(() => {
+  const tags = Array.isArray(overview.value?.alertTags) ? overview.value.alertTags : []
+  return tags
+})
+
+const overviewAlertHeadline = computed(() => {
+  if (!overviewAlertTags.value.length) return '最近窗口内未发现需要升级处理的告警'
+  if (overviewAlertLevel.value === 'HIGH') return '检测到高优先级链路风险，建议立即排查'
+  if (overviewAlertLevel.value === 'MEDIUM') return '检测到链路退化信号，建议持续关注'
+  return '存在轻量告警信号，可结合趋势继续观察'
+})
+
+const activeTimeWindowLabel = computed(() => {
+  if (!traceStartedAfter.value && !traceEndedBefore.value) return ''
+  const from = traceStartedAfter.value ? formatTime(traceStartedAfter.value) : '...'
+  const to = traceEndedBefore.value ? formatTime(traceEndedBefore.value) : '...'
+  return `${from} ~ ${to}`
+})
+
+const overviewTrendBuckets = computed(() => {
+  const buckets = Array.isArray(overview.value?.trendBuckets) ? overview.value.trendBuckets : []
+  const peak = buckets.reduce((max, item) => {
+    const currentMax = Math.max(
+      Number(item?.risky || 0),
+      Number(item?.slow || 0),
+      Number(item?.fallback || 0),
+      Number(item?.emptyRetrieval || 0),
+      Number(item?.failed || 0)
+    )
+    return Math.max(max, currentMax)
+  }, 0)
+  return buckets.map((item, index) => {
+    const total = Number(item?.total || 0)
+    const toPercent = (value) => peak > 0 ? Math.max((Number(value || 0) / peak) * 100, Number(value || 0) > 0 ? 8 : 0) : 0
+    return {
+      key: `${item?.label || 'B'}-${index}`,
+      label: item?.label || `B${index + 1}`,
+      startAt: item?.startAt || '',
+      endAt: item?.endAt || '',
+      total,
+      risky: Number(item?.risky || 0),
+      slow: Number(item?.slow || 0),
+      fallback: Number(item?.fallback || 0),
+      emptyRetrieval: Number(item?.emptyRetrieval || 0),
+      failed: Number(item?.failed || 0),
+      riskyPercent: toPercent(item?.risky),
+      slowPercent: toPercent(item?.slow),
+      fallbackPercent: toPercent(item?.fallback),
+      emptyRetrievalPercent: toPercent(item?.emptyRetrieval),
+      failedPercent: toPercent(item?.failed)
+    }
+  })
+})
+
+const trendPeakRisk = computed(() => {
+  if (!overviewTrendBuckets.value.length) return '-'
+  const peak = [...overviewTrendBuckets.value].sort((a, b) => b.risky - a.risky)[0]
+  return `${peak.label}/${peak.risky}`
+})
+
+const trendPeakSlow = computed(() => {
+  if (!overviewTrendBuckets.value.length) return '-'
+  const peak = [...overviewTrendBuckets.value].sort((a, b) => b.slow - a.slow)[0]
+  return `${peak.label}/${peak.slow}`
+})
+
 const idempotencyTotal = computed(() => {
   const inMemory = idempotency.value.inMemorySize || 0
   const redisSize = idempotency.value.redisSize || 0
@@ -720,6 +1064,87 @@ const formatTime = (value) => {
 
 const viewDetail = (traceId) => {
   router.push({ name: 'rag-trace-detail', params: { traceId } })
+}
+
+const toggleTraceExpansion = async () => {
+  showFullTraces.value = !showFullTraces.value
+  await reload()
+}
+
+const clearTraceFiltersState = () => {
+  traceSearch.value = ''
+  traceStatusFilter.value = 'ALL'
+  onlyRiskyTraces.value = false
+  onlyFallbackTraces.value = false
+  onlyEmptyRetrievalTraces.value = false
+  onlySlowTraces.value = false
+  traceStartedAfter.value = ''
+  traceEndedBefore.value = ''
+}
+
+const applyOverviewPreset = async (preset) => {
+  clearTraceFiltersState()
+  showFullTraces.value = true
+  if (preset === 'active') {
+    traceStatusFilter.value = 'RUNNING'
+  } else if (preset === 'risky') {
+    onlyRiskyTraces.value = true
+  } else if (preset === 'fallback') {
+    onlyFallbackTraces.value = true
+  } else if (preset === 'emptyRetrieval') {
+    onlyEmptyRetrievalTraces.value = true
+  }
+  await reload()
+}
+
+const applyStatusPreset = async (status) => {
+  clearTraceFiltersState()
+  showFullTraces.value = true
+  traceStatusFilter.value = status || 'ALL'
+  await reload()
+}
+
+const applyRiskTagPreset = async (riskTag) => {
+  clearTraceFiltersState()
+  showFullTraces.value = true
+  if (riskTag === 'fallback_triggered') {
+    onlyFallbackTraces.value = true
+  } else if (riskTag === 'retrieval_empty') {
+    onlyEmptyRetrievalTraces.value = true
+  } else if (riskTag === 'slow_trace' || riskTag === 'slow_first_token') {
+    onlySlowTraces.value = true
+  } else {
+    onlyRiskyTraces.value = true
+    traceSearch.value = String(riskTag || '').trim()
+  }
+  await reload()
+}
+
+const applyAlertPreset = async (alertTag) => {
+  clearTraceFiltersState()
+  showFullTraces.value = true
+  if (alertTag === 'high_active_trace_load' || alertTag === 'active_traces_present') {
+    traceStatusFilter.value = 'RUNNING'
+  } else if (alertTag === 'failed_traces_elevated' || alertTag === 'degrading_failed_trend') {
+    traceStatusFilter.value = 'FAILED'
+  } else if (alertTag === 'slow_traces_elevated' || alertTag === 'degrading_slow_trend') {
+    onlySlowTraces.value = true
+  } else if (alertTag === 'fallback_rate_elevated') {
+    onlyFallbackTraces.value = true
+  } else if (alertTag === 'empty_retrieval_elevated') {
+    onlyEmptyRetrievalTraces.value = true
+  } else if (alertTag === 'degrading_risky_trend') {
+    onlyRiskyTraces.value = true
+  }
+  await reload()
+}
+
+const applyTrendBucketPreset = async (bucket) => {
+  clearTraceFiltersState()
+  showFullTraces.value = true
+  traceStartedAfter.value = bucket?.startAt || ''
+  traceEndedBefore.value = bucket?.endAt || ''
+  await reload()
 }
 
 const resolveStatus = (traceStatus, durationMs, nodes) => {
@@ -765,31 +1190,67 @@ const getTraceStatusClass = (status) => {
   return 'bg-emerald-100 text-emerald-700'
 }
 
+const formatRiskTag = (tag) => {
+  if (tag === 'slow_trace') return 'slow trace'
+  if (tag === 'slow_first_token') return 'slow first token'
+  if (tag === 'fallback_triggered') return 'fallback'
+  if (tag === 'retrieval_empty') return 'empty retrieval'
+  return tag || 'risk'
+}
+
+const formatAlertTag = (tag) => {
+  if (tag === 'high_active_trace_load') return 'high active load'
+  if (tag === 'active_traces_present') return 'active traces present'
+  if (tag === 'failed_traces_elevated') return 'failed traces elevated'
+  if (tag === 'slow_traces_elevated') return 'slow traces elevated'
+  if (tag === 'fallback_rate_elevated') return 'fallback elevated'
+  if (tag === 'empty_retrieval_elevated') return 'empty retrieval elevated'
+  if (tag === 'degrading_risky_trend') return 'risky trend rising'
+  if (tag === 'degrading_slow_trend') return 'slow trend rising'
+  if (tag === 'degrading_failed_trend') return 'failed trend rising'
+  return tag || 'alert'
+}
+
 const reload = async () => {
   loading.value = true
   hint.value = '正在刷新运维数据...'
   try {
+    const traceFilters = {
+      limit: showFullTraces.value ? 50 : 20,
+      status: traceStatusFilter.value,
+      riskyOnly: onlyRiskyTraces.value,
+      fallbackOnly: onlyFallbackTraces.value,
+      emptyRetrievalOnly: onlyEmptyRetrievalTraces.value,
+      slowOnly: onlySlowTraces.value,
+      q: traceSearch.value.trim(),
+      startedAfter: traceStartedAfter.value,
+      endedBefore: traceEndedBefore.value
+    }
     const [overviewData, tracesData, idempotencyData, auditsData] = await Promise.all([
       loadOpsOverview(),
-      loadOpsTraces(),
+      loadOpsTraces(traceFilters),
       loadOpsIdempotency(),
       loadOpsAudits(5)
     ])
     overview.value = overviewData || {}
     traces.value = Array.isArray(tracesData)
       ? tracesData.map(item => {
-          const nodes = Array.isArray(item?.nodes) ? item.nodes : []
-          const retrievedCount = nodes
-            .filter(n => n?.nodeType === 'RETRIEVAL')
-            .reduce((sum, n) => {
-              const docs = n?.metrics?.retrievedDocs
-              return sum + (typeof docs === 'number' ? docs : 0)
-            }, 0)
+          const businessDurationMs = typeof item?.businessDurationMs === 'number'
+            ? item.businessDurationMs
+            : 0
+          const traceStatus = typeof item?.traceStatus === 'string'
+            ? item.traceStatus.trim().toUpperCase()
+            : ''
+          const status = traceStatus === 'COMPLETED'
+            ? (item?.slowTrace ? 'SLOW' : 'SUCCESS')
+            : (traceStatus || 'UNKNOWN')
           return {
             traceId: item?.traceId ?? '-',
-            latencyMs: typeof item?.durationMs === 'number' ? item.durationMs : 0,
-            retrievedCount,
-            status: resolveStatus(item?.traceStatus, typeof item?.durationMs === 'number' ? item.durationMs : 0, nodes)
+            latencyMs: businessDurationMs,
+            firstTokenMs: typeof item?.firstTokenMs === 'number' ? item.firstTokenMs : 0,
+            retrievedCount: typeof item?.retrievedDocCount === 'number' ? item.retrievedDocCount : 0,
+            riskTags: Array.isArray(item?.riskTags) ? item.riskTags : [],
+            status
           }
         })
       : []
@@ -801,6 +1262,15 @@ const reload = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const applyTraceFilters = async () => {
+  await reload()
+}
+
+const resetTraceFilters = async () => {
+  clearTraceFiltersState()
+  await reload()
 }
 
 const purge = async () => {

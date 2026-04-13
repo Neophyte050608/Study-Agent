@@ -15,6 +15,7 @@ import com.example.interview.service.interview.ObservabilityApplicationService;
 import com.example.interview.service.interview.ProfileApplicationService;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -107,8 +108,40 @@ public class InterviewService {
         return mcpApplicationService.invokeCapability(userId, capability, params, context);
     }
 
-    public java.util.List<RAGObservabilityService.RAGTrace> getRecentRagTraces(int limit) {
+    public java.util.List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
         return observabilityApplicationService.getRecentRagTraces(limit);
+    }
+
+    public java.util.List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+                                                                                   String status,
+                                                                                   boolean riskyOnly,
+                                                                                   boolean fallbackOnly,
+                                                                                   boolean emptyRetrievalOnly,
+                                                                                   boolean slowOnly,
+                                                                                   String query) {
+        return getRecentRagTraces(limit, status, riskyOnly, fallbackOnly, emptyRetrievalOnly, slowOnly, query, null, null);
+    }
+
+    public java.util.List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+                                                                                   String status,
+                                                                                   boolean riskyOnly,
+                                                                                   boolean fallbackOnly,
+                                                                                   boolean emptyRetrievalOnly,
+                                                                                   boolean slowOnly,
+                                                                                   String query,
+                                                                                   Instant startedAfter,
+                                                                                   Instant endedBefore) {
+        return observabilityApplicationService.getRecentRagTraces(
+                limit,
+                status,
+                riskyOnly,
+                fallbackOnly,
+                emptyRetrievalOnly,
+                slowOnly,
+                query,
+                startedAfter,
+                endedBefore
+        );
     }
 
     /**
@@ -117,7 +150,7 @@ public class InterviewService {
      * @param limit 返回条数上限
      * @return 活动态 Trace 列表
      */
-    public java.util.List<RAGObservabilityService.RAGTrace> getActiveRagTraces(int limit) {
+    public java.util.List<RAGObservabilityService.TraceSummary> getActiveRagTraces(int limit) {
         return observabilityApplicationService.getActiveRagTraces(limit);
     }
 
@@ -127,7 +160,7 @@ public class InterviewService {
      * @param traceId Trace ID
      * @return Trace 详情；不存在时返回 null
      */
-    public RAGObservabilityService.RAGTrace getRagTraceDetail(String traceId) {
+    public RAGObservabilityService.TraceDetailView getRagTraceDetail(String traceId) {
         return observabilityApplicationService.getRagTraceDetail(traceId);
     }
 

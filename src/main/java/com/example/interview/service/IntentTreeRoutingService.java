@@ -4,6 +4,7 @@ import com.example.interview.config.IntentTreeProperties;
 import com.example.interview.intent.IntentCandidate;
 import com.example.interview.intent.IntentRoutingDecision;
 import com.example.interview.intent.IntentTreeNode;
+import com.example.interview.observability.TraceNode;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.ModelRoutingProperties;
 import com.example.interview.modelrouting.RoutingChatService;
@@ -74,6 +75,7 @@ public class IntentTreeRoutingService {
      * @param domain  PreFilter 提供的域提示（可为 null）
      * @return 意图路由决策
      */
+    @TraceNode(type = "INTENT", name = "INTENT_ROUTE")
     public IntentRoutingDecision route(String query, String history, String domain) {
         if (query == null || query.isBlank()) {
             return IntentRoutingDecision.fallback();
@@ -119,6 +121,7 @@ public class IntentTreeRoutingService {
         return classifyWithinDomain(query, sanitizedHistory, domainLeaves, resolvedDomain);
     }
 
+    @TraceNode(type = "INTENT", name = "SLOT_REFINE")
     public Map<String, Object> refineSlots(String taskType, String query, String history) {
         if (taskType == null || taskType.isBlank() || query == null || query.isBlank()) {
             return Map.of();

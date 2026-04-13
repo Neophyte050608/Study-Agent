@@ -1,5 +1,7 @@
 package com.example.interview.intent;
 
+import com.example.interview.observability.TraceNode;
+
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -117,6 +119,7 @@ public class IntentPreFilter {
      * @param query 用户输入的原始文本
      * @return 如果规则命中返回 PreFilterResult，否则返回 empty
      */
+    @TraceNode(type = "INTENT", name = "PRE_FILTER")
     public Optional<PreFilterResult> filter(String query) {
         if (query == null || query.isBlank()) {
             return Optional.empty();

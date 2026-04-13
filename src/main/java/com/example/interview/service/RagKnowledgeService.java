@@ -1,6 +1,10 @@
 package com.example.interview.service;
 
+import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * RAG 适配层。
@@ -34,7 +38,30 @@ public class RagKnowledgeService {
                 packet.imageContext(),
                 packet.retrievalEvidence(),
                 packet.retrievedImages(),
-                packet.webFallbackUsed()
+                packet.webFallbackUsed(),
+                packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
+                summarizeDocuments(packet.retrievedDocs())
         );
+    }
+
+    private List<String> summarizeDocuments(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return List.of();
+        }
+        return documents.stream()
+                .limit(5)
+                .map(document -> {
+                    String source = String.valueOf(document.getMetadata().getOrDefault("source", ""));
+                    String title = String.valueOf(document.getMetadata().getOrDefault("title", ""));
+                    String snippet = document.getText() == null ? "" : document.getText().replaceAll("\\s+", " ").trim();
+                    if (snippet.length() > 80) {
+                        snippet = snippet.substring(0, 80) + "...";
+                    }
+                    return List.of(source, title, snippet).stream()
+                            .filter(item -> item != null && !item.isBlank() && !"null".equalsIgnoreCase(item))
+                            .collect(Collectors.joining(" | "));
+                })
+                .filter(item -> item != null && !item.isBlank())
+                .toList();
     }
 }

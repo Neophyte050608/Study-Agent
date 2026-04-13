@@ -8,6 +8,7 @@ import com.example.interview.service.KnowledgeRetrievalCoordinator;
 import com.example.interview.service.KnowledgeRetrievalMode;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.RAGObservabilityService;
+import com.example.interview.service.TraceService;
 import com.example.interview.service.knowledge.ConversationTopicTracker;
 import com.example.interview.service.knowledge.DynamicKnowledgeContextBuilder;
 import com.example.interview.service.knowledge.TurnAnalysis;
@@ -32,6 +33,7 @@ public class KnowledgeQaAgent {
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
     private final RAGObservabilityService ragObservabilityService;
+    private final TraceService traceService;
     private final ConversationTopicTracker topicTracker;
     private final DynamicKnowledgeContextBuilder dynamicContextBuilder;
     private final Executor ragRetrieveExecutor;
@@ -40,6 +42,7 @@ public class KnowledgeQaAgent {
                             RoutingChatService routingChatService,
                             PromptManager promptManager,
                             RAGObservabilityService ragObservabilityService,
+                            TraceService traceService,
                             ConversationTopicTracker topicTracker,
                             DynamicKnowledgeContextBuilder dynamicContextBuilder,
                             @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor) {
@@ -47,6 +50,7 @@ public class KnowledgeQaAgent {
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.ragObservabilityService = ragObservabilityService;
+        this.traceService = traceService;
         this.topicTracker = topicTracker;
         this.dynamicContextBuilder = dynamicContextBuilder;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
@@ -197,8 +201,14 @@ public class KnowledgeQaAgent {
             vars.put("history", history != null ? history : "");
             vars.put("dialogSignal", dialogSignal);
             PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
-            String answer = routingChatService.callStream(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL,
-                    "知识问答-流式", tokenConsumer);
+            String answer = routingChatService.callStreamWithTrace(
+                    pair.systemPrompt(),
+                    pair.userPrompt(),
+                    ModelRouteType.GENERAL,
+                    "知识问答-流式",
+                    tokenConsumer,
+                    traceService
+            );
 
             if (sessionId != null && !sessionId.isBlank()) {
                 topicTracker.generateDigestAsync(sessionId, analysis, packet.context());

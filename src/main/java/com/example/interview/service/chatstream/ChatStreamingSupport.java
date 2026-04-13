@@ -1,6 +1,8 @@
 package com.example.interview.service.chatstream;
 
 import com.example.interview.entity.ChatMessageDO;
+import com.example.interview.service.RAGObservabilityService;
+import com.example.interview.service.TraceNodeDefinitions;
 import com.example.interview.service.WebChatService;
 import com.example.interview.stream.InterviewStreamEventType;
 import com.example.interview.stream.InterviewStreamTaskManager;
@@ -11,6 +13,9 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 @Component
 public class ChatStreamingSupport {
@@ -20,11 +25,14 @@ public class ChatStreamingSupport {
     private final WebChatService webChatService;
     private final InterviewStreamTaskManager taskManager;
     private final ChunkedTextStreamer chunkedTextStreamer;
+    private final RAGObservabilityService ragObservabilityService;
 
     public ChatStreamingSupport(WebChatService webChatService,
-                                InterviewStreamTaskManager taskManager) {
+                                InterviewStreamTaskManager taskManager,
+                                RAGObservabilityService ragObservabilityService) {
         this.webChatService = webChatService;
         this.taskManager = taskManager;
+        this.ragObservabilityService = ragObservabilityService;
         this.chunkedTextStreamer = new ChunkedTextStreamer();
     }
 
@@ -64,16 +72,215 @@ public class ChatStreamingSupport {
     }
 
     public void sendChunkedText(StreamEventEmitter emitter, String text, String taskId) {
-        chunkedTextStreamer.stream(emitter, text, () -> taskManager.isCancelled(taskId));
+        traceStreamDispatch(
+                estimateChunkCount(text),
+                0,
+                () -> chunkedTextStreamer.stream(emitter, text, () -> taskManager.isCancelled(taskId))
+        );
+    }
+
+    public <T> T streamObservedAnswer(StreamEventEmitter emitter,
+                                      String taskId,
+                                      Function<java.util.function.Consumer<String>, T> producer) {
+        String traceId = com.example.interview.core.RAGTraceContext.getTraceId();
+        String parentNodeId = resolveDispatchParentNodeId(traceId);
+        AtomicInteger chunkCounter = new AtomicInteger();
+        AtomicLong dispatchNanos = new AtomicLong();
+        AtomicInteger nodeStarted = new AtomicInteger(0);
+        String nodeId = java.util.UUID.randomUUID().toString();
+        try {
+            T result = producer.apply(token -> {
+                if (taskManager.isCancelled(taskId)) {
+                    return;
+                }
+                if (traceId != null && !traceId.isBlank()
+                        && parentNodeId != null && !parentNodeId.isBlank()
+                        && nodeStarted.compareAndSet(0, 1)) {
+                    ragObservabilityService.startNode(
+                            traceId,
+                            nodeId,
+                            parentNodeId,
+                            TraceNodeDefinitions.STREAM_DISPATCH.nodeType(),
+                            TraceNodeDefinitions.STREAM_DISPATCH.nodeName()
+                    );
+                }
+                long emitStart = System.nanoTime();
+                emitter.emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
+                        "channel", "answer",
+                        "delta", token
+                ));
+                dispatchNanos.addAndGet(System.nanoTime() - emitStart);
+                chunkCounter.incrementAndGet();
+            });
+            finishObservedAnswer(traceId, nodeId, nodeStarted.get() == 1, chunkCounter.get(), dispatchNanos.get(), null);
+            return result;
+        } catch (RuntimeException ex) {
+            finishObservedAnswer(traceId, nodeId, nodeStarted.get() == 1, chunkCounter.get(), dispatchNanos.get(), ex);
+            throw ex;
+        }
     }
 
     public void sendImageEvents(StreamEventEmitter emitter, List<?> images, String taskId) {
-        for (Object image : images) {
-            if (taskManager.isCancelled(taskId)) {
-                return;
-            }
-            emitter.emit(InterviewStreamEventType.IMAGE.value(), image);
+        traceStreamDispatch(
+                0,
+                images == null ? 0 : images.size(),
+                () -> {
+                    if (images == null || images.isEmpty()) {
+                        return;
+                    }
+                    for (Object image : images) {
+                        if (taskManager.isCancelled(taskId)) {
+                            return;
+                        }
+                        emitter.emit(InterviewStreamEventType.IMAGE.value(), image);
+                    }
+                }
+        );
+    }
+
+    private void traceStreamDispatch(int chunkCount, int imageEventCount, Runnable action) {
+        traceStreamDispatchResult(chunkCount, imageEventCount, actualChunkCount -> {
+            action.run();
+            return null;
+        });
+    }
+
+    private <T> T traceStreamDispatchResult(int chunkCount,
+                                            int imageEventCount,
+                                            Function<AtomicInteger, T> action) {
+        String traceId = com.example.interview.core.RAGTraceContext.getTraceId();
+        if (traceId == null || traceId.isBlank()) {
+            return action.apply(null);
         }
+        String parentNodeId = resolveDispatchParentNodeId(traceId);
+        if (parentNodeId == null || parentNodeId.isBlank()) {
+            return action.apply(null);
+        }
+        String nodeId = java.util.UUID.randomUUID().toString();
+        ragObservabilityService.startNode(
+                traceId,
+                nodeId,
+                parentNodeId,
+                TraceNodeDefinitions.STREAM_DISPATCH.nodeType(),
+                TraceNodeDefinitions.STREAM_DISPATCH.nodeName()
+        );
+        long start = System.currentTimeMillis();
+        AtomicInteger actualChunkCount = new AtomicInteger(chunkCount);
+        try {
+            T result = action.apply(actualChunkCount);
+            long completionMs = System.currentTimeMillis() - start;
+            Map<String, Object> output = new LinkedHashMap<>();
+            output.put("status", "COMPLETED");
+            output.put("completionMs", completionMs);
+            if (actualChunkCount.get() > 0) {
+                output.put("chunkCount", actualChunkCount.get());
+            }
+            if (imageEventCount > 0) {
+                output.put("imageEventCount", imageEventCount);
+            }
+            ragObservabilityService.endNode(
+                    traceId,
+                    nodeId,
+                    "",
+                    output.toString(),
+                    null,
+                    null,
+                    new RAGObservabilityService.NodeDetails(
+                            1,
+                            null,
+                            null,
+                            null,
+                            null,
+                            List.of(),
+                            null,
+                            imageEventCount > 0 ? imageEventCount : null,
+                            null,
+                            null,
+                            null,
+                            completionMs
+                    )
+            );
+            return result;
+        } catch (RuntimeException ex) {
+            long completionMs = System.currentTimeMillis() - start;
+            ragObservabilityService.endNode(
+                    traceId,
+                    nodeId,
+                    "",
+                    Map.of("status", "FAILED", "completionMs", completionMs).toString(),
+                    ex.getMessage(),
+                    null,
+                    new RAGObservabilityService.NodeDetails(
+                            1,
+                            null,
+                            null,
+                            null,
+                            null,
+                            List.of(),
+                            null,
+                            imageEventCount > 0 ? imageEventCount : null,
+                            null,
+                            null,
+                            null,
+                            completionMs
+                    )
+            );
+            throw ex;
+        }
+    }
+
+    private String resolveDispatchParentNodeId(String traceId) {
+        String parentNodeId = com.example.interview.core.RAGTraceContext.getCurrentNodeId();
+        if (parentNodeId == null || parentNodeId.isBlank()) {
+            parentNodeId = ragObservabilityService.getActiveRootNodeId(traceId);
+        }
+        return parentNodeId;
+    }
+
+    private void finishObservedAnswer(String traceId,
+                                      String nodeId,
+                                      boolean started,
+                                      int chunkCount,
+                                      long dispatchNanos,
+                                      RuntimeException error) {
+        if (!started || traceId == null || traceId.isBlank()) {
+            return;
+        }
+        long completionMs = Math.max(0L, dispatchNanos / 1_000_000L);
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("status", error == null ? "COMPLETED" : "FAILED");
+        output.put("completionMs", completionMs);
+        output.put("chunkCount", chunkCount);
+        ragObservabilityService.endNode(
+                traceId,
+                nodeId,
+                "",
+                output.toString(),
+                error == null ? null : error.getMessage(),
+                null,
+                new RAGObservabilityService.NodeDetails(
+                        1,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        completionMs
+                )
+        );
+    }
+
+    private int estimateChunkCount(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        int chunkSize = 32;
+        return Math.max(1, (text.length() + chunkSize - 1) / chunkSize);
     }
 
     public String buildRichContent(String text, List<?> images) {

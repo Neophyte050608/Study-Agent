@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * RAG 核心服务。
@@ -160,45 +161,118 @@ public class RAGService {
         return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question, () -> {
             // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
             String traceId = RAGTraceContext.getTraceId();
-            String rewriteNodeId = UUID.randomUUID().toString();
-            observabilityService.startNode(traceId, rewriteNodeId, RAGTraceContext.getCurrentNodeId(), "REWRITE", "Query Rewrite");
-
+            String parentNodeId = RAGTraceContext.getCurrentNodeId();
+            TraceNodeHandle rewriteTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.QUERY_REWRITE, Map.of("status", "RUNNING"));
             RewrittenQuery rewrittenQuery = buildRewrittenQuery(question, userAnswer);
-            observabilityService.endNode(traceId, rewriteNodeId, "Q: " + question,
-                    "CORE: " + rewrittenQuery.coreTerms() + " | EXPAND: " + rewrittenQuery.expandTerms(), null);
+            completeTraceSuccess(rewriteTrace, Map.of("status", "COMPLETED"));
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
             }
 
-            String retrievalNodeId = UUID.randomUUID().toString();
-            observabilityService.startNode(traceId, retrievalNodeId, RAGTraceContext.getCurrentNodeId(), "RETRIEVAL", "Hybrid Retrieval");
-
+            TraceNodeHandle docRetrieveTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.DOC_RETRIEVE, Map.of("status", "RUNNING"));
             List<Document> retrievedDocs = retrieveHybridDocuments(rewrittenQuery, 5);
             String context = retrievedDocs.stream()
                     .map(Document::getText)
                     .collect(Collectors.joining("\n\n"));
+            double bestRetrievalScore = bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
+            completeTraceSuccess(
+                    docRetrieveTrace,
+                    Map.of(
+                            "docCount", retrievedDocs.size(),
+                            "docRefs", summarizeRetrievedDocuments(retrievedDocs),
+                            "status", "COMPLETED"
+                    ),
+                    new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), false),
+                    new RAGObservabilityService.NodeDetails(
+                            1,
+                            KnowledgeRetrievalMode.RAG_ONLY.name(),
+                            null,
+                            false,
+                            retrievedDocs.size(),
+                            summarizeRetrievedDocuments(retrievedDocs),
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null
+                    )
+            );
+
+            TraceNodeHandle associatedImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_ASSOC_RETRIEVE, Map.of("status", "RUNNING"));
             List<ImageService.ImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
+            completeTraceSuccess(associatedImageTrace, Map.of(
+                    "imageCount", associatedImages.size(),
+                    "status", "COMPLETED"
+            ), null, new RAGObservabilityService.NodeDetails(
+                    1,
+                    KnowledgeRetrievalMode.RAG_ONLY.name(),
+                    null,
+                    false,
+                    null,
+                    List.of(),
+                    null,
+                    associatedImages.size(),
+                    null,
+                    null,
+                    null,
+                    null
+            ));
+
+            TraceNodeHandle semanticImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_SEMANTIC_RETRIEVE, Map.of("status", "RUNNING"));
             List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), containsVisualIntent(rewrittenQuery.fullQuery()));
+            completeTraceSuccess(semanticImageTrace, Map.of(
+                    "imageCount", semanticImages.size(),
+                    "status", "COMPLETED"
+            ), null, new RAGObservabilityService.NodeDetails(
+                    1,
+                    KnowledgeRetrievalMode.RAG_ONLY.name(),
+                    null,
+                    false,
+                    null,
+                    List.of(),
+                    null,
+                    semanticImages.size(),
+                    null,
+                    null,
+                    null,
+                    null
+            ));
             List<ImageService.ImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
             String imageContext = buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
-            double bestRetrievalScore = bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
             boolean webFallbackUsed = false;
             if (shouldUseWebFallback(allowWebFallback, rewrittenQuery.fullQuery(), retrievedDocs, context, bestRetrievalScore)) {
+                TraceNodeHandle webFallbackTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
                 List<String> webContext = webSearchTool.run(new WebSearchTool.Query(rewrittenQuery.fullQuery(), 3));
                 context = webContext.stream().collect(Collectors.joining("\n\n"));
                 retrievalEvidence = buildWebEvidence(webContext);
                 webFallbackUsed = true;
+                completeTraceSuccess(
+                        webFallbackTrace,
+                        Map.of(
+                                "fallback", true,
+                                "fallbackReason", "LOW_RETRIEVAL_QUALITY",
+                                "docCount", webContext.size(),
+                                "status", "COMPLETED"
+                        ),
+                        new RAGObservabilityService.NodeMetrics(0, true),
+                        new RAGObservabilityService.NodeDetails(
+                                1,
+                                KnowledgeRetrievalMode.RAG_ONLY.name(),
+                                null,
+                                false,
+                                webContext.size(),
+                                List.of(),
+                                webContext.size(),
+                                null,
+                                "LOW_RETRIEVAL_QUALITY",
+                                null,
+                                null,
+                                null
+                        )
+                );
             }
-
-            observabilityService.endNode(
-                    traceId,
-                    retrievalNodeId,
-                    rewrittenQuery.fullQuery(),
-                    retrievedDocs.size() + " docs retrieved, web fallback: " + webFallbackUsed + ", best score: " + String.format(Locale.ROOT, "%.3f", bestRetrievalScore),
-                    null,
-                    new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), webFallbackUsed)
-            );
 
             return new KnowledgePacket(rewrittenQuery.fullQuery(), retrievedDocs, retrievedImages, context, imageContext, retrievalEvidence, webFallbackUsed);
         });
@@ -304,7 +378,13 @@ public class RAGService {
     private RoutingChatService.RoutingResult generateEvaluationResult(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String imageContext, String retrievalEvidence, String strategyHint) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(traceId, nodeId, RAGTraceContext.getCurrentNodeId(), "GENERATION", "LLM Evaluation");
+        observabilityService.startNode(
+                traceId,
+                nodeId,
+                RAGTraceContext.getCurrentNodeId(),
+                TraceNodeDefinitions.LLM_EVALUATION.nodeType(),
+                TraceNodeDefinitions.LLM_EVALUATION.nodeName()
+        );
         
         try {
             String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
@@ -337,6 +417,41 @@ public class RAGService {
             observabilityService.endNode(traceId, nodeId, "Q: " + question, null, e.getMessage());
             throw e;
         }
+    }
+
+    private TraceNodeHandle startTraceChild(String traceId,
+                                            String parentNodeId,
+                                            TraceNodeDefinition definition,
+                                            Map<String, Object> attributes) {
+        String safeParentNodeId = parentNodeId == null ? RAGTraceContext.getCurrentNodeId() : parentNodeId;
+        String nodeId = UUID.randomUUID().toString();
+        observabilityService.startNode(traceId, nodeId, safeParentNodeId, definition.nodeType(), definition.nodeName());
+        return new TraceNodeHandle(traceId, nodeId, safeParentNodeId, definition);
+    }
+
+    private void completeTraceSuccess(TraceNodeHandle handle, Map<String, Object> result) {
+        completeTraceSuccess(handle, result, null, null);
+    }
+
+    private void completeTraceSuccess(TraceNodeHandle handle,
+                                      Map<String, Object> result,
+                                      RAGObservabilityService.NodeMetrics metrics) {
+        completeTraceSuccess(handle, result, metrics, null);
+    }
+
+    private void completeTraceSuccess(TraceNodeHandle handle,
+                                      Map<String, Object> result,
+                                      RAGObservabilityService.NodeMetrics metrics,
+                                      RAGObservabilityService.NodeDetails details) {
+        observabilityService.endNode(
+                handle.traceId(),
+                handle.nodeId(),
+                "",
+                result == null ? "" : result.toString(),
+                null,
+                metrics,
+                details
+        );
     }
 
     private String validateEvidenceReferences(String rawJson, String retrievalEvidence) {
@@ -2024,6 +2139,27 @@ public class RAGService {
                     .append("\n");
         }
         return builder.toString().trim();
+    }
+
+    private List<String> summarizeRetrievedDocuments(List<Document> retrievedDocs) {
+        if (retrievedDocs == null || retrievedDocs.isEmpty()) {
+            return List.of();
+        }
+        return retrievedDocs.stream()
+                .limit(5)
+                .map(document -> {
+                    String source = String.valueOf(document.getMetadata().getOrDefault("source", ""));
+                    String title = String.valueOf(document.getMetadata().getOrDefault("title", ""));
+                    String snippet = document.getText() == null ? "" : document.getText().replaceAll("\\s+", " ").trim();
+                    if (snippet.length() > 80) {
+                        snippet = snippet.substring(0, 80) + "...";
+                    }
+                    return Stream.of(source, title, snippet)
+                            .filter(item -> item != null && !item.isBlank() && !"null".equalsIgnoreCase(item))
+                            .collect(Collectors.joining(" | "));
+                })
+                .filter(item -> item != null && !item.isBlank())
+                .toList();
     }
 
     private List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,

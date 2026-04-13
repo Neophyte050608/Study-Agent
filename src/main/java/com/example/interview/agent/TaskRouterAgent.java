@@ -23,6 +23,9 @@ import com.example.interview.service.IntentTreeRoutingService;
 import com.example.interview.service.LearningProfileAgent;
 import com.example.interview.service.PromptManager;
 import com.example.interview.service.RAGObservabilityService;
+import com.example.interview.service.TraceNodeDefinitions;
+import com.example.interview.service.TraceNodeHandle;
+import com.example.interview.service.TraceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -39,6 +42,26 @@ import java.util.UUID;
 @Component
 public class TaskRouterAgent {
 
+    private static final TraceService NOOP_TRACE_SERVICE = new TraceService() {
+        @Override
+        public TraceNodeHandle startRoot(String traceId, com.example.interview.service.TraceNodeDefinition definition, Map<String, Object> attributes) {
+            return new TraceNodeHandle(traceId, "", "", definition);
+        }
+
+        @Override
+        public TraceNodeHandle startChild(String traceId, String parentNodeId, com.example.interview.service.TraceNodeDefinition definition, Map<String, Object> attributes) {
+            return new TraceNodeHandle(traceId, "", parentNodeId, definition);
+        }
+
+        @Override
+        public void success(TraceNodeHandle handle, Map<String, Object> result) {
+        }
+
+        @Override
+        public void fail(TraceNodeHandle handle, String errorMessage, Map<String, Object> result) {
+        }
+    };
+
     private final InterviewOrchestratorAgent interviewOrchestratorAgent;
     private final CodingPracticeAgent codingPracticeAgent;
     private final NoteMakingAgent noteMakingAgent;
@@ -51,6 +74,7 @@ public class TaskRouterAgent {
     private final RoutingChatService routingChatService;
     private final RAGObservabilityService ragObservabilityService;
     private final TaskHandlerRegistry taskHandlerRegistry;
+    private final TraceService traceService;
 
     @Autowired
     public TaskRouterAgent(
@@ -65,7 +89,8 @@ public class TaskRouterAgent {
             A2ABus a2aBus,
             RoutingChatService routingChatService,
             RAGObservabilityService ragObservabilityService,
-            TaskHandlerRegistry taskHandlerRegistry
+            TaskHandlerRegistry taskHandlerRegistry,
+            TraceService traceService
     ) {
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
         this.codingPracticeAgent = codingPracticeAgent;
@@ -79,6 +104,38 @@ public class TaskRouterAgent {
         this.routingChatService = routingChatService;
         this.ragObservabilityService = ragObservabilityService;
         this.taskHandlerRegistry = taskHandlerRegistry;
+        this.traceService = traceService;
+    }
+
+    public TaskRouterAgent(
+            InterviewOrchestratorAgent interviewOrchestratorAgent,
+            CodingPracticeAgent codingPracticeAgent,
+            NoteMakingAgent noteMakingAgent,
+            LearningProfileAgent learningProfileAgent,
+            KnowledgeQaAgent knowledgeQaAgent,
+            PromptManager promptManager,
+            IntentTreeRoutingService intentTreeRoutingService,
+            IntentPreFilter intentPreFilter,
+            A2ABus a2aBus,
+            RoutingChatService routingChatService,
+            RAGObservabilityService ragObservabilityService,
+            TaskHandlerRegistry taskHandlerRegistry
+    ) {
+        this(
+                interviewOrchestratorAgent,
+                codingPracticeAgent,
+                noteMakingAgent,
+                learningProfileAgent,
+                knowledgeQaAgent,
+                promptManager,
+                intentTreeRoutingService,
+                intentPreFilter,
+                a2aBus,
+                routingChatService,
+                ragObservabilityService,
+                taskHandlerRegistry,
+                NOOP_TRACE_SERVICE
+        );
     }
 
     public TaskResponse dispatch(TaskRequest request) {
@@ -276,13 +333,26 @@ public class TaskRouterAgent {
         String prompt = promptManager.render("task-router", vars);
 
         try {
-            String reactDecisionStr = routingChatService.callWithFirstPacketProbeSupplier(
-                    () -> "{\"taskType\":\"UNKNOWN\"}",
-                    prompt,
-                    ModelRouteType.THINKING,
-                    TimeoutHint.FAST,
-                    "任务路由ReAct"
+            TraceNodeHandle reactRouteTrace = traceService.startChild(
+                    RAGTraceContext.getTraceId(),
+                    RAGTraceContext.getCurrentNodeId(),
+                    TraceNodeDefinitions.REACT_ROUTE_LLM,
+                    Map.of("status", "RUNNING", "routeSource", "react-router")
             );
+            String reactDecisionStr;
+            try {
+                reactDecisionStr = routingChatService.callWithFirstPacketProbeSupplier(
+                        () -> "{\"taskType\":\"UNKNOWN\"}",
+                        prompt,
+                        ModelRouteType.THINKING,
+                        TimeoutHint.FAST,
+                        "任务路由ReAct"
+                );
+                traceService.success(reactRouteTrace, Map.of("status", "COMPLETED", "routeSource", "react-router"));
+            } catch (RuntimeException ex) {
+                traceService.fail(reactRouteTrace, ex.getMessage(), Map.of("status", "FAILED", "routeSource", "react-router"));
+                throw ex;
+            }
 
             String decidedTaskType = "";
             String topic = "";

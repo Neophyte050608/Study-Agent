@@ -18,14 +18,18 @@ public record KnowledgeContextPacket(
         String imageContext,
         String retrievalEvidence,
         List<ImageService.ImageResult> retrievedImages,
-        boolean webFallbackUsed
+        boolean webFallbackUsed,
+        int retrievedDocCount,
+        List<String> retrievedDocumentRefs
 ) {
     public KnowledgeContextPacket {
         retrievedImages = retrievedImages == null ? List.of() : List.copyOf(retrievedImages);
+        retrievedDocumentRefs = retrievedDocumentRefs == null ? List.of() : List.copyOf(retrievedDocumentRefs);
         fallbackReason = fallbackReason == null ? "" : fallbackReason;
         context = context == null ? "" : context;
         imageContext = imageContext == null ? "" : imageContext;
         retrievalEvidence = retrievalEvidence == null ? "" : retrievalEvidence;
         retrievalQuery = retrievalQuery == null ? "" : retrievalQuery;
+        retrievedDocCount = Math.max(0, retrievedDocCount);
     }
 }

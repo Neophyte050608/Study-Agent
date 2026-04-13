@@ -46,19 +46,21 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
                 "stage", "GENERATING", "label", "正在生成回答", "status", "running", "percent", 70));
 
         StringBuilder fullAnswer = new StringBuilder();
-        Map<String, Object> result = knowledgeQaAgent.executeStream(
-                context.content(),
-                context.history(),
-                context.retrievalMode(),
-                context.sessionId(),
-                token -> {
-                    if (!chatStreamingSupport.isCancelled(context.taskId())) {
-                        fullAnswer.append(token);
-                        context.emitter().emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
-                                "channel", "answer",
-                                "delta", token));
-                    }
-                }
+        Map<String, Object> result = chatStreamingSupport.streamObservedAnswer(
+                context.emitter(),
+                context.taskId(),
+                tokenSink -> knowledgeQaAgent.executeStream(
+                        context.content(),
+                        context.history(),
+                        context.retrievalMode(),
+                        context.sessionId(),
+                        token -> {
+                            if (!chatStreamingSupport.isCancelled(context.taskId())) {
+                                fullAnswer.append(token);
+                                tokenSink.accept(token);
+                            }
+                        }
+                )
         );
 
         if (chatStreamingSupport.isCancelled(context.taskId())) {

@@ -42,17 +42,17 @@ public class LocalGraphKnowledgeService {
     public KnowledgeContextPacket retrieve(String question, KnowledgeRetrievalMode requestedMode) {
         String traceId = RAGTraceContext.getTraceId();
 
-        KnowledgeMapService.KnowledgeMapSnapshot snapshot = trace("LOCAL_INDEX_LOAD", "Local Index Load",
+        KnowledgeMapService.KnowledgeMapSnapshot snapshot = trace(TraceNodeDefinitions.LOCAL_INDEX_LOAD,
                 question,
                 () -> knowledgeMapService.loadValidatedIndex(),
                 result -> "buildId=" + result.buildId() + ", nodes=" + result.nodeCount());
 
-        List<KnowledgeMapService.KnowledgeNode> candidates = trace("LOCAL_CANDIDATE_RECALL", "Local Candidate Recall",
+        List<KnowledgeMapService.KnowledgeNode> candidates = trace(TraceNodeDefinitions.LOCAL_CANDIDATE_RECALL,
                 question,
                 () -> localCandidateRecallService.recall(question, snapshot),
                 result -> "candidates=" + result.size());
 
-        List<String> matchedIds = trace("LOCAL_OLLAMA_ROUTE", "Ollama Route",
+        List<String> matchedIds = trace(TraceNodeDefinitions.LOCAL_OLLAMA_ROUTE,
                 question,
                 () -> ollamaRoutingService.route(question, candidates),
                 result -> "matches=" + result.size() + ", ids=" + String.join(",", result));
@@ -68,7 +68,7 @@ public class LocalGraphKnowledgeService {
             );
         }
 
-        NoteGraphResolver.NoteGraphContext graphContext = trace("LOCAL_NOTE_GRAPH", "Local Note Graph Resolve",
+        NoteGraphResolver.NoteGraphContext graphContext = trace(TraceNodeDefinitions.LOCAL_NOTE_GRAPH,
                 question,
                 () -> noteGraphResolver.resolve(snapshot, matchedNodes, question),
                 result -> "primary=" + result.primaryNotes().size()
@@ -95,18 +95,25 @@ public class LocalGraphKnowledgeService {
                 "",
                 buildEvidence(graphContext),
                 List.of(),
-                false
+                false,
+                countRetrievedNotes(graphContext),
+                summarizeResolvedNotes(graphContext)
         );
     }
 
-    private <T> T trace(String nodeType,
-                        String nodeName,
+    private <T> T trace(TraceNodeDefinition definition,
                         String inputSummary,
                         java.util.concurrent.Callable<T> action,
                         java.util.function.Function<T, String> outputBuilder) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(traceId, nodeId, RAGTraceContext.getCurrentNodeId(), nodeType, nodeName);
+        ragObservabilityService.startNode(
+                traceId,
+                nodeId,
+                RAGTraceContext.getCurrentNodeId(),
+                definition.nodeType(),
+                definition.nodeName()
+        );
         try {
             T result = action.call();
             ragObservabilityService.endNode(
@@ -136,7 +143,7 @@ public class LocalGraphKnowledgeService {
             );
             throw new LocalGraphRetrievalException(
                     LocalGraphFailureReason.NOTE_PARSE_FAILED,
-                    "Local graph tracing step failed: " + nodeName,
+                    "Local graph tracing step failed: " + definition.nodeName(),
                     e
             );
         }
@@ -192,5 +199,51 @@ public class LocalGraphKnowledgeService {
             lines.add(index++ + ". [local_graph_tag_neighbor:" + slice.note().node().filePath() + "] " + slice.note().node().title());
         }
         return lines.stream().collect(Collectors.joining("\n"));
+    }
+
+    private int countRetrievedNotes(NoteGraphResolver.NoteGraphContext graphContext) {
+        if (graphContext == null) {
+            return 0;
+        }
+        return graphContext.primaryNotes().size()
+                + graphContext.linkedNotes().size()
+                + graphContext.backlinkNotes().size()
+                + graphContext.tagNeighborNotes().size();
+    }
+
+    private List<String> summarizeResolvedNotes(NoteGraphResolver.NoteGraphContext graphContext) {
+        if (graphContext == null) {
+            return List.of();
+        }
+        LinkedHashSet<String> refs = new LinkedHashSet<>();
+        appendResolvedNotes(refs, graphContext.primaryNotes(), "primary");
+        appendResolvedNotes(refs, graphContext.linkedNotes(), "linked");
+        appendResolvedNotes(refs, graphContext.backlinkNotes(), "backlink");
+        appendResolvedNotes(refs, graphContext.tagNeighborNotes(), "tag");
+        return refs.stream().limit(5).toList();
+    }
+
+    private void appendResolvedNotes(Set<String> refs,
+                                     List<NoteGraphResolver.ResolvedNoteSlice> slices,
+                                     String category) {
+        if (slices == null || slices.isEmpty()) {
+            return;
+        }
+        for (NoteGraphResolver.ResolvedNoteSlice slice : slices) {
+            if (slice == null || slice.note() == null || slice.note().node() == null) {
+                continue;
+            }
+            String title = slice.note().node().title();
+            String path = slice.note().node().filePath();
+            String excerpt = slice.excerpt() == null ? "" : slice.excerpt().replaceAll("\\s+", " ").trim();
+            if (excerpt.length() > 80) {
+                excerpt = excerpt.substring(0, 80) + "...";
+            }
+            String ref = "[" + category + "] " + title + (path == null || path.isBlank() ? "" : " | " + path);
+            if (!excerpt.isBlank()) {
+                ref = ref + " | " + excerpt;
+            }
+            refs.add(ref);
+        }
     }
 }

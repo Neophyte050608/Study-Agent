@@ -1,16 +1,21 @@
 package com.example.interview.modelrouting;
 
 import com.example.interview.service.DynamicModelFactory;
+import com.example.interview.service.TraceNodeDefinitions;
+import com.example.interview.service.TraceNodeHandle;
+import com.example.interview.service.TraceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import com.example.interview.core.RAGTraceContext;
 
 @Service
 public class RoutingChatService {
@@ -175,6 +180,46 @@ public class RoutingChatService {
                     modelHealthStore.stateOf(candidate.name()), cost);
             return response;
         });
+    }
+
+    public String callStreamWithTrace(String systemPrompt,
+                                      String userPrompt,
+                                      ModelRouteType routeType,
+                                      String stage,
+                                      Consumer<String> tokenConsumer,
+                                      TraceService traceService) {
+        String traceId = RAGTraceContext.getTraceId();
+        String parentNodeId = RAGTraceContext.getCurrentNodeId();
+        TraceNodeHandle streamHandle = traceService.startChild(
+                traceId,
+                parentNodeId,
+                TraceNodeDefinitions.LLM_STREAM,
+                Map.of("status", "RUNNING")
+        );
+        AtomicBoolean firstTokenRecorded = new AtomicBoolean(false);
+        long start = System.currentTimeMillis();
+        try {
+            String result = callStream(systemPrompt, userPrompt, routeType, stage, token -> {
+                if (firstTokenRecorded.compareAndSet(false, true)) {
+                    long firstTokenMs = System.currentTimeMillis() - start;
+                    TraceNodeHandle firstTokenHandle = traceService.startChild(
+                            traceId,
+                            streamHandle.nodeId(),
+                            TraceNodeDefinitions.LLM_FIRST_TOKEN,
+                            Map.of("firstTokenMs", firstTokenMs, "status", "COMPLETED")
+                    );
+                    traceService.success(firstTokenHandle, Map.of("firstTokenMs", firstTokenMs, "status", "COMPLETED"));
+                }
+                tokenConsumer.accept(token);
+            });
+            long completionMs = System.currentTimeMillis() - start;
+            traceService.success(streamHandle, Map.of("status", "COMPLETED", "completionMs", completionMs));
+            return result;
+        } catch (RuntimeException ex) {
+            long completionMs = System.currentTimeMillis() - start;
+            traceService.fail(streamHandle, ex.getMessage(), Map.of("status", "FAILED", "completionMs", completionMs));
+            throw ex;
+        }
     }
 
     private String streamWithModel(ChatModel chatModel, String systemPrompt, String userPrompt, Consumer<String> tokenConsumer) {

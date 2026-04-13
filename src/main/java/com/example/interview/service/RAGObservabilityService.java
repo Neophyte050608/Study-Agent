@@ -43,6 +43,10 @@ public class RAGObservabilityService {
 
     private static final Logger logger = LoggerFactory.getLogger(RAGObservabilityService.class);
     private static final int MAX_TRACES = 300;
+    private static final int MAX_TRACE_SCAN_LIMIT = 1_000;
+    private static final int DEFAULT_RECENT_SUMMARY_SCAN_LIMIT = 1_000;
+    private static final long SLOW_TRACE_THRESHOLD_MS = 20_000L;
+    private static final long SLOW_FIRST_TOKEN_THRESHOLD_MS = 3_000L;
     private static final Pattern RETRIEVED_DOCS_PATTERN = Pattern.compile("(\\d+)\\s+docs?\\s+retrieved");
     private static final ZoneId TRACE_ZONE = ZoneId.systemDefault();
 
@@ -136,7 +140,7 @@ public class RAGObservabilityService {
      * @param errorSummary 错误摘要
      */
     public void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary) {
-        endNode(traceId, nodeId, inputSummary, outputSummary, errorSummary, null);
+        endNode(traceId, nodeId, inputSummary, outputSummary, errorSummary, null, null);
     }
 
     /**
@@ -150,6 +154,27 @@ public class RAGObservabilityService {
      * @param metrics 节点结构化指标
      */
     public void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
+        endNode(traceId, nodeId, inputSummary, outputSummary, errorSummary, metrics, null);
+    }
+
+    /**
+     * 结束一个链路节点，并补充结构化详情。
+     *
+     * @param traceId Trace ID
+     * @param nodeId 节点 ID
+     * @param inputSummary 输入摘要
+     * @param outputSummary 输出摘要
+     * @param errorSummary 错误摘要
+     * @param metrics 节点结构化指标
+     * @param details 节点结构化详情
+     */
+    public void endNode(String traceId,
+                        String nodeId,
+                        String inputSummary,
+                        String outputSummary,
+                        String errorSummary,
+                        NodeMetrics metrics,
+                        NodeDetails details) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return;
         }
@@ -163,7 +188,7 @@ public class RAGObservabilityService {
             if (node == null) {
                 return;
             }
-            node.complete(Instant.now(), inputSummary, outputSummary, errorSummary, metrics);
+            node.complete(Instant.now(), inputSummary, outputSummary, errorSummary, metrics, details);
             publishNodeEvent(safeTraceId, "node_finished", node, trace);
             if (node.parentNodeId() == null || node.parentNodeId().isBlank()) {
                 publishTraceFinishedEvent(safeTraceId, trace);
@@ -240,26 +265,48 @@ public class RAGObservabilityService {
      */
     public Map<String, Object> getOverview() {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
-            return Map.of(
-                    "enabled", false,
-                    "avgLatencyMs", 0,
-                    "avgRetrievedDocs", 0.0,
-                    "cacheHitRate", "0.0%",
-                    "p95LatencyMs", 0,
-                    "successRate", "0.0%",
-                    "failedTraceCount", 0
+            return Map.ofEntries(
+                    Map.entry("enabled", false),
+                    Map.entry("avgLatencyMs", 0),
+                    Map.entry("avgRetrievedDocs", 0.0),
+                    Map.entry("cacheHitRate", "0.0%"),
+                    Map.entry("p95LatencyMs", 0),
+                    Map.entry("successRate", "0.0%"),
+                    Map.entry("failedTraceCount", 0),
+                    Map.entry("activeTraceCount", 0),
+                    Map.entry("slowTraceCount", 0),
+                    Map.entry("riskyTraceCount", 0),
+                    Map.entry("fallbackTraceCount", 0),
+                    Map.entry("emptyRetrievalTraceCount", 0),
+                    Map.entry("statusCounts", Map.of()),
+                    Map.entry("riskTagCounts", Map.of()),
+                    Map.entry("trendBuckets", List.of()),
+                    Map.entry("alertLevel", "NONE"),
+                    Map.entry("alertTags", List.of()),
+                    Map.entry("alertSummary", "no_alerts")
             );
         }
-        List<RAGTrace> traces = resolveCompletedTraces(MAX_TRACES);
+        List<RAGTrace> traces = resolveCompletedTraces(DEFAULT_RECENT_SUMMARY_SCAN_LIMIT);
         if (traces.isEmpty()) {
-            return Map.of(
-                    "enabled", true,
-                    "avgLatencyMs", 0,
-                    "avgRetrievedDocs", 0.0,
-                    "cacheHitRate", "0.0%",
-                    "p95LatencyMs", 0,
-                    "successRate", "0.0%",
-                    "failedTraceCount", 0
+            return Map.ofEntries(
+                    Map.entry("enabled", true),
+                    Map.entry("avgLatencyMs", 0),
+                    Map.entry("avgRetrievedDocs", 0.0),
+                    Map.entry("cacheHitRate", "0.0%"),
+                    Map.entry("p95LatencyMs", 0),
+                    Map.entry("successRate", "0.0%"),
+                    Map.entry("failedTraceCount", 0),
+                    Map.entry("activeTraceCount", activeTraces.size()),
+                    Map.entry("slowTraceCount", 0),
+                    Map.entry("riskyTraceCount", 0),
+                    Map.entry("fallbackTraceCount", 0),
+                    Map.entry("emptyRetrievalTraceCount", 0),
+                    Map.entry("statusCounts", Map.of()),
+                    Map.entry("riskTagCounts", Map.of()),
+                    Map.entry("trendBuckets", List.of()),
+                    Map.entry("alertLevel", activeTraces.isEmpty() ? "NONE" : "INFO"),
+                    Map.entry("alertTags", activeTraces.isEmpty() ? List.of() : List.of("active_traces_present")),
+                    Map.entry("alertSummary", activeTraces.isEmpty() ? "no_alerts" : "active_traces_present")
             );
         }
 
@@ -282,17 +329,267 @@ public class RAGObservabilityService {
         long failedTraceCount = traces.stream()
                 .filter(trace -> "FAILED".equals(resolveTraceStatus(trace)))
                 .count();
+        List<TraceSummary> summaries = traces.stream()
+                .map(this::buildTraceSummary)
+                .filter(Objects::nonNull)
+                .toList();
+        long slowTraceCount = summaries.stream()
+                .filter(summary -> Boolean.TRUE.equals(summary.slowTrace()))
+                .count();
+        long riskyTraceCount = summaries.stream()
+                .filter(summary -> summary.riskCount() != null && summary.riskCount() > 0)
+                .count();
+        long fallbackTraceCount = summaries.stream()
+                .filter(summary -> summary.riskTags() != null && summary.riskTags().contains("fallback_triggered"))
+                .count();
+        long emptyRetrievalTraceCount = summaries.stream()
+                .filter(summary -> summary.riskTags() != null && summary.riskTags().contains("retrieval_empty"))
+                .count();
+        Map<String, Long> statusCounts = buildStatusCounts(summaries);
+        Map<String, Long> riskTagCounts = buildRiskTagCounts(summaries);
+        List<Map<String, Object>> trendBuckets = buildTrendBuckets(summaries);
+        List<String> alertTags = buildOverviewAlertTags(
+                activeTraces.size(),
+                failedTraceCount,
+                slowTraceCount,
+                fallbackTraceCount,
+                emptyRetrievalTraceCount,
+                trendBuckets
+        );
+        String alertLevel = resolveAlertLevel(alertTags);
         double successRate = ((double) (traces.size() - failedTraceCount) / traces.size()) * 100.0D;
 
-        return Map.of(
-                "enabled", true,
-                "avgLatencyMs", (int) avgLatency,
-                "avgRetrievedDocs", String.format(Locale.ROOT, "%.1f", avgDocs),
-                "cacheHitRate", "N/A",
-                "p95LatencyMs", p95Latency,
-                "successRate", String.format(Locale.ROOT, "%.1f%%", successRate),
-                "failedTraceCount", failedTraceCount
+        return Map.ofEntries(
+                Map.entry("enabled", true),
+                Map.entry("avgLatencyMs", (int) avgLatency),
+                Map.entry("avgRetrievedDocs", String.format(Locale.ROOT, "%.1f", avgDocs)),
+                Map.entry("cacheHitRate", "N/A"),
+                Map.entry("p95LatencyMs", p95Latency),
+                Map.entry("successRate", String.format(Locale.ROOT, "%.1f%%", successRate)),
+                Map.entry("failedTraceCount", failedTraceCount),
+                Map.entry("activeTraceCount", activeTraces.size()),
+                Map.entry("slowTraceCount", slowTraceCount),
+                Map.entry("riskyTraceCount", riskyTraceCount),
+                Map.entry("fallbackTraceCount", fallbackTraceCount),
+                Map.entry("emptyRetrievalTraceCount", emptyRetrievalTraceCount),
+                Map.entry("statusCounts", statusCounts),
+                Map.entry("riskTagCounts", riskTagCounts),
+                Map.entry("trendBuckets", trendBuckets),
+                Map.entry("alertLevel", alertLevel),
+                Map.entry("alertTags", alertTags),
+                Map.entry("alertSummary", alertTags.isEmpty() ? "no_alerts" : String.join(",", alertTags))
         );
+    }
+
+    private List<String> buildOverviewAlertTags(int activeTraceCount,
+                                                long failedTraceCount,
+                                                long slowTraceCount,
+                                                long fallbackTraceCount,
+                                                long emptyRetrievalTraceCount,
+                                                List<Map<String, Object>> trendBuckets) {
+        List<String> tags = new ArrayList<>();
+        if (activeTraceCount >= 5) {
+            tags.add("high_active_trace_load");
+        } else if (activeTraceCount > 0) {
+            tags.add("active_traces_present");
+        }
+        if (failedTraceCount >= 3) {
+            tags.add("failed_traces_elevated");
+        }
+        if (slowTraceCount >= 5) {
+            tags.add("slow_traces_elevated");
+        }
+        if (fallbackTraceCount >= 3) {
+            tags.add("fallback_rate_elevated");
+        }
+        if (emptyRetrievalTraceCount >= 3) {
+            tags.add("empty_retrieval_elevated");
+        }
+        if (hasRisingTrend(trendBuckets, "risky")) {
+            tags.add("degrading_risky_trend");
+        }
+        if (hasRisingTrend(trendBuckets, "slow")) {
+            tags.add("degrading_slow_trend");
+        }
+        if (hasRisingTrend(trendBuckets, "failed")) {
+            tags.add("degrading_failed_trend");
+        }
+        return tags;
+    }
+
+    private boolean hasRisingTrend(List<Map<String, Object>> trendBuckets, String key) {
+        if (trendBuckets == null || trendBuckets.size() < 2) {
+            return false;
+        }
+        List<Long> values = trendBuckets.stream()
+                .map(bucket -> toLong(bucket.get(key)))
+                .filter(Objects::nonNull)
+                .toList();
+        if (values.size() < 2) {
+            return false;
+        }
+        long latest = values.get(values.size() - 1);
+        long previous = values.get(values.size() - 2);
+        return latest > previous && latest > 0;
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
+    }
+
+    private String resolveAlertLevel(List<String> alertTags) {
+        if (alertTags == null || alertTags.isEmpty()) {
+            return "NONE";
+        }
+        boolean hasCritical = alertTags.stream().anyMatch(tag ->
+                "failed_traces_elevated".equals(tag)
+                        || "degrading_failed_trend".equals(tag)
+                        || "high_active_trace_load".equals(tag)
+        );
+        if (hasCritical) {
+            return "HIGH";
+        }
+        boolean hasWarning = alertTags.stream().anyMatch(tag ->
+                "slow_traces_elevated".equals(tag)
+                        || "fallback_rate_elevated".equals(tag)
+                        || "empty_retrieval_elevated".equals(tag)
+                        || "degrading_risky_trend".equals(tag)
+                        || "degrading_slow_trend".equals(tag)
+        );
+        if (hasWarning) {
+            return "MEDIUM";
+        }
+        return "INFO";
+    }
+
+    private List<Map<String, Object>> buildTrendBuckets(List<TraceSummary> summaries) {
+        if (summaries == null || summaries.isEmpty()) {
+            return List.of();
+        }
+        List<TraceSummary> datedSummaries = summaries.stream()
+                .filter(summary -> summary.endedAt() != null || summary.startedAt() != null)
+                .sorted(Comparator.comparing(summary -> summary.endedAt() != null ? summary.endedAt() : summary.startedAt()))
+                .toList();
+        if (datedSummaries.isEmpty()) {
+            return List.of();
+        }
+        int bucketCount = Math.min(8, datedSummaries.size());
+        Instant earliest = resolveTrendTimestamp(datedSummaries.get(0));
+        Instant latest = resolveTrendTimestamp(datedSummaries.get(datedSummaries.size() - 1));
+        if (earliest == null || latest == null) {
+            return List.of();
+        }
+        long spanMs = Math.max(1L, java.time.Duration.between(earliest, latest).toMillis() + 1L);
+        long bucketWidthMs = Math.max(1L, (long) Math.ceil((double) spanMs / bucketCount));
+        List<List<TraceSummary>> partitions = new ArrayList<>();
+        List<Instant> bucketStarts = new ArrayList<>();
+        List<Instant> bucketEnds = new ArrayList<>();
+        for (int i = 0; i < bucketCount; i++) {
+            partitions.add(new ArrayList<>());
+            Instant bucketStart = earliest.plusMillis(bucketWidthMs * i);
+            Instant bucketEnd = i == bucketCount - 1
+                    ? latest
+                    : earliest.plusMillis(Math.max(0L, bucketWidthMs * (i + 1) - 1L));
+            bucketStarts.add(bucketStart);
+            bucketEnds.add(bucketEnd);
+        }
+        for (TraceSummary summary : datedSummaries) {
+            Instant timestamp = resolveTrendTimestamp(summary);
+            if (timestamp == null) {
+                continue;
+            }
+            long offsetMs = Math.max(0L, java.time.Duration.between(earliest, timestamp).toMillis());
+            int bucketIndex = Math.min(bucketCount - 1, (int) (offsetMs / bucketWidthMs));
+            partitions.get(bucketIndex).add(summary);
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int i = 0; i < partitions.size(); i++) {
+            List<TraceSummary> bucket = partitions.get(i);
+            if (bucket.isEmpty()) {
+                continue;
+            }
+            long slow = bucket.stream().filter(item -> Boolean.TRUE.equals(item.slowTrace())).count();
+            long fallback = bucket.stream().filter(item -> item.riskTags() != null && item.riskTags().contains("fallback_triggered")).count();
+            long emptyRetrieval = bucket.stream().filter(item -> item.riskTags() != null && item.riskTags().contains("retrieval_empty")).count();
+            long failed = bucket.stream().filter(item -> "FAILED".equals(normalizeDisplayStatus(item))).count();
+            long risky = bucket.stream().filter(item -> item.riskCount() != null && item.riskCount() > 0).count();
+            result.add(Map.ofEntries(
+                    Map.entry("bucket", i + 1),
+                    Map.entry("label", formatTrendBucketLabel(bucketStarts.get(i), bucketEnds.get(i), i + 1)),
+                    Map.entry("startAt", bucketStarts.get(i)),
+                    Map.entry("endAt", bucketEnds.get(i)),
+                    Map.entry("total", bucket.size()),
+                    Map.entry("slow", slow),
+                    Map.entry("fallback", fallback),
+                    Map.entry("emptyRetrieval", emptyRetrieval),
+                    Map.entry("failed", failed),
+                    Map.entry("risky", risky)
+            ));
+        }
+        return result;
+    }
+
+    private Instant resolveTrendTimestamp(TraceSummary summary) {
+        return summary.endedAt() != null ? summary.endedAt() : summary.startedAt();
+    }
+
+    private String formatTrendBucketLabel(Instant startAt, Instant endAt, int bucketNumber) {
+        if (startAt == null || endAt == null) {
+            return String.format(Locale.ROOT, "B%d", bucketNumber);
+        }
+        LocalDateTime start = LocalDateTime.ofInstant(startAt, TRACE_ZONE);
+        LocalDateTime end = LocalDateTime.ofInstant(endAt, TRACE_ZONE);
+        return String.format(
+                Locale.ROOT,
+                "%02d:%02d-%02d:%02d",
+                start.getHour(),
+                start.getMinute(),
+                end.getHour(),
+                end.getMinute()
+        );
+    }
+
+    private Map<String, Long> buildStatusCounts(List<TraceSummary> summaries) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        counts.put("SUCCESS", 0L);
+        counts.put("SLOW", 0L);
+        counts.put("FAILED", 0L);
+        counts.put("RUNNING", 0L);
+        for (TraceSummary summary : summaries) {
+            String status = normalizeDisplayStatus(summary);
+            counts.compute(status, (key, value) -> value == null ? 1L : value + 1L);
+        }
+        return counts;
+    }
+
+    private Map<String, Long> buildRiskTagCounts(List<TraceSummary> summaries) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (TraceSummary summary : summaries) {
+            if (summary.riskTags() == null) {
+                continue;
+            }
+            for (String riskTag : summary.riskTags()) {
+                if (riskTag == null || riskTag.isBlank()) {
+                    continue;
+                }
+                counts.compute(riskTag, (key, value) -> value == null ? 1L : value + 1L);
+            }
+        }
+        return counts;
+    }
+
+    private String normalizeDisplayStatus(TraceSummary summary) {
+        String traceStatus = summary.traceStatus() == null ? "" : summary.traceStatus().trim().toUpperCase(Locale.ROOT);
+        if ("COMPLETED".equals(traceStatus)) {
+            return Boolean.TRUE.equals(summary.slowTrace()) ? "SLOW" : "SUCCESS";
+        }
+        if (traceStatus.isBlank()) {
+            return "UNKNOWN";
+        }
+        return traceStatus;
     }
 
     /**
@@ -307,19 +604,61 @@ public class RAGObservabilityService {
         if (ragTraceEventBus == null) {
             return;
         }
-        int retrievalNodeCount = (int) trace.nodes().stream().filter(item -> "RETRIEVAL".equals(item.nodeType())).count();
+        TraceSummary summary = buildTraceSummary(trace);
         ragTraceEventBus.publish(traceId, new RagTraceEventBus.RagTraceStreamEvent(
                 traceId,
                 eventType,
                 LocalDateTime.now(),
                 node,
                 new RagTraceEventBus.TraceSummary(
-                        resolveTraceStatus(trace),
-                        trace.getDurationMs(),
-                        trace.nodes().size(),
-                        retrievalNodeCount
+                        summary == null ? resolveTraceStatus(trace) : summary.traceStatus(),
+                        summary == null ? trace.getDurationMs() : summary.businessDurationMs(),
+                        summary == null ? trace.nodes().size() : summary.nodeCount(),
+                        summary == null ? 0 : summary.retrievalNodeCount()
                 )
         ));
+    }
+
+    public List<TraceSummary> listRecentSummaries(int limit) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return List.of();
+        }
+        int safeLimit = limit <= 0 ? 20 : Math.min(limit, MAX_TRACE_SCAN_LIMIT);
+        int scanLimit = Math.max(safeLimit, DEFAULT_RECENT_SUMMARY_SCAN_LIMIT);
+        return resolveCompletedTraces(scanLimit).stream()
+                .map(this::buildTraceSummary)
+                .limit(safeLimit)
+                .toList();
+    }
+
+    public List<TraceSummary> listActiveSummaries(int limit) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return List.of();
+        }
+        return listActive(limit).stream()
+                .map(this::buildTraceSummary)
+                .toList();
+    }
+
+    public TraceDetailView getTraceDetailView(String traceId) {
+        RAGTrace trace = getTraceDetail(traceId);
+        if (trace == null) {
+            return null;
+        }
+        return new TraceDetailView(trace, buildTraceSummary(trace));
+    }
+
+    public String getActiveRootNodeId(String traceId) {
+        String safeTraceId = normalizeTraceId(traceId);
+        if (safeTraceId.isBlank()) {
+            return null;
+        }
+        RAGTrace trace = activeTraces.get(safeTraceId);
+        if (trace == null) {
+            return null;
+        }
+        RAGTraceNode rootNode = findRootNode(trace);
+        return rootNode == null ? null : rootNode.nodeId();
     }
 
     /**
@@ -332,9 +671,9 @@ public class RAGObservabilityService {
         if (ragTraceEventBus == null) {
             return;
         }
-        String traceStatus = resolveTraceStatus(trace);
+        TraceSummary summary = buildTraceSummary(trace);
+        String traceStatus = summary == null ? resolveTraceStatus(trace) : summary.traceStatus();
         String eventType = "FAILED".equals(traceStatus) ? "trace_failed" : "trace_finished";
-        int retrievalNodeCount = (int) trace.nodes().stream().filter(item -> "RETRIEVAL".equals(item.nodeType())).count();
         ragTraceEventBus.publish(traceId, new RagTraceEventBus.RagTraceStreamEvent(
                 traceId,
                 eventType,
@@ -342,9 +681,9 @@ public class RAGObservabilityService {
                 null,
                 new RagTraceEventBus.TraceSummary(
                         traceStatus,
-                        trace.getDurationMs(),
-                        trace.nodes().size(),
-                        retrievalNodeCount
+                        summary == null ? trace.getDurationMs() : summary.businessDurationMs(),
+                        summary == null ? trace.nodes().size() : summary.nodeCount(),
+                        summary == null ? 0 : summary.retrievalNodeCount()
                 )
         ));
     }
@@ -371,7 +710,7 @@ public class RAGObservabilityService {
      * @return 归并后的 Trace 列表
      */
     private List<RAGTrace> resolveCompletedTraces(int limit) {
-        int safeLimit = limit <= 0 ? 20 : Math.min(limit, MAX_TRACES);
+        int safeLimit = limit <= 0 ? 20 : Math.min(limit, MAX_TRACE_SCAN_LIMIT);
         Map<String, RAGTrace> merged = new LinkedHashMap<>();
         for (RAGTrace trace : loadRecentFromPersistence(Math.max(safeLimit, 20))) {
             merged.put(trace.traceId(), trace);
@@ -398,7 +737,7 @@ public class RAGObservabilityService {
         try {
             List<RagTraceDO> traceRows = ragTraceMapper.selectList(new LambdaQueryWrapper<RagTraceDO>()
                     .orderByDesc(RagTraceDO::getStartedAt)
-                    .last("LIMIT " + Math.max(1, Math.min(limit, MAX_TRACES))));
+                    .last("LIMIT " + Math.max(1, Math.min(limit, MAX_TRACE_SCAN_LIMIT))));
             if (traceRows == null || traceRows.isEmpty()) {
                 return List.of();
             }
@@ -502,6 +841,8 @@ public class RAGObservabilityService {
      */
     private RagTraceDO toTraceDO(RAGTrace trace) {
         RAGTraceNode rootNode = findRootNode(trace);
+        Instant effectiveStartTime = trace.getEffectiveStartTime();
+        Instant effectiveEndTime = trace.getEffectiveEndTime();
         int retrievalNodeCount = (int) trace.nodes().stream().filter(node -> "RETRIEVAL".equals(node.nodeType())).count();
         int totalRetrievedDocs = trace.nodes().stream()
                 .filter(node -> "RETRIEVAL".equals(node.nodeType()))
@@ -529,8 +870,8 @@ public class RAGObservabilityService {
         traceDO.setTotalRetrievedDocs(totalRetrievedDocs);
         traceDO.setMaxRetrievedDocs(maxRetrievedDocs);
         traceDO.setWebFallbackUsed(webFallbackUsed);
-        traceDO.setStartedAt(toLocalDateTime(trace.startTime()));
-        traceDO.setEndedAt(rootNode == null ? null : toLocalDateTime(rootNode.endTime()));
+        traceDO.setStartedAt(toLocalDateTime(effectiveStartTime));
+        traceDO.setEndedAt(toLocalDateTime(effectiveEndTime));
         traceDO.setDurationMs(trace.getDurationMs());
         return traceDO;
     }
@@ -600,7 +941,58 @@ public class RAGObservabilityService {
                 nodeDO.getOutputSummary(),
                 nodeDO.getErrorSummary(),
                 new NodeMetrics(nodeDO.getRetrievedDocs(), nodeDO.getWebFallbackUsed()),
+                resolveNodeDetails(nodeDO),
                 nodeDO.getNodeStatus()
+        );
+    }
+
+    private NodeDetails resolveNodeDetails(RagTraceNodeDO nodeDO) {
+        if (nodeDO == null) {
+            return null;
+        }
+        String outputSummary = nodeDO.getOutputSummary();
+        String retrievalMode = extractSummaryToken(outputSummary, "mode");
+        Boolean cacheHit = extractBooleanToken(outputSummary, "cacheHit");
+        Integer retrievedDocCount = firstNonNull(
+                extractIntegerToken(outputSummary, "retrievedDocs"),
+                extractIntegerToken(outputSummary, "docCount"),
+                nodeDO.getRetrievedDocs()
+        );
+        List<String> retrievedDocumentRefs = extractDocRefs(outputSummary);
+        Integer imageSearchCount = extractIntegerToken(outputSummary, "imageCount");
+        Integer imageEventCount = extractIntegerToken(outputSummary, "imageEventCount");
+        Integer webSearchCount = extractIntegerToken(outputSummary, "webSearchCount");
+        String fallbackReason = extractSummaryToken(outputSummary, "fallbackReason");
+        Long firstTokenMs = extractLongToken(outputSummary, "firstTokenMs");
+        Long completionMs = extractLongToken(outputSummary, "completionMs");
+        String modelName = extractSummaryToken(outputSummary, "model");
+
+        if (retrievalMode == null
+                && cacheHit == null
+                && retrievedDocCount == null
+                && retrievedDocumentRefs.isEmpty()
+                && imageSearchCount == null
+                && imageEventCount == null
+                && webSearchCount == null
+                && fallbackReason == null
+                && firstTokenMs == null
+                && completionMs == null
+                && modelName == null) {
+            return null;
+        }
+        return new NodeDetails(
+                1,
+                retrievalMode,
+                null,
+                cacheHit,
+                retrievedDocCount,
+                retrievedDocumentRefs,
+                webSearchCount,
+                firstNonNull(imageSearchCount, imageEventCount),
+                fallbackReason,
+                modelName,
+                firstTokenMs,
+                completionMs
         );
     }
 
@@ -636,6 +1028,13 @@ public class RAGObservabilityService {
      * @return 汇总状态
      */
     private String resolveTraceStatus(RAGTrace trace) {
+        return resolveTraceStatus(trace, false);
+    }
+
+    private String resolveTraceStatus(RAGTrace trace, boolean active) {
+        if (active) {
+            return "RUNNING";
+        }
         boolean hasFailure = trace.nodes().stream().anyMatch(node -> "FAILED".equals(node.status()));
         return hasFailure ? "FAILED" : "COMPLETED";
     }
@@ -675,6 +1074,187 @@ public class RAGObservabilityService {
         return traceId == null ? "" : traceId.trim();
     }
 
+    private TraceSummary buildTraceSummary(RAGTrace trace) {
+        if (trace == null) {
+            return null;
+        }
+        List<RAGTraceNode> nodes = trace.nodes();
+        RAGTraceNode rootNode = findRootNode(trace);
+        String traceStatus = resolveTraceStatus(trace, activeTraces.containsKey(trace.traceId()));
+        long businessDurationMs = Math.max(0L, trace.getDurationMs());
+        long connectionDurationMs = rootNode == null ? businessDurationMs : Math.max(0L, rootNode.durationMs());
+        int retrievalNodeCount = (int) nodes.stream()
+                .filter(node -> "RETRIEVAL".equals(node.nodeType()))
+                .count();
+        int retrievedDocCount = nodes.stream()
+                .filter(node -> "RETRIEVAL".equals(node.nodeType()))
+                .mapToInt(this::resolveRetrievedDocs)
+                .sum();
+        int fallbackCount = (int) nodes.stream()
+                .filter(this::isFallbackNode)
+                .count();
+        int failedNodeCount = (int) nodes.stream()
+                .filter(node -> {
+                    String status = node.status();
+                    return "FAILED".equals(status) || "ERROR".equals(status) || "TIMEOUT".equals(status);
+                })
+                .count();
+        Long firstTokenMs = nodes.stream()
+                .map(RAGTraceNode::details)
+                .filter(Objects::nonNull)
+                .map(NodeDetails::firstTokenMs)
+                .filter(Objects::nonNull)
+                .min(Long::compareTo)
+                .orElse(null);
+        Long streamDispatchMs = nodes.stream()
+                .filter(node -> TraceNodeDefinitions.STREAM_DISPATCH.nodeName().equals(node.nodeName()))
+                .map(RAGTraceNode::details)
+                .filter(Objects::nonNull)
+                .map(NodeDetails::completionMs)
+                .filter(Objects::nonNull)
+                .max(Long::compareTo)
+                .orElse(null);
+        List<String> riskTags = buildRiskTags(
+                traceStatus,
+                businessDurationMs,
+                firstTokenMs,
+                retrievedDocCount,
+                fallbackCount
+        );
+        Instant startedAt = trace.getEffectiveStartTime();
+        Instant endedAt = trace.getEffectiveEndTime();
+        return new TraceSummary(
+                trace.traceId(),
+                traceStatus,
+                businessDurationMs,
+                connectionDurationMs,
+                firstTokenMs,
+                streamDispatchMs,
+                retrievedDocCount,
+                retrievedDocCount,
+                fallbackCount,
+                failedNodeCount,
+                businessDurationMs >= SLOW_TRACE_THRESHOLD_MS,
+                riskTags,
+                riskTags.size(),
+                nodes.size(),
+                retrievalNodeCount,
+                startedAt,
+                endedAt
+        );
+    }
+
+    private List<String> buildRiskTags(String traceStatus,
+                                       long businessDurationMs,
+                                       Long firstTokenMs,
+                                       int retrievedDocCount,
+                                       int fallbackCount) {
+        List<String> tags = new ArrayList<>();
+        if (businessDurationMs >= SLOW_TRACE_THRESHOLD_MS) {
+            tags.add("slow_trace");
+        }
+        if (firstTokenMs != null && firstTokenMs >= SLOW_FIRST_TOKEN_THRESHOLD_MS) {
+            tags.add("slow_first_token");
+        }
+        if (fallbackCount > 0) {
+            tags.add("fallback_triggered");
+        }
+        boolean shouldCheckRetrievalEmpty = !"CANCELLED".equals(traceStatus) && !"RUNNING".equals(traceStatus);
+        if (shouldCheckRetrievalEmpty && retrievedDocCount <= 0) {
+            tags.add("retrieval_empty");
+        }
+        return List.copyOf(tags);
+    }
+
+    private boolean isFallbackNode(RAGTraceNode node) {
+        if (node == null) {
+            return false;
+        }
+        String nodeType = node.nodeType();
+        if (nodeType != null && nodeType.toUpperCase(Locale.ROOT).contains("FALLBACK")) {
+            return true;
+        }
+        return node.details() != null
+                && node.details().fallbackReason() != null
+                && !node.details().fallbackReason().isBlank();
+    }
+
+    private Integer extractIntegerToken(String summary, String key) {
+        String token = extractSummaryToken(summary, key);
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(token);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Boolean extractBooleanToken(String summary, String key) {
+        String token = extractSummaryToken(summary, key);
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        return Boolean.parseBoolean(token);
+    }
+
+    private Long extractLongToken(String summary, String key) {
+        String token = extractSummaryToken(summary, key);
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(token);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private String extractSummaryToken(String summary, String key) {
+        if (summary == null || summary.isBlank() || key == null || key.isBlank()) {
+            return null;
+        }
+        Pattern pattern = Pattern.compile(Pattern.quote(key) + "=([^,}\\]]+)");
+        Matcher matcher = pattern.matcher(summary);
+        if (!matcher.find()) {
+            return null;
+        }
+        String value = matcher.group(1);
+        return value == null ? null : value.trim();
+    }
+
+    private List<String> extractDocRefs(String summary) {
+        if (summary == null || summary.isBlank()) {
+            return List.of();
+        }
+        Matcher matcher = Pattern.compile("docRefs=\\[(.*)]\\}?$", Pattern.DOTALL).matcher(summary);
+        if (!matcher.find()) {
+            return List.of();
+        }
+        String body = matcher.group(1);
+        if (body == null || body.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(body.split(",\\s*(?=(?:\\[[a-z]+]|[A-Za-z]:\\\\|[A-Za-z0-9_./-]+\\s*\\|))"))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .toList();
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNull(T... values) {
+        if (values == null) {
+            return null;
+        }
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     /**
      * 将 Instant 转为本地时间，便于写入 DATETIME 字段。
      *
@@ -702,6 +1282,65 @@ public class RAGObservabilityService {
      * @param webFallbackUsed 是否触发 Web fallback
      */
     public record NodeMetrics(Integer retrievedDocs, Boolean webFallbackUsed) {
+    }
+
+    public record TraceSummary(
+            String traceId,
+            String traceStatus,
+            Long businessDurationMs,
+            Long connectionDurationMs,
+            Long firstTokenMs,
+            Long streamDispatchMs,
+            Integer retrievedDocCount,
+            Integer displayedDocCount,
+            Integer fallbackCount,
+            Integer failedNodeCount,
+            Boolean slowTrace,
+            List<String> riskTags,
+            Integer riskCount,
+            Integer nodeCount,
+            Integer retrievalNodeCount,
+            Instant startedAt,
+            Instant endedAt
+    ) {
+    }
+
+    public record TraceDetailView(
+            RAGTrace trace,
+            TraceSummary summary
+    ) {
+    }
+
+    /**
+     * 节点结构化详情，供前端与后续告警/汇总逻辑直接消费。
+     */
+    public record NodeDetails(
+            Integer schemaVersion,
+            String retrievalMode,
+            String intentRoute,
+            Boolean cacheHit,
+            Integer retrievedDocCount,
+            List<String> retrievedDocumentRefs,
+            Integer webSearchCount,
+            Integer imageSearchCount,
+            String fallbackReason,
+            String modelName,
+            Long firstTokenMs,
+            Long completionMs
+    ) {
+        public NodeDetails {
+            schemaVersion = schemaVersion == null || schemaVersion <= 0 ? 1 : schemaVersion;
+            retrievalMode = retrievalMode == null || retrievalMode.isBlank() ? null : retrievalMode.trim();
+            intentRoute = intentRoute == null || intentRoute.isBlank() ? null : intentRoute.trim();
+            retrievedDocCount = retrievedDocCount == null ? null : Math.max(0, retrievedDocCount);
+            retrievedDocumentRefs = retrievedDocumentRefs == null ? List.of() : List.copyOf(retrievedDocumentRefs);
+            webSearchCount = webSearchCount == null ? null : Math.max(0, webSearchCount);
+            imageSearchCount = imageSearchCount == null ? null : Math.max(0, imageSearchCount);
+            fallbackReason = fallbackReason == null || fallbackReason.isBlank() ? null : fallbackReason.trim();
+            modelName = modelName == null || modelName.isBlank() ? null : modelName.trim();
+            firstTokenMs = firstTokenMs == null ? null : Math.max(0L, firstTokenMs);
+            completionMs = completionMs == null ? null : Math.max(0L, completionMs);
+        }
     }
 
     /**
@@ -748,11 +1387,56 @@ public class RAGObservabilityService {
             if (nodes.isEmpty()) {
                 return 0L;
             }
+            Instant effectiveStart = getEffectiveStartTime();
+            Instant effectiveEnd = getEffectiveEndTime();
+            if (effectiveStart == null || effectiveEnd == null) {
+                return 0L;
+            }
+            return java.time.Duration.between(effectiveStart, effectiveEnd).toMillis();
+        }
+
+        public Instant getEffectiveStartTime() {
+            if (nodes.isEmpty()) {
+                return null;
+            }
+            List<RAGTraceNode> businessNodes = businessNodes();
+            return businessNodes.isEmpty()
+                    ? rootOrFirstNode().startTime()
+                    : businessNodes.stream()
+                    .map(RAGTraceNode::startTime)
+                    .filter(Objects::nonNull)
+                    .min(Instant::compareTo)
+                    .orElse(rootOrFirstNode().startTime());
+        }
+
+        public Instant getEffectiveEndTime() {
+            if (nodes.isEmpty()) {
+                return null;
+            }
+            List<RAGTraceNode> businessNodes = businessNodes();
+            if (businessNodes.isEmpty()) {
+                return rootOrFirstNode().endTime();
+            }
+            return businessNodes.stream()
+                    .map(RAGTraceNode::endTime)
+                    .filter(Objects::nonNull)
+                    .max(Instant::compareTo)
+                    .orElse(rootOrFirstNode().endTime());
+        }
+
+        private List<RAGTraceNode> businessNodes() {
+            return nodes.stream()
+                    .filter(node -> node.parentNodeId() != null && !node.parentNodeId().isBlank())
+                    .filter(node -> !"TERMINAL".equals(node.nodeType()))
+                    .filter(node -> !"ERROR".equals(node.nodeName()))
+                    .toList();
+        }
+
+        private RAGTraceNode rootOrFirstNode() {
             return nodes.stream()
                     .filter(node -> node.parentNodeId() == null || node.parentNodeId().isBlank())
                     .findFirst()
-                    .orElse(nodes.get(0))
-                    .durationMs();
+                    .orElse(nodes.get(0));
         }
     }
 
@@ -770,6 +1454,7 @@ public class RAGObservabilityService {
         private String outputSummary;
         private String errorSummary;
         private NodeMetrics metrics;
+        private NodeDetails details;
         private String status = "RUNNING";
 
         /**
@@ -816,6 +1501,7 @@ public class RAGObservabilityService {
                 String outputSummary,
                 String errorSummary,
                 NodeMetrics metrics,
+                NodeDetails details,
                 String status
         ) {
             RAGTraceNode node = new RAGTraceNode(
@@ -830,10 +1516,40 @@ public class RAGObservabilityService {
             node.outputSummary = outputSummary;
             node.errorSummary = errorSummary;
             node.metrics = metrics;
+            node.details = details;
             node.status = status == null || status.isBlank()
                     ? ((errorSummary == null || errorSummary.isBlank()) ? "COMPLETED" : "FAILED")
                     : status;
             return node;
+        }
+
+        public static RAGTraceNode restore(
+                String nodeId,
+                String parentNodeId,
+                String nodeType,
+                String nodeName,
+                Instant startTime,
+                Instant endTime,
+                String inputSummary,
+                String outputSummary,
+                String errorSummary,
+                NodeMetrics metrics,
+                String status
+        ) {
+            return restore(
+                    nodeId,
+                    parentNodeId,
+                    nodeType,
+                    nodeName,
+                    startTime,
+                    endTime,
+                    inputSummary,
+                    outputSummary,
+                    errorSummary,
+                    metrics,
+                    null,
+                    status
+            );
         }
 
         /**
@@ -845,12 +1561,18 @@ public class RAGObservabilityService {
          * @param errorSummary 错误摘要
          * @param metrics 结构化指标
          */
-        public void complete(Instant endTime, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
+        public void complete(Instant endTime,
+                             String inputSummary,
+                             String outputSummary,
+                             String errorSummary,
+                             NodeMetrics metrics,
+                             NodeDetails details) {
             this.endTime = endTime;
             this.inputSummary = inputSummary;
             this.outputSummary = outputSummary;
             this.errorSummary = errorSummary;
             this.metrics = metrics;
+            this.details = details;
             this.status = (errorSummary == null || errorSummary.isBlank()) ? "COMPLETED" : "FAILED";
         }
 
@@ -978,6 +1700,17 @@ public class RAGObservabilityService {
          */
         public NodeMetrics getMetrics() {
             return metrics;
+        }
+
+        public NodeDetails details() {
+            return details;
+        }
+
+        /**
+         * @return 节点结构化详情
+         */
+        public NodeDetails getDetails() {
+            return details;
         }
 
         public String status() {
