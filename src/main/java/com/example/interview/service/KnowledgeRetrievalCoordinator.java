@@ -19,7 +19,7 @@ import java.util.Objects;
 /**
  * 统一知识检索协调器。
  *
- * <p>RAG_ONLY 直接走 RAG；LOCAL_GRAPH_* 走本地知识图；HYBRID_FUSION 会融合本地知识图与 RAG 结果。</p>
+ * <p>RAG_ONLY 直接走 RAG；LOCAL_GRAPH_ONLY 走本地知识图；HYBRID_FUSION 会融合本地知识图与 RAG 结果。</p>
  */
 @Service
 public class KnowledgeRetrievalCoordinator {

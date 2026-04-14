@@ -33,9 +33,9 @@ class KnowledgeRetrievalCoordinatorTest {
     }
 
     @Test
-    void shouldTemporarilyDowngradeUnimplementedModeToRagOnly() {
+    void shouldThrowWhenLocalGraphOnlyFails() {
         KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
-        properties.setDefaultMode(KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST);
+        properties.setDefaultMode(KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY);
         FakeRagKnowledgeService ragKnowledgeService = new FakeRagKnowledgeService();
         KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
                 properties,
@@ -44,29 +44,10 @@ class KnowledgeRetrievalCoordinatorTest {
                 new RAGObservabilityService(new ObservabilitySwitchProperties())
         );
 
-        KnowledgeContextPacket packet = coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST);
-
-        assertEquals(KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST, packet.retrievalModeRequested());
-        assertEquals(KnowledgeRetrievalMode.RAG_ONLY, packet.retrievalModeResolved());
-        assertEquals(LocalGraphFailureReason.LOCAL_RETRIEVAL_NOT_IMPLEMENTED.name(), packet.fallbackReason());
-    }
-
-    @Test
-    void shouldThrowWhenLocalGraphOnlyAndIndexIsNotConfigured() {
-        KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
-        properties.setDefaultMode(KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY);
-        FakeRagKnowledgeService ragKnowledgeService = new FakeRagKnowledgeService();
-        KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
-                properties,
-                ragKnowledgeService,
-                new FakeLocalGraphKnowledgeService(true, LocalGraphFailureReason.INDEX_NOT_CONFIGURED),
-                new RAGObservabilityService(new ObservabilitySwitchProperties())
-        );
-
         try {
             coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY);
         } catch (LocalGraphRetrievalException e) {
-            assertEquals(LocalGraphFailureReason.INDEX_NOT_CONFIGURED, e.getFailureReason());
+            assertEquals(LocalGraphFailureReason.LOCAL_RETRIEVAL_NOT_IMPLEMENTED, e.getFailureReason());
             return;
         }
         throw new AssertionError("Expected LocalGraphRetrievalException");
@@ -75,7 +56,7 @@ class KnowledgeRetrievalCoordinatorTest {
     @Test
     void shouldTraceLocalGraphRetrievalWithRetrievedDocCount() {
         KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
-        properties.setDefaultMode(KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST);
+        properties.setDefaultMode(KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY);
         properties.setRetrievalCacheEnabled(false);
         ObservabilitySwitchProperties observabilityProperties = new ObservabilitySwitchProperties();
         observabilityProperties.setRagTraceEnabled(true);
@@ -89,7 +70,7 @@ class KnowledgeRetrievalCoordinatorTest {
 
         RAGTraceContext.setTraceId("trace-local-graph");
         try {
-            coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST);
+            coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY);
             RAGObservabilityService.RAGTrace trace = observabilityService.getTraceDetail("trace-local-graph");
             assertNotNull(trace);
             RAGObservabilityService.RAGTraceNode node = trace.nodes().stream()
@@ -100,7 +81,7 @@ class KnowledgeRetrievalCoordinatorTest {
             assertEquals("LOCAL_GRAPH_RETRIEVE", node.nodeName());
             assertEquals(3, node.metrics().retrievedDocs());
             assertNotNull(node.details());
-            assertEquals(KnowledgeRetrievalMode.LOCAL_GRAPH_FIRST.name(), node.details().retrievalMode());
+            assertEquals(KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY.name(), node.details().retrievalMode());
             assertEquals(2, node.details().retrievedDocumentRefs().size());
         } finally {
             RAGTraceContext.clear();

@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
 /**
  * 统一知识检索配置。
  *
- * <p>第一阶段默认保持 RAG_ONLY，以保证引入协调器后系统行为不变。
- * 等本地知识图链路稳定后，再将默认值切换到 LOCAL_GRAPH_FIRST。</p>
+ * <p>默认保持 RAG_ONLY，避免配置升级时意外放大检索成本。
+ * 如需更强召回，可显式切换到 HYBRID_FUSION。</p>
  */
 @Component
 @ConfigurationProperties(prefix = "app.knowledge.retrieval")

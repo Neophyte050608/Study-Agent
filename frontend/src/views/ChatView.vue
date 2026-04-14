@@ -292,7 +292,6 @@
               <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span class="font-semibold">检索模式</span>
                 <select v-model="selectedRetrievalMode" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-                  <option value="LOCAL_GRAPH_FIRST">LOCAL_GRAPH_FIRST</option>
                   <option value="RAG_ONLY">RAG_ONLY</option>
                   <option value="LOCAL_GRAPH_ONLY">LOCAL_GRAPH_ONLY</option>
                   <option value="HYBRID_FUSION">HYBRID_FUSION</option>
@@ -379,7 +378,7 @@ const props = defineProps({
 })
 
 const RETRIEVAL_MODE_STORAGE_KEY = 'chat.selectedRetrievalMode'
-const RETRIEVAL_MODE_OPTIONS = ['LOCAL_GRAPH_FIRST', 'RAG_ONLY', 'LOCAL_GRAPH_ONLY', 'HYBRID_FUSION']
+const RETRIEVAL_MODE_OPTIONS = ['RAG_ONLY', 'LOCAL_GRAPH_ONLY', 'HYBRID_FUSION']
 
 const sessions = ref([])
 const currentSessionId = ref(null)
@@ -397,7 +396,7 @@ const currentQuizPayload = ref(null)
 const streamTaskId = ref(null)
 const streamHandle = ref(null)
 const messagesContainer = ref(null)
-const selectedRetrievalMode = ref('LOCAL_GRAPH_FIRST')
+const selectedRetrievalMode = ref('RAG_ONLY')
 const acSuggestions = ref([])
 const acVisible = ref(false)
 const acHighlightIndex = ref(-1)
@@ -610,7 +609,7 @@ const showError = (msg) => {
 }
 
 const normalizeRetrievalMode = (value) => {
-  return RETRIEVAL_MODE_OPTIONS.includes(value) ? value : 'LOCAL_GRAPH_FIRST'
+  return RETRIEVAL_MODE_OPTIONS.includes(value) ? value : 'RAG_ONLY'
 }
 
 // Load sessions on mount
