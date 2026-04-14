@@ -12,6 +12,7 @@ public final class TraceNodeDefinitions {
     public static final TraceNodeDefinition DOC_RETRIEVE = new TraceNodeDefinition("RETRIEVAL", "DOC_RETRIEVE");
     public static final TraceNodeDefinition RETRIEVAL_CACHE_HIT = new TraceNodeDefinition("RETRIEVAL", "RETRIEVAL_CACHE_HIT");
     public static final TraceNodeDefinition LOCAL_GRAPH_RETRIEVE = new TraceNodeDefinition("RETRIEVAL", "LOCAL_GRAPH_RETRIEVE");
+    public static final TraceNodeDefinition HYBRID_FUSION_RETRIEVE = new TraceNodeDefinition("RETRIEVAL", "HYBRID_FUSION_RETRIEVE");
     public static final TraceNodeDefinition IMAGE_ASSOC_RETRIEVE = new TraceNodeDefinition("RETRIEVAL", "IMAGE_ASSOC_RETRIEVE");
     public static final TraceNodeDefinition IMAGE_SEMANTIC_RETRIEVE = new TraceNodeDefinition("RETRIEVAL", "IMAGE_SEMANTIC_RETRIEVE");
     public static final TraceNodeDefinition WEB_FALLBACK = new TraceNodeDefinition("RETRIEVAL", "WEB_FALLBACK");

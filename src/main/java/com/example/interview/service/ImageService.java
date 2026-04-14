@@ -251,6 +251,114 @@ public class ImageService {
                 .toList();
     }
 
+    public List<ImageResult> findImagesForNotePaths(Map<String, Double> notePathWeights, String query, String vaultRoot) {
+        if (notePathWeights == null || notePathWeights.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        Path vaultRootPath = safePath(vaultRoot);
+        Map<String, Double> normalizedWeights = new LinkedHashMap<>();
+        for (Map.Entry<String, Double> entry : notePathWeights.entrySet()) {
+            String notePath = entry.getKey();
+            if (notePath == null || notePath.isBlank()) {
+                continue;
+            }
+            String normalized = notePath.replace("\\", "/").trim();
+            if (normalized.isBlank()) {
+                continue;
+            }
+            candidates.add(normalized);
+            normalizedWeights.merge(normalized, clampScore(entry.getValue()), Math::max);
+            if (vaultRootPath != null) {
+                try {
+                    String absolute = vaultRootPath.resolve(normalized).normalize().toString();
+                    candidates.add(absolute);
+                    normalizedWeights.merge(absolute, clampScore(entry.getValue()), Math::max);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+
+        List<RagParentDO> parents = ragParentMapper.selectList(
+                new LambdaQueryWrapper<RagParentDO>().in(RagParentDO::getFilePath, candidates)
+        );
+        if (parents.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, Double> semanticScoreMap = loadSemanticImageScores(query);
+        List<String> imageIds = parents.stream()
+                .map(RagParentDO::getImageRefs)
+                .filter(Objects::nonNull)
+                .flatMap(Collection::stream)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .distinct()
+                .toList();
+        if (imageIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, ImageMetadataDO> imageMap = getImagesByIds(imageIds).stream()
+                .collect(Collectors.toMap(
+                        ImageMetadataDO::getImageId,
+                        image -> image,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+
+        Map<String, ImageResult> deduplicated = new LinkedHashMap<>();
+        for (RagParentDO parent : parents) {
+            if (parent == null || parent.getImageRefs() == null || parent.getImageRefs().isEmpty()) {
+                continue;
+            }
+            double noteWeight = normalizedWeights.getOrDefault(parent.getFilePath(), 0.0d);
+            for (String imageId : parent.getImageRefs()) {
+                if (imageId == null || imageId.isBlank()) {
+                    continue;
+                }
+                ImageMetadataDO image = imageMap.get(imageId);
+                if (image == null) {
+                    continue;
+                }
+                double semanticScore = semanticScoreMap.getOrDefault(imageId, 0.0d);
+                double score = noteWeight * 0.65d + semanticScore * 0.35d;
+                if (semanticScore <= 0.0d && noteWeight < 0.95d) {
+                    score *= 0.7d;
+                }
+                if (score < associatedImageMinScore) {
+                    continue;
+                }
+                final double finalScore = score;
+                final String retrieveChannel = semanticScore > 0.0d ? "local_graph_semantic" : "local_graph_associated";
+                deduplicated.compute(image.getImageId(), (key, existing) -> {
+                    ImageResult candidate = new ImageResult(
+                            image.getImageId(),
+                            image.getImageName(),
+                            "/api/images/" + image.getImageId() + "/file",
+                            "/api/images/" + image.getImageId() + "/thumbnail?maxWidth=400",
+                            image.getSummaryText(),
+                            null,
+                            finalScore,
+                            retrieveChannel
+                    );
+                    if (existing == null || candidate.relevanceScore() > existing.relevanceScore()) {
+                        return candidate;
+                    }
+                    return existing;
+                });
+            }
+        }
+        return deduplicated.values().stream()
+                .sorted(Comparator.comparingDouble(ImageResult::relevanceScore).reversed())
+                .limit(imageSearchTopK)
+                .toList();
+    }
+
     public Map<String, Object> getStatusSummary() {
         long pending = countByStatus("PENDING");
         long processing = countByStatus("PROCESSING");
@@ -587,6 +695,42 @@ public class ImageService {
         return imageMetadataMapper.selectCount(
                 new LambdaQueryWrapper<ImageMetadataDO>().eq(ImageMetadataDO::getSummaryStatus, status)
         );
+    }
+
+    private Map<String, Double> loadSemanticImageScores(String query) {
+        if (query == null || query.isBlank()) {
+            return Map.of();
+        }
+        List<ImageIndexService.ImageHit> hits = imageIndexService.search(query, Math.max(imageSearchTopK * 3, 6), true);
+        if (hits.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Double> scores = new LinkedHashMap<>();
+        for (ImageIndexService.ImageHit hit : hits) {
+            if (hit == null || hit.imageId() == null || hit.imageId().isBlank()) {
+                continue;
+            }
+            scores.merge(hit.imageId(), clampScore(hit.score()), Math::max);
+        }
+        return scores;
+    }
+
+    private double clampScore(Double score) {
+        if (score == null || score.isNaN() || score.isInfinite()) {
+            return 0.0d;
+        }
+        return Math.max(0.0d, Math.min(1.0d, score));
+    }
+
+    private Path safePath(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(raw).toAbsolutePath().normalize();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     public record ImageResult(

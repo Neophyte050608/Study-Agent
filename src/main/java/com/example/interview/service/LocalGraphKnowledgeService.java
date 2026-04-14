@@ -4,6 +4,7 @@ import com.example.interview.config.KnowledgeRetrievalProperties;
 import com.example.interview.core.RAGTraceContext;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -24,19 +25,22 @@ public class LocalGraphKnowledgeService {
     private final OllamaRoutingService ollamaRoutingService;
     private final NoteGraphResolver noteGraphResolver;
     private final RAGObservabilityService ragObservabilityService;
+    private final ImageService imageService;
 
     public LocalGraphKnowledgeService(KnowledgeRetrievalProperties properties,
                                       KnowledgeMapService knowledgeMapService,
                                       LocalCandidateRecallService localCandidateRecallService,
                                       OllamaRoutingService ollamaRoutingService,
                                       NoteGraphResolver noteGraphResolver,
-                                      RAGObservabilityService ragObservabilityService) {
+                                      RAGObservabilityService ragObservabilityService,
+                                      ImageService imageService) {
         this.properties = properties;
         this.knowledgeMapService = knowledgeMapService;
         this.localCandidateRecallService = localCandidateRecallService;
         this.ollamaRoutingService = ollamaRoutingService;
         this.noteGraphResolver = noteGraphResolver;
         this.ragObservabilityService = ragObservabilityService;
+        this.imageService = imageService;
     }
 
     public KnowledgeContextPacket retrieve(String question, KnowledgeRetrievalMode requestedMode) {
@@ -83,6 +87,7 @@ public class LocalGraphKnowledgeService {
                 "Local note context is too thin"
             );
         }
+        List<ImageService.ImageResult> retrievedImages = findAssociatedImages(question, graphContext, snapshot.vaultRoot());
 
         return new KnowledgeContextPacket(
                 requestedMode,
@@ -92,9 +97,9 @@ public class LocalGraphKnowledgeService {
                 "",
                 question,
                 context,
-                "",
+                buildImageContext(retrievedImages),
                 buildEvidence(graphContext),
-                List.of(),
+                retrievedImages,
                 false,
                 countRetrievedNotes(graphContext),
                 summarizeResolvedNotes(graphContext)
@@ -245,5 +250,51 @@ public class LocalGraphKnowledgeService {
             }
             refs.add(ref);
         }
+    }
+
+    private List<ImageService.ImageResult> findAssociatedImages(String question,
+                                                                NoteGraphResolver.NoteGraphContext graphContext,
+                                                                String vaultRoot) {
+        if (imageService == null || graphContext == null) {
+            return List.of();
+        }
+        LinkedHashMap<String, Double> notePathWeights = new LinkedHashMap<>();
+        appendNotePaths(notePathWeights, graphContext.primaryNotes(), 1.0d);
+        appendNotePaths(notePathWeights, graphContext.linkedNotes(), 0.82d);
+        appendNotePaths(notePathWeights, graphContext.backlinkNotes(), 0.68d);
+        appendNotePaths(notePathWeights, graphContext.tagNeighborNotes(), 0.55d);
+        return imageService.findImagesForNotePaths(notePathWeights, question, vaultRoot);
+    }
+
+    private void appendNotePaths(java.util.Map<String, Double> notePaths,
+                                 List<NoteGraphResolver.ResolvedNoteSlice> slices,
+                                 double weight) {
+        if (slices == null || slices.isEmpty()) {
+            return;
+        }
+        for (NoteGraphResolver.ResolvedNoteSlice slice : slices) {
+            if (slice == null || slice.note() == null || slice.note().node() == null) {
+                continue;
+            }
+            String filePath = slice.note().node().filePath();
+            if (filePath != null && !filePath.isBlank()) {
+                notePaths.merge(filePath, weight, Math::max);
+            }
+        }
+    }
+
+    private String buildImageContext(List<ImageService.ImageResult> retrievedImages) {
+        if (retrievedImages == null || retrievedImages.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (ImageService.ImageResult image : retrievedImages) {
+            builder.append("[图").append(index++).append("] ")
+                    .append(image.summaryText() == null ? image.imageName() : image.summaryText())
+                    .append(" - 来源: ").append(image.imageName())
+                    .append("\n");
+        }
+        return builder.toString().trim();
     }
 }

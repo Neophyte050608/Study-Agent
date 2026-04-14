@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class KnowledgeRetrievalCoordinatorTest {
@@ -106,6 +108,49 @@ class KnowledgeRetrievalCoordinatorTest {
     }
 
     @Test
+    void shouldKeepLocalGraphImagesWhenHybridFusionSucceeds() {
+        KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
+        properties.setDefaultMode(KnowledgeRetrievalMode.HYBRID_FUSION);
+        KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
+                properties,
+                new FakeRagKnowledgeService(),
+                new FakeLocalGraphKnowledgeService(),
+                new RAGObservabilityService(new ObservabilitySwitchProperties())
+        );
+
+        KnowledgeContextPacket packet = coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.HYBRID_FUSION);
+
+        assertEquals(KnowledgeRetrievalMode.HYBRID_FUSION, packet.retrievalModeResolved());
+        assertTrue(packet.localGraphUsed());
+        assertTrue(packet.ragUsed());
+        assertTrue(packet.context().contains("[本地知识图]"));
+        assertTrue(packet.context().contains("[RAG检索]"));
+        assertTrue(packet.retrievalEvidence().contains("[local_graph:Redis/AOF]"));
+        assertTrue(packet.retrievalEvidence().contains("[obsidian:redis.md]"));
+        assertEquals(2, packet.retrievedImages().size());
+        assertFalse(packet.retrievedImages().isEmpty());
+    }
+
+    @Test
+    void shouldFallbackToRagOnlyWhenHybridFusionLocalGraphFails() {
+        KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
+        properties.setDefaultMode(KnowledgeRetrievalMode.HYBRID_FUSION);
+        KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
+                properties,
+                new FakeRagKnowledgeService(),
+                new FakeLocalGraphKnowledgeService(true, LocalGraphFailureReason.ROUTING_EMPTY),
+                new RAGObservabilityService(new ObservabilitySwitchProperties())
+        );
+
+        KnowledgeContextPacket packet = coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.HYBRID_FUSION);
+
+        assertEquals(KnowledgeRetrievalMode.RAG_ONLY, packet.retrievalModeResolved());
+        assertEquals(LocalGraphFailureReason.ROUTING_EMPTY.name(), packet.fallbackReason());
+        assertTrue(packet.ragUsed());
+        assertFalse(packet.localGraphUsed());
+    }
+
+    @Test
     void shouldTraceCacheHitWithRetrievedDocCount() {
         KnowledgeRetrievalProperties properties = new KnowledgeRetrievalProperties();
         properties.setDefaultMode(KnowledgeRetrievalMode.RAG_ONLY);
@@ -166,11 +211,20 @@ class KnowledgeRetrievalCoordinatorTest {
                     false,
                     true,
                     fallbackReason,
-                    question,
-                    "context",
-                    "",
-                    "evidence",
-                    List.of(),
+                    "redis 持久化 why fast",
+                    "rag context",
+                    "[图1] Redis 架构图 - 来源: redis-arch.png",
+                    "1. [obsidian:redis.md] Redis缓存\n2. [obsidian:java.md] Java集合",
+                    List.of(new ImageService.ImageResult(
+                            "img-2",
+                            "redis-arch.png",
+                            "/api/images/img-2/file",
+                            "/api/images/img-2/thumbnail?maxWidth=400",
+                            "Redis 架构图",
+                            null,
+                            0.91d,
+                            "text_associated"
+                    )),
                     false,
                     5,
                     List.of("redis.md | Redis缓存", "java.md | Java集合")
@@ -194,7 +248,8 @@ class KnowledgeRetrievalCoordinatorTest {
                     null,
                     null,
                     null,
-                    new RAGObservabilityService(new ObservabilitySwitchProperties())
+                    new RAGObservabilityService(new ObservabilitySwitchProperties()),
+                    null
             );
             this.alwaysFail = alwaysFail;
             this.failureReason = failureReason;
@@ -213,9 +268,18 @@ class KnowledgeRetrievalCoordinatorTest {
                     "",
                     question,
                     "local context",
-                    "",
-                    "local evidence",
-                    List.of(),
+                    "[图1] Redis 持久化流程图 - 来源: redis.png",
+                    "1. [local_graph:Redis/AOF] Redis AOF\n2. [local_graph_backlink:Redis/RDB] Redis RDB",
+                    List.of(new ImageService.ImageResult(
+                            "img-1",
+                            "redis.png",
+                            "/api/images/img-1/file",
+                            "/api/images/img-1/thumbnail?maxWidth=400",
+                            "Redis 持久化流程图",
+                            null,
+                            0.88d,
+                            "local_graph_associated"
+                    )),
                     false,
                     3,
                     List.of("[primary] Redis/AOF", "[backlink] Redis/RDB")
