@@ -54,6 +54,9 @@ public class ModelSelector {
         if (routeType == ModelRouteType.THINKING) {
             return properties.getDeepThinkingModel();
         }
+        if (routeType == ModelRouteType.RETRIEVAL) {
+            return properties.getRetrievalModel();
+        }
         return properties.getDefaultModel();
     }
 

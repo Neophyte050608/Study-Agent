@@ -180,6 +180,7 @@ app:
     default-model: ${APP_MODEL_ROUTING_DEFAULT_MODEL:deepseek-chat}
     deep-thinking-model: ${APP_MODEL_ROUTING_DEEP_THINKING_MODEL:deepseek-reasoner}
     intent-model: ${APP_MODEL_ROUTING_INTENT_MODEL:ollama-intent}
+    retrieval-model: ${APP_MODEL_ROUTING_RETRIEVAL_MODEL:}
     candidates:
       - name: deepseek-chat
         provider: openai

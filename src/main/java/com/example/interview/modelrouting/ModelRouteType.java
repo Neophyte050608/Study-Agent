@@ -13,5 +13,10 @@ public enum ModelRouteType {
     /**
      * 深度推理型任务（如代码评估、复杂面试打分等），优先使用带有 CoT (Chain of Thought) 能力的 deepThinkingModel。
      */
-    THINKING
+    THINKING,
+
+    /**
+     * 召回路由任务（如本地知识候选筛选），优先使用 retrievalModel。
+     */
+    RETRIEVAL
 }

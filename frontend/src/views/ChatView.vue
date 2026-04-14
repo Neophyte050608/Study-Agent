@@ -242,6 +242,35 @@
                         via: {{ formatRouteLabel(msg.routeSource) }}
                       </span>
                     </div>
+                    <div class="mt-3 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <button
+                        class="inline-flex items-center gap-1 px-2 py-1 rounded-md border transition-colors"
+                        :class="getReaction(msg, idx) === 'like'
+                          ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:bg-emerald-950/30'
+                          : 'border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-700/60'"
+                        @click="toggleReaction(msg, idx, 'like')"
+                      >
+                        <span class="material-symbols-outlined text-[15px]" :style="getReaction(msg, idx) === 'like' ? `font-variation-settings: 'FILL' 1` : ''">thumb_up</span>
+                        点赞
+                      </button>
+                      <button
+                        class="inline-flex items-center gap-1 px-2 py-1 rounded-md border transition-colors"
+                        :class="getReaction(msg, idx) === 'dislike'
+                          ? 'border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:bg-rose-950/30'
+                          : 'border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-700/60'"
+                        @click="toggleReaction(msg, idx, 'dislike')"
+                      >
+                        <span class="material-symbols-outlined text-[15px]" :style="getReaction(msg, idx) === 'dislike' ? `font-variation-settings: 'FILL' 1` : ''">thumb_down</span>
+                        点踩
+                      </button>
+                      <button
+                        class="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-700/60 transition-colors"
+                        @click="copyMessage(msg, idx)"
+                      >
+                        <span class="material-symbols-outlined text-[15px]">{{ copiedState[getMessageActionKey(msg, idx)] ? 'check' : 'content_copy' }}</span>
+                        {{ copiedState[getMessageActionKey(msg, idx)] ? '已复制' : '复制' }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -400,6 +429,8 @@ const selectedRetrievalMode = ref('RAG_ONLY')
 const acSuggestions = ref([])
 const acVisible = ref(false)
 const acHighlightIndex = ref(-1)
+const reactionState = ref({})
+const copiedState = ref({})
 let acDebounceTimer = null
 let acAbortController = null
 let acSuppressEnterOnce = false
@@ -729,6 +760,54 @@ const formatRouteLabel = (label) => {
   const normalized = typeof label === 'string' ? label.trim() : ''
   if (!normalized) return 'unknown'
   return normalized.replaceAll('-', ' ')
+}
+
+const getMessageActionKey = (msg, idx) => {
+  if (msg?.messageId) return String(msg.messageId)
+  if (msg?.id) return String(msg.id)
+  return `msg-${idx}`
+}
+
+const getReaction = (msg, idx) => {
+  return reactionState.value[getMessageActionKey(msg, idx)] || ''
+}
+
+const toggleReaction = (msg, idx, reaction) => {
+  const key = getMessageActionKey(msg, idx)
+  const prev = reactionState.value[key] || ''
+  reactionState.value[key] = prev === reaction ? '' : reaction
+}
+
+const copyMessage = async (msg, idx) => {
+  const text = typeof msg?.content === 'string' ? msg.content : ''
+  if (!text.trim()) {
+    showError('当前消息没有可复制文本')
+    return
+  }
+
+  const key = getMessageActionKey(msg, idx)
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    copiedState.value[key] = true
+    setTimeout(() => {
+      copiedState.value[key] = false
+    }, 1500)
+  } catch (err) {
+    console.error('Copy message failed', err)
+    showError('复制失败')
+  }
 }
 
 const handleSendFromEmpty = async () => {

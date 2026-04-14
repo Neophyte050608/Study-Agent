@@ -579,7 +579,7 @@ CREATE TABLE IF NOT EXISTS `t_model_candidate` (
     `is_primary`        TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否主模型 (控制主动健康监控)',
     `supports_thinking` TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否支持深度推理',
     `enabled`           TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '是否启用',
-    `route_type`        VARCHAR(16)  NOT NULL DEFAULT 'GENERAL' COMMENT 'GENERAL / THINKING / ALL',
+    `route_type`        VARCHAR(16)  NOT NULL DEFAULT 'GENERAL' COMMENT 'GENERAL / THINKING / RETRIEVAL / ALL',
     `deleted`           TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     `created_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

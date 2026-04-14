@@ -14,6 +14,7 @@ public class ModelRoutingProperties {
     private String defaultModel = "";
     private String deepThinkingModel = "";
     private String intentModel = "";
+    private String retrievalModel = "";
     private List<Candidate> candidates = new ArrayList<>();
     private CircuitBreaker circuitBreaker = new CircuitBreaker();
     private Stream stream = new Stream();
@@ -48,6 +49,14 @@ public class ModelRoutingProperties {
 
     public void setIntentModel(String intentModel) {
         this.intentModel = intentModel;
+    }
+
+    public String getRetrievalModel() {
+        return retrievalModel;
+    }
+
+    public void setRetrievalModel(String retrievalModel) {
+        this.retrievalModel = retrievalModel;
     }
 
     public List<Candidate> getCandidates() {

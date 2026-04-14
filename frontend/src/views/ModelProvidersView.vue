@@ -25,7 +25,7 @@
       :class="sidebarCollapsed ? 'ml-20' : 'ml-64'"
     >
       <div class="max-w-7xl mx-auto space-y-6">
-        <section class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <section class="grid grid-cols-1 xl:grid-cols-5 gap-4">
           <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-5">
             <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">候选模型数</p>
             <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100">{{ candidates.length }}</p>
@@ -40,6 +40,11 @@
             <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">深度推理模型</p>
             <p class="mt-3 text-lg font-bold text-slate-900 dark:text-slate-100 break-all">{{ stats?.deepThinkingModel || '-' }}</p>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">用于 THINKING 路由的首选模型</p>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-5">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">召回模型</p>
+            <p class="mt-3 text-lg font-bold text-slate-900 dark:text-slate-100 break-all">{{ stats?.retrievalModel || '-' }}</p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">用于 RETRIEVAL 路由的首选模型</p>
           </div>
           <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-5">
             <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">回退次数</p>
@@ -300,6 +305,7 @@
             <select v-model="form.routeType" :class="inputClass" class="w-full border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none">
               <option value="GENERAL">GENERAL</option>
               <option value="THINKING">THINKING</option>
+              <option value="RETRIEVAL">RETRIEVAL</option>
               <option value="ALL">ALL</option>
             </select>
           </div>
@@ -685,6 +691,7 @@ const getCircuitBadgeClass = (name) => {
 
 const getRouteTypeClass = (routeType) => {
   if (routeType === 'THINKING') return 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+  if (routeType === 'RETRIEVAL') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
   if (routeType === 'ALL') return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
   return 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
 }

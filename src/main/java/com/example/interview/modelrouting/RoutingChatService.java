@@ -89,6 +89,28 @@ public class RoutingChatService {
         return call(prompt, routeType, null, stage);
     }
 
+    public String callWithoutFallback(String prompt, ModelRouteType routeType, String stage) {
+        return callWithoutFallback(prompt, routeType, null, stage);
+    }
+
+    public String callWithoutFallback(String prompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
+        return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
+                () -> {
+                    throw new ModelRoutingException("模型路由不可用: routeType=" + routeType + ", stage=" + stage);
+                },
+                candidate -> {
+                    ChatModel chatModel = resolveChatModel(candidate);
+                    RoutingResult result = callWithModelMetadata(chatModel, null, prompt);
+                    logger.info("模型路由命中(无兜底): stage={}, candidate={}, provider={}, state={}, costMs={}",
+                            stage,
+                            candidate.name(),
+                            candidate.provider(),
+                            modelHealthStore.stateOf(candidate.name()),
+                            result.costMs());
+                    return result.content();
+                });
+    }
+
     public String call(String prompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
         return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
                 () -> callWithModel(fallbackChatModel, prompt),

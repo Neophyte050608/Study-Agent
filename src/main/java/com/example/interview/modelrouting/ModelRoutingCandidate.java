@@ -12,7 +12,7 @@ package com.example.interview.modelrouting;
  * @param supportsThinking 是否支持深度推理 (用于过滤 ModelRouteType.THINKING 的请求)
  * @param baseUrl 动态模型的 OpenAI 兼容 API 地址
  * @param apiKeyRef 加密后的 API Key 引用
- * @param routeType 候选声明的路由范围（GENERAL / THINKING / ALL，空表示兼容旧配置）
+ * @param routeType 候选声明的路由范围（GENERAL / THINKING / RETRIEVAL / ALL，空表示兼容旧配置）
  * @param source 候选来源标识（YAML / DATABASE / TEST）
  */
 public record ModelRoutingCandidate(

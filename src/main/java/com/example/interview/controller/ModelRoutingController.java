@@ -62,6 +62,7 @@ public class ModelRoutingController {
         data.put("enabled", properties.isEnabled());
         data.put("defaultModel", properties.getDefaultModel());
         data.put("deepThinkingModel", properties.getDeepThinkingModel());
+        data.put("retrievalModel", properties.getRetrievalModel());
         data.put("candidateCount", modelCandidateService.listAll().size());
         data.put("runtime", routingChatService.snapshotStats());
         data.put("ollama", ollamaHealthService.getHealthInfo());

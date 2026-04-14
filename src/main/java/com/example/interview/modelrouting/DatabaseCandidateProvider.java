@@ -41,7 +41,10 @@ public class DatabaseCandidateProvider implements CandidateProvider {
             return true;
         }
         String normalized = routeType.toUpperCase(Locale.ROOT);
-        return "GENERAL".equals(normalized) || "THINKING".equals(normalized) || "ALL".equals(normalized);
+        return "GENERAL".equals(normalized)
+                || "THINKING".equals(normalized)
+                || "RETRIEVAL".equals(normalized)
+                || "ALL".equals(normalized);
     }
 
     private String normalize(String value) {
