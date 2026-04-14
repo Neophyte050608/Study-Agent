@@ -186,8 +186,8 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String sessionId = UUID.randomUUID().toString();
         CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", "", 0, 0, Instant.now());
         
-        // 选择题 + 多题 → 走批量交互式模式
-        if (type.contains("选择") && count > 1) {
+        // 选择题统一走交互式答题卡模式（含单题），避免单题退化为纯文本输出
+        if (type.contains("选择") && count >= 1) {
             return handleBatchQuiz(userId, topic, difficulty, count,
                 learningProfileAgent.snapshotForPrompt(userId, topic));
         }

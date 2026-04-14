@@ -1,4 +1,0 @@
-interface:
-  display_name: "Knowledge Retrieval"
-  short_description: "Build evidence packets with hybrid retrieval and fallback"
-  default_prompt: "Use $knowledge-retrieval to build an evidence packet for this interview question."
