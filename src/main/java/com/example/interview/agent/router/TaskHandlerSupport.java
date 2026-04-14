@@ -76,6 +76,13 @@ public final class TaskHandlerSupport {
         if (!merged.containsKey("userId")) {
             merged.put("userId", resolveUserId(request, learningProfileAgent));
         }
+        if (!merged.containsKey("action")) {
+            String query = readText(request.payload(), "query");
+            if (!query.isBlank()) {
+                merged.put("action", "chat");
+                merged.put("message", query);
+            }
+        }
         if (request.payload() != null && request.payload().containsKey("type")) {
             merged.put("type", request.payload().get("type"));
         }

@@ -199,6 +199,20 @@
                     <div v-html="renderMarkdown(msg.content)"></div>
                     <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${idx}-${imageIdx}`" :image="image" />
                     <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
+                    <ScenarioCard
+                      v-if="msg.scenarioPayload"
+                      :payload="msg.scenarioPayload"
+                      :message-id="msg.messageId"
+                      :chat-session-id="currentSessionId"
+                      @updated="handleStructuredMessageUpdated"
+                    />
+                    <FillCard
+                      v-if="msg.fillPayload"
+                      :payload="msg.fillPayload"
+                      :message-id="msg.messageId"
+                      :chat-session-id="currentSessionId"
+                      @updated="handleStructuredMessageUpdated"
+                    />
                     <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason || msg.routeLabel || msg.routeSource" class="mt-3 flex flex-wrap gap-2">
                       <span v-if="msg.generationStatus === 'RUNNING'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900">
                         generating
@@ -342,6 +356,8 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import QuizCard from './chat/QuizCard.vue'
+import ScenarioCard from './chat/ScenarioCard.vue'
+import FillCard from './chat/FillCard.vue'
 import ImageCard from './chat/ImageCard.vue'
 import AutocompleteDropdown from './chat/AutocompleteDropdown.vue'
 import { fetchSuggestions, recordClick } from '../api/autocomplete'
@@ -458,6 +474,22 @@ const normalizeImageItem = (item) => {
 const normalizeMessages = (rawMessages) => {
   return rawMessages.map(msg => {
     const metadata = msg?.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}
+    if (msg.contentType === 'scenario_card' && msg.content) {
+      try {
+        const scenarioPayload = JSON.parse(msg.content)
+        return { ...msg, ...metadata, scenarioPayload, content: '' }
+      } catch (e) {
+        return { ...msg, ...metadata }
+      }
+    }
+    if (msg.contentType === 'fill_card' && msg.content) {
+      try {
+        const fillPayload = JSON.parse(msg.content)
+        return { ...msg, ...metadata, fillPayload, content: '' }
+      } catch (e) {
+        return { ...msg, ...metadata }
+      }
+    }
     if (msg.contentType === 'quiz' && msg.content) {
       try {
         const quizPayload = JSON.parse(msg.content)
@@ -483,6 +515,10 @@ const normalizeMessages = (rawMessages) => {
     }
     return { ...msg, ...metadata }
   })
+}
+
+const handleStructuredMessageUpdated = async () => {
+  await refreshCurrentMessages({ silent: true })
 }
 
 const refreshCurrentMessages = async ({ silent = false } = {}) => {
@@ -793,8 +829,10 @@ const handleSend = async () => {
       onFinish: (payload) => {
         const result = payload?.result || {}
         const finalQuizPayload = currentQuizPayload.value || result?.quizPayload || null
+        const finalScenarioPayload = result?.scenarioPayload || null
+        const finalFillPayload = result?.fillPayload || null
         const finalImages = streamingImages.value.length ? [...streamingImages.value] : (Array.isArray(result?.images) ? result.images : [])
-        const finalContent = finalQuizPayload ? '' : (streamingContent.value || result?.content || '')
+        const finalContent = (finalQuizPayload || finalScenarioPayload || finalFillPayload) ? '' : (streamingContent.value || result?.content || '')
         streamingMeta.value = {
           retrievalModeRequested: result?.retrievalModeRequested || selectedRetrievalMode.value,
           retrievalModeResolved: result?.retrievalModeResolved || '',
@@ -806,9 +844,12 @@ const handleSend = async () => {
         }
         messages.value.push({ 
           role: 'assistant', 
+          messageId: result?.assistantMessageId || '',
           content: finalContent,
           images: finalImages,
           quizPayload: finalQuizPayload,
+          scenarioPayload: finalScenarioPayload,
+          fillPayload: finalFillPayload,
           ...streamingMeta.value
         })
         streamingContent.value = ''

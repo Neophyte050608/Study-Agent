@@ -68,6 +68,18 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if ("submit".equals(action)) {
             return submitPractice(input);
         }
+        if ("submit-scenario-card".equals(action)) {
+            return submitScenarioCard(input);
+        }
+        if ("next-scenario-card".equals(action)) {
+            return nextScenarioCard(input);
+        }
+        if ("submit-fill-card".equals(action)) {
+            return submitFillCard(input);
+        }
+        if ("next-fill-card".equals(action)) {
+            return nextFillCard(input);
+        }
         if ("batch-quiz-submit".equals(action)) {
             return submitBatchQuizResults(input);
         }
@@ -172,7 +184,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
 
         String sessionId = UUID.randomUUID().toString();
-        CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", 0, 0, Instant.now());
+        CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", "", 0, 0, Instant.now());
         
         // 选择题 + 多题 → 走批量交互式模式
         if (type.contains("选择") && count > 1) {
@@ -198,12 +210,37 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if (question == null || question.isBlank()) {
             question = buildQuestion(session.topic(), session.difficulty(), session.type()) + " (" + session.type() + ")";
         }
+        String cardId = "";
+        if (isScenarioType(session.type())) {
+            cardId = "scenario_" + UUID.randomUUID();
+        } else if (isFillType(session.type())) {
+            cardId = "fill_" + UUID.randomUUID();
+        }
 
         CodingSession updatedSession = new CodingSession(
             session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
-            session.totalQuestions(), session.currentQuestionIndex() + 1, question, session.attempts(), session.bestScore(), session.createdAt()
+            session.totalQuestions(), session.currentQuestionIndex() + 1, question, cardId, session.attempts(), session.bestScore(), session.createdAt()
         );
         sessions.put(session.sessionId(), updatedSession);
+
+        if (isScenarioType(updatedSession.type())) {
+            ScenarioPayload payload = buildScenarioPayload(updatedSession, question, cardId, "", false, false, null, "", "", "", false);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("agent", "CodingPracticeAgent");
+            result.put("status", "scenario_question_generated");
+            result.put("sessionId", updatedSession.sessionId());
+            result.put("scenarioPayload", payload);
+            return result;
+        }
+        if (isFillType(updatedSession.type())) {
+            FillPayload payload = buildFillPayload(updatedSession, question, cardId, "", false, false, null, "", "", "", false);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("agent", "CodingPracticeAgent");
+            result.put("status", "fill_question_generated");
+            result.put("sessionId", updatedSession.sessionId());
+            result.put("fillPayload", payload);
+            return result;
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("agent", "CodingPracticeAgent");
@@ -225,7 +262,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         // 创建 session 记录（currentQuestion 留空，批量模式不逐题跟踪）
         sessions.put(sessionId, new CodingSession(
             sessionId, userId, topic, difficulty, "选择题",
-            questions.size(), 0, "", 0, 0, Instant.now()));
+            questions.size(), 0, "", "", 0, 0, Instant.now()));
 
         QuizPayload payload = new QuizPayload(sessionId, topic, difficulty, questions.size(), questions);
 
@@ -332,8 +369,63 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         // 清空当前题目，等待下一次请求生成新题目
         CodingSession updatedSession = new CodingSession(
             session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
-            session.totalQuestions(), session.currentQuestionIndex(), "", attempts, bestScore, session.createdAt()
+            session.totalQuestions(), session.currentQuestionIndex(), "", "", attempts, bestScore, session.createdAt()
         );
+
+        if (isScenarioType(session.type())) {
+            CodingSession scenarioUpdatedSession = new CodingSession(
+                    session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
+                    session.totalQuestions(), session.currentQuestionIndex(), "", session.currentCardId(), attempts, bestScore, session.createdAt()
+            );
+            sessions.put(session.sessionId(), scenarioUpdatedSession);
+            String referenceAnswer = buildScenarioReferenceAnswer(session.currentQuestion(), session.topic(), finalAssessment);
+            ScenarioPayload payload = buildScenarioPayload(
+                    session,
+                    session.currentQuestion(),
+                    session.currentCardId(),
+                    answer,
+                    true,
+                    false,
+                    score,
+                    assessment.feedback(),
+                    referenceAnswer,
+                    assessment.nextHint(),
+                    session.currentQuestionIndex() < session.totalQuestions()
+            );
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "scenario_evaluated",
+                    "sessionId", session.sessionId(),
+                    "scenarioPayload", payload
+            );
+        }
+        if (isFillType(session.type())) {
+            CodingSession fillUpdatedSession = new CodingSession(
+                    session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
+                    session.totalQuestions(), session.currentQuestionIndex(), "", session.currentCardId(), attempts, bestScore, session.createdAt()
+            );
+            sessions.put(session.sessionId(), fillUpdatedSession);
+            String referenceAnswer = buildFillReferenceAnswer(session.currentQuestion(), session.topic(), finalAssessment);
+            FillPayload payload = buildFillPayload(
+                    session,
+                    session.currentQuestion(),
+                    session.currentCardId(),
+                    answer,
+                    true,
+                    false,
+                    score,
+                    assessment.feedback(),
+                    referenceAnswer,
+                    assessment.nextHint(),
+                    session.currentQuestionIndex() < session.totalQuestions()
+            );
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "fill_evaluated",
+                    "sessionId", session.sessionId(),
+                    "fillPayload", payload
+            );
+        }
         sessions.put(session.sessionId(), updatedSession);
 
         return Map.of(
@@ -345,6 +437,176 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 "progress", session.currentQuestionIndex() + "/" + session.totalQuestions(),
                 "isLast", session.currentQuestionIndex() >= session.totalQuestions()
         );
+    }
+
+    private Map<String, Object> submitScenarioCard(Map<String, Object> input) {
+        String sessionId = text(input, "sessionId");
+        String cardId = text(input, "cardId");
+        String answer = text(input, "answer");
+        if (sessionId.isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "sessionId 不能为空"
+            );
+        }
+        CodingSession session = sessions.get(sessionId);
+        if (session == null) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "not_found",
+                    "message", "Session已失效"
+            );
+        }
+        if (!isScenarioType(session.type())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "当前 session 不是场景题"
+            );
+        }
+        if (session.currentQuestion() == null || session.currentQuestion().isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "当前场景题已提交或不存在待作答题目"
+            );
+        }
+        if (cardId.isBlank() || !cardId.equals(session.currentCardId())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "场景题卡片已失效，请刷新后重试"
+            );
+        }
+        return evaluateChatAnswer(session, answer);
+    }
+
+    private Map<String, Object> nextScenarioCard(Map<String, Object> input) {
+        String sessionId = text(input, "sessionId");
+        String cardId = text(input, "cardId");
+        if (sessionId.isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "sessionId 不能为空"
+            );
+        }
+        CodingSession session = sessions.get(sessionId);
+        if (session == null) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "not_found",
+                    "message", "Session已失效"
+            );
+        }
+        if (!isScenarioType(session.type())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "当前 session 不是场景题"
+            );
+        }
+        if (session.currentQuestion() != null && !session.currentQuestion().isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "请先提交当前场景题答案"
+            );
+        }
+        if (cardId.isBlank() || !cardId.equals(session.currentCardId())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "这张场景题卡片已经不是当前可继续的题目"
+            );
+        }
+        return generateNextChatQuestion(session);
+    }
+
+    private Map<String, Object> submitFillCard(Map<String, Object> input) {
+        String sessionId = text(input, "sessionId");
+        String cardId = text(input, "cardId");
+        String answer = text(input, "answer");
+        if (sessionId.isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "sessionId 不能为空"
+            );
+        }
+        CodingSession session = sessions.get(sessionId);
+        if (session == null) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "not_found",
+                    "message", "Session已失效"
+            );
+        }
+        if (!isFillType(session.type())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "当前 session 不是填空题"
+            );
+        }
+        if (session.currentQuestion() == null || session.currentQuestion().isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "当前填空题已提交或不存在待作答题目"
+            );
+        }
+        if (cardId.isBlank() || !cardId.equals(session.currentCardId())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "填空题卡片已失效，请刷新后重试"
+            );
+        }
+        return evaluateChatAnswer(session, answer);
+    }
+
+    private Map<String, Object> nextFillCard(Map<String, Object> input) {
+        String sessionId = text(input, "sessionId");
+        String cardId = text(input, "cardId");
+        if (sessionId.isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "sessionId 不能为空"
+            );
+        }
+        CodingSession session = sessions.get(sessionId);
+        if (session == null) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "not_found",
+                    "message", "Session已失效"
+            );
+        }
+        if (!isFillType(session.type())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "当前 session 不是填空题"
+            );
+        }
+        if (session.currentQuestion() != null && !session.currentQuestion().isBlank()) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "请先提交当前填空题答案"
+            );
+        }
+        if (cardId.isBlank() || !cardId.equals(session.currentCardId())) {
+            return Map.of(
+                    "agent", "CodingPracticeAgent",
+                    "status", "bad_request",
+                    "message", "这张填空题卡片已经不是当前可继续的题目"
+            );
+        }
+        return generateNextChatQuestion(session);
     }
 
     /**
@@ -411,7 +673,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
 
         // 保存会话并返回结果
-        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, totalQuestions, 1, question, 0, 0, Instant.now()));
+        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, totalQuestions, 1, question, "", 0, 0, Instant.now()));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("agent", "CodingPracticeAgent");
         result.put("status", "started");
@@ -475,6 +737,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 session.totalQuestions(),
                 session.currentQuestionIndex(),
                 session.currentQuestion(),
+                session.currentCardId(),
                 attempts,
                 bestScore,
                 session.createdAt()
@@ -658,6 +921,111 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         return "选择题";
     }
 
+    private boolean isScenarioType(String type) {
+        return type != null && type.contains("场景");
+    }
+
+    private boolean isFillType(String type) {
+        return type != null && type.contains("填空");
+    }
+
+    private ScenarioPayload buildScenarioPayload(CodingSession session,
+                                                 String stem,
+                                                 String cardId,
+                                                 String userAnswer,
+                                                 boolean submitted,
+                                                 boolean evaluating,
+                                                 Integer score,
+                                                 String feedback,
+                                                 String referenceAnswer,
+                                                 String nextHint,
+                                                 boolean canContinue) {
+        return new ScenarioPayload(
+                cardId == null ? "" : cardId,
+                session.sessionId(),
+                session.topic(),
+                session.difficulty(),
+                session.type(),
+                stem == null ? "" : stem,
+                userAnswer == null ? "" : userAnswer,
+                submitted,
+                evaluating,
+                score,
+                feedback == null ? "" : feedback,
+                referenceAnswer == null ? "" : referenceAnswer,
+                nextHint == null ? "" : nextHint,
+                session.currentQuestionIndex() + "/" + session.totalQuestions(),
+                session.currentQuestionIndex() >= session.totalQuestions(),
+                canContinue
+        );
+    }
+
+    private String buildScenarioReferenceAnswer(String question,
+                                                String topic,
+                                                RAGService.CodingAssessment assessment) {
+        List<String> sections = new ArrayList<>();
+        sections.add("高质量回答至少应先明确目标、约束和成功标准。");
+        sections.add("然后给出核心方案、关键流程以及主要技术取舍。");
+        sections.add("最后补充边界情况、失败兜底、监控告警和可观测性。");
+        if (topic != null && !topic.isBlank()) {
+            sections.add("本题建议重点围绕「" + topic + "」展开。");
+        }
+        if (assessment != null && assessment.nextHint() != null && !assessment.nextHint().isBlank()) {
+            sections.add("建议补充：" + assessment.nextHint().trim());
+        } else if (question != null && !question.isBlank()) {
+            sections.add("回答时要确保每个关键环节都能回扣题干中的真实工程场景。");
+        }
+        return String.join("\n", sections);
+    }
+
+    private FillPayload buildFillPayload(CodingSession session,
+                                         String stem,
+                                         String cardId,
+                                         String userAnswer,
+                                         boolean submitted,
+                                         boolean evaluating,
+                                         Integer score,
+                                         String feedback,
+                                         String referenceAnswer,
+                                         String nextHint,
+                                         boolean canContinue) {
+        return new FillPayload(
+                cardId == null ? "" : cardId,
+                session.sessionId(),
+                session.topic(),
+                session.difficulty(),
+                session.type(),
+                stem == null ? "" : stem,
+                userAnswer == null ? "" : userAnswer,
+                submitted,
+                evaluating,
+                score,
+                feedback == null ? "" : feedback,
+                referenceAnswer == null ? "" : referenceAnswer,
+                nextHint == null ? "" : nextHint,
+                session.currentQuestionIndex() + "/" + session.totalQuestions(),
+                session.currentQuestionIndex() >= session.totalQuestions(),
+                canContinue
+        );
+    }
+
+    private String buildFillReferenceAnswer(String question,
+                                            String topic,
+                                            RAGService.CodingAssessment assessment) {
+        List<String> sections = new ArrayList<>();
+        sections.add("参考答案应直接补全题干中的关键空缺，并确保语义与上下文一致。");
+        sections.add("如果题目涉及 SQL、代码或配置，答案需要保持语法完整。");
+        if (topic != null && !topic.isBlank()) {
+            sections.add("本题重点知识点来自「" + topic + "」。");
+        }
+        if (assessment != null && assessment.nextHint() != null && !assessment.nextHint().isBlank()) {
+            sections.add("建议补充：" + assessment.nextHint().trim());
+        } else if (question != null && !question.isBlank()) {
+            sections.add("检查是否遗漏关键字、边界条件或必要约束。");
+        }
+        return String.join("\n", sections);
+    }
+
     /**
      * 从用户原始文本中提取题目数量。
      * 支持阿拉伯数字（"来3道"）和常见中文数字（"来三道"）。
@@ -780,6 +1148,44 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             String explanation
     ) {}
 
+    public record ScenarioPayload(
+            String cardId,
+            String sessionId,
+            String topic,
+            String difficulty,
+            String type,
+            String stem,
+            String userAnswer,
+            boolean submitted,
+            boolean evaluating,
+            Integer score,
+            String feedback,
+            String referenceAnswer,
+            String nextHint,
+            String progress,
+            boolean isLast,
+            boolean canContinue
+    ) {}
+
+    public record FillPayload(
+            String cardId,
+            String sessionId,
+            String topic,
+            String difficulty,
+            String type,
+            String stem,
+            String userAnswer,
+            boolean submitted,
+            boolean evaluating,
+            Integer score,
+            String feedback,
+            String referenceAnswer,
+            String nextHint,
+            String progress,
+            boolean isLast,
+            boolean canContinue
+    ) {}
+
     /**
      * 编程练习会话的内部记录类。
      */
@@ -792,6 +1198,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             int totalQuestions,
             int currentQuestionIndex,
             String currentQuestion,
+            String currentCardId,
             int attempts,
             int bestScore,
             Instant createdAt

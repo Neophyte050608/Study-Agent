@@ -56,6 +56,74 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             return true;
         }
 
+        if (codingResponse.data() instanceof Map<?, ?> dataMap
+                && "scenario_question_generated".equals(dataMap.get("status"))
+                && dataMap.containsKey("scenarioPayload")) {
+            context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+                    "stage", "GENERATING", "label", "正在生成场景题", "status", "running", "percent", 100));
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("traceId", context.traceId());
+            metadata.put("type", "coding_practice_scenario");
+            metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
+            metadata.put("routeLabel", "coding-scenario-card");
+            metadata.put("routeSource", "active-session");
+            if (dataMap.get("scenarioPayload") instanceof com.example.interview.agent.CodingPracticeAgent.ScenarioPayload payload) {
+                metadata.put("cardId", payload.cardId());
+            }
+            String scenarioJson = chatStreamingSupport.toJson(
+                    dataMap.get("scenarioPayload"),
+                    "已为您生成场景题答题卡，请在卡片中作答。"
+            );
+            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
+            context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+                    "action", "chat",
+                    "result", Map.of(
+                            "content", "",
+                            "scenarioPayload", dataMap.get("scenarioPayload"),
+                            "assistantMessageId", context.assistantMessageId(),
+                            "traceId", context.traceId(),
+                            "routeLabel", "coding-scenario-card",
+                            "routeSource", "active-session"
+                    )));
+            context.emitter().done();
+            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            return true;
+        }
+
+        if (codingResponse.data() instanceof Map<?, ?> dataMap
+                && "fill_question_generated".equals(dataMap.get("status"))
+                && dataMap.containsKey("fillPayload")) {
+            context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+                    "stage", "GENERATING", "label", "正在生成填空题", "status", "running", "percent", 100));
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("traceId", context.traceId());
+            metadata.put("type", "coding_practice_fill");
+            metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
+            metadata.put("routeLabel", "coding-fill-card");
+            metadata.put("routeSource", "active-session");
+            if (dataMap.get("fillPayload") instanceof com.example.interview.agent.CodingPracticeAgent.FillPayload payload) {
+                metadata.put("cardId", payload.cardId());
+            }
+            String fillJson = chatStreamingSupport.toJson(
+                    dataMap.get("fillPayload"),
+                    "已为您生成填空题答题卡，请在卡片中作答。"
+            );
+            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
+            context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+                    "action", "chat",
+                    "result", Map.of(
+                            "content", "",
+                            "fillPayload", dataMap.get("fillPayload"),
+                            "assistantMessageId", context.assistantMessageId(),
+                            "traceId", context.traceId(),
+                            "routeLabel", "coding-fill-card",
+                            "routeSource", "active-session"
+                    )));
+            context.emitter().done();
+            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            return true;
+        }
+
         String replyText = webChatService.extractReplyText(codingResponse);
         boolean isLast = true;
         Object nextQuizPayload = null;

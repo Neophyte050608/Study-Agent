@@ -183,6 +183,17 @@ public class WebChatService {
         touchSession(existing.getSessionId());
     }
 
+    public ChatMessageDO findMessageById(String messageId) {
+        if (messageId == null || messageId.isBlank()) {
+            return null;
+        }
+        return messageMapper.selectOne(
+                new LambdaQueryWrapper<ChatMessageDO>()
+                        .eq(ChatMessageDO::getMessageId, messageId)
+                        .last("LIMIT 1")
+        );
+    }
+
     // ======== Public helpers (used by ChatStreamingService) ========
 
     public String buildHistoryContext(String sessionId) {
