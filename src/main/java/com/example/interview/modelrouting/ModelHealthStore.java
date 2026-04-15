@@ -106,6 +106,10 @@ public class ModelHealthStore {
         synchronized (state) {
             state.totalFailureCount.incrementAndGet();
             state.lastFailureMessage = failureMessage;
+            if (isMemoryInsufficientError(failureMessage)) {
+                openCircuit(state);
+                return;
+            }
             int threshold = Math.max(1, properties.getCircuitBreaker().getFailureThreshold());
             ModelCircuitState current = stateOf(candidateName);
             if (current == ModelCircuitState.HALF_OPEN) {
@@ -162,6 +166,17 @@ public class ModelHealthStore {
         state.halfOpenTrialCount.set(0);
         state.openUntilEpochMs = System.currentTimeMillis() + Math.max(1000L, properties.getCircuitBreaker().getOpenDurationMs());
         openTransitionCount.incrementAndGet();
+    }
+
+    private boolean isMemoryInsufficientError(String failureMessage) {
+        if (failureMessage == null || failureMessage.isBlank()) {
+            return false;
+        }
+        String normalized = failureMessage.toLowerCase();
+        return normalized.contains("requires more system memory")
+                || normalized.contains("system memory")
+                || normalized.contains("insufficient memory")
+                || normalized.contains("out of memory");
     }
 
     private static class HealthState {

@@ -34,11 +34,6 @@ public class IntentTreeRoutingService {
     private final String intentPreferredModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * 域分类结果。
-     */
-    private record DomainClassificationResult(String domainCode, double confidence, String reason) {}
-
     public IntentTreeRoutingService(
             PromptManager promptManager,
             IntentTreeProperties properties,
@@ -81,44 +76,39 @@ public class IntentTreeRoutingService {
             return IntentRoutingDecision.fallback();
         }
         String sanitizedHistory = sanitizeHistoryForIntentRouting(history);
-
-        String resolvedDomain = domain;
-        double domainConfidence = 1.0;
-        if (resolvedDomain == null || resolvedDomain.isBlank()) {
-            DomainClassificationResult dcr = classifyDomain(query, sanitizedHistory);
-            if (dcr == null || "UNKNOWN".equalsIgnoreCase(dcr.domainCode())) {
-                logger.info("域分类未能稳定收敛，转全局叶子分类回退, query={}, domainResult={}",
-                        query, dcr == null ? "null" : dcr.domainCode() + ":" + dcr.confidence());
-                return classifyAcrossDefaultLeaves(query, sanitizedHistory);
-            }
-            resolvedDomain = dcr.domainCode();
-            domainConfidence = dcr.confidence();
+        List<IntentTreeNode> candidateLeaves = resolveCandidateLeaves(domain);
+        if (candidateLeaves.isEmpty()) {
+            logger.warn("无可用叶子节点, domainHint={}, query={}", domain, truncateForLog(query));
+            return routeFailureDecision("no_leaf_candidates");
         }
+        try {
+            Map<String, Object> vars = new LinkedHashMap<>();
+            vars.put("query", query);
+            vars.put("history", sanitizedHistory);
+            vars.put("leafIntents", toTemplateLeafIntents(candidateLeaves));
+            vars.put("confidenceThreshold", properties.getConfidenceThreshold());
+            vars.put("minGap", properties.getMinGap());
+            vars.put("ambiguityRatio", properties.getAmbiguityRatio());
+            vars.put("domainHint", domain == null ? "" : domain);
+            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
 
-        List<IntentTreeNode> domainLeaves = intentTreeService.loadLeafIntentsByDomain(resolvedDomain);
-        if (domainLeaves.isEmpty()) {
-            domainLeaves = defaultLeafIntents();
+            logger.info("统一意图分类请求: preferredModel={}, domainHint={}, query={}, history={}, leafCount={}",
+                    intentPreferredModel,
+                    domain == null ? "" : domain,
+                    truncateForLog(query),
+                    truncateForLog(sanitizedHistory),
+                    candidateLeaves.size());
+            String response = routingChatService.call(
+                    pair.systemPrompt(), pair.userPrompt(),
+                    ModelRouteType.GENERAL, intentPreferredModel, "统一意图分类");
+            logger.info("统一意图分类响应: query={}, rawResponse={}",
+                    truncateForLog(query),
+                    truncateForLog(response));
+            return normalizeDecision(response, query, sanitizedHistory);
+        } catch (Exception ex) {
+            logger.warn("统一意图分类失败: {}", ex.getMessage());
+            return routeFailureDecision(ex.getMessage());
         }
-        List<IntentTreeNode> nonUnknownLeaves = domainLeaves.stream()
-                .filter(n -> !"UNKNOWN".equalsIgnoreCase(n.intentId()))
-                .toList();
-
-        if (nonUnknownLeaves.size() == 1) {
-            IntentTreeNode leaf = nonUnknownLeaves.get(0);
-            logger.info("单叶子域自动解析: domain={}, leaf={}, taskType={}, query={}",
-                    resolvedDomain, leaf.intentId(), leaf.taskType(), query);
-            return new IntentRoutingDecision(
-                    false, leaf.taskType(), domainConfidence,
-                    "single_leaf_auto_resolve:" + resolvedDomain,
-                    Map.of(), List.of(), false, "", List.of()
-            );
-        }
-
-        if (nonUnknownLeaves.isEmpty()) {
-            logger.warn("域 {} 下无叶子节点, query={}", resolvedDomain, query);
-            return IntentRoutingDecision.fallback();
-        }
-        return classifyWithinDomain(query, sanitizedHistory, domainLeaves, resolvedDomain);
     }
 
     @TraceNode(type = "INTENT", name = "SLOT_REFINE")
@@ -217,6 +207,25 @@ public class IntentTreeRoutingService {
         String reason = readText(root, "reason");
         Map<String, Object> slots = readSlots(root.get("slots"));
         List<IntentCandidate> candidates = readCandidates(root.get("candidates"));
+        boolean topicSwitch = readBoolean(root, "topicSwitch");
+        String dialogAct = readText(root, "dialogAct").toUpperCase();
+        double infoNovelty = readScore(root, "infoNovelty");
+        boolean infoNoveltyProvided = hasNonNullField(root, "infoNovelty");
+        String currentTopic = readText(root, "currentTopic");
+        String previousTopic = readText(root, "previousTopic");
+        String contextPolicy = normalizeContextPolicy(readText(root, "contextPolicy"), dialogAct, topicSwitch);
+        if (currentTopic.isBlank()) {
+            currentTopic = extractFallbackTopic(query);
+        }
+        if (previousTopic.isBlank()) {
+            previousTopic = currentTopic;
+        }
+        if (dialogAct.isBlank()) {
+            dialogAct = inferDialogAct(contextPolicy);
+        }
+        if (!infoNoveltyProvided) {
+            infoNovelty = "SWITCH".equals(contextPolicy) ? 0.9D : 0.5D;
+        }
 
         if (confidence <= 0 && !candidates.isEmpty()) {
             confidence = candidates.getFirst().score();
@@ -236,9 +245,15 @@ public class IntentTreeRoutingService {
             options = buildOptionsFromCandidates(candidates);
         }
         if (intentId.equalsIgnoreCase("UNKNOWN") && !askClarification) {
-            return new IntentRoutingDecision(false, "UNKNOWN", confidence, reason, slots, candidates, false, "", List.of());
+            return new IntentRoutingDecision(
+                    false, "UNKNOWN", confidence, reason, slots, candidates, false, "", List.of(),
+                    topicSwitch, dialogAct, infoNovelty, currentTopic, previousTopic, contextPolicy
+            );
         }
-        return new IntentRoutingDecision(false, taskType, confidence, reason, slots, candidates, askClarification, clarificationQuestion, options);
+        return new IntentRoutingDecision(
+                false, taskType, confidence, reason, slots, candidates, askClarification, clarificationQuestion, options,
+                topicSwitch, dialogAct, infoNovelty, currentTopic, previousTopic, contextPolicy
+        );
     }
 
     private boolean shouldClarify(List<IntentCandidate> candidates, double confidence, Map<String, Object> slots, String taskType) {
@@ -258,115 +273,67 @@ public class IntentTreeRoutingService {
         return false;
     }
 
-    /**
-     * 小模型域分类（4 个候选域）。
-     */
-    private DomainClassificationResult classifyDomain(String query, String history) {
-        try {
-            List<IntentTreeNode> domains = intentTreeService.loadDomainNodes();
-            if (domains.isEmpty()) {
-                logger.warn("无可用域节点");
-                return null;
-            }
-            Map<String, Object> vars = new LinkedHashMap<>();
-            vars.put("query", query);
-            vars.put("history", history);
-            vars.put("domains", toTemplateLeafIntents(domains));
-            PromptManager.PromptPair pair = promptManager.renderSplit("router", "domain-classifier", vars);
-
-            logger.info("小模型域分类请求: preferredModel={}, query={}, history={}, domainCount={}, systemPrompt={}, userPrompt={}",
-                    intentPreferredModel,
-                    truncateForLog(query),
-                    truncateForLog(history),
-                    domains.size(),
-                    truncateForLog(pair.systemPrompt()),
-                    truncateForLog(pair.userPrompt()));
-            String response = routingChatService.call(
-                    pair.systemPrompt(), pair.userPrompt(),
-                    ModelRouteType.GENERAL, intentPreferredModel, "域级分类");
-            logger.info("小模型域分类响应: query={}, rawResponse={}",
-                    truncateForLog(query),
-                    truncateForLog(response));
-
-            if (response == null || response.isBlank()) {
-                return null;
-            }
-            String clean = response.replace("```json", "").replace("```", "").trim();
-            JsonNode root = objectMapper.readTree(clean);
-            String domainCode = readText(root, "domainCode").toUpperCase();
-            double confidence = readScore(root, "confidence");
-            String reason = readText(root, "reason");
-
-            if (confidence < properties.getConfidenceThreshold()) {
-                logger.info("域分类置信度过低: domain={}, confidence={}, threshold={}",
-                        domainCode, confidence, properties.getConfidenceThreshold());
-                return new DomainClassificationResult("UNKNOWN", confidence, reason);
-            }
-            return new DomainClassificationResult(domainCode, confidence, reason);
-        } catch (Exception ex) {
-            logger.warn("域分类失败: {}", ex.getMessage());
-            return null;
+    private List<IntentTreeNode> resolveCandidateLeaves(String domainHint) {
+        List<IntentTreeNode> leaves;
+        if (domainHint != null && !domainHint.isBlank()) {
+            leaves = intentTreeService.loadLeafIntentsByDomain(domainHint);
+        } else {
+            leaves = intentTreeService.loadAllLeafIntents();
         }
+        if (leaves == null || leaves.isEmpty()) {
+            leaves = defaultLeafIntents();
+        }
+        return leaves.stream()
+                .filter(node -> node != null && node.intentId() != null && !node.intentId().isBlank())
+                .toList();
     }
 
-    private IntentRoutingDecision classifyAcrossDefaultLeaves(String query, String history) {
-        List<IntentTreeNode> fallbackLeaves = defaultLeafIntents();
-        if (fallbackLeaves.isEmpty()) {
-            return properties.isFallbackToLegacyTaskRouter()
-                    ? IntentRoutingDecision.fallback()
-                    : new IntentRoutingDecision(
-                    false, "UNKNOWN", 0D, "global_fallback_no_candidates",
-                    Map.of(), List.of(), false, "", List.of()
-            );
+    private String normalizeContextPolicy(String rawPolicy, String dialogAct, boolean topicSwitch) {
+        String normalized = rawPolicy == null ? "" : rawPolicy.trim().toUpperCase();
+        if (normalized.equals("CONTINUE")
+                || normalized.equals("SWITCH")
+                || normalized.equals("RETURN")
+                || normalized.equals("SUMMARY")
+                || normalized.equals("SAFE_MIN")) {
+            return normalized;
         }
-        return classifyWithinDomain(query, history, fallbackLeaves, "GLOBAL_FALLBACK");
+        String normalizedDialogAct = dialogAct == null ? "" : dialogAct.trim().toUpperCase();
+        if ("NEW_QUESTION".equals(normalizedDialogAct) || "COMPARISON".equals(normalizedDialogAct)) {
+            return "SWITCH";
+        }
+        if ("SUMMARY".equals(normalizedDialogAct)) {
+            return "SUMMARY";
+        }
+        if ("RETURN".equals(normalizedDialogAct)) {
+            return "RETURN";
+        }
+        if (topicSwitch) {
+            return "SWITCH";
+        }
+        return "CONTINUE";
     }
 
-    /**
-     * 域内叶子分类（复用 intent-tree-classifier prompt，仅传域内叶子）。
-     */
-    private IntentRoutingDecision classifyWithinDomain(
-            String query, String history,
-            List<IntentTreeNode> domainLeaves, String domainCode) {
-        try {
-            Map<String, Object> vars = new LinkedHashMap<>();
-            vars.put("query", query);
-            vars.put("history", history);
-            vars.put("leafIntents", toTemplateLeafIntents(domainLeaves));
-            vars.put("confidenceThreshold", properties.getConfidenceThreshold());
-            vars.put("minGap", properties.getMinGap());
-            vars.put("ambiguityRatio", properties.getAmbiguityRatio());
-            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
-
-            logger.info("小模型域内分类请求: preferredModel={}, domain={}, query={}, history={}, leafCount={}, systemPrompt={}, userPrompt={}",
-                    intentPreferredModel,
-                    domainCode,
-                    truncateForLog(query),
-                    truncateForLog(history),
-                    domainLeaves.size(),
-                    truncateForLog(pair.systemPrompt()),
-                    truncateForLog(pair.userPrompt()));
-            String response = routingChatService.call(
-                    pair.systemPrompt(), pair.userPrompt(),
-                    ModelRouteType.GENERAL, intentPreferredModel, "域内意图分类");
-            logger.info("小模型域内分类响应: domain={}, query={}, rawResponse={}",
-                    domainCode,
-                    truncateForLog(query),
-                    truncateForLog(response));
-
-            return normalizeDecision(response, query, history);
-        } catch (Exception ex) {
-            logger.warn("域内分类失败, domain={}: {}", domainCode, ex.getMessage());
-            if (properties.isFallbackToLegacyTaskRouter()) {
-                return IntentRoutingDecision.fallback();
-            }
-            return new IntentRoutingDecision(
-                    false, "UNKNOWN", 0D, "domain_classify_failed:" + ex.getMessage(),
-                    Map.of(), List.of(), true,
-                    "我没有完全理解你的意图，请补充你想进行：面试、刷题还是知识问答？",
-                    List.of()
-            );
+    private IntentRoutingDecision routeFailureDecision(String reason) {
+        if (properties.isFallbackToLegacyTaskRouter()) {
+            return IntentRoutingDecision.fallback();
         }
+        String normalizedReason = reason == null ? "route_failed" : reason;
+        return new IntentRoutingDecision(
+                false, "UNKNOWN", 0D, "unified_classify_failed:" + normalizedReason,
+                Map.of(), List.of(), true,
+                "我没有完全理解你的意图，请补充你想进行：面试、刷题还是知识问答？",
+                List.of(),
+                false, "", 0.5D, "", "", "SAFE_MIN"
+        );
+    }
+
+    private String inferDialogAct(String contextPolicy) {
+        return switch (contextPolicy) {
+            case "SWITCH" -> "NEW_QUESTION";
+            case "RETURN" -> "RETURN";
+            case "SUMMARY" -> "SUMMARY";
+            default -> "FOLLOW_UP";
+        };
     }
 
     private String buildClarificationQuestion(String query, String history, List<IntentCandidate> candidates) {
@@ -503,6 +470,25 @@ public class IntentTreeRoutingService {
         return Math.max(0D, Math.min(1D, node.get(field).asDouble(0D)));
     }
 
+    private boolean hasNonNullField(JsonNode node, String field) {
+        return node != null && field != null && node.has(field) && !node.get(field).isNull();
+    }
+
+    private boolean readBoolean(JsonNode node, String field) {
+        if (node == null || field == null || !node.has(field) || node.get(field).isNull()) {
+            return false;
+        }
+        JsonNode value = node.get(field);
+        if (value.isBoolean()) {
+            return value.asBoolean();
+        }
+        if (value.isNumber()) {
+            return value.asInt() != 0;
+        }
+        String text = value.asText("").trim();
+        return "true".equalsIgnoreCase(text) || "1".equals(text);
+    }
+
     private List<String> readTextArray(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -519,6 +505,14 @@ public class IntentTreeRoutingService {
 
     private String textOf(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String extractFallbackTopic(String query) {
+        if (query == null || query.isBlank()) {
+            return "未知话题";
+        }
+        String trimmed = query.trim();
+        return trimmed.length() > 20 ? trimmed.substring(0, 20) : trimmed;
     }
 
     private String sanitizeHistoryForIntentRouting(String history) {

@@ -10,6 +10,7 @@ import com.example.interview.service.PromptManager;
 import com.example.interview.service.RAGObservabilityService;
 import com.example.interview.service.TraceService;
 import com.example.interview.service.knowledge.ConversationTopicTracker;
+import com.example.interview.service.knowledge.DialogAct;
 import com.example.interview.service.knowledge.DynamicKnowledgeContextBuilder;
 import com.example.interview.service.knowledge.TurnAnalysis;
 import org.slf4j.Logger;
@@ -70,6 +71,14 @@ public class KnowledgeQaAgent {
                                        String history,
                                        KnowledgeRetrievalMode retrievalMode,
                                        String sessionId) {
+        return execute(question, history, retrievalMode, sessionId, null);
+    }
+
+    public Map<String, Object> execute(String question,
+                                       String history,
+                                       KnowledgeRetrievalMode retrievalMode,
+                                       String sessionId,
+                                       Map<String, Object> precomputedTurnAnalysis) {
         String traceId = RAGTraceContext.getTraceId();
         if (traceId == null || traceId.isBlank()) {
             traceId = UUID.randomUUID().toString();
@@ -83,7 +92,8 @@ public class KnowledgeQaAgent {
             String currentTraceId = RAGTraceContext.getTraceId();
             String currentNodeId = RAGTraceContext.getCurrentNodeId();
             CompletableFuture<TurnAnalysis> analysisFuture = CompletableFuture.supplyAsync(
-                    wrapWithTraceContext(currentTraceId, currentNodeId, () -> analyzeTurnSafe(sessionId, question, history)),
+                    wrapWithTraceContext(currentTraceId, currentNodeId,
+                            () -> resolveAnalysis(sessionId, question, history, precomputedTurnAnalysis)),
                     ragRetrieveExecutor
             );
             CompletableFuture<KnowledgeContextPacket> packetFuture = CompletableFuture.supplyAsync(
@@ -93,11 +103,12 @@ public class KnowledgeQaAgent {
             );
             TurnAnalysis analysis = analysisFuture.join();
             KnowledgeContextPacket packet = packetFuture.join();
+            String contextPolicy = resolveContextPolicy(precomputedTurnAnalysis, analysis);
             String combinedContext;
             String dialogSignal = "";
             if (sessionId != null && !sessionId.isBlank()) {
-                combinedContext = dynamicContextBuilder.buildDynamicContext(analysis, packet, sessionId);
-                dialogSignal = dynamicContextBuilder.buildDialogSignal(analysis);
+                combinedContext = dynamicContextBuilder.buildDynamicContext(contextPolicy, analysis, packet, sessionId);
+                dialogSignal = dynamicContextBuilder.buildDialogSignal(contextPolicy, analysis);
             } else {
                 combinedContext = buildCombinedContext(packet);
             }
@@ -129,10 +140,11 @@ public class KnowledgeQaAgent {
             result.put("traceId", traceId);
             result.put("dialogAct", analysis.dialogAct().name());
             result.put("topicSwitch", analysis.topicSwitch());
+            result.put("contextPolicy", contextPolicy);
 
             ragObservabilityService.endNode(traceId, nodeId, question, answer, null);
-            log.info("KnowledgeQA 完成, traceId={}, dialogAct={}, topicSwitch={}",
-                    traceId, analysis.dialogAct(), analysis.topicSwitch());
+            log.info("KnowledgeQA 完成, traceId={}, dialogAct={}, topicSwitch={}, contextPolicy={}",
+                    traceId, analysis.dialogAct(), analysis.topicSwitch(), contextPolicy);
             return result;
         } catch (Exception e) {
             ragObservabilityService.endNode(traceId, nodeId, question, null, e.getMessage());
@@ -161,6 +173,15 @@ public class KnowledgeQaAgent {
                                              KnowledgeRetrievalMode retrievalMode,
                                              String sessionId,
                                              Consumer<String> tokenConsumer) {
+        return executeStream(question, history, retrievalMode, sessionId, tokenConsumer, null);
+    }
+
+    public Map<String, Object> executeStream(String question,
+                                             String history,
+                                             KnowledgeRetrievalMode retrievalMode,
+                                             String sessionId,
+                                             Consumer<String> tokenConsumer,
+                                             Map<String, Object> precomputedTurnAnalysis) {
         String traceId = RAGTraceContext.getTraceId();
         if (traceId == null || traceId.isBlank()) {
             traceId = UUID.randomUUID().toString();
@@ -174,7 +195,8 @@ public class KnowledgeQaAgent {
             String currentTraceId = RAGTraceContext.getTraceId();
             String currentNodeId = RAGTraceContext.getCurrentNodeId();
             CompletableFuture<TurnAnalysis> analysisFuture = CompletableFuture.supplyAsync(
-                    wrapWithTraceContext(currentTraceId, currentNodeId, () -> analyzeTurnSafe(sessionId, question, history)),
+                    wrapWithTraceContext(currentTraceId, currentNodeId,
+                            () -> resolveAnalysis(sessionId, question, history, precomputedTurnAnalysis)),
                     ragRetrieveExecutor
             );
             CompletableFuture<KnowledgeContextPacket> packetFuture = CompletableFuture.supplyAsync(
@@ -184,11 +206,12 @@ public class KnowledgeQaAgent {
             );
             TurnAnalysis analysis = analysisFuture.join();
             KnowledgeContextPacket packet = packetFuture.join();
+            String contextPolicy = resolveContextPolicy(precomputedTurnAnalysis, analysis);
             String combinedContext;
             String dialogSignal = "";
             if (sessionId != null && !sessionId.isBlank()) {
-                combinedContext = dynamicContextBuilder.buildDynamicContext(analysis, packet, sessionId);
-                dialogSignal = dynamicContextBuilder.buildDialogSignal(analysis);
+                combinedContext = dynamicContextBuilder.buildDynamicContext(contextPolicy, analysis, packet, sessionId);
+                dialogSignal = dynamicContextBuilder.buildDialogSignal(contextPolicy, analysis);
             } else {
                 combinedContext = buildCombinedContext(packet);
             }
@@ -227,10 +250,11 @@ public class KnowledgeQaAgent {
             result.put("traceId", traceId);
             result.put("dialogAct", analysis.dialogAct().name());
             result.put("topicSwitch", analysis.topicSwitch());
+            result.put("contextPolicy", contextPolicy);
 
             ragObservabilityService.endNode(traceId, nodeId, question, answer, null);
-            log.info("KnowledgeQA流式完成, traceId={}, dialogAct={}, topicSwitch={}",
-                    traceId, analysis.dialogAct(), analysis.topicSwitch());
+            log.info("KnowledgeQA流式完成, traceId={}, dialogAct={}, topicSwitch={}, contextPolicy={}",
+                    traceId, analysis.dialogAct(), analysis.topicSwitch(), contextPolicy);
             return result;
         } catch (Exception e) {
             ragObservabilityService.endNode(traceId, nodeId, question, null, e.getMessage());
@@ -275,6 +299,128 @@ public class KnowledgeQaAgent {
             log.warn("话题分析失败，降级为首轮: sessionId={}", sessionId, e);
             return TurnAnalysis.firstTurn(fallbackTopic);
         }
+    }
+
+    private TurnAnalysis resolveAnalysis(String sessionId,
+                                         String question,
+                                         String history,
+                                         Map<String, Object> precomputedTurnAnalysis) {
+        TurnAnalysis parsed = parsePrecomputedTurnAnalysis(precomputedTurnAnalysis, question);
+        if (parsed != null) {
+            return parsed;
+        }
+        return analyzeTurnSafe(sessionId, question, history);
+    }
+
+    private TurnAnalysis parsePrecomputedTurnAnalysis(Map<String, Object> hints, String question) {
+        if (hints == null || hints.isEmpty()) {
+            return null;
+        }
+        String currentTopic = textOf(hints.get("currentTopic"));
+        if (currentTopic.isBlank()) {
+            currentTopic = extractFallbackTopic(question);
+        }
+        String dialogActRaw = textOf(hints.get("dialogAct"));
+        String contextPolicy = normalizeContextPolicy(textOf(hints.get("contextPolicy")));
+        if (dialogActRaw.isBlank() && !contextPolicy.isBlank()) {
+            dialogActRaw = dialogActFromContextPolicy(contextPolicy);
+        }
+        if (dialogActRaw.isBlank()) {
+            return null;
+        }
+        boolean topicSwitch = hints.containsKey("topicSwitch")
+                ? boolOf(hints.get("topicSwitch"))
+                : inferTopicSwitchFromPolicy(contextPolicy);
+        double infoNovelty = hints.containsKey("infoNovelty")
+                ? clampNovelty(doubleOf(hints.get("infoNovelty"), 0.5))
+                : defaultNoveltyForPolicy(contextPolicy);
+        String previousTopic = textOf(hints.get("previousTopic"));
+        if (previousTopic.isBlank()) {
+            previousTopic = currentTopic;
+        }
+        DialogAct dialogAct = DialogAct.fromString(dialogActRaw);
+        return new TurnAnalysis(topicSwitch, dialogAct, infoNovelty, currentTopic, previousTopic);
+    }
+
+    private String resolveContextPolicy(Map<String, Object> hints, TurnAnalysis analysis) {
+        String fromHints = normalizeContextPolicy(textOf(hints == null ? null : hints.get("contextPolicy")));
+        if (!fromHints.isBlank()) {
+            return fromHints;
+        }
+        if (analysis == null) {
+            return "SAFE_MIN";
+        }
+        return switch (analysis.dialogAct()) {
+            case NEW_QUESTION, COMPARISON -> "SWITCH";
+            case RETURN -> "RETURN";
+            case SUMMARY -> "SUMMARY";
+            case FOLLOW_UP, CLARIFICATION -> analysis.topicSwitch() ? "SWITCH" : "CONTINUE";
+        };
+    }
+
+    private String normalizeContextPolicy(String raw) {
+        String value = raw == null ? "" : raw.trim().toUpperCase();
+        return switch (value) {
+            case "CONTINUE", "SWITCH", "RETURN", "SUMMARY", "SAFE_MIN" -> value;
+            default -> "";
+        };
+    }
+
+    private String dialogActFromContextPolicy(String contextPolicy) {
+        return switch (contextPolicy) {
+            case "SWITCH" -> "NEW_QUESTION";
+            case "RETURN" -> "RETURN";
+            case "SUMMARY" -> "SUMMARY";
+            default -> "FOLLOW_UP";
+        };
+    }
+
+    private boolean inferTopicSwitchFromPolicy(String contextPolicy) {
+        return "SWITCH".equals(contextPolicy);
+    }
+
+    private double defaultNoveltyForPolicy(String contextPolicy) {
+        return switch (contextPolicy) {
+            case "SWITCH" -> 0.9;
+            case "SUMMARY" -> 0.2;
+            default -> 0.5;
+        };
+    }
+
+    private String textOf(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private boolean boolOf(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        if (value != null) {
+            String text = String.valueOf(value).trim();
+            return "true".equalsIgnoreCase(text) || "1".equals(text);
+        }
+        return false;
+    }
+
+    private double doubleOf(Object value, double defaultValue) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Double.parseDouble(text.trim());
+            } catch (NumberFormatException ignored) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
+    private double clampNovelty(double value) {
+        return Math.max(0.0, Math.min(1.0, value));
     }
 
     private String extractFallbackTopic(String question) {

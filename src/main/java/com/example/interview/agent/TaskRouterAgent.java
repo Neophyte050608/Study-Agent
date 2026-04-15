@@ -264,10 +264,14 @@ public class TaskRouterAgent {
         if (intentTreeRoutingService == null || !intentTreeRoutingService.enabled()) {
             return reactDispatch(request);
         }
+        long routeStartedAt = System.nanoTime();
         IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history, domain);
+        long routeLatencyMs = Math.max(0L, (System.nanoTime() - routeStartedAt) / 1_000_000L);
+        putContextValue(request.context(), "intentRouteLatencyMs", routeLatencyMs);
         if (decision.fallbackToLegacy()) {
             return reactDispatch(request);
         }
+        applyDecisionContext(request.context(), decision);
         if (decision.askClarification()) {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("question", decision.clarificationQuestion());
@@ -276,6 +280,13 @@ public class TaskRouterAgent {
             data.put("originalQuery", naturalLanguageQuery);
             data.put("confidence", decision.confidence());
             data.put("reason", decision.reason());
+            data.put("intentRouteLatencyMs", routeLatencyMs);
+            data.put("topicSwitch", decision.topicSwitch());
+            data.put("dialogAct", decision.dialogAct());
+            data.put("infoNovelty", decision.infoNovelty());
+            data.put("currentTopic", decision.currentTopic());
+            data.put("previousTopic", decision.previousTopic());
+            data.put("contextPolicy", decision.contextPolicy());
             return TaskResponse.ok(data);
         }
         if ("UNKNOWN".equalsIgnoreCase(decision.taskType())) {
@@ -477,7 +488,45 @@ public class TaskRouterAgent {
         if (!retrievalMode.isBlank()) {
             data.put("retrievalModeRequested", retrievalMode);
         }
+        copyIfPresent(request.context(), data, "topicSwitch");
+        copyIfPresent(request.context(), data, "dialogAct");
+        copyIfPresent(request.context(), data, "infoNovelty");
+        copyIfPresent(request.context(), data, "currentTopic");
+        copyIfPresent(request.context(), data, "previousTopic");
+        copyIfPresent(request.context(), data, "contextPolicy");
+        copyIfPresent(request.context(), data, "intentRouteLatencyMs");
         return data;
+    }
+
+    private void applyDecisionContext(Map<String, Object> context, IntentRoutingDecision decision) {
+        if (context == null || decision == null) {
+            return;
+        }
+        putContextValue(context, "topicSwitch", decision.topicSwitch());
+        putContextValue(context, "dialogAct", decision.dialogAct());
+        putContextValue(context, "infoNovelty", decision.infoNovelty());
+        putContextValue(context, "currentTopic", decision.currentTopic());
+        putContextValue(context, "previousTopic", decision.previousTopic());
+        putContextValue(context, "contextPolicy", decision.contextPolicy());
+    }
+
+    private void putContextValue(Map<String, Object> context, String key, Object value) {
+        if (context == null || key == null || key.isBlank() || value == null) {
+            return;
+        }
+        try {
+            context.put(key, value);
+        } catch (UnsupportedOperationException ignored) {
+        }
+    }
+
+    private void copyIfPresent(Map<String, Object> source, Map<String, Object> target, String key) {
+        if (source == null || target == null || key == null || key.isBlank()) {
+            return;
+        }
+        if (source.containsKey(key)) {
+            target.put(key, source.get(key));
+        }
     }
 
     private void publish(TaskRequest request, String receiver, A2AStatus status, String correlationId, String traceId, String parentMessageId) {

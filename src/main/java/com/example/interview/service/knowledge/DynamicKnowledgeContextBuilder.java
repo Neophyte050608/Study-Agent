@@ -17,28 +17,41 @@ public class DynamicKnowledgeContextBuilder {
     public String buildDynamicContext(TurnAnalysis analysis,
                                       KnowledgeContextPacket newPacket,
                                       String sessionId) {
+        return buildDynamicContext(resolvePolicyFromAnalysis(analysis), analysis, newPacket, sessionId);
+    }
+
+    public String buildDynamicContext(String contextPolicy,
+                                      TurnAnalysis analysis,
+                                      KnowledgeContextPacket newPacket,
+                                      String sessionId) {
         String newContext = buildBaseContext(newPacket);
         if (sessionId == null || sessionId.isBlank()) {
             return newContext;
         }
-
-        return switch (analysis.dialogAct()) {
-            case FOLLOW_UP, CLARIFICATION -> buildContinuationContext(analysis, newContext, sessionId);
-            case NEW_QUESTION -> newContext;
-            case RETURN -> buildReturnContext(analysis, newContext, sessionId);
-            case COMPARISON -> buildComparisonContext(analysis, newContext, sessionId);
-            case SUMMARY -> buildSummaryContext(newContext, sessionId);
+        String policy = normalizePolicy(contextPolicy, analysis);
+        return switch (policy) {
+            case "CONTINUE" -> buildContinuationContext(analysis, newContext, sessionId);
+            case "SWITCH" -> newContext;
+            case "RETURN" -> buildReturnContext(analysis, newContext, sessionId);
+            case "SUMMARY" -> buildSummaryContext(newContext, sessionId);
+            case "SAFE_MIN" -> buildSafeMinimalContext(newContext);
+            default -> newContext;
         };
     }
 
     public String buildDialogSignal(TurnAnalysis analysis) {
-        return switch (analysis.dialogAct()) {
-            case FOLLOW_UP -> "用户正在对「" + analysis.currentTopic() + "」进行追问，请基于历史知识上下文和新检索结果给出连贯的深入解答。";
-            case CLARIFICATION -> "用户请求澄清「" + analysis.currentTopic() + "」的某个细节，请结合历史知识给出更清晰的解释。";
-            case NEW_QUESTION -> "用户切换到了新话题「" + analysis.currentTopic() + "」，请专注于新检索到的知识回答，不要引用之前话题的内容。";
-            case RETURN -> "用户回跳到之前讨论过的话题「" + analysis.currentTopic() + "」，请结合之前该话题的知识摘要和新检索结果回答。";
-            case COMPARISON -> "用户在对比「" + analysis.previousTopic() + "」和「" + analysis.currentTopic() + "」，请综合两个话题的知识进行对比分析。";
-            case SUMMARY -> "用户请求总结对话中讨论过的知识，请综合所有历史话题的知识给出全面的总结。";
+        return buildDialogSignal(resolvePolicyFromAnalysis(analysis), analysis);
+    }
+
+    public String buildDialogSignal(String contextPolicy, TurnAnalysis analysis) {
+        String policy = normalizePolicy(contextPolicy, analysis);
+        return switch (policy) {
+            case "CONTINUE" -> "用户正在对「" + analysis.currentTopic() + "」进行追问，请基于历史知识上下文和新检索结果给出连贯的深入解答。";
+            case "SWITCH" -> "用户切换到了新话题「" + analysis.currentTopic() + "」，请专注于新检索到的知识回答，不要引用之前话题的内容。";
+            case "RETURN" -> "用户回跳到之前讨论过的话题「" + analysis.currentTopic() + "」，请结合之前该话题的知识摘要和新检索结果回答。";
+            case "SUMMARY" -> "用户请求总结对话中讨论过的知识，请综合所有历史话题的知识给出全面的总结。";
+            case "SAFE_MIN" -> "当前轮请以本轮检索结果为主，谨慎引用历史信息，优先保证回答准确与收敛。";
+            default -> "";
         };
     }
 
@@ -68,13 +81,8 @@ public class DynamicKnowledgeContextBuilder {
         return "【回跳话题知识】\n" + digest + "\n\n【补充检索】\n" + newContext;
     }
 
-    private String buildComparisonContext(TurnAnalysis analysis, String newContext, String sessionId) {
-        String previousDigest = topicTracker.getTopicKnowledgeDigest(sessionId, analysis.previousTopic());
-        if (previousDigest == null || previousDigest.isBlank()) {
-            return newContext;
-        }
-        return "【话题「" + analysis.previousTopic() + "」知识】\n" + previousDigest
-                + "\n\n【话题「" + analysis.currentTopic() + "」知识】\n" + newContext;
+    private String buildSafeMinimalContext(String newContext) {
+        return newContext;
     }
 
     private String buildSummaryContext(String newContext, String sessionId) {
@@ -95,5 +103,29 @@ public class DynamicKnowledgeContextBuilder {
         }
         summary.append("【补充检索】\n").append(newContext);
         return summary.toString();
+    }
+
+    private String resolvePolicyFromAnalysis(TurnAnalysis analysis) {
+        if (analysis == null) {
+            return "SAFE_MIN";
+        }
+        return switch (analysis.dialogAct()) {
+            case NEW_QUESTION, COMPARISON -> "SWITCH";
+            case RETURN -> "RETURN";
+            case SUMMARY -> "SUMMARY";
+            case FOLLOW_UP, CLARIFICATION -> analysis.topicSwitch() ? "SWITCH" : "CONTINUE";
+        };
+    }
+
+    private String normalizePolicy(String contextPolicy, TurnAnalysis analysis) {
+        String value = contextPolicy == null ? "" : contextPolicy.trim().toUpperCase();
+        if ("CONTINUE".equals(value)
+                || "SWITCH".equals(value)
+                || "RETURN".equals(value)
+                || "SUMMARY".equals(value)
+                || "SAFE_MIN".equals(value)) {
+            return value;
+        }
+        return resolvePolicyFromAnalysis(analysis);
     }
 }

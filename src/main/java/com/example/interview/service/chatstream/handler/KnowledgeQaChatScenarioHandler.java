@@ -45,6 +45,7 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
         context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成回答", "status", "running", "percent", 70));
 
+        Map<String, Object> precomputedTurnAnalysis = extractPrecomputedTurnAnalysis(response);
         StringBuilder fullAnswer = new StringBuilder();
         Map<String, Object> result = chatStreamingSupport.streamObservedAnswer(
                 context.emitter(),
@@ -59,7 +60,8 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
                                 fullAnswer.append(token);
                                 tokenSink.accept(token);
                             }
-                        }
+                        },
+                        precomputedTurnAnalysis
                 )
         );
 
@@ -142,6 +144,26 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
     }
 
     private void copyIfPresent(Map<String, Object> source, Map<String, Object> target, String key) {
+        if (source.containsKey(key)) {
+            target.put(key, source.get(key));
+        }
+    }
+
+    private Map<String, Object> extractPrecomputedTurnAnalysis(TaskResponse response) {
+        if (response == null || !(response.data() instanceof Map<?, ?> data)) {
+            return Map.of();
+        }
+        Map<String, Object> hints = new LinkedHashMap<>();
+        copyFromUnknownMap(data, hints, "topicSwitch");
+        copyFromUnknownMap(data, hints, "dialogAct");
+        copyFromUnknownMap(data, hints, "infoNovelty");
+        copyFromUnknownMap(data, hints, "currentTopic");
+        copyFromUnknownMap(data, hints, "previousTopic");
+        copyFromUnknownMap(data, hints, "contextPolicy");
+        return hints;
+    }
+
+    private void copyFromUnknownMap(Map<?, ?> source, Map<String, Object> target, String key) {
         if (source.containsKey(key)) {
             target.put(key, source.get(key));
         }

@@ -22,3 +22,36 @@ icon=VALUES(icon),
 position=VALUES(position), 
 sort_order=VALUES(sort_order), 
 is_beta=VALUES(is_beta);
+
+-- =========================================================
+-- 提示词模板升级（方案B：统一意图 + 三信号 + contextPolicy）
+-- 说明：
+-- 1) 仅在模板为内置模板(is_builtin=1)时覆盖内容，避免误伤手工定制模板。
+-- 2) 运行时已不再依赖 domain-classifier，这里仅做“废弃说明”标记。
+-- =========================================================
+INSERT INTO `t_prompt_template`
+(`name`, `category`, `type`, `title`, `description`, `content`, `is_builtin`, `deleted`)
+VALUES
+(
+  'intent-tree-classifier',
+  'router',
+  'TASK',
+  '统一意图树分类器',
+  '单次输出意图决策+三信号+contextPolicy（方案B）',
+  '你是统一意图路由分类器。目标：基于候选叶子意图与对话上下文，一次输出可执行的结构化路由结果。\n\n【输入】\n- 当前用户输入：{{ query }}\n- 历史对话：{{ history }}\n- 预筛域提示（可为空）：{{ domainHint }}\n- 候选叶子意图列表：{{ leafIntents }}\n- 判定阈值参考：confidenceThreshold={{ confidenceThreshold }}, minGap={{ minGap }}, ambiguityRatio={{ ambiguityRatio }}\n\n【任务要求】\n1) 从候选叶子里选择最匹配 intentId，并给出 taskType、confidence、reason。\n2) 给出至少1个 candidates，按 score 降序，最多3个。\n3) 抽取 slots（按语义尽量填充，无法确定可留空）：topic/questionType/difficulty/count/skipIntro/mode。\n4) 产出三信号：topicSwitch、dialogAct、infoNovelty。\n5) 产出话题信息：currentTopic、previousTopic。\n6) 产出上下文策略 contextPolicy，枚举仅允许：CONTINUE/SWITCH/RETURN/SUMMARY/SAFE_MIN。\n\n【dialogAct 枚举】\nFOLLOW_UP | CLARIFICATION | NEW_QUESTION | COMPARISON | RETURN | SUMMARY\n\n【策略映射建议】\n- NEW_QUESTION/COMPARISON -> SWITCH\n- RETURN -> RETURN\n- SUMMARY -> SUMMARY\n- FOLLOW_UP/CLARIFICATION -> CONTINUE（若明显换题也可给 SWITCH）\n\n【输出格式（必须严格 JSON，不要 Markdown，不要解释）】\n{\n  "taskType": "KNOWLEDGE_QA",\n  "intentId": "KNOWLEDGE.QA.GENERAL",\n  "confidence": 0.0,\n  "reason": "",\n  "slots": {\n    "topic": "",\n    "questionType": "",\n    "difficulty": "",\n    "count": null,\n    "skipIntro": null,\n    "mode": ""\n  },\n  "candidates": [\n    {\n      "intentId": "",\n      "taskType": "",\n      "score": 0.0,\n      "reason": "",\n      "missingSlots": []\n    }\n  ],\n  "topicSwitch": false,\n  "dialogAct": "FOLLOW_UP",\n  "infoNovelty": 0.5,\n  "currentTopic": "",\n  "previousTopic": "",\n  "contextPolicy": "CONTINUE"\n}\n\n【约束】\n- confidence、score、infoNovelty 范围必须是 0~1。\n- 若无法确定具体任务，taskType 可给 UNKNOWN，但仍需给 candidates 与三信号。\n- 一律输出合法 JSON。',
+  1,
+  0
+)
+ON DUPLICATE KEY UPDATE
+`category` = IF(`is_builtin` = 1, VALUES(`category`), `category`),
+`type` = IF(`is_builtin` = 1, VALUES(`type`), `type`),
+`title` = IF(`is_builtin` = 1, VALUES(`title`), `title`),
+`description` = IF(`is_builtin` = 1, VALUES(`description`), `description`),
+`content` = IF(`is_builtin` = 1, VALUES(`content`), `content`),
+`deleted` = IF(`is_builtin` = 1, 0, `deleted`);
+
+UPDATE `t_prompt_template`
+SET `description` = '已废弃：统一分类链路不再使用该模板（保留仅用于回滚排障）'
+WHERE `name` = 'domain-classifier'
+  AND `deleted` = 0
+  AND `is_builtin` = 1;

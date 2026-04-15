@@ -40,8 +40,44 @@ public record IntentRoutingDecision(
         List<IntentCandidate> candidates,
         boolean askClarification,
         String clarificationQuestion,
-        List<Map<String, String>> clarificationOptions
+        List<Map<String, String>> clarificationOptions,
+        boolean topicSwitch,
+        String dialogAct,
+        double infoNovelty,
+        String currentTopic,
+        String previousTopic,
+        String contextPolicy
 ) {
+
+    public IntentRoutingDecision(
+            boolean fallbackToLegacy,
+            String taskType,
+            double confidence,
+            String reason,
+            Map<String, Object> slots,
+            List<IntentCandidate> candidates,
+            boolean askClarification,
+            String clarificationQuestion,
+            List<Map<String, String>> clarificationOptions
+    ) {
+        this(
+                fallbackToLegacy,
+                taskType,
+                confidence,
+                reason,
+                slots,
+                candidates,
+                askClarification,
+                clarificationQuestion,
+                clarificationOptions,
+                false,
+                "",
+                0.5D,
+                "",
+                "",
+                "SAFE_MIN"
+        );
+    }
 
     /**
      * 构造一个“回退旧链路”的默认决策。
@@ -51,6 +87,9 @@ public record IntentRoutingDecision(
      * @return 回退决策对象
      */
     public static IntentRoutingDecision fallback() {
-        return new IntentRoutingDecision(true, "", 0D, "", Map.of(), List.of(), false, "", List.of());
+        return new IntentRoutingDecision(
+                true, "", 0D, "", Map.of(), List.of(), false, "", List.of(),
+                false, "", 0.5D, "", "", "SAFE_MIN"
+        );
     }
 }

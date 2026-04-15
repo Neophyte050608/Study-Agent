@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -418,6 +419,7 @@ class TaskRouterAgentTest {
     void shouldCarryDomainOnlyPrefilterSlotsIntoResolvedTaskDispatch() {
         IntentPreFilter intentPreFilter = mock(IntentPreFilter.class);
         IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
+        Map<String, Object> context = new java.util.HashMap<>(Map.of("traceId", "trace-domain-slots", "history", "history"));
         when(intentPreFilter.filter("我想练两道Java选择题")).thenReturn(Optional.of(
                 PreFilterResult.domainOnly("CODING", Map.of(
                         "topic", "Java",
@@ -436,7 +438,13 @@ class TaskRouterAgentTest {
                         List.of(),
                         false,
                         "",
-                        List.of()
+                        List.of(),
+                        true,
+                        "NEW_QUESTION",
+                        0.9,
+                        "Java选择题",
+                        "历史话题",
+                        "SWITCH"
                 ));
         when(intentTreeRoutingService.refineSlots("CODING_PRACTICE", "我想练两道Java选择题", "history"))
                 .thenReturn(Map.of());
@@ -476,7 +484,7 @@ class TaskRouterAgentTest {
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
                 null,
                 Map.of("query", "我想练两道Java选择题"),
-                new java.util.HashMap<>(Map.of("traceId", "trace-domain-slots", "history", "history"))
+                context
         ));
 
         assertTrue(response.success());
@@ -486,6 +494,123 @@ class TaskRouterAgentTest {
         assertEquals("CHOICE", data.get("questionType"));
         assertEquals(2, data.get("count"));
         assertEquals("选择题", data.get("type"));
+        assertEquals("SWITCH", context.get("contextPolicy"));
+        assertEquals("NEW_QUESTION", context.get("dialogAct"));
+        assertEquals(true, context.get("topicSwitch"));
+        assertTrue(context.containsKey("intentRouteLatencyMs"));
         verify(intentTreeRoutingService).route("我想练两道Java选择题", "history", "CODING");
+    }
+
+    @Test
+    void shouldPropagateContextPolicyIntoKnowledgeQaStreamDelegation() {
+        IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
+        when(intentTreeRoutingService.enabled()).thenReturn(true);
+        when(intentTreeRoutingService.route("说说Redis和MySQL区别", "history", null))
+                .thenReturn(new IntentRoutingDecision(
+                        false,
+                        "KNOWLEDGE_QA",
+                        0.93,
+                        "unified-hit",
+                        Map.of(),
+                        List.of(),
+                        false,
+                        "",
+                        List.of(),
+                        true,
+                        "NEW_QUESTION",
+                        0.88,
+                        "Redis和MySQL区别",
+                        "缓存基础",
+                        "SWITCH"
+                ));
+        when(intentTreeRoutingService.refineSlots("KNOWLEDGE_QA", "说说Redis和MySQL区别", "history"))
+                .thenReturn(Map.of());
+
+        TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
+                mock(InterviewOrchestratorAgent.class),
+                mock(CodingPracticeAgent.class),
+                mock(NoteMakingAgent.class),
+                mock(LearningProfileAgent.class),
+                mock(KnowledgeQaAgent.class),
+                mock(PromptManager.class),
+                intentTreeRoutingService,
+                mock(IntentPreFilter.class),
+                mock(A2ABus.class),
+                mock(RoutingChatService.class),
+                mock(RAGObservabilityService.class),
+                new TaskHandlerRegistry(List.of())
+        );
+
+        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
+                null,
+                Map.of("query", "说说Redis和MySQL区别"),
+                new java.util.HashMap<>(Map.of(
+                        "traceId", "trace-qa-unified",
+                        "history", "history",
+                        "executionMode", ExecutionMode.STREAM_ROUTE_ONLY.name()
+                ))
+        ));
+
+        assertTrue(response.success());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.data();
+        assertEquals("KnowledgeQaAgent", data.get("agent"));
+        assertEquals("SWITCH", data.get("contextPolicy"));
+        assertEquals("NEW_QUESTION", data.get("dialogAct"));
+        assertEquals(true, data.get("topicSwitch"));
+        assertTrue(data.containsKey("intentRouteLatencyMs"));
+    }
+
+    @Test
+    void shouldNotInjectRoutingHintsWhenIntentDecisionFallbackToLegacy() {
+        IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
+        RoutingChatService routingChatService = mock(RoutingChatService.class);
+        PromptManager promptManager = mock(PromptManager.class);
+        when(intentTreeRoutingService.enabled()).thenReturn(true);
+        when(intentTreeRoutingService.route("讲讲Redis", "history", null))
+                .thenReturn(IntentRoutingDecision.fallback());
+        when(promptManager.render(eq("task-router"), any())).thenReturn("prompt");
+        when(routingChatService.callWithFirstPacketProbeSupplier(
+                any(),
+                eq("prompt"),
+                any(ModelRouteType.class),
+                any(TimeoutHint.class),
+                any()
+        )).thenReturn("{\"taskType\":\"UNKNOWN\"}");
+
+        Map<String, Object> context = new java.util.HashMap<>(Map.of(
+                "traceId", "trace-fallback",
+                "history", "history"
+        ));
+
+        TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
+                mock(InterviewOrchestratorAgent.class),
+                mock(CodingPracticeAgent.class),
+                mock(NoteMakingAgent.class),
+                mock(LearningProfileAgent.class),
+                mock(KnowledgeQaAgent.class),
+                promptManager,
+                intentTreeRoutingService,
+                mock(IntentPreFilter.class),
+                mock(A2ABus.class),
+                routingChatService,
+                mock(RAGObservabilityService.class),
+                new TaskHandlerRegistry(List.of())
+        );
+
+        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
+                null,
+                Map.of("query", "讲讲Redis"),
+                context
+        ));
+
+        assertTrue(response.success());
+        assertFalse(context.containsKey("contextPolicy"));
+        assertFalse(context.containsKey("dialogAct"));
+        assertFalse(context.containsKey("topicSwitch"));
+        assertFalse(context.containsKey("infoNovelty"));
+        assertFalse(context.containsKey("currentTopic"));
+        assertFalse(context.containsKey("previousTopic"));
+        assertTrue(context.containsKey("intentRouteLatencyMs"));
     }
 }

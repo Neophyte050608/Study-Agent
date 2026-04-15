@@ -12,7 +12,6 @@ import com.example.interview.im.runtime.ClarificationResolver;
 import com.example.interview.im.runtime.ImCommandDispatcher;
 import com.example.interview.im.runtime.ImPlatformAdapterRegistry;
 import com.example.interview.im.runtime.ImResponsePresenter;
-import com.example.interview.service.IntentRoutingContextBuilder;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -42,7 +41,6 @@ public class ImWebhookService {
     private final ImCommandDispatcher imCommandDispatcher;
     private final ClarificationResolver clarificationResolver;
     private final ImResponsePresenter imResponsePresenter;
-    private final IntentRoutingContextBuilder intentRoutingContextBuilder;
 
     public ImWebhookService(
             StringRedisTemplate redisTemplate,
@@ -51,8 +49,7 @@ public class ImWebhookService {
             ImPlatformAdapterRegistry imPlatformAdapterRegistry,
             ImCommandDispatcher imCommandDispatcher,
             ClarificationResolver clarificationResolver,
-            ImResponsePresenter imResponsePresenter,
-            IntentRoutingContextBuilder intentRoutingContextBuilder
+            ImResponsePresenter imResponsePresenter
     ) {
         this.redisTemplate = redisTemplate;
         this.conversationStore = conversationStore;
@@ -61,7 +58,6 @@ public class ImWebhookService {
         this.imCommandDispatcher = imCommandDispatcher;
         this.clarificationResolver = clarificationResolver;
         this.imResponsePresenter = imResponsePresenter;
-        this.intentRoutingContextBuilder = intentRoutingContextBuilder;
     }
     
     /** 事件幂等性缓存前缀 */
@@ -145,7 +141,7 @@ public class ImWebhookService {
                 Map<String, Object> context = new HashMap<>();
                 context.put("sessionId", sessionId);
                 context.put("userId", message.getSenderId());
-                context.put("history", intentRoutingContextBuilder.build(sessionId, content, history));
+                context.put("history", history == null ? "" : history);
                 context.put("traceId", UUID.randomUUID().toString());
 
                 TaskRequest request = new TaskRequest(forcedTaskType, payload, context);

@@ -21,6 +21,10 @@ public class IntentRoutingContextBuilder {
     }
 
     public String build(String sessionId, String currentQuestion, String recentHistory) {
+        return buildSnapshot(sessionId, currentQuestion, recentHistory).summary();
+    }
+
+    public RoutingContextSnapshot buildSnapshot(String sessionId, String currentQuestion, String recentHistory) {
         String sanitizedHistory = sanitizeRecentHistory(currentQuestion, recentHistory);
         TurnAnalysis analysis = analyzeSafely(sessionId, currentQuestion, sanitizedHistory);
         List<TopicState> recentTopics = conversationTopicTracker.getRecentTopics(sessionId, RECENT_TOPIC_LIMIT);
@@ -54,7 +58,24 @@ public class IntentRoutingContextBuilder {
             lines.add("- recentConversation: " + truncateInline(sanitizedHistory, RECENT_HISTORY_LIMIT));
         }
 
-        return String.join("\n", lines);
+        return new RoutingContextSnapshot(
+                String.join("\n", lines),
+                analysis.topicSwitch(),
+                analysis.dialogAct().name(),
+                analysis.infoNovelty(),
+                text(analysis.currentTopic(), "未知"),
+                text(analysis.previousTopic(), "无")
+        );
+    }
+
+    public record RoutingContextSnapshot(
+            String summary,
+            boolean topicSwitch,
+            String dialogAct,
+            double infoNovelty,
+            String currentTopic,
+            String previousTopic
+    ) {
     }
 
     private TurnAnalysis analyzeSafely(String sessionId, String currentQuestion, String sanitizedHistory) {
