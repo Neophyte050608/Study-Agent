@@ -4,6 +4,7 @@ import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.service.RAGObservabilityService;
 import com.example.interview.service.RAGQualityEvaluationService;
 import com.example.interview.service.RetrievalEvaluationService;
+import com.example.interview.skill.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -19,15 +20,18 @@ public class ObservabilityApplicationService {
     private final RetrievalEvaluationService retrievalEvaluationService;
     private final RAGQualityEvaluationService ragQualityEvaluationService;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
+    private final SkillTelemetryRecorder skillTelemetryRecorder;
 
     public ObservabilityApplicationService(RAGObservabilityService ragObservabilityService,
                                            RetrievalEvaluationService retrievalEvaluationService,
                                            RAGQualityEvaluationService ragQualityEvaluationService,
-                                           ObservabilitySwitchProperties observabilitySwitchProperties) {
+                                           ObservabilitySwitchProperties observabilitySwitchProperties,
+                                           SkillTelemetryRecorder skillTelemetryRecorder) {
         this.ragObservabilityService = ragObservabilityService;
         this.retrievalEvaluationService = retrievalEvaluationService;
         this.ragQualityEvaluationService = ragQualityEvaluationService;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
+        this.skillTelemetryRecorder = skillTelemetryRecorder;
     }
 
     public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
@@ -232,6 +236,13 @@ public class ObservabilityApplicationService {
             observabilitySwitchProperties.setRagQualityEvalEnabled(ragQualityEvalEnabled);
         }
         return getObservabilitySwitches();
+    }
+
+    public List<SkillTelemetryRecorder.SkillTelemetryEvent> getRecentSkillTelemetry(int limit,
+                                                                                    String skillId,
+                                                                                    String status,
+                                                                                    String traceId) {
+        return skillTelemetryRecorder.recentEvents(limit, skillId, status, traceId);
     }
 
     private void ensureRetrievalEvalEnabled() {

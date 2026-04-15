@@ -9,6 +9,12 @@ import com.example.interview.core.RAGTraceContext;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
 import com.example.interview.modelrouting.TimeoutHint;
+import com.example.interview.skill.SkillDefinition;
+import com.example.interview.skill.SkillExecutionBudget;
+import com.example.interview.skill.SkillExecutionContext;
+import com.example.interview.skill.SkillExecutionResult;
+import com.example.interview.skill.SkillMcpClient;
+import com.example.interview.skill.SkillOrchestrator;
 import com.example.interview.tool.WebSearchTool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -102,9 +108,11 @@ public class RAGService {
     private final ParentChildRetrievalProperties parentChildRetrievalProperties;
     private final ParentChildIndexService parentChildIndexService;
     private final ImageService imageService;
+    private final SkillOrchestrator skillOrchestrator;
+    private final SkillMcpClient skillMcpClient;
     private final ConcurrentHashMap<String, CachedRewrite> rewriteCache = new ConcurrentHashMap<>();
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, com.example.interview.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, SkillMcpClient skillMcpClient) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -121,6 +129,8 @@ public class RAGService {
         this.parentChildRetrievalProperties = parentChildRetrievalProperties;
         this.parentChildIndexService = parentChildIndexService;
         this.imageService = imageService;
+        this.skillOrchestrator = skillOrchestrator;
+        this.skillMcpClient = skillMcpClient;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -162,8 +172,9 @@ public class RAGService {
             // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
             String traceId = RAGTraceContext.getTraceId();
             String parentNodeId = RAGTraceContext.getCurrentNodeId();
+            SkillExecutionBudget skillBudget = skillOrchestrator.newBudget();
             TraceNodeHandle rewriteTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.QUERY_REWRITE, Map.of("status", "RUNNING"));
-            RewrittenQuery rewrittenQuery = buildRewrittenQuery(question, userAnswer);
+            RewrittenQuery rewrittenQuery = buildRewrittenQuery(question, userAnswer, skillBudget);
             completeTraceSuccess(rewriteTrace, Map.of("status", "COMPLETED"));
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
@@ -242,9 +253,24 @@ public class RAGService {
             String imageContext = buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
             boolean webFallbackUsed = false;
-            if (shouldUseWebFallback(allowWebFallback, rewrittenQuery.fullQuery(), retrievedDocs, context, bestRetrievalScore)) {
+            SkillExecutionResult evidenceDecision = evaluateEvidenceSkill(
+                    rewrittenQuery,
+                    retrievedDocs,
+                    context,
+                    bestRetrievalScore,
+                    allowWebFallback,
+                    traceId,
+                    skillBudget
+            );
+            boolean allowExternalLookup = evidenceDecision.succeeded()
+                    ? evidenceDecision.boolOutput("allowExternalLookup")
+                    : shouldUseWebFallback(allowWebFallback, rewrittenQuery.fullQuery(), retrievedDocs, context, bestRetrievalScore);
+            String externalLookupReason = evidenceDecision.succeeded()
+                    ? evidenceDecision.textOutput("reason")
+                    : "LEGACY_WEB_FALLBACK";
+            if (allowExternalLookup) {
                 TraceNodeHandle webFallbackTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
-                List<String> webContext = webSearchTool.run(new WebSearchTool.Query(rewrittenQuery.fullQuery(), 3));
+                List<String> webContext = runControlledWebSearch(rewrittenQuery.fullQuery(), traceId, externalLookupReason, skillBudget);
                 context = webContext.stream().collect(Collectors.joining("\n\n"));
                 retrievalEvidence = buildWebEvidence(webContext);
                 webFallbackUsed = true;
@@ -266,7 +292,7 @@ public class RAGService {
                                 List.of(),
                                 webContext.size(),
                                 null,
-                                "LOW_RETRIEVAL_QUALITY",
+                                externalLookupReason,
                                 null,
                                 null,
                                 null
@@ -311,6 +337,18 @@ public class RAGService {
             String finalEvidence = truncate(originalEvidence, 900);
             String safeProfileSnapshot = truncate(profileSnapshot, 480);
             String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
+            if (normalizedStrategy.isBlank()) {
+                normalizedStrategy = resolveQuestionStrategySummary(
+                        "evaluation",
+                        topic,
+                        question,
+                        difficultyLevel,
+                        followUpState,
+                        safeProfileSnapshot,
+                        "",
+                        false
+                );
+            }
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info(
                         "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, imageContextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
@@ -335,7 +373,8 @@ public class RAGService {
                 );
             }
             try {
-                RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalImageContext, finalEvidence, normalizedStrategy), 2, "回答评估");
+                final String effectiveStrategyHint = normalizedStrategy;
+                RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalImageContext, finalEvidence, effectiveStrategyHint), 2, "回答评估");
                 return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
             } catch (RuntimeException e) {
                 logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
@@ -626,13 +665,44 @@ public class RAGService {
         if (!allowWebFallback) {
             return false;
         }
-        boolean emptyContext = context == null || context.isBlank() || retrievedDocs == null || retrievedDocs.isEmpty();
+        boolean groundedEvidencePresent = hasGroundedLocalEvidence(retrievedDocs);
+        boolean graphOnlyContext = !groundedEvidencePresent && containsGraphHint(context);
+        boolean emptyContext = !groundedEvidencePresent && ((context == null || context.isBlank()) || graphOnlyContext);
         RagRetrievalProperties.WebFallbackMode mode = ragRetrievalProperties.getWebFallbackMode();
         return switch (mode) {
             case NONE -> false;
             case ON_EMPTY -> emptyContext;
             case ON_LOW_QUALITY -> emptyContext || bestRetrievalScore < ragRetrievalProperties.getWebFallbackQualityThreshold();
         };
+    }
+
+    private boolean hasGroundedLocalEvidence(List<Document> retrievedDocs) {
+        if (retrievedDocs == null || retrievedDocs.isEmpty()) {
+            return false;
+        }
+        return retrievedDocs.stream().anyMatch(doc -> {
+            if (doc == null) {
+                return false;
+            }
+            String sourceType = String.valueOf(doc.getMetadata().getOrDefault("source_type", "")).trim().toLowerCase(Locale.ROOT);
+            if ("graph_rag".equals(sourceType)) {
+                return isSubstantiveGraphEvidence(doc.getText());
+            }
+            String text = doc.getText();
+            return text != null && !text.isBlank();
+        });
+    }
+
+    private boolean containsGraphHint(String context) {
+        return context != null && context.contains("知识图谱关联提示");
+    }
+
+    private boolean isSubstantiveGraphEvidence(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        long conceptCount = text.chars().filter(ch -> ch == '（').count();
+        return conceptCount >= 2 || text.contains("；");
     }
 
     /**
@@ -1182,7 +1252,7 @@ public class RAGService {
         return parseRewrittenQuery(raw);
     }
 
-    private RewrittenQuery buildRewrittenQuery(String question, String userAnswer) {
+    private RewrittenQuery buildRewrittenQuery(String question, String userAnswer, SkillExecutionBudget skillBudget) {
         String fallbackRaw = normalizeRewriteSource(question, userAnswer);
         if (!shouldRewriteQuery(question, userAnswer)) {
             return RewrittenQuery.fallback(fallbackRaw);
@@ -1193,13 +1263,148 @@ public class RAGService {
             return cachedRewrite.query();
         }
         try {
-            RewrittenQuery rewrittenQuery = callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
+            SkillExecutionResult result = skillOrchestrator.execute(
+                    "query-optimizer",
+                    new SkillExecutionContext(
+                            RAGTraceContext.getTraceId(),
+                            "rag-service",
+                            Map.of(
+                                    "question", question == null ? "" : question,
+                                    "userAnswer", userAnswer == null ? "" : userAnswer
+                            ),
+                            skillBudget
+                    )
+            );
+            RewrittenQuery rewrittenQuery = result.succeeded()
+                    ? new RewrittenQuery(
+                    result.textOutput("coreTerms"),
+                    result.textOutput("expandTerms"),
+                    result.textOutput("fullQuery").isBlank() ? fallbackRaw : result.textOutput("fullQuery")
+            )
+                    : callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
             putRewriteCache(cacheKey, rewrittenQuery);
             return rewrittenQuery;
         } catch (RuntimeException e) {
             logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
             return RewrittenQuery.fallback(fallbackRaw);
         }
+    }
+
+    private SkillExecutionResult evaluateEvidenceSkill(RewrittenQuery rewrittenQuery,
+                                                       List<Document> retrievedDocs,
+                                                       String context,
+                                                       double bestRetrievalScore,
+                                                       boolean allowWebFallback,
+                                                       String traceId,
+                                                       SkillExecutionBudget skillBudget) {
+        return skillOrchestrator.execute(
+                "evidence-evaluator",
+                new SkillExecutionContext(
+                        traceId,
+                        "rag-service",
+                        Map.of(
+                                "retrievalQuery", rewrittenQuery == null ? "" : rewrittenQuery.fullQuery(),
+                                "retrievedDocs", retrievedDocs == null ? List.of() : retrievedDocs,
+                                "context", context == null ? "" : context,
+                                "bestRetrievalScore", bestRetrievalScore,
+                                "allowWebFallback", allowWebFallback
+                        ),
+                        skillBudget
+                )
+        );
+    }
+
+    private List<String> runControlledWebSearch(String query,
+                                                String traceId,
+                                                String reason,
+                                                SkillExecutionBudget skillBudget) {
+        SkillDefinition definition = skillOrchestrator.definition("evidence-evaluator");
+        SkillExecutionContext skillContext = new SkillExecutionContext(
+                traceId,
+                "rag-service",
+                Map.of(
+                        "query", query == null ? "" : query,
+                        "reason", reason == null ? "" : reason
+                ),
+                skillBudget
+        );
+        Map<String, Object> mcpResult = skillMcpClient.invokeForSkill(
+                "rag-service",
+                definition,
+                skillContext,
+                "web.search",
+                Map.of(
+                        "query", query == null ? "" : query,
+                        "limit", 3,
+                        "reason", reason == null ? "" : reason
+                )
+        );
+        List<String> snippets = extractSearchSnippets(mcpResult);
+        if (!snippets.isEmpty()) {
+            return snippets;
+        }
+        return webSearchTool.run(new WebSearchTool.Query(query, 3));
+    }
+
+    private List<String> extractSearchSnippets(Map<String, Object> mcpResult) {
+        if (mcpResult == null || mcpResult.isEmpty()) {
+            return List.of();
+        }
+        Object result = mcpResult.get("result");
+        if (result instanceof List<?> list) {
+            return stringifySearchList(list);
+        }
+        if (result instanceof Map<?, ?> map) {
+            Object items = map.get("results");
+            if (!(items instanceof List<?>)) {
+                items = map.get("items");
+            }
+            if (!(items instanceof List<?>)) {
+                items = map.get("snippets");
+            }
+            if (items instanceof List<?> list) {
+                return stringifySearchList(list);
+            }
+            Object content = map.get("content");
+            if (content instanceof String text && !text.isBlank()) {
+                return List.of(text.trim());
+            }
+        }
+        return List.of();
+    }
+
+    private List<String> stringifySearchList(List<?> list) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        return list.stream()
+                .map(this::searchSnippetOf)
+                .filter(item -> item != null && !item.isBlank())
+                .limit(3)
+                .toList();
+    }
+
+    private String searchSnippetOf(Object item) {
+        if (item instanceof String text) {
+            return text.trim();
+        }
+        if (item instanceof Map<?, ?> map) {
+            Object title = map.get("title");
+            Object snippet = map.get("snippet");
+            if (snippet == null) {
+                snippet = map.get("content");
+            }
+            if (snippet == null) {
+                snippet = map.get("summary");
+            }
+            String titleText = title == null ? "" : String.valueOf(title).trim();
+            String snippetText = snippet == null ? "" : String.valueOf(snippet).trim();
+            if (!titleText.isBlank() && !snippetText.isBlank()) {
+                return titleText + " - " + snippetText;
+            }
+            return snippetText;
+        }
+        return item == null ? "" : String.valueOf(item).trim();
     }
 
     private boolean shouldRewriteQuery(String question, String userAnswer) {
@@ -1484,8 +1689,18 @@ public class RAGService {
          String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
          try {
             logger.debug("[generateFirstQuestion] Params: topic={}, skipIntro={}", topic, skipIntro);
+            String strategySummary = resolveQuestionStrategySummary(
+                    "first-question",
+                    topic,
+                    "",
+                    "",
+                    "",
+                    profileSnapshot,
+                    resumeContent,
+                    skipIntro
+            );
             Map<String, Object> vars = new HashMap<>();
-            vars.put("skillBlock", skillBlock);
+            vars.put("skillBlock", mergeSkillGuidance(skillBlock, strategySummary));
             vars.put("resume", truncate(resumeContent, 1500));
             vars.put("profileSnapshot", truncate(profileSnapshot, 500));
             vars.put("topic", topic == null ? "" : topic);
@@ -1510,17 +1725,23 @@ public class RAGService {
     public String generateFinalReport(String topic, List<Question> history, String targetedSuggestion, String rollingSummary) {
         // 使用新抽离的 interview-report-generator 和 interview-growth-coach 技能
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-report-generator", "interview-growth-coach"));
+        String reportStrategySummary = resolveFinalReportSummary(topic, history, targetedSuggestion, rollingSummary);
+        List<Question> safeHistory = history == null ? List.of() : history;
         
         // 结合 Rolling Summary 机制，如果存在滚动总结，则将其作为极高权重的历史基线传入
         String baseContext = rollingSummary == null || rollingSummary.isBlank() ? "" : "【前期面试表现滚动总结】\n" + rollingSummary + "\n\n";
 
         // Contextual Compression: 针对长达几十轮的面试历史，采用摘要式压缩
         // 因为已经有了 rollingSummary 覆盖了前面的对话，这里我们只需要保留最近 5 轮的详细记录即可，防止 Prompt 过长
-        int historySize = history.size();
+        int historySize = safeHistory.size();
         int recentCount = Math.min(historySize, 5);
-        List<Question> recentHistoryList = history.subList(historySize - recentCount, historySize);
+        List<Question> recentHistoryList = recentCount <= 0
+                ? List.of()
+                : safeHistory.subList(historySize - recentCount, historySize);
 
-        String qaHistory = recentHistoryList.stream()
+        String qaHistory = recentHistoryList.isEmpty()
+                ? "暂无有效面试记录。"
+                : recentHistoryList.stream()
                 .map(item -> {
                     // 对于最近 5 轮，我们仍然保留 150 个字符的截断作为双保险，避免个别回答异常冗长
                     String shortAnswer = item.getUserAnswer() != null && item.getUserAnswer().length() > 150 
@@ -1533,7 +1754,7 @@ public class RAGService {
                 .collect(Collectors.joining("\n\n---\n\n"));
 
         Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", skillBlock);
+        params.put("skillBlock", mergeSkillGuidance(skillBlock, reportStrategySummary));
         params.put("topic", topic);
         params.put("targetedSuggestion", targetedSuggestion);
         params.put("baseContext", baseContext);
@@ -1550,7 +1771,7 @@ public class RAGService {
             return response;
         } catch (RuntimeException e) {
             logger.warn("最终复盘生成失败，返回降级报告。原因: {}", summarizeError(e));
-            return buildFallbackReport(history, targetedSuggestion);
+            return buildFallbackReport(safeHistory, targetedSuggestion);
         }
     }
 
@@ -1559,9 +1780,18 @@ public class RAGService {
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
         String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
         String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
+        String codingCoachSummary = resolveCodingCoachSummary(
+                "generate_question",
+                normalizedTopic,
+                normalizedDifficulty,
+                normalizedQuestionType,
+                "",
+                "",
+                0
+        );
         
         Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", skillBlock);
+        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
         params.put("topic", normalizedTopic);
         params.put("difficulty", normalizedDifficulty);
         params.put("questionType", normalizedQuestionType);
@@ -1596,9 +1826,18 @@ public class RAGService {
         String normalizedTopic = topic == null || topic.isBlank() ? "Java基础" : topic.trim();
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
         String skillBlock = resolveCodingSkillBlock("选择题");
+        String codingCoachSummary = resolveCodingCoachSummary(
+                "generate_question",
+                normalizedTopic,
+                normalizedDifficulty,
+                "CHOICE",
+                "",
+                "",
+                0
+        );
 
         Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", skillBlock);
+        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
         params.put("topic", normalizedTopic);
         params.put("difficulty", normalizedDifficulty);
         params.put("count", String.valueOf(Math.min(count, 10)));
@@ -1711,9 +1950,18 @@ public class RAGService {
         }
         String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
         String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
+        String codingCoachSummary = resolveCodingCoachSummary(
+                "evaluate_code",
+                normalizedTopic,
+                normalizedDifficulty,
+                normalizedQuestionType,
+                safeQuestion,
+                safeAnswer,
+                0
+        );
         
         Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", skillBlock);
+        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
         params.put("topic", normalizedTopic);
         params.put("difficulty", normalizedDifficulty);
         params.put("questionType", normalizedQuestionType);
@@ -1749,9 +1997,18 @@ public class RAGService {
     public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
         String normalizedQuestionType = normalizeCodingQuestionType(topic);
         String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
+        String codingCoachSummary = resolveCodingCoachSummary(
+                "generate_follow_up",
+                topic == null ? "算法" : topic,
+                difficulty == null ? "medium" : difficulty,
+                normalizedQuestionType,
+                question,
+                answer,
+                score
+        );
         
         Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", skillBlock);
+        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
         params.put("topic", topic == null ? "算法" : topic);
         params.put("difficulty", difficulty == null ? "medium" : difficulty);
         params.put("questionType", normalizedQuestionType);
@@ -1779,9 +2036,10 @@ public class RAGService {
         String normalizedTopic = topic == null || topic.isBlank() ? "后端基础" : topic.trim();
         // 使用新抽离的 personalized-learning-planner 技能
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("personalized-learning-planner", "interview-learning-profile", "interview-growth-coach"));
+        String planningSummary = resolveLearningPlanSummary(normalizedTopic, weakPoint, recentPerformance);
         
         Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", skillBlock);
+        params.put("skillBlock", mergeSkillGuidance(skillBlock, planningSummary));
         params.put("topic", normalizedTopic);
         params.put("weakPoint", truncate(weakPoint, 200));
         params.put("recentPerformance", truncate(recentPerformance, 300));
@@ -2080,6 +2338,114 @@ public class RAGService {
             return "";
         }
         return content.trim();
+    }
+
+    private String resolveQuestionStrategySummary(String stage,
+                                                  String topic,
+                                                  String question,
+                                                  String difficultyLevel,
+                                                  String followUpState,
+                                                  String profileSnapshot,
+                                                  String resumeContent,
+                                                  boolean skipIntro) {
+        SkillExecutionResult result = skillOrchestrator.execute(
+                "question-strategy",
+                new SkillExecutionContext(
+                        RAGTraceContext.getTraceId(),
+                        "rag-service",
+                        Map.of(
+                                "stage", stage == null ? "" : stage,
+                                "topic", topic == null ? "" : topic,
+                                "question", question == null ? "" : question,
+                                "difficultyLevel", difficultyLevel == null ? "" : difficultyLevel,
+                                "followUpState", followUpState == null ? "" : followUpState,
+                                "profileSnapshot", profileSnapshot == null ? "" : profileSnapshot,
+                                "resumeContent", resumeContent == null ? "" : resumeContent,
+                                "skipIntro", skipIntro
+                        ),
+                        skillOrchestrator.newBudget()
+                )
+        );
+        return result.succeeded() ? result.textOutput("strategySummary") : "";
+    }
+
+    private String mergeSkillGuidance(String skillBlock, String strategySummary) {
+        String normalizedSkillBlock = skillBlock == null ? "" : skillBlock.trim();
+        String normalizedStrategySummary = strategySummary == null ? "" : strategySummary.trim();
+        if (normalizedSkillBlock.isBlank()) {
+            return normalizedStrategySummary;
+        }
+        if (normalizedStrategySummary.isBlank()) {
+            return normalizedSkillBlock;
+        }
+        return normalizedSkillBlock + "\n\n" + normalizedStrategySummary;
+    }
+
+    private String resolveCodingCoachSummary(String taskType,
+                                             String topic,
+                                             String difficulty,
+                                             String questionType,
+                                             String question,
+                                             String answer,
+                                             int score) {
+        SkillExecutionResult result = skillOrchestrator.execute(
+                "coding-interview-coach",
+                new SkillExecutionContext(
+                        RAGTraceContext.getTraceId(),
+                        "rag-service",
+                        Map.of(
+                                "taskType", taskType == null ? "" : taskType,
+                                "topic", topic == null ? "" : topic,
+                                "difficulty", difficulty == null ? "" : difficulty,
+                                "questionType", questionType == null ? "" : questionType,
+                                "question", question == null ? "" : question,
+                                "answer", answer == null ? "" : answer,
+                                "score", score
+                        ),
+                        skillOrchestrator.newBudget()
+                )
+        );
+        return result.succeeded() ? result.textOutput("coachingSummary") : "";
+    }
+
+    private String resolveLearningPlanSummary(String topic,
+                                              String weakPoint,
+                                              String recentPerformance) {
+        SkillExecutionResult result = skillOrchestrator.execute(
+                "personalized-learning-planner",
+                new SkillExecutionContext(
+                        RAGTraceContext.getTraceId(),
+                        "rag-service",
+                        Map.of(
+                                "topic", topic == null ? "" : topic,
+                                "weakPoint", weakPoint == null ? "" : weakPoint,
+                                "recentPerformance", recentPerformance == null ? "" : recentPerformance
+                        ),
+                        skillOrchestrator.newBudget()
+                )
+        );
+        return result.succeeded() ? result.textOutput("planningSummary") : "";
+    }
+
+    private String resolveFinalReportSummary(String topic,
+                                             List<Question> history,
+                                             String targetedSuggestion,
+                                             String rollingSummary) {
+        SkillExecutionResult result = skillOrchestrator.execute(
+                "interview-report-generator",
+                new SkillExecutionContext(
+                        RAGTraceContext.getTraceId(),
+                        "rag-service",
+                        Map.of(
+                                "topic", topic == null ? "" : topic,
+                                "history", history == null ? List.of() : history,
+                                "targetedSuggestion", targetedSuggestion == null ? "" : targetedSuggestion,
+                                "rollingSummary", rollingSummary == null ? "" : rollingSummary
+                        ),
+                        skillOrchestrator.newBudget()
+                )
+        );
+        return result.succeeded() ? result.textOutput("reportSummary") : "";
     }
 
     private double sourceTypeBoost(Document doc) {

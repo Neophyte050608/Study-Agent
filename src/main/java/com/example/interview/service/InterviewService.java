@@ -13,6 +13,7 @@ import com.example.interview.service.interview.InterviewSessionApplicationServic
 import com.example.interview.service.interview.McpApplicationService;
 import com.example.interview.service.interview.ObservabilityApplicationService;
 import com.example.interview.service.interview.ProfileApplicationService;
+import com.example.interview.skill.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -342,6 +343,13 @@ public class InterviewService {
         return observabilityApplicationService.updateObservabilitySwitches(
                 ragTraceEnabled, retrievalEvalEnabled, ragQualityEvalEnabled
         );
+    }
+
+    public List<SkillTelemetryRecorder.SkillTelemetryEvent> getRecentSkillTelemetry(int limit,
+                                                                                    String skillId,
+                                                                                    String status,
+                                                                                    String traceId) {
+        return observabilityApplicationService.getRecentSkillTelemetry(limit, skillId, status, traceId);
     }
 
     public record AnswerResult(

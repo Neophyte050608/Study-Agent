@@ -3,9 +3,20 @@ package com.example.interview.service;
 import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.config.ParentChildRetrievalProperties;
 import com.example.interview.config.RagRetrievalProperties;
+import com.example.interview.config.SkillExecutionProperties;
 import com.example.interview.entity.RagParentDO;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.modelrouting.TimeoutHint;
+import com.example.interview.skill.EvidenceEvaluatorSkill;
+import com.example.interview.skill.CodingInterviewCoachSkill;
+import com.example.interview.skill.PersonalizedLearningPlannerSkill;
+import com.example.interview.skill.QueryOptimizerSkill;
+import com.example.interview.skill.QuestionStrategySkill;
+import com.example.interview.skill.SkillExecutor;
+import com.example.interview.skill.SkillMcpClient;
+import com.example.interview.skill.SkillOrchestrator;
+import com.example.interview.skill.SkillRegistry;
 import com.example.interview.tool.WebSearchTool;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +79,9 @@ class ParentChildRetrievalHydrationTest {
     @Mock
     private ImageService imageService;
 
+    @Mock
+    private McpGatewayService mcpGatewayService;
+
     private RAGService ragService;
     private RetrievalTokenizerService retrievalTokenizerService;
     private RagRetrievalProperties ragRetrievalProperties;
@@ -81,6 +95,20 @@ class ParentChildRetrievalHydrationTest {
         parentChildRetrievalProperties.setHydrateChildMatchChars(80);
         retrievalTokenizerService = new RetrievalTokenizerService();
         ragRetrievalProperties = new RagRetrievalProperties();
+        SkillExecutionProperties skillExecutionProperties = new SkillExecutionProperties();
+        SkillRegistry skillRegistry = new SkillRegistry(List.of(
+                new QueryOptimizerSkill(routingChatService, agentSkillService),
+                new EvidenceEvaluatorSkill(ragRetrievalProperties),
+                new QuestionStrategySkill(),
+                new CodingInterviewCoachSkill(),
+                new PersonalizedLearningPlannerSkill()
+        ));
+        SkillOrchestrator skillOrchestrator = new SkillOrchestrator(
+                skillRegistry,
+                new SkillExecutor(skillExecutionProperties),
+                skillExecutionProperties
+        );
+        SkillMcpClient skillMcpClient = new SkillMcpClient(mcpGatewayService);
         Executor executor = Runnable::run;
         ragService = new RAGService(
                 routingChatService,
@@ -98,7 +126,9 @@ class ParentChildRetrievalHydrationTest {
                 ragRetrievalProperties,
                 parentChildRetrievalProperties,
                 parentChildIndexService,
-                imageService
+                imageService,
+                skillOrchestrator,
+                skillMcpClient
         );
     }
 
@@ -108,11 +138,15 @@ class ParentChildRetrievalHydrationTest {
     @Test
     void shouldHydrateParentContextAndChildSnippetWhenChildMatched() {
         AtomicInteger callIndex = new AtomicInteger(0);
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(), anyString(), any(ModelRouteType.class), anyString()))
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenAnswer(invocation -> callIndex.getAndIncrement() == 0 ? "缓存一致性 检索词" : "{\"score\":80,\"accuracy\":80,\"logic\":80,\"depth\":80,\"boundary\":80,\"deductions\":[],\"citations\":[\"1. [ok]\"],\"conflicts\":[],\"feedback\":\"ok\",\"nextQuestion\":\"继续\"}");
         when(agentSkillService.resolveSkillBlock(any())).thenReturn("");
         when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of());
         when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
+        when(mcpGatewayService.invoke(anyString(), anyString(), any(), any())).thenReturn(Map.of(
+                "status", "blocked",
+                "result", Map.of()
+        ));
 
         Document childDoc = new Document("child content");
         childDoc.getMetadata().put("file_path", "note/cache.md");

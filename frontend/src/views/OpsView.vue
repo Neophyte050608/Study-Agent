@@ -619,6 +619,111 @@
           </div>
         </div>
 
+        <div class="col-span-12 bg-white dark:bg-slate-900 rounded-xl p-8 border border-slate-200 shadow-sm">
+          <div class="flex items-start justify-between gap-4 mb-6">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">Skills 执行观测</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">观测真实可执行 skill 的最近执行事件、降级情况和 trace 关联。</p>
+            </div>
+            <button @click="loadSkillTelemetryPanel" :disabled="skillTelemetryLoading" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-200 transition-all disabled:opacity-50 flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm" :class="skillTelemetryLoading ? 'animate-spin' : ''">{{ skillTelemetryLoading ? 'progress_activity' : 'sync' }}</span>
+              {{ skillTelemetryLoading ? '加载中...' : '刷新 Skills' }}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-12 gap-6">
+            <section class="col-span-4 rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/50 p-5">
+              <div class="grid grid-cols-3 gap-3">
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">事件数</div>
+                  <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ skillEventCount }}</div>
+                </div>
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">降级</div>
+                  <div class="mt-1 text-lg font-black text-amber-700">{{ skillFallbackCount }}</div>
+                </div>
+                <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                  <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">平均耗时</div>
+                  <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ skillAvgLatency }}<span class="text-sm font-medium ml-1 opacity-60">ms</span></div>
+                </div>
+              </div>
+
+              <div class="mt-5 space-y-3">
+                <div>
+                  <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Skill</label>
+                  <select v-model="selectedSkillId" class="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="ALL">全部</option>
+                    <option v-for="skillId in skillIds" :key="skillId" :value="skillId">{{ skillId }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">状态</label>
+                  <select v-model="selectedSkillStatus" class="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="ALL">全部</option>
+                    <option value="SUCCESS">SUCCESS</option>
+                    <option value="FALLBACK">FALLBACK</option>
+                    <option value="SKIPPED">SKIPPED</option>
+                    <option value="FAILED">FAILED</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Trace ID</label>
+                  <input v-model="skillTraceQuery" type="text" placeholder="trace-..." class="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex items-center gap-3">
+                  <button @click="loadSkillTelemetryPanel" :disabled="skillTelemetryLoading" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">应用过滤</button>
+                  <button @click="resetSkillTelemetryFilters" :disabled="skillTelemetryLoading" class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-all disabled:opacity-50">重置</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="col-span-8 rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/50 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">最近事件</h4>
+                <span class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">最多展示 12 条</span>
+              </div>
+
+              <div v-if="!skillTelemetry.length" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                暂无技能执行事件
+              </div>
+
+              <div v-else class="space-y-3">
+                <article v-for="item in skillTelemetry" :key="`${item.timestamp}-${item.skillId}-${item.status}`" class="rounded-lg border border-slate-200 bg-white dark:bg-slate-900 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 flex-wrap">
+                      <span class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ item.skillId || '-' }}</span>
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold" :class="getSkillStatusClass(item.status)">{{ formatSkillStatus(item.status) }}</span>
+                      <span v-if="item.fallbackUsed" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">fallback</span>
+                    </div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                      {{ formatTime(item.timestamp) }}
+                    </div>
+                  </div>
+                  <div class="mt-3 grid grid-cols-4 gap-3 text-xs">
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
+                      <div class="text-slate-500 dark:text-slate-400 dark:text-slate-500">耗时</div>
+                      <div class="mt-1 font-bold text-slate-900 dark:text-slate-100">{{ item.latencyMs || 0 }} ms</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
+                      <div class="text-slate-500 dark:text-slate-400 dark:text-slate-500">尝试次数</div>
+                      <div class="mt-1 font-bold text-slate-900 dark:text-slate-100">{{ item.attempts || 0 }}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
+                      <div class="text-slate-500 dark:text-slate-400 dark:text-slate-500">Trace</div>
+                      <div class="mt-1 font-mono font-bold text-slate-900 dark:text-slate-100">{{ shortTraceId(skillTraceId(item)) }}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
+                      <div class="text-slate-500 dark:text-slate-400 dark:text-slate-500">Operator</div>
+                      <div class="mt-1 font-bold text-slate-900 dark:text-slate-100">{{ skillOperator(item) }}</div>
+                    </div>
+                  </div>
+                  <p class="mt-3 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500 break-all">{{ item.message || '-' }}</p>
+                </article>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <!-- Recent Audit Log (Asymmetric Section) -->
         <div id="section-audit" class="col-span-12 bg-white dark:bg-slate-900 rounded-xl p-8 border border-slate-200 shadow-sm">
           <div class="flex items-center justify-between mb-6">
@@ -651,7 +756,7 @@
 import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns } from '../api/admin'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: {
@@ -679,6 +784,11 @@ const displayedTraces = computed(() => {
   return traces.value.slice(0, 5)
 })
 const audits = ref([])
+const skillTelemetry = ref([])
+const skillTelemetryLoading = ref(false)
+const selectedSkillId = ref('ALL')
+const selectedSkillStatus = ref('ALL')
+const skillTraceQuery = ref('')
 const idempotency = ref({})
 const showAdvancedOps = ref(false)
 const datasetLoading = ref(false)
@@ -713,6 +823,20 @@ const selectedQualityDatasetDescription = computed(() => {
   const current = qualityDatasets.value.find(item => item.datasetId === selectedQualityDataset.value)
   if (!current) return '请选择质量评测使用的数据集。'
   return `${current.description || ''}${current.fileName ? ` | ${current.fileName}` : ''}`
+})
+
+const skillIds = computed(() => {
+  return Array.from(new Set(skillTelemetry.value.map(item => item.skillId).filter(Boolean))).sort()
+})
+
+const skillEventCount = computed(() => skillTelemetry.value.length)
+
+const skillFallbackCount = computed(() => skillTelemetry.value.filter(item => item.fallbackUsed).length)
+
+const skillAvgLatency = computed(() => {
+  if (!skillTelemetry.value.length) return 0
+  const total = skillTelemetry.value.reduce((sum, item) => sum + Number(item.latencyMs || 0), 0)
+  return Math.round(total / skillTelemetry.value.length)
 })
 
 const qualityMetrics = computed(() => {
@@ -887,6 +1011,63 @@ const loadEvalDatasets = async () => {
 }
 
 const formatPercent = (value) => `${(((typeof value === 'number' ? value : 0) || 0) * 100).toFixed(1)}%`
+
+const fetchSkillTelemetry = () => {
+  return loadSkillTelemetryApi({
+    limit: 12,
+    skillId: selectedSkillId.value,
+    status: selectedSkillStatus.value,
+    traceId: skillTraceQuery.value.trim()
+  })
+}
+
+const assignSkillTelemetry = (payload) => {
+  skillTelemetry.value = Array.isArray(payload) ? payload : (payload?.records || [])
+}
+
+const loadSkillTelemetryPanel = async () => {
+  skillTelemetryLoading.value = true
+  try {
+    const data = await fetchSkillTelemetry()
+    assignSkillTelemetry(data)
+  } catch (error) {
+    hint.value = `加载技能观测失败: ${error.message || 'unknown'}`
+  } finally {
+    skillTelemetryLoading.value = false
+  }
+}
+
+const resetSkillTelemetryFilters = async () => {
+  selectedSkillId.value = 'ALL'
+  selectedSkillStatus.value = 'ALL'
+  skillTraceQuery.value = ''
+  await loadSkillTelemetryPanel()
+}
+
+const formatSkillStatus = (status) => {
+  if (status === 'SUCCESS') return '成功'
+  if (status === 'FALLBACK') return '降级'
+  if (status === 'SKIPPED') return '跳过'
+  if (status === 'FAILED') return '失败'
+  return status || '未知'
+}
+
+const getSkillStatusClass = (status) => {
+  if (status === 'SUCCESS') return 'bg-emerald-100 text-emerald-700'
+  if (status === 'FALLBACK') return 'bg-amber-100 text-amber-700'
+  if (status === 'SKIPPED') return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+  if (status === 'FAILED') return 'bg-red-100 text-red-700'
+  return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+}
+
+const skillTraceId = (item) => item?.attributes?.traceId || '-'
+
+const skillOperator = (item) => item?.attributes?.operator || '-'
+
+const shortTraceId = (value) => {
+  if (!value || value === '-') return '-'
+  return value.length > 10 ? value.slice(0, 10) : value
+}
 
 const toggleSample = (idx) => {
   const pos = expandedSamples.value.indexOf(idx)
@@ -1226,11 +1407,12 @@ const reload = async () => {
       startedAfter: traceStartedAfter.value,
       endedBefore: traceEndedBefore.value
     }
-    const [overviewData, tracesData, idempotencyData, auditsData] = await Promise.all([
+    const [overviewData, tracesData, idempotencyData, auditsData, skillTelemetryData] = await Promise.all([
       loadOpsOverview(),
       loadOpsTraces(traceFilters),
       loadOpsIdempotency(),
-      loadOpsAudits(5)
+      loadOpsAudits(5),
+      fetchSkillTelemetry()
     ])
     overview.value = overviewData || {}
     traces.value = Array.isArray(tracesData)
@@ -1256,6 +1438,7 @@ const reload = async () => {
       : []
     idempotency.value = idempotencyData || {}
     audits.value = Array.isArray(auditsData) ? auditsData : []
+    assignSkillTelemetry(skillTelemetryData)
     hint.value = '数据已刷新'
   } catch (error) {
     hint.value = `刷新失败: ${error.message || 'unknown'}`

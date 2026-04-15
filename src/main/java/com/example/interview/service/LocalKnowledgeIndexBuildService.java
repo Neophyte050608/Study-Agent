@@ -87,6 +87,7 @@ public class LocalKnowledgeIndexBuildService {
         writeIndex(outputPath, vaultRoot, serializedNodes);
 
         if (request.activate()) {
+            properties.setIndexFilePath(outputPath.toString());
             ingestConfigService.saveLocalKnowledgeIndexPath(outputPath.toString());
         }
 

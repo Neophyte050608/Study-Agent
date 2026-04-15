@@ -19,6 +19,16 @@ export function loadOpsTraces(filters = {}) {
   return httpGet(`/api/observability/rag-traces${suffix}`)
 }
 
+export function loadSkillTelemetry(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.limit) params.set('limit', String(filters.limit))
+  if (filters.skillId && filters.skillId !== 'ALL') params.set('skillId', filters.skillId)
+  if (filters.status && filters.status !== 'ALL') params.set('status', filters.status)
+  if (filters.traceId) params.set('traceId', filters.traceId)
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return httpGet(`/api/observability/skills${suffix}`)
+}
+
 export function loadOpsTraceDetail(traceId) {
   return httpGet(`/api/observability/rag-traces/${traceId}`)
 }

@@ -295,6 +295,17 @@ app:
   agent:
     skills:
       paths: ${APP_AGENT_SKILLS_PATHS:skills}
+
+  skill:
+    execution:
+      max-skill-executions: ${APP_SKILL_MAX_EXECUTIONS:3}
+      max-mcp-calls: ${APP_SKILL_MAX_MCP_CALLS:2}
+      extra-latency-budget-ms: ${APP_SKILL_EXTRA_LATENCY_BUDGET_MS:3000}
+      default-max-attempts: ${APP_SKILL_DEFAULT_MAX_ATTEMPTS:2}
+      default-backoff-millis: ${APP_SKILL_DEFAULT_BACKOFF_MILLIS:200}
+      default-timeout-ms: ${APP_SKILL_DEFAULT_TIMEOUT_MS:2000}
+      circuit-breaker-failure-threshold: ${APP_SKILL_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
+      circuit-breaker-open-millis: ${APP_SKILL_CIRCUIT_BREAKER_OPEN_MS:60000}
   
   security:
     mode: ${SECURITY_MODE:open}  # open | jwt

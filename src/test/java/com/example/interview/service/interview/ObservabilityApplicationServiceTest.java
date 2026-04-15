@@ -4,6 +4,7 @@ import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.service.RAGObservabilityService;
 import com.example.interview.service.RAGQualityEvaluationService;
 import com.example.interview.service.RetrievalEvaluationService;
+import com.example.interview.skill.SkillTelemetryRecorder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -34,7 +35,8 @@ class ObservabilityApplicationServiceTest {
                 ragObservabilityService,
                 mock(RetrievalEvaluationService.class),
                 mock(RAGQualityEvaluationService.class),
-                properties
+                properties,
+                new SkillTelemetryRecorder()
         );
 
         assertEquals(List.of("trace-success", "trace-fallback", "trace-empty"),
@@ -70,7 +72,8 @@ class ObservabilityApplicationServiceTest {
                 ragObservabilityService,
                 mock(RetrievalEvaluationService.class),
                 mock(RAGQualityEvaluationService.class),
-                properties
+                properties,
+                new SkillTelemetryRecorder()
         );
 
         assertEquals(

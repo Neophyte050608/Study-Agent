@@ -3,10 +3,23 @@ package com.example.interview.service;
 import com.example.interview.config.ObservabilitySwitchProperties;
 import com.example.interview.config.ParentChildRetrievalProperties;
 import com.example.interview.config.RagRetrievalProperties;
+import com.example.interview.config.SkillExecutionProperties;
+import com.example.interview.core.Question;
 import com.example.interview.graph.TechConceptRepository;
 import com.example.interview.graph.TechConceptSnippetView;
 import com.example.interview.modelrouting.ModelRouteType;
 import com.example.interview.modelrouting.RoutingChatService;
+import com.example.interview.modelrouting.TimeoutHint;
+import com.example.interview.skill.EvidenceEvaluatorSkill;
+import com.example.interview.skill.CodingInterviewCoachSkill;
+import com.example.interview.skill.InterviewReportGeneratorSkill;
+import com.example.interview.skill.PersonalizedLearningPlannerSkill;
+import com.example.interview.skill.QueryOptimizerSkill;
+import com.example.interview.skill.QuestionStrategySkill;
+import com.example.interview.skill.SkillExecutor;
+import com.example.interview.skill.SkillMcpClient;
+import com.example.interview.skill.SkillOrchestrator;
+import com.example.interview.skill.SkillRegistry;
 import com.example.interview.tool.WebSearchTool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -88,6 +101,9 @@ class RAGServiceTest {
     @Mock
     private ImageService imageService;
 
+    @Mock
+    private McpGatewayService mcpGatewayService;
+
     private final Executor ragRetrieveExecutor = Runnable::run;
 
     private RetrievalTokenizerService retrievalTokenizerService;
@@ -98,6 +114,21 @@ class RAGServiceTest {
     void setUp() {
         retrievalTokenizerService = new RetrievalTokenizerService();
         ragRetrievalProperties = new RagRetrievalProperties();
+        SkillExecutionProperties skillExecutionProperties = new SkillExecutionProperties();
+        SkillRegistry skillRegistry = new SkillRegistry(List.of(
+                new QueryOptimizerSkill(routingChatService, agentSkillService),
+                new EvidenceEvaluatorSkill(ragRetrievalProperties),
+                new QuestionStrategySkill(),
+                new CodingInterviewCoachSkill(),
+                new InterviewReportGeneratorSkill(),
+                new PersonalizedLearningPlannerSkill()
+        ));
+        SkillOrchestrator skillOrchestrator = new SkillOrchestrator(
+                skillRegistry,
+                new SkillExecutor(skillExecutionProperties),
+                skillExecutionProperties
+        );
+        SkillMcpClient skillMcpClient = new SkillMcpClient(mcpGatewayService);
         ragService = new RAGService(
                 routingChatService,
                 vectorStore,
@@ -114,16 +145,27 @@ class RAGServiceTest {
                 ragRetrievalProperties,
                 parentChildRetrievalProperties,
                 parentChildIndexService,
-                imageService
+                imageService,
+                skillOrchestrator,
+                skillMcpClient
         );
+        when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
+                .thenReturn(new RoutingChatService.RoutingResult("{\"score\":80,\"accuracy\":80,\"logic\":80,\"depth\":80,\"boundary\":80,\"deductions\":[],\"citations\":[\"1. [ok]\"],\"conflicts\":[],\"feedback\":\"ok\",\"nextQuestion\":\"继续\"}", 0, 0, 0L));
     }
 
     @Test
     void shouldCallWebSearchWhenVectorStoreIsEmpty() {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("Java Concurrency");
         when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "fallback_stub",
+                "result", Map.of()
+        ));
         when(webSearchTool.run(any())).thenReturn(List.of("Web info about concurrency"));
 
         ragService.buildKnowledgePacket("什么是并发", "同时执行");
@@ -136,7 +178,8 @@ class RAGServiceTest {
         ragRetrievalProperties.setWebFallbackMode(RagRetrievalProperties.WebFallbackMode.ON_LOW_QUALITY);
         ragRetrievalProperties.setWebFallbackQualityThreshold(0.40D);
 
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("Redis 为什么快");
         when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
         when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of());
@@ -145,6 +188,10 @@ class RAGServiceTest {
         unrelatedDoc.getMetadata().put("file_path", "note/docker.md");
         unrelatedDoc.getMetadata().put("source_type", "obsidian");
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of(unrelatedDoc));
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "fallback_stub",
+                "result", Map.of()
+        ));
         when(webSearchTool.run(any())).thenReturn(List.of("Redis 基于内存访问与高效数据结构实现低延迟"));
 
         RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("Redis 为什么快", "");
@@ -158,15 +205,20 @@ class RAGServiceTest {
      */
     @Test
     void shouldBuildGraphRagContextFromConceptDescriptions() {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("HashMap 树化");
         when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
         when(lexicalIndexService.tokenize(anyString())).thenReturn(List.of("HashMap"));
         when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of());
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
-        when(techConceptRepository.findRelatedConceptSnippetsWithinTwoHops(anyString())).thenReturn(List.of(
-                graphConcept("红黑树", "JDK 8 中链表过长时会树化，避免哈希桶退化。", "Algorithm"),
-                graphConcept("扩容", "容量不足时会触发 rehash，并影响元素迁移成本。", "Concept")
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "blocked",
+                "result", Map.of()
+        ));
+        when(techConceptRepository.findRelatedConceptSnippetsBatch(any())).thenReturn(List.of(
+                batchGraphConcept("HashMap", "红黑树", "JDK 8 中链表过长时会树化，避免哈希桶退化。", "Algorithm"),
+                batchGraphConcept("HashMap", "扩容", "容量不足时会触发 rehash，并影响元素迁移成本。", "Concept")
         ));
 
         RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("HashMap 为什么会树化", "");
@@ -180,18 +232,20 @@ class RAGServiceTest {
 
     @Test
     void shouldFilterInvalidEvidenceReferences() throws Exception {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn(
-                        "Spring Transaction",
-                        """
+                        "Spring Transaction"
+                );
+        when(promptManager.renderSplit(eq("interviewer"), eq("evaluation"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
+                .thenReturn(new RoutingChatService.RoutingResult("""
                         {"score":85,"accuracy":84,"logic":83,"depth":82,"boundary":81,
                         "deductions":["边界解释不足"],
                         "citations":["99. [fake]","1. [ok]"],
                         "conflicts":["异常结论~7","隔离级别描述不全~1"],
                         "feedback":"回答较好","nextQuestion":"说一下面试中的事务隔离级别"}
-                        """
-                );
-        when(promptManager.render(eq("evaluation"), anyMap())).thenReturn("evaluation-prompt");
+                        """, 0, 0, 0L));
 
         Document vectorDoc = new Document("事务的隔离级别包括读未提交、读已提交、可重复读和串行化。");
         vectorDoc.getMetadata().put("file_path", "note/tx.md");
@@ -212,22 +266,27 @@ class RAGServiceTest {
     @Test
     void shouldInjectKnowledgeSkillIntoRewritePrompt() {
         when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("### Skill: query-optimizer\n遵循混合检索流程");
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("事务");
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "blocked",
+                "result", Map.of()
+        ));
         when(webSearchTool.run(any())).thenReturn(List.of("fallback"));
         when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
 
         ragService.buildKnowledgePacket("什么是事务", "用于一致性");
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(routingChatService).callWithFirstPacketProbeSupplier(any(Supplier.class), captor.capture(), any(ModelRouteType.class), anyString());
+        verify(routingChatService).callWithFirstPacketProbeSupplier(any(Supplier.class), captor.capture(), any(ModelRouteType.class), any(TimeoutHint.class), anyString());
         assertTrue(captor.getValue().contains("query-optimizer"));
     }
 
     @Test
     void shouldPrioritizeInterviewExperienceInEvidenceOrder() {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn(
                         "缓存 一致性",
                         """
@@ -250,11 +309,15 @@ class RAGServiceTest {
         interviewDoc.getMetadata().put("source_type", "interview_experience");
 
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of(obsidianDoc, interviewDoc));
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "blocked",
+                "result", Map.of()
+        ));
 
         ragService.processAnswer("缓存", "如何保证缓存一致性", "回答", "INTERMEDIATE", "PROBE", 70.0, "画像");
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(promptManager, atLeastOnce()).render(eq("evaluation"), captor.capture());
+        verify(promptManager, atLeastOnce()).renderSplit(eq("interviewer"), eq("evaluation"), captor.capture());
         Object evidence = captor.getValue().get("retrievalEvidence");
         assertTrue(String.valueOf(evidence).contains("1. [interview_experience:interview/tencent.md]"));
     }
@@ -289,7 +352,9 @@ class RAGServiceTest {
 
     @Test
     void shouldReturnFallbackFirstQuestionWhenChatModelTimeout() {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(promptManager.renderSplit(eq("interviewer"), eq("first-question"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("你好！欢迎参加今天的 JVM 模拟面试。在正式开始技术交流之前，能请你先花 1-2 分钟做一个简单的自我介绍吗？");
 
         String firstQuestion = ragService.generateFirstQuestion("", "JVM", "画像", false);
@@ -300,9 +365,17 @@ class RAGServiceTest {
 
     @Test
     void shouldReturnFallbackEvaluationWhenLayeredEvaluateTimeout() throws Exception {
-        when(promptManager.render(eq("evaluation"), anyMap())).thenReturn("evaluation-prompt");
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("JVM 内存模型");
+        when(promptManager.renderSplit(eq("interviewer"), eq("evaluation"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
                 .thenThrow(new ResourceAccessException("timeout"));
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "blocked",
+                "result", Map.of()
+        ));
 
         RAGService.EvaluationResult result = ragService.evaluateWithKnowledge(
                 "Java",
@@ -323,7 +396,9 @@ class RAGServiceTest {
 
     @Test
     void shouldNormalizeVerboseFirstQuestionOutput() {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), anyString()))
+        when(promptManager.renderSplit(eq("interviewer"), eq("first-question"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("""
                         **第一题：请简述 Java 中 HashMap 的实现原理？**
 
@@ -339,11 +414,168 @@ class RAGServiceTest {
         assertFalse(question.contains("策略提示"));
     }
 
+    @Test
+    void shouldInjectExecutableQuestionStrategyIntoFirstQuestionPrompt() {
+        when(promptManager.renderSplit(eq("interviewer"), eq("first-question"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("请你先做一个简短的自我介绍，然后聊聊 Spring Boot 自动配置原理。");
+
+        ragService.generateFirstQuestion("负责过订单系统重构", "Spring Boot", "高级后端开发", false);
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(promptManager, atLeastOnce()).renderSplit(eq("interviewer"), eq("first-question"), captor.capture());
+        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
+        assertTrue(skillBlock.contains("Question Strategy"));
+        assertTrue(skillBlock.contains("首题生成"));
+    }
+
+    @Test
+    void shouldUseMcpSearchResultWhenAvailable() {
+        ragRetrievalProperties.setWebFallbackMode(RagRetrievalProperties.WebFallbackMode.ON_EMPTY);
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("Java 并发");
+        when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(mcpGatewayService.invoke(anyString(), eq("web.search"), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "ok",
+                "result", List.of(
+                        Map.of("title", "并发基础", "snippet", "线程与锁的关系")
+                )
+        ));
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("什么是并发", "");
+
+        assertTrue(packet.webFallbackUsed());
+        assertTrue(packet.context().contains("并发基础"));
+    }
+
+    @Test
+    void shouldStillFallbackToWebWhenOnlyGraphHintsExist() {
+        ragRetrievalProperties.setWebFallbackMode(RagRetrievalProperties.WebFallbackMode.ON_EMPTY);
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("HashMap 树化");
+        when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
+        when(lexicalIndexService.tokenize(anyString())).thenReturn(List.of("HashMap"));
+        when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of());
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(techConceptRepository.findRelatedConceptSnippetsBatch(any())).thenReturn(List.of(
+                batchGraphConcept("HashMap", "红黑树", "JDK 8 中链表过长时会树化，避免哈希桶退化。", "Algorithm")
+        ));
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "fallback_stub",
+                "result", Map.of()
+        ));
+        when(webSearchTool.run(any())).thenReturn(List.of("Web info about HashMap treeify"));
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("HashMap 为什么会树化", "");
+
+        assertTrue(packet.webFallbackUsed());
+        assertTrue(packet.context().contains("Web info about HashMap treeify"));
+        verify(webSearchTool, times(1)).run(any(WebSearchTool.Query.class));
+    }
+
+    @Test
+    void shouldInjectExecutableCodingCoachIntoCodingQuestionPrompt() {
+        when(promptManager.renderSplit(eq("coding-coach"), eq("coding-question"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("请完成一道 Two Sum 算法题。");
+
+        ragService.generateCodingQuestion("数组与字符串", "medium", "高级后端开发");
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(promptManager, atLeastOnce()).renderSplit(eq("coding-coach"), eq("coding-question"), captor.capture());
+        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
+        assertTrue(skillBlock.contains("Coding Coach"));
+        assertTrue(skillBlock.contains("任务: 出题"));
+    }
+
+    @Test
+    void shouldInjectExecutableCodingCoachIntoCodingEvaluationPrompt() {
+        when(promptManager.renderSplit(eq("coding-coach"), eq("coding-evaluation"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("{\"score\":80,\"feedback\":\"ok\",\"nextHint\":\"补复杂度\",\"nextQuestion\":\"再优化一下空间复杂度\"}");
+
+        ragService.evaluateCodingAnswer("算法", "medium", "Two Sum", "使用 HashMap 一次遍历");
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(promptManager, atLeastOnce()).renderSplit(eq("coding-coach"), eq("coding-evaluation"), captor.capture());
+        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
+        assertTrue(skillBlock.contains("Coding Coach"));
+        assertTrue(skillBlock.contains("任务: 评估"));
+    }
+
+    @Test
+    void shouldInjectExecutableLearningPlannerIntoLearningPlanPrompt() {
+        when(promptManager.renderSplit(eq("interviewer"), eq("learning-plan"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("Day1: 学概念 | 练习: 看一题 | 复盘: 记错点");
+
+        ragService.generateLearningPlan("Redis", "缓存一致性薄弱", "最近低分，边界条件经常漏");
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(promptManager, atLeastOnce()).renderSplit(eq("interviewer"), eq("learning-plan"), captor.capture());
+        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
+        assertTrue(skillBlock.contains("Learning Plan Strategy"));
+        assertTrue(skillBlock.contains("聚焦短板"));
+    }
+
+    @Test
+    void shouldInjectExecutableReportStrategyIntoFinalReportPrompt() {
+        when(promptManager.renderSplit(eq("interviewer"), eq("final-report"), anyMap()))
+                .thenReturn(new PromptManager.PromptPair("system", "user"));
+        when(routingChatService.call(anyString(), anyString(), any(ModelRouteType.class), anyString()))
+                .thenReturn("<summary>整体表现一般</summary>");
+
+        List<Question> history = List.of(
+                new Question("Redis 为什么快", "因为在内存", 45, "只回答了表层现象"),
+                new Question("说一下 JVM 垃圾回收器", "回答不完整", 68, "缺少分代与收集器对比")
+        );
+
+        ragService.generateFinalReport("Java", history, "下一轮重点补 JVM 与 Redis 原理链路", "前几轮存在基础概念混淆");
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(promptManager, atLeastOnce()).renderSplit(eq("interviewer"), eq("final-report"), captor.capture());
+        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
+        assertTrue(skillBlock.contains("Interview Report Strategy"));
+        assertTrue(skillBlock.contains("Redis 为什么快"));
+        assertTrue(skillBlock.contains("targetedSuggestion"));
+    }
+
     /**
      * 构造 GraphRAG 投影视图测试桩，便于验证描述性文本拼装逻辑。
      */
     private TechConceptSnippetView graphConcept(String name, String description, String type) {
         return new TechConceptSnippetView() {
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public String getDescription() {
+                return description;
+            }
+
+            @Override
+            public String getType() {
+                return type;
+            }
+        };
+    }
+
+    private com.example.interview.graph.BatchedConceptSnippetView batchGraphConcept(String anchor, String name, String description, String type) {
+        return new com.example.interview.graph.BatchedConceptSnippetView() {
+            @Override
+            public String getAnchor() {
+                return anchor;
+            }
+
             @Override
             public String getName() {
                 return name;

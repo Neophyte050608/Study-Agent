@@ -884,6 +884,26 @@ public class InterviewController {
     }
 
     /**
+     * 获取最近的技能执行 telemetry，支持按技能、状态、trace 过滤。
+     */
+    @GetMapping("/observability/skills")
+    public ResponseEntity<?> skillTelemetry(
+            @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit,
+            @RequestParam(value = "skillId", required = false) String skillId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "traceId", required = false) String traceId
+    ) {
+        int normalizedLimit = limit == null ? 20 : limit;
+        return ResponseEntity.ok(Map.of(
+                "limit", normalizedLimit,
+                "skillId", skillId == null ? "" : skillId,
+                "status", status == null ? "" : status,
+                "traceId", traceId == null ? "" : traceId,
+                "records", interviewService.getRecentSkillTelemetry(normalizedLimit, skillId, status, traceId)
+        ));
+    }
+
+    /**
      * 获取画像更新事件流。
      */
     @GetMapping("/observability/profile/events")
