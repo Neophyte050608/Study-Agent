@@ -45,6 +45,8 @@ public class RAGObservabilityService {
     private static final int MAX_TRACES = 300;
     private static final int MAX_TRACE_SCAN_LIMIT = 1_000;
     private static final int DEFAULT_RECENT_SUMMARY_SCAN_LIMIT = 1_000;
+    private static final int DEFAULT_RETRIEVAL_LATENCY_WINDOW_LIMIT = 200;
+    private static final int MAX_RETRIEVAL_LATENCY_WINDOW_HOURS = 24 * 7;
     private static final long SLOW_TRACE_THRESHOLD_MS = 20_000L;
     private static final long SLOW_FIRST_TOKEN_THRESHOLD_MS = 3_000L;
     private static final Pattern RETRIEVED_DOCS_PATTERN = Pattern.compile("(\\d+)\\s+docs?\\s+retrieved");
@@ -592,6 +594,41 @@ public class RAGObservabilityService {
         return traceStatus;
     }
 
+    private int normalizeLatencyWindowLimit(@Nullable Integer limit) {
+        int raw = limit == null ? DEFAULT_RETRIEVAL_LATENCY_WINDOW_LIMIT : limit;
+        if (raw <= 0) {
+            return DEFAULT_RETRIEVAL_LATENCY_WINDOW_LIMIT;
+        }
+        return Math.min(raw, MAX_TRACE_SCAN_LIMIT);
+    }
+
+    private Integer normalizeLatencyWindowHours(@Nullable Integer hours) {
+        if (hours == null || hours <= 0) {
+            return null;
+        }
+        return Math.min(hours, MAX_RETRIEVAL_LATENCY_WINDOW_HOURS);
+    }
+
+    private boolean isTraceWithinHours(RAGTrace trace, int hours) {
+        Instant referenceTime = trace == null ? null : trace.getEffectiveEndTime();
+        if (referenceTime == null && trace != null) {
+            referenceTime = trace.getEffectiveStartTime();
+        }
+        if (referenceTime == null) {
+            return false;
+        }
+        Instant cutoff = Instant.now().minus(java.time.Duration.ofHours(hours));
+        return !referenceTime.isBefore(cutoff);
+    }
+
+    private long percentile(List<Long> sortedValues, double percentile) {
+        if (sortedValues == null || sortedValues.isEmpty()) {
+            return 0L;
+        }
+        int index = Math.max(0, (int) Math.ceil(sortedValues.size() * percentile) - 1);
+        return sortedValues.get(Math.min(index, sortedValues.size() - 1));
+    }
+
     /**
      * 发布节点级事件到实时事件总线。
      *
@@ -646,6 +683,57 @@ public class RAGObservabilityService {
             return null;
         }
         return new TraceDetailView(trace, buildTraceSummary(trace));
+    }
+
+    /**
+     * 统计检索节点延迟分位数（P95/P99）。
+     *
+     * <p>统计口径：</p>
+     * <p>1. 只统计已完成 Trace 中 `nodeType=RETRIEVAL` 的节点耗时。</p>
+     * <p>2. 支持按最近 N 条 Trace（limit）或最近 N 小时（hours）窗口统计。</p>
+     *
+     * @param limit 最近 Trace 数量窗口（hours 为空时生效）
+     * @param hours 最近小时数窗口（优先级高于 limit）
+     * @return 检索延迟统计结果
+     */
+    public RetrievalLatencyStats getRetrievalLatencyStats(@Nullable Integer limit, @Nullable Integer hours) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return new RetrievalLatencyStats(0L, 0L, 0, "disabled", null, null);
+        }
+        Integer safeHours = normalizeLatencyWindowHours(hours);
+        int safeLimit = normalizeLatencyWindowLimit(limit);
+        List<RAGTrace> completedTraces = safeHours == null
+                ? resolveCompletedTraces(safeLimit)
+                : resolveCompletedTraces(MAX_TRACE_SCAN_LIMIT).stream()
+                .filter(trace -> isTraceWithinHours(trace, safeHours))
+                .toList();
+
+        List<Long> sortedDurations = completedTraces.stream()
+                .flatMap(trace -> trace.nodes().stream())
+                .filter(node -> "RETRIEVAL".equals(node.nodeType()))
+                .map(RAGTraceNode::durationMs)
+                .filter(Objects::nonNull)
+                .map(value -> Math.max(0L, value))
+                .sorted()
+                .toList();
+        if (sortedDurations.isEmpty()) {
+            return new RetrievalLatencyStats(
+                    0L,
+                    0L,
+                    0,
+                    safeHours == null ? "limit" : "hours",
+                    safeHours == null ? safeLimit : null,
+                    safeHours
+            );
+        }
+        return new RetrievalLatencyStats(
+                percentile(sortedDurations, 0.95D),
+                percentile(sortedDurations, 0.99D),
+                sortedDurations.size(),
+                safeHours == null ? "limit" : "hours",
+                safeHours == null ? safeLimit : null,
+                safeHours
+        );
     }
 
     public String getActiveRootNodeId(String traceId) {
@@ -1308,6 +1396,16 @@ public class RAGObservabilityService {
     public record TraceDetailView(
             RAGTrace trace,
             TraceSummary summary
+    ) {
+    }
+
+    public record RetrievalLatencyStats(
+            long p95LatencyMs,
+            long p99LatencyMs,
+            int sampleSize,
+            String windowMode,
+            @Nullable Integer windowLimit,
+            @Nullable Integer windowHours
     ) {
     }
 

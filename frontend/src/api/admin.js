@@ -62,6 +62,15 @@ export function loadRetrievalEvalRuns(limit = 20) {
   return httpGet(`/api/observability/retrieval-eval/runs?limit=${limit}`)
 }
 
+export function loadRetrievalMetrics(params = {}) {
+  const query = new URLSearchParams()
+  if (params.limit) query.set('limit', String(params.limit))
+  if (params.hours) query.set('hours', String(params.hours))
+  if (params.dataset) query.set('dataset', params.dataset)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return httpGet(`/api/observability/retrieval-metrics${suffix}`)
+}
+
 export function loadRagQualityEvalDatasets() {
   return httpGet('/api/observability/rag-quality-eval/datasets')
 }

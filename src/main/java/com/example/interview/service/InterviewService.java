@@ -169,6 +169,10 @@ public class InterviewService {
         return observabilityApplicationService.getRagOverview();
     }
 
+    public java.util.Map<String, Object> getRetrievalMetrics(Integer limit, Integer hours, String dataset) {
+        return observabilityApplicationService.getRetrievalMetrics(limit, hours, dataset);
+    }
+
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
         return runRetrievalOfflineEval(null);
     }

@@ -518,6 +518,18 @@ public class InterviewController {
     }
 
     /**
+     * 获取检索指标聚合（Top-3 召回率 + 检索节点 P95/P99 延迟）。
+     */
+    @GetMapping("/observability/retrieval-metrics")
+    public ResponseEntity<?> retrievalMetrics(
+            @RequestParam(value = "limit", required = false, defaultValue = "200") Integer limit,
+            @RequestParam(value = "hours", required = false) Integer hours,
+            @RequestParam(value = "dataset", required = false) String dataset
+    ) {
+        return ResponseEntity.ok(interviewService.getRetrievalMetrics(limit, hours, dataset));
+    }
+
+    /**
      * 运行检索离线评测（默认用例）。
      */
     @GetMapping("/observability/retrieval-eval")

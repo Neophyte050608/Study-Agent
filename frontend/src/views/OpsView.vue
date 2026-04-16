@@ -138,6 +138,53 @@
               </div>
             </div>
           </div>
+
+          <section class="mt-6 rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/50 p-5">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">接口测试关键指标</h4>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  聚合展示最新 Top-3 召回率，以及检索节点 P95/P99 延迟。
+                </p>
+              </div>
+              <button @click="loadRetrievalMetricsPanel" :disabled="retrievalMetricsLoading" class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800 transition-all disabled:opacity-50 flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm" :class="retrievalMetricsLoading ? 'animate-spin' : ''">{{ retrievalMetricsLoading ? 'progress_activity' : 'sync' }}</span>
+                {{ retrievalMetricsLoading ? '刷新中...' : '刷新指标' }}
+              </button>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-3">
+              <div>
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Trace 窗口(limit)</label>
+                <input v-model.number="retrievalMetricsLimit" type="number" min="1" max="1000" class="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">时间窗口(hours)</label>
+                <input v-model.number="retrievalMetricsHours" type="number" min="1" max="168" class="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+              <div class="flex items-end">
+                <div class="w-full rounded-lg border border-slate-200 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  {{ retrievalMetricsWindowLabel }}
+                </div>
+              </div>
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-3">
+              <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">Top-3 召回率</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ retrievalTop3RecallText }}</div>
+              </div>
+              <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">检索 P95</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ retrievalMetricsP95 }} ms</div>
+              </div>
+              <div class="rounded-lg bg-white dark:bg-slate-900 p-3 border border-slate-200">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 dark:text-slate-500">检索 P99</div>
+                <div class="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">{{ retrievalMetricsP99 }} ms</div>
+              </div>
+            </div>
+            <p v-if="retrievalMetricsMessage" class="mt-3 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              {{ retrievalMetricsMessage }}
+            </p>
+          </section>
         </div>
 
         <!-- Key Metrics Summary -->
@@ -756,7 +803,7 @@
 import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns } from '../api/admin'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns, loadRetrievalMetrics } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: {
@@ -799,6 +846,10 @@ const selectedQualityDataset = ref('default')
 const retrievalEvalLoading = ref(false)
 const retrievalEvalReport = ref(null)
 const retrievalEvalRuns = ref([])
+const retrievalMetricsLoading = ref(false)
+const retrievalMetrics = ref({})
+const retrievalMetricsLimit = ref(200)
+const retrievalMetricsHours = ref(null)
 
 // ===== RAG 生成质量评测 =====
 const selectedEngine = ref('')
@@ -823,6 +874,45 @@ const selectedQualityDatasetDescription = computed(() => {
   const current = qualityDatasets.value.find(item => item.datasetId === selectedQualityDataset.value)
   if (!current) return '请选择质量评测使用的数据集。'
   return `${current.description || ''}${current.fileName ? ` | ${current.fileName}` : ''}`
+})
+
+const retrievalMetricsP95 = computed(() => {
+  return typeof retrievalMetrics.value?.retrievalLatencyP95Ms === 'number'
+    ? retrievalMetrics.value.retrievalLatencyP95Ms
+    : 0
+})
+
+const retrievalMetricsP99 = computed(() => {
+  return typeof retrievalMetrics.value?.retrievalLatencyP99Ms === 'number'
+    ? retrievalMetrics.value.retrievalLatencyP99Ms
+    : 0
+})
+
+const retrievalTop3RecallText = computed(() => {
+  if (typeof retrievalMetrics.value?.top3Recall !== 'number') {
+    return '--'
+  }
+  return formatPercent(retrievalMetrics.value.top3Recall)
+})
+
+const retrievalMetricsWindowLabel = computed(() => {
+  const window = retrievalMetrics.value?.window
+  const sampleSize = Number(retrievalMetrics.value?.retrievalLatencySampleSize || 0)
+  if (window?.mode === 'hours') {
+    return `窗口: 最近 ${window.hours || 0} 小时 | 样本: ${sampleSize}`
+  }
+  if (window?.mode === 'limit') {
+    return `窗口: 最近 ${window.limit || 0} 条 Trace | 样本: ${sampleSize}`
+  }
+  return `样本: ${sampleSize}`
+})
+
+const retrievalMetricsMessage = computed(() => {
+  const message = retrievalMetrics.value?.message
+  if (typeof message !== 'string' || !message.trim() || message === 'ok') {
+    return ''
+  }
+  return message
 })
 
 const skillIds = computed(() => {
@@ -939,6 +1029,7 @@ const runRetrievalEvalAction = async () => {
     retrievalEvalReport.value = data
     hint.value = `检索评测完成: ${data.runLabel || data.runId || dataset || 'default'}`
     await loadRetrievalEvalHistoryAction()
+    await loadRetrievalMetricsPanel()
   } catch (error) {
     hint.value = `检索评测失败: ${error.message || 'unknown'}`
   } finally {
@@ -952,6 +1043,32 @@ const loadRetrievalEvalHistoryAction = async () => {
     retrievalEvalRuns.value = Array.isArray(resp) ? resp : (resp?.records || [])
   } catch (error) {
     hint.value = `加载检索评测历史失败: ${error.message || 'unknown'}`
+  }
+}
+
+const resolveRetrievalMetricsParams = () => {
+  const params = {}
+  const parsedLimit = Number(retrievalMetricsLimit.value)
+  if (Number.isFinite(parsedLimit) && parsedLimit > 0) {
+    params.limit = Math.min(Math.round(parsedLimit), 1000)
+  } else {
+    params.limit = 200
+  }
+  const parsedHours = Number(retrievalMetricsHours.value)
+  if (Number.isFinite(parsedHours) && parsedHours > 0) {
+    params.hours = Math.min(Math.round(parsedHours), 168)
+  }
+  return params
+}
+
+const loadRetrievalMetricsPanel = async () => {
+  retrievalMetricsLoading.value = true
+  try {
+    retrievalMetrics.value = await loadRetrievalMetrics(resolveRetrievalMetricsParams())
+  } catch (error) {
+    hint.value = `加载检索指标失败: ${error.message || 'unknown'}`
+  } finally {
+    retrievalMetricsLoading.value = false
   }
 }
 
@@ -1407,12 +1524,13 @@ const reload = async () => {
       startedAfter: traceStartedAfter.value,
       endedBefore: traceEndedBefore.value
     }
-    const [overviewData, tracesData, idempotencyData, auditsData, skillTelemetryData] = await Promise.all([
+    const [overviewData, tracesData, idempotencyData, auditsData, skillTelemetryData, retrievalMetricsData] = await Promise.all([
       loadOpsOverview(),
       loadOpsTraces(traceFilters),
       loadOpsIdempotency(),
       loadOpsAudits(5),
-      fetchSkillTelemetry()
+      fetchSkillTelemetry(),
+      loadRetrievalMetrics(resolveRetrievalMetricsParams())
     ])
     overview.value = overviewData || {}
     traces.value = Array.isArray(tracesData)
@@ -1439,6 +1557,7 @@ const reload = async () => {
     idempotency.value = idempotencyData || {}
     audits.value = Array.isArray(auditsData) ? auditsData : []
     assignSkillTelemetry(skillTelemetryData)
+    retrievalMetrics.value = retrievalMetricsData || {}
     hint.value = '数据已刷新'
   } catch (error) {
     hint.value = `刷新失败: ${error.message || 'unknown'}`

@@ -8,6 +8,8 @@ import com.example.interview.skill.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -15,6 +17,7 @@ import java.util.Locale;
 @Service
 public class ObservabilityApplicationService {
     private static final int TRACE_FILTER_SCAN_LIMIT = 1_000;
+    private static final int RETRIEVAL_METRICS_EVAL_SCAN_LIMIT = 200;
 
     private final RAGObservabilityService ragObservabilityService;
     private final RetrievalEvaluationService retrievalEvaluationService;
@@ -93,6 +96,49 @@ public class ObservabilityApplicationService {
             return Map.of("enabled", false, "avgLatencyMs", 0, "avgRetrievedDocs", 0.0, "cacheHitRate", "0.0%");
         }
         return ragObservabilityService.getOverview();
+    }
+
+    public Map<String, Object> getRetrievalMetrics(Integer limit, Integer hours, String dataset) {
+        RAGObservabilityService.RetrievalLatencyStats latencyStats =
+                ragObservabilityService.getRetrievalLatencyStats(limit, hours);
+        RetrievalEvaluationService.RetrievalEvalRunSummary latestEvalRun = resolveLatestEvalRun(dataset);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("enabled", observabilitySwitchProperties.isRagTraceEnabled());
+        response.put("retrievalEvalEnabled", observabilitySwitchProperties.isRetrievalEvalEnabled());
+        response.put("top3Recall", latestEvalRun == null ? null : latestEvalRun.recallAt3());
+        response.put("latestEvalRunId", latestEvalRun == null ? "" : latestEvalRun.runId());
+        response.put("latestEvalTimestamp", latestEvalRun == null ? "" : latestEvalRun.timestamp());
+        response.put("latestEvalDatasetSource", latestEvalRun == null ? "" : latestEvalRun.datasetSource());
+        response.put("retrievalLatencyP95Ms", latencyStats.p95LatencyMs());
+        response.put("retrievalLatencyP99Ms", latencyStats.p99LatencyMs());
+        response.put("retrievalLatencySampleSize", latencyStats.sampleSize());
+
+        Map<String, Object> window = new LinkedHashMap<>();
+        window.put("mode", latencyStats.windowMode());
+        if ("hours".equals(latencyStats.windowMode())) {
+            window.put("hours", latencyStats.windowHours());
+        } else if ("limit".equals(latencyStats.windowMode())) {
+            window.put("limit", latencyStats.windowLimit());
+        }
+        response.put("window", window);
+
+        List<String> messages = new ArrayList<>();
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            messages.add("RAG Trace 已关闭，检索延迟指标不可用");
+        } else if (latencyStats.sampleSize() == 0) {
+            messages.add("暂无检索节点样本，无法计算 P95/P99");
+        }
+        if (!observabilitySwitchProperties.isRetrievalEvalEnabled()) {
+            messages.add("检索评测已关闭，Top-3 召回率不可用");
+        } else if (latestEvalRun == null) {
+            String normalizedDataset = normalizeText(dataset);
+            messages.add(normalizedDataset.isBlank()
+                    ? "暂无检索评测结果，Top-3 召回率为空"
+                    : "未找到指定数据集的检索评测结果: " + normalizedDataset);
+        }
+        response.put("message", messages.isEmpty() ? "ok" : String.join("；", messages));
+        return response;
     }
 
     public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
@@ -243,6 +289,29 @@ public class ObservabilityApplicationService {
                                                                                     String status,
                                                                                     String traceId) {
         return skillTelemetryRecorder.recentEvents(limit, skillId, status, traceId);
+    }
+
+    private RetrievalEvaluationService.RetrievalEvalRunSummary resolveLatestEvalRun(String dataset) {
+        if (!observabilitySwitchProperties.isRetrievalEvalEnabled()) {
+            return null;
+        }
+        List<RetrievalEvaluationService.RetrievalEvalRunSummary> runs =
+                retrievalEvaluationService.listRecentRuns(RETRIEVAL_METRICS_EVAL_SCAN_LIMIT);
+        if (runs.isEmpty()) {
+            return null;
+        }
+        String normalizedDataset = normalizeText(dataset);
+        if (normalizedDataset.isBlank()) {
+            return runs.get(0);
+        }
+        return runs.stream()
+                .filter(run -> normalizedDataset.equalsIgnoreCase(normalizeText(run.datasetSource())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private void ensureRetrievalEvalEnabled() {

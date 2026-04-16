@@ -380,6 +380,63 @@ class RAGObservabilityServiceTest {
     }
 
     @Test
+    void shouldComputeRetrievalLatencyPercentilesByLimitWindow() {
+        ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
+        properties.setRagTraceEnabled(true);
+        RagTraceMapper traceMapper = mock(RagTraceMapper.class);
+        RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+
+        LocalDateTime now = LocalDateTime.now();
+        when(traceMapper.selectList(any())).thenReturn(List.of(
+                traceRow("trace-latency-a", now.minusMinutes(1)),
+                traceRow("trace-latency-b", now.minusMinutes(2))
+        ));
+        when(traceNodeMapper.selectList(any())).thenReturn(List.of(
+                retrievalNode("trace-latency-a", "ret-a-1", now.minusMinutes(1), 40L),
+                retrievalNode("trace-latency-a", "ret-a-2", now.minusMinutes(1), 80L),
+                retrievalNode("trace-latency-b", "ret-b-1", now.minusMinutes(2), 20L)
+        ));
+
+        RAGObservabilityService.RetrievalLatencyStats stats = service.getRetrievalLatencyStats(200, null);
+
+        assertEquals(3, stats.sampleSize());
+        assertEquals(80L, stats.p95LatencyMs());
+        assertEquals(80L, stats.p99LatencyMs());
+        assertEquals("limit", stats.windowMode());
+        assertEquals(200, stats.windowLimit());
+        assertNull(stats.windowHours());
+    }
+
+    @Test
+    void shouldComputeRetrievalLatencyPercentilesByHoursWindow() {
+        ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
+        properties.setRagTraceEnabled(true);
+        RagTraceMapper traceMapper = mock(RagTraceMapper.class);
+        RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+
+        LocalDateTime now = LocalDateTime.now();
+        when(traceMapper.selectList(any())).thenReturn(List.of(
+                traceRow("trace-recent", now.minusMinutes(20)),
+                traceRow("trace-old", now.minusHours(5))
+        ));
+        when(traceNodeMapper.selectList(any())).thenReturn(List.of(
+                retrievalNode("trace-recent", "ret-recent", now.minusMinutes(20), 35L),
+                retrievalNode("trace-old", "ret-old", now.minusHours(5), 600L)
+        ));
+
+        RAGObservabilityService.RetrievalLatencyStats stats = service.getRetrievalLatencyStats(200, 1);
+
+        assertEquals(1, stats.sampleSize());
+        assertEquals(35L, stats.p95LatencyMs());
+        assertEquals(35L, stats.p99LatencyMs());
+        assertEquals("hours", stats.windowMode());
+        assertEquals(1, stats.windowHours());
+        assertNull(stats.windowLimit());
+    }
+
+    @Test
     void shouldRestoreStructuredDetailsFromPersistedOutputSummary() {
         ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
         properties.setRagTraceEnabled(true);
@@ -495,5 +552,25 @@ class RAGObservabilityServiceTest {
         assertTrue(detailView.summary().riskTags().contains("fallback_triggered"));
         assertTrue(detailView.summary().riskTags().contains("retrieval_empty"));
         assertEquals(detailView.summary().riskTags().size(), detailView.summary().riskCount());
+    }
+
+    private static RagTraceDO traceRow(String traceId, LocalDateTime startedAt) {
+        RagTraceDO row = new RagTraceDO();
+        row.setTraceId(traceId);
+        row.setStartedAt(startedAt);
+        return row;
+    }
+
+    private static RagTraceNodeDO retrievalNode(String traceId, String nodeId, LocalDateTime start, long durationMs) {
+        RagTraceNodeDO row = new RagTraceNodeDO();
+        row.setTraceId(traceId);
+        row.setNodeId(nodeId);
+        row.setNodeType("RETRIEVAL");
+        row.setNodeName("Hybrid Retrieval");
+        row.setNodeStatus("COMPLETED");
+        row.setStartedAt(start);
+        row.setEndedAt(start.plusNanos(durationMs * 1_000_000));
+        row.setDurationMs(durationMs);
+        return row;
     }
 }
