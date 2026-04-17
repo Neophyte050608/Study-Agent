@@ -1,0 +1,14 @@
+package io.github.imzmq.interview.agent.task;
+
+public enum TaskType {
+    INTERVIEW_START,
+    INTERVIEW_ANSWER,
+    INTERVIEW_REPORT,
+    LEARNING_PLAN,
+    CODING_PRACTICE,
+    PROFILE_EVENT_UPSERT,
+    PROFILE_SNAPSHOT_QUERY,
+    PROFILE_TRAINING_PLAN_QUERY,
+    KNOWLEDGE_QA
+}
+
