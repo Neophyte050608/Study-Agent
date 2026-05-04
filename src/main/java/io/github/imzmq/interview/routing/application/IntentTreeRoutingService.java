@@ -200,6 +200,14 @@ public class IntentTreeRoutingService {
                     Map.of(
                             "user_query", "刷一道并发算法题",
                             "ai_response", "{\"slots\":{\"topic\":\"并发\",\"questionType\":\"ALGORITHM\",\"difficulty\":\"\",\"count\":1,\"skipIntro\":null,\"mode\":\"\"}}"
+                    ),
+                    Map.of(
+                            "user_query", "来两道算法题，不要动态规划和贪心",
+                            "ai_response", "{\"slots\":{\"topic\":\"算法\",\"questionType\":\"ALGORITHM\",\"difficulty\":\"\",\"count\":2,\"excludedTopics\":[\"动态规划\",\"贪心\"]}}"
+                    ),
+                    Map.of(
+                            "user_query", "刷五道Java选择题，跳过并发和多线程",
+                            "ai_response", "{\"slots\":{\"topic\":\"Java\",\"questionType\":\"CHOICE\",\"difficulty\":\"\",\"count\":5,\"excludedTopics\":[\"并发\",\"多线程\"]}}"
                     )
             );
         }
@@ -208,6 +216,10 @@ public class IntentTreeRoutingService {
                     Map.of(
                             "user_query", "来一场Spring Boot面试，跳过自我介绍",
                             "ai_response", "{\"slots\":{\"topic\":\"Spring Boot\",\"questionType\":\"\",\"difficulty\":\"\",\"count\":null,\"skipIntro\":true,\"mode\":\"\"}}"
+                    ),
+                    Map.of(
+                            "user_query", "开始Java面试，但不要Spring和MyBatis的内容",
+                            "ai_response", "{\"slots\":{\"topic\":\"Java\",\"questionType\":\"\",\"difficulty\":\"\",\"count\":null,\"skipIntro\":null,\"excludedTopics\":[\"Spring\",\"MyBatis\"]}}"
                     )
             );
         }
