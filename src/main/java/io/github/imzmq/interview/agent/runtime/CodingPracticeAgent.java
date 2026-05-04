@@ -101,10 +101,11 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String sessionId = text(input, "sessionId");
         String message = text(input, "message");
         String userId = learningProfileAgent.normalizeUserId(text(input, "userId"));
+        List<String> excludedTopics = readTextList(input, "excludedTopics");
 
         // 1. 如果没有 sessionId，说明是新的一轮对话，进行意图识别并开启刷题
         if (sessionId.isBlank()) {
-            return startNewChatSession(userId, message);
+            return startNewChatSession(userId, message, excludedTopics);
         }
 
         // 2. 如果有 sessionId，检查当前状态
@@ -122,7 +123,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         return generateNextChatQuestion(session);
     }
 
-    private Map<String, Object> startNewChatSession(String userId, String message) {
+    private Map<String, Object> startNewChatSession(String userId, String message, List<String> excludedTopics) {
         // 意图识别
         // 注意：这里仍然可以用 promptTemplateService.loadFewShotCases 也可以把它挪走，但我们保留它因为只是加载JSON
         List<Map<String, Object>> cases = new java.util.ArrayList<>();
@@ -185,12 +186,12 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
 
         String sessionId = UUID.randomUUID().toString();
-        CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", "", 0, 0, Instant.now());
-        
+        CodingSession session = new CodingSession(sessionId, userId, topic, difficulty, type, count, 0, "", "", 0, 0, Instant.now(), excludedTopics);
+
         // 选择题统一走交互式答题卡模式（含单题），避免单题退化为纯文本输出
         if (type.contains("选择") && count >= 1) {
             return handleBatchQuiz(userId, topic, difficulty, count,
-                learningProfileAgent.snapshotForPrompt(userId, topic));
+                learningProfileAgent.snapshotForPrompt(userId, topic), excludedTopics);
         }
 
         return generateNextChatQuestion(session);
@@ -207,9 +208,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
 
         String resolvedProfileSnapshot = learningProfileAgent.snapshotForPrompt(session.userId(), session.topic());
-        String question = ragService.generateCodingQuestion(buildTopicWithType(session.topic(), session.type()), session.difficulty(), resolvedProfileSnapshot, List.of());
+        String question = ragService.generateCodingQuestion(buildTopicWithType(session.topic(), session.type()), session.difficulty(), resolvedProfileSnapshot, session.excludedTopics());
         if (question == null || question.isBlank()) {
-            question = buildQuestion(session.topic(), session.difficulty(), session.type()) + " (" + session.type() + ")";
+            question = buildQuestion(session.topic(), session.difficulty(), session.type()) + buildExclusionSuffix(session.excludedTopics()) + " (" + session.type() + ")";
         }
         String cardId = "";
         if (isScenarioType(session.type())) {
@@ -220,7 +221,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
 
         CodingSession updatedSession = new CodingSession(
             session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
-            session.totalQuestions(), session.currentQuestionIndex() + 1, question, cardId, session.attempts(), session.bestScore(), session.createdAt()
+            session.totalQuestions(), session.currentQuestionIndex() + 1, question, cardId, session.attempts(), session.bestScore(), session.createdAt(), session.excludedTopics()
         );
         sessions.put(session.sessionId(), updatedSession);
 
@@ -256,14 +257,14 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
      * 批量选择题模式：一次生成所有题目，前端交互式答题。
      */
     private Map<String, Object> handleBatchQuiz(String userId, String topic,
-            String difficulty, int count, String profileSnapshot) {
-        List<QuizQuestion> questions = ragService.generateBatchQuiz(topic, difficulty, count, profileSnapshot, List.of());
+            String difficulty, int count, String profileSnapshot, List<String> excludedTopics) {
+        List<QuizQuestion> questions = ragService.generateBatchQuiz(topic, difficulty, count, profileSnapshot, excludedTopics);
 
         String sessionId = UUID.randomUUID().toString();
         // 创建 session 记录（currentQuestion 留空，批量模式不逐题跟踪）
         sessions.put(sessionId, new CodingSession(
             sessionId, userId, topic, difficulty, "选择题",
-            questions.size(), 0, "", "", 0, 0, Instant.now()));
+            questions.size(), 0, "", "", 0, 0, Instant.now(), excludedTopics));
 
         QuizPayload payload = new QuizPayload(sessionId, topic, difficulty, questions.size(), questions);
 
@@ -370,13 +371,13 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         // 清空当前题目，等待下一次请求生成新题目
         CodingSession updatedSession = new CodingSession(
             session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
-            session.totalQuestions(), session.currentQuestionIndex(), "", "", attempts, bestScore, session.createdAt()
+            session.totalQuestions(), session.currentQuestionIndex(), "", "", attempts, bestScore, session.createdAt(), session.excludedTopics()
         );
 
         if (isScenarioType(session.type())) {
             CodingSession scenarioUpdatedSession = new CodingSession(
                     session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
-                    session.totalQuestions(), session.currentQuestionIndex(), "", session.currentCardId(), attempts, bestScore, session.createdAt()
+                    session.totalQuestions(), session.currentQuestionIndex(), "", session.currentCardId(), attempts, bestScore, session.createdAt(), session.excludedTopics()
             );
             sessions.put(session.sessionId(), scenarioUpdatedSession);
             String referenceAnswer = buildScenarioReferenceAnswer(session.currentQuestion(), session.topic(), finalAssessment);
@@ -403,7 +404,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         if (isFillType(session.type())) {
             CodingSession fillUpdatedSession = new CodingSession(
                     session.sessionId(), session.userId(), session.topic(), session.difficulty(), session.type(),
-                    session.totalQuestions(), session.currentQuestionIndex(), "", session.currentCardId(), attempts, bestScore, session.createdAt()
+                    session.totalQuestions(), session.currentQuestionIndex(), "", session.currentCardId(), attempts, bestScore, session.createdAt(), session.excludedTopics()
             );
             sessions.put(session.sessionId(), fillUpdatedSession);
             String referenceAnswer = buildFillReferenceAnswer(session.currentQuestion(), session.topic(), finalAssessment);
@@ -621,6 +622,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String type = text(input, "type");
         String profileSnapshot = text(input, "profileSnapshot");
         String query = text(input, "query"); // 用户原始输入
+        List<String> excludedTopics = readTextList(input, "excludedTopics");
         String recommendedTopic = "";
 
         // 如果没有传入主题，尝试从画像推荐
@@ -662,19 +664,19 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
 
         // 选择题 + 多题 → 走批量交互式模式（提前判断，避免浪费单题 LLM 调用）
         if (normalizedType.contains("选择") && totalQuestions > 1) {
-            return handleBatchQuiz(userId, normalizedTopic, normalizedDifficulty, totalQuestions, resolvedProfileSnapshot);
+            return handleBatchQuiz(userId, normalizedTopic, normalizedDifficulty, totalQuestions, resolvedProfileSnapshot, excludedTopics);
         }
 
         String sessionId = UUID.randomUUID().toString();
         // 调用 RAG 生成题目，将类型融入主题描述中以获得更准确的题目生成
         String ragTopic = buildTopicWithType(normalizedTopic, normalizedType);
-        String question = ragService.generateCodingQuestion(ragTopic, normalizedDifficulty, resolvedProfileSnapshot, List.of());
+        String question = ragService.generateCodingQuestion(ragTopic, normalizedDifficulty, resolvedProfileSnapshot, excludedTopics);
         if (question == null || question.isBlank()) {
-            question = buildQuestion(normalizedTopic, normalizedDifficulty, normalizedType) + " (" + normalizedType + ")";
+            question = buildQuestion(normalizedTopic, normalizedDifficulty, normalizedType) + buildExclusionSuffix(excludedTopics) + " (" + normalizedType + ")";
         }
 
         // 保存会话并返回结果
-        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, totalQuestions, 1, question, "", 0, 0, Instant.now()));
+        sessions.put(sessionId, new CodingSession(sessionId, userId, normalizedTopic, normalizedDifficulty, normalizedType, totalQuestions, 1, question, "", 0, 0, Instant.now(), excludedTopics));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("agent", "CodingPracticeAgent");
         result.put("status", "started");
@@ -741,7 +743,8 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
                 session.currentCardId(),
                 attempts,
                 bestScore,
-                session.createdAt()
+                session.createdAt(),
+                session.excludedTopics()
         ));
         
         // 将练习结果异步沉淀为学习事件写入画像，使用自定义线程池 profileUpdateExecutor
@@ -903,6 +906,19 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             return normalizedType;
         }
         return normalizedTopic + "（" + normalizedType + "）";
+    }
+
+    private String buildExclusionSuffix(List<String> excludedTopics) {
+        if (excludedTopics == null || excludedTopics.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("\n不要出以下知识点的题目：");
+        for (int i = 0; i < excludedTopics.size(); i++) {
+            if (i > 0) sb.append("、");
+            sb.append(excludedTopics.get(i));
+        }
+        sb.append("。");
+        return sb.toString();
     }
 
     private String normalizePracticeType(String rawType, String userText) {
@@ -1091,6 +1107,22 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    @SuppressWarnings("unchecked")
+    private List<String> readTextList(Map<String, Object> input, String key) {
+        if (input == null) return List.of();
+        Object raw = input.get(key);
+        if (raw instanceof List<?> list) {
+            List<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (item != null && !item.toString().isBlank()) {
+                    result.add(item.toString().trim());
+                }
+            }
+            return result;
+        }
+        return List.of();
+    }
+
     /**
      * 根据得分确定薄弱点标签。
      */
@@ -1202,7 +1234,8 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             String currentCardId,
             int attempts,
             int bestScore,
-            Instant createdAt
+            Instant createdAt,
+            List<String> excludedTopics
     ) {
     }
 }
