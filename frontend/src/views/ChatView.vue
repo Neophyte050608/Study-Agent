@@ -213,6 +213,13 @@
                       :chat-session-id="currentSessionId"
                       @updated="handleStructuredMessageUpdated"
                     />
+                    <InterviewCard
+                      v-if="msg.interviewPayload"
+                      :payload="msg.interviewPayload"
+                      :message-id="msg.messageId"
+                      :chat-session-id="currentSessionId"
+                      @updated="handleStructuredMessageUpdated"
+                    />
                     <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason || msg.routeLabel || msg.routeSource" class="mt-3 flex flex-wrap gap-2">
                       <span v-if="msg.generationStatus === 'RUNNING'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900">
                         generating
@@ -386,6 +393,7 @@ import DOMPurify from 'dompurify'
 import QuizCard from './chat/QuizCard.vue'
 import ScenarioCard from './chat/ScenarioCard.vue'
 import FillCard from './chat/FillCard.vue'
+import InterviewCard from './chat/InterviewCard.vue'
 import ImageCard from './chat/ImageCard.vue'
 import AutocompleteDropdown from './chat/AutocompleteDropdown.vue'
 import { fetchSuggestions, recordClick } from '../api/autocomplete'
