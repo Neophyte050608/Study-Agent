@@ -4,6 +4,7 @@ import io.github.imzmq.interview.tool.adapter.DatabaseMcpAdapterRouter;
 import io.github.imzmq.interview.tool.gateway.FastMcpCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpBridgeCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
+import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.tool.gateway.McpGatewayException;
 import io.github.imzmq.interview.tool.gateway.McpSseCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpStdioCapabilityGateway;
@@ -315,6 +316,9 @@ public class McpGatewayService {
     }
 
     private boolean isRetryable(Throwable error) {
+        if (error instanceof BusinessException ex) {
+            return ex.retryable();
+        }
         if (error instanceof McpGatewayException ex) {
             return ex.isRetryable();
         }
@@ -322,6 +326,9 @@ public class McpGatewayService {
     }
 
     private String errorCodeOf(Throwable error) {
+        if (error instanceof BusinessException ex) {
+            return String.valueOf(ex.errorCode());
+        }
         if (error instanceof McpGatewayException ex) {
             return ex.getErrorCode();
         }
@@ -335,6 +342,9 @@ public class McpGatewayService {
     }
 
     private boolean retryableOf(Throwable error) {
+        if (error instanceof BusinessException ex) {
+            return ex.retryable();
+        }
         if (error instanceof McpGatewayException ex) {
             return ex.isRetryable();
         }

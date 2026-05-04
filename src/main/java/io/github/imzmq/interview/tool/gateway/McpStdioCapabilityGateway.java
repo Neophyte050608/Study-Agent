@@ -1,6 +1,8 @@
 package io.github.imzmq.interview.tool.gateway;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -87,25 +89,25 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
 
     private Object execute(Map<String, Object> request) {
         if (command.isBlank()) {
-            throw new McpGatewayException("MCP_STDIO_NOT_CONFIGURED", false, "mcp stdio command is not configured");
+            throw new BusinessException(ErrorCode.MCP_STDIO_NOT_CONFIGURED, "mcp stdio command is not configured");
         }
         Process process;
         try {
             process = processStarter.start(buildCommandParts());
         } catch (IOException ex) {
-            throw new McpGatewayException("MCP_UNREACHABLE", true, "mcp stdio process start failed", ex);
+            throw new BusinessException(ErrorCode.MCP_UNREACHABLE, "mcp stdio process start failed", ex);
         }
         try {
             writeRequest(process, request);
             String output = waitAndReadOutput(process);
             if (output.isBlank()) {
-                throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio empty response");
+                throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio empty response");
             }
             return objectMapper.readValue(output, Object.class);
-        } catch (McpGatewayException ex) {
+        } catch (BusinessException ex) {
             throw ex;
         } catch (IOException ex) {
-            throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio invalid response", ex);
+            throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio invalid response", ex);
         } finally {
             process.destroyForcibly();
         }
@@ -126,10 +128,10 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
             finished = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new McpGatewayException("MCP_TIMEOUT", true, "mcp stdio interrupted", ex);
+            throw new BusinessException(ErrorCode.MCP_TIMEOUT, "mcp stdio interrupted", ex);
         }
         if (!finished) {
-            throw new McpGatewayException("MCP_TIMEOUT", true, "mcp stdio timeout");
+            throw new BusinessException(ErrorCode.MCP_TIMEOUT, "mcp stdio timeout");
         }
         String merged = readStream(process.getInputStream(), process.getErrorStream()).trim();
         return extractJsonPayload(merged);
@@ -183,7 +185,7 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
         if (body != null) {
             return body;
         }
-        throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio invoke invalid response");
+        throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio invoke invalid response");
     }
 
     private List<String> parseCapabilitiesBody(Object body) {
@@ -201,7 +203,7 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
         if (body instanceof List<?> list) {
             return list.stream().filter(Objects::nonNull).map(String::valueOf).toList();
         }
-        throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio capabilities invalid response");
+        throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio capabilities invalid response");
     }
 
     private List<String> parseCapabilitiesResult(Object resultBody) {
@@ -221,12 +223,12 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
                 return list.stream().filter(Objects::nonNull).map(String::valueOf).toList();
             }
         }
-        throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio capabilities invalid response");
+        throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio capabilities invalid response");
     }
 
     private Object parseInvokeResult(Object resultBody) {
         if (resultBody == null) {
-            throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio invoke invalid response");
+            throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio invoke invalid response");
         }
         if (resultBody instanceof Map<?, ?> map) {
             if (map.containsKey("structuredContent")) {
@@ -235,7 +237,7 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
             if (map.containsKey("result")) {
                 Object nested = map.get("result");
                 if (nested == null) {
-                    throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp stdio invoke invalid response");
+                    throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp stdio invoke invalid response");
                 }
                 return nested;
             }
@@ -273,7 +275,7 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
         return String.valueOf(rawTool).trim();
     }
 
-    private McpGatewayException toRemoteProtocolException(Object errorBody) {
+    private BusinessException toRemoteProtocolException(Object errorBody) {
         String code = "";
         String message = "mcp remote error";
         if (errorBody instanceof Map<?, ?> map) {
@@ -287,15 +289,15 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
             }
         }
         if ("-32602".equals(code) || "INVALID_PARAMS".equalsIgnoreCase(code)) {
-            return new McpGatewayException("MCP_INVALID_PARAMS", false, message);
+            return new BusinessException(ErrorCode.MCP_INVALID_PARAMS, message);
         }
         if ("-32001".equals(code) || "PERMISSION_DENIED".equalsIgnoreCase(code) || "UNAUTHORIZED".equalsIgnoreCase(code)) {
-            return new McpGatewayException("MCP_PERMISSION_DENIED", false, message);
+            return new BusinessException(ErrorCode.FORBIDDEN, message);
         }
         if ("-32601".equals(code) || "METHOD_NOT_FOUND".equalsIgnoreCase(code) || "PROTOCOL_INCOMPATIBLE".equalsIgnoreCase(code)) {
-            return new McpGatewayException("MCP_PROTOCOL_INCOMPATIBLE", false, message);
+            return new BusinessException(ErrorCode.MCP_PROTOCOL_INCOMPATIBLE, message);
         }
-        return new McpGatewayException("MCP_REMOTE_ERROR", true, message);
+        return new BusinessException(ErrorCode.MCP_REMOTE_ERROR, message);
     }
 
     @FunctionalInterface

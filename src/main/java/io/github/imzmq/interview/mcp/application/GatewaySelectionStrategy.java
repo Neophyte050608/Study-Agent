@@ -4,7 +4,8 @@ import io.github.imzmq.interview.tool.gateway.FastMcpCapabilityGateway;
 import io.github.imzmq.interview.tool.adapter.DatabaseMcpAdapterRouter;
 import io.github.imzmq.interview.tool.gateway.McpBridgeCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
-import io.github.imzmq.interview.tool.gateway.McpGatewayException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.tool.gateway.McpSseCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpStdioCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.StubMcpCapabilityGateway;
@@ -43,25 +44,25 @@ public class GatewaySelectionStrategy {
             return sseGateway;
         }
         if ("sse".equals(normalizedMode)) {
-            throw new McpGatewayException("MCP_SSE_NOT_CONFIGURED", false, "mcp sse is not configured");
+            throw new BusinessException(ErrorCode.MCP_SSE_NOT_CONFIGURED, "mcp sse is not configured");
         }
         if ("bridge".equals(normalizedMode) && bridgeGateway != null) {
             return bridgeGateway;
         }
         if ("bridge".equals(normalizedMode)) {
-            throw new McpGatewayException("MCP_BRIDGE_NOT_CONFIGURED", false, "mcp bridge is not configured");
+            throw new BusinessException(ErrorCode.MCP_BRIDGE_NOT_CONFIGURED, "mcp bridge is not configured");
         }
         if ("stdio".equals(normalizedMode) && stdioGateway != null) {
             return stdioGateway;
         }
         if ("stdio".equals(normalizedMode)) {
-            throw new McpGatewayException("MCP_STDIO_NOT_CONFIGURED", false, "mcp stdio is not configured");
+            throw new BusinessException(ErrorCode.MCP_STDIO_NOT_CONFIGURED, "mcp stdio is not configured");
         }
         if ("fastmcp".equals(normalizedMode) && fastMcpGateway != null) {
             return fastMcpGateway;
         }
         if ("fastmcp".equals(normalizedMode)) {
-            throw new McpGatewayException("MCP_FASTMCP_NOT_CONFIGURED", false, "mcp fastmcp is not configured");
+            throw new BusinessException(ErrorCode.MCP_FASTMCP_NOT_CONFIGURED, "mcp fastmcp is not configured");
         }
         if ("auto".equals(normalizedMode) && fastMcpGateway != null) {
             return fastMcpGateway;

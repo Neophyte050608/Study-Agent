@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.tool.gateway;
 
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
@@ -21,7 +23,7 @@ import java.util.Objects;
  * <p>职责：</p>
  * <ul>
  *   <li>对接 fastMCP4J 的 MCP JSON-RPC 端点，提供能力发现与调用。</li>
- *   <li>把 HTTP、协议、超时异常统一映射为 McpGatewayException，便于上层重试与降级。</li>
+ *   <li>把 HTTP、协议、超时异常统一映射为 BusinessException，便于上层重试与降级。</li>
  * </ul>
  */
 @Component
@@ -60,14 +62,14 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
                     })
                     .body(Object.class);
             return parseCapabilitiesBody(body);
-        } catch (McpGatewayException ex) {
+        } catch (BusinessException ex) {
             throw ex;
         } catch (RestClientResponseException ex) {
             throw toHttpException("capabilities", ex.getStatusCode().value(), ex);
         } catch (ResourceAccessException ex) {
             throw toAccessException("mcp fastmcp capabilities access failed", ex);
         } catch (RestClientException ex) {
-            throw new McpGatewayException("MCP_REMOTE_ERROR", true, "mcp fastmcp capabilities remote error", ex);
+            throw new BusinessException(ErrorCode.MCP_REMOTE_ERROR, "mcp fastmcp capabilities remote error", ex);
         }
     }
 
@@ -100,14 +102,14 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
                     })
                     .body(Object.class);
             return parseInvokeBody(body);
-        } catch (McpGatewayException ex) {
+        } catch (BusinessException ex) {
             throw ex;
         } catch (RestClientResponseException ex) {
             throw toHttpException("invoke", ex.getStatusCode().value(), ex);
         } catch (ResourceAccessException ex) {
             throw toAccessException("mcp fastmcp invoke access failed", ex);
         } catch (RestClientException ex) {
-            throw new McpGatewayException("MCP_REMOTE_ERROR", true, "mcp fastmcp invoke remote error", ex);
+            throw new BusinessException(ErrorCode.MCP_REMOTE_ERROR, "mcp fastmcp invoke remote error", ex);
         }
     }
 
@@ -115,7 +117,7 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
         if ("streamable".equals(transport) || "sse".equals(transport)) {
             return;
         }
-        throw new McpGatewayException("MCP_PROTOCOL_INCOMPATIBLE", false, "mcp fastmcp transport is not supported");
+        throw new BusinessException(ErrorCode.MCP_PROTOCOL_INCOMPATIBLE, "mcp fastmcp transport is not supported");
     }
 
     private Object parseInvokeBody(Object body) {
@@ -130,7 +132,7 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
         if (body != null) {
             return body;
         }
-        throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp fastmcp invoke invalid response");
+        throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp fastmcp invoke invalid response");
     }
 
     private List<String> parseCapabilitiesBody(Object body) {
@@ -148,7 +150,7 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
         if (body instanceof List<?> list) {
             return list.stream().filter(Objects::nonNull).map(String::valueOf).toList();
         }
-        throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp fastmcp capabilities invalid response");
+        throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp fastmcp capabilities invalid response");
     }
 
     private List<String> parseCapabilitiesResult(Object resultBody) {
@@ -168,12 +170,12 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
                 return list.stream().filter(Objects::nonNull).map(String::valueOf).toList();
             }
         }
-        throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp fastmcp capabilities invalid response");
+        throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp fastmcp capabilities invalid response");
     }
 
     private Object parseInvokeResult(Object resultBody) {
         if (resultBody == null) {
-            throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp fastmcp invoke invalid response");
+            throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp fastmcp invoke invalid response");
         }
         if (resultBody instanceof Map<?, ?> map) {
             if (map.containsKey("structuredContent")) {
@@ -182,7 +184,7 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
             if (map.containsKey("result")) {
                 Object nested = map.get("result");
                 if (nested == null) {
-                    throw new McpGatewayException("MCP_INVALID_RESPONSE", false, "mcp fastmcp invoke invalid response");
+                    throw new BusinessException(ErrorCode.MCP_INVALID_RESPONSE, "mcp fastmcp invoke invalid response");
                 }
                 return nested;
             }
@@ -220,7 +222,7 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
         return String.valueOf(rawTraceId).trim();
     }
 
-    private McpGatewayException toRemoteProtocolException(Object errorBody) {
+    private BusinessException toRemoteProtocolException(Object errorBody) {
         String code = "";
         String message = "mcp remote error";
         if (errorBody instanceof Map<?, ?> map) {
@@ -234,38 +236,38 @@ public class FastMcpCapabilityGateway implements McpCapabilityGateway {
             }
         }
         if ("-32602".equals(code) || "INVALID_PARAMS".equalsIgnoreCase(code)) {
-            return new McpGatewayException("MCP_INVALID_PARAMS", false, message);
+            return new BusinessException(ErrorCode.MCP_INVALID_PARAMS, message);
         }
         if ("-32001".equals(code) || "PERMISSION_DENIED".equalsIgnoreCase(code) || "UNAUTHORIZED".equalsIgnoreCase(code)) {
-            return new McpGatewayException("MCP_PERMISSION_DENIED", false, message);
+            return new BusinessException(ErrorCode.FORBIDDEN, message);
         }
         if ("-32601".equals(code) || "METHOD_NOT_FOUND".equalsIgnoreCase(code) || "PROTOCOL_INCOMPATIBLE".equalsIgnoreCase(code)) {
-            return new McpGatewayException("MCP_PROTOCOL_INCOMPATIBLE", false, message);
+            return new BusinessException(ErrorCode.MCP_PROTOCOL_INCOMPATIBLE, message);
         }
-        return new McpGatewayException("MCP_REMOTE_ERROR", true, message);
+        return new BusinessException(ErrorCode.MCP_REMOTE_ERROR, message);
     }
 
-    private McpGatewayException toHttpException(String operation, int statusCode, Throwable cause) {
+    private BusinessException toHttpException(String operation, int statusCode, Throwable cause) {
         String lowerOp = operation == null ? "invoke" : operation.trim().toLowerCase();
         String opText = "capabilities".equals(lowerOp) ? "mcp fastmcp capabilities" : "mcp fastmcp invoke";
         if (statusCode == 400 || statusCode == 422) {
-            return new McpGatewayException("MCP_INVALID_PARAMS", false, opText + " invalid params", cause);
+            return new BusinessException(ErrorCode.MCP_INVALID_PARAMS, opText + " invalid params", cause);
         }
         if (statusCode == 401 || statusCode == 403) {
-            return new McpGatewayException("MCP_PERMISSION_DENIED", false, opText + " permission denied", cause);
+            return new BusinessException(ErrorCode.FORBIDDEN, opText + " permission denied", cause);
         }
-        if (statusCode == 406 || statusCode == 409 || statusCode == 412 || statusCode == 415 || statusCode == 426) {
-            return new McpGatewayException("MCP_PROTOCOL_INCOMPATIBLE", false, opText + " protocol incompatible", cause);
+        if (statusCode == 404 || statusCode == 405 || statusCode == 406 || statusCode == 409 || statusCode == 412 || statusCode == 415 || statusCode == 426 || statusCode == 501) {
+            return new BusinessException(ErrorCode.MCP_PROTOCOL_INCOMPATIBLE, opText + " protocol incompatible", cause);
         }
-        return new McpGatewayException("MCP_REMOTE_" + statusCode, statusCode >= 500, opText + " remote error", cause);
+        return new BusinessException(ErrorCode.MCP_REMOTE_ERROR, opText + " remote error", cause);
     }
 
-    private McpGatewayException toAccessException(String message, ResourceAccessException ex) {
+    private BusinessException toAccessException(String message, ResourceAccessException ex) {
         Throwable cause = ex.getCause();
         if (cause instanceof SocketTimeoutException) {
-            return new McpGatewayException("MCP_TIMEOUT", true, message, ex);
+            return new BusinessException(ErrorCode.MCP_TIMEOUT, message, ex);
         }
-        return new McpGatewayException("MCP_UNREACHABLE", true, message, ex);
+        return new BusinessException(ErrorCode.MCP_UNREACHABLE, message, ex);
     }
 }
 

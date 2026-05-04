@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.mcp.application;
 
-import io.github.imzmq.interview.tool.gateway.McpGatewayException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -29,7 +30,7 @@ public class CapabilityParamNormalizer {
         Integer lineStart = positiveInteger(firstNonNull(adjusted, "lineStart", "fromLine"), "lineStart");
         Integer lineEnd = positiveInteger(firstNonNull(adjusted, "lineEnd", "toLine"), "lineEnd");
         if (lineStart != null && lineEnd != null && lineEnd < lineStart) {
-            throw new McpGatewayException("MCP_INVALID_PARAMS", false, "lineEnd 不能小于 lineStart");
+            throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, "lineEnd 不能小于 lineStart");
         }
         if (offset == null && lineStart != null) {
             offset = lineStart;
@@ -42,7 +43,7 @@ public class CapabilityParamNormalizer {
         }
         if (limit != null) {
             if (limit > MAX_READ_LIMIT) {
-                throw new McpGatewayException("MCP_INVALID_PARAMS", false, "limit 超过最大允许值 " + MAX_READ_LIMIT);
+                throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, "limit 超过最大允许值 " + MAX_READ_LIMIT);
             }
             adjusted.put("limit", limit);
         }
@@ -83,11 +84,11 @@ public class CapabilityParamNormalizer {
             try {
                 parsed = Integer.parseInt(text);
             } catch (NumberFormatException ex) {
-                throw new McpGatewayException("MCP_INVALID_PARAMS", false, field + " 必须为正整数");
+                throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, field + " 必须为正整数");
             }
         }
         if (parsed <= 0) {
-            throw new McpGatewayException("MCP_INVALID_PARAMS", false, field + " 必须大于 0");
+            throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, field + " 必须大于 0");
         }
         return parsed;
     }

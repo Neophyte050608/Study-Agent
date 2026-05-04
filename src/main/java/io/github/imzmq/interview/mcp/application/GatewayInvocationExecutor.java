@@ -1,7 +1,8 @@
 package io.github.imzmq.interview.mcp.application;
 
 import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
-import io.github.imzmq.interview.tool.gateway.McpGatewayException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -29,7 +30,7 @@ public class GatewayInvocationExecutor {
                 throw runtimeException;
             }
             if (cause instanceof TimeoutException timeoutException) {
-                throw new McpGatewayException("MCP_TIMEOUT", true, timeoutException.getMessage() == null ? "invoke timeout" : timeoutException.getMessage());
+                throw new BusinessException(ErrorCode.MCP_TIMEOUT, timeoutException.getMessage() == null ? "invoke timeout" : timeoutException.getMessage());
             }
             throw new RuntimeException(cause);
         }

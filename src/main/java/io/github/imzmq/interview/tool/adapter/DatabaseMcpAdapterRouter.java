@@ -7,7 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
-import io.github.imzmq.interview.tool.gateway.McpGatewayException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 @Component
 public class DatabaseMcpAdapterRouter implements McpCapabilityGateway {
@@ -38,7 +39,7 @@ public class DatabaseMcpAdapterRouter implements McpCapabilityGateway {
     public Object invokeCapability(String name, Map<String, Object> params, Map<String, Object> context) {
         DatabaseMcpAdapter adapter = adapterOf(name);
         if (adapter == null) {
-            throw new McpGatewayException("MCP_INVALID_PARAMS", false, "database capability is not supported");
+            throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, "database capability is not supported");
         }
         return adapter.invoke(name, params == null ? Map.of() : params, context == null ? Map.of() : context);
     }
