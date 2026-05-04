@@ -32,6 +32,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.imzmq.interview.chat.application.JsonResult;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -109,6 +111,7 @@ public class RAGService {
     private final PromptTemplateService promptTemplateService;
     private final PromptManager promptManager;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final LlmJsonParser llmJsonParser;
     // 注入自定义检索线程池
     private final java.util.concurrent.Executor ragRetrieveExecutor;
     // 注入图谱持久化组件
@@ -124,7 +127,7 @@ public class RAGService {
     private final SkillMcpClient skillMcpClient;
     private final ConcurrentHashMap<String, CachedRewrite> rewriteCache = new ConcurrentHashMap<>();
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, SkillMcpClient skillMcpClient) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -143,6 +146,7 @@ public class RAGService {
         this.imageService = imageService;
         this.skillOrchestrator = skillOrchestrator;
         this.skillMcpClient = skillMcpClient;
+        this.llmJsonParser = llmJsonParser;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -511,29 +515,15 @@ public class RAGService {
             return rawJson;
         }
         
-        String cleanJson = rawJson;
-        if (cleanJson != null) {
-            cleanJson = cleanJson.trim();
-            // 兼容可能存在的 markdown 标记，无论是否标明了 json 语言
-            if (cleanJson.startsWith("```json")) {
-                cleanJson = cleanJson.substring(7);
-            } else if (cleanJson.startsWith("```")) {
-                cleanJson = cleanJson.substring(3);
-            }
-            if (cleanJson.endsWith("```")) {
-                cleanJson = cleanJson.substring(0, cleanJson.length() - 3);
-            }
-            cleanJson = cleanJson.trim();
+        JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(rawJson, null, null);
+        if (!parseResult.success()) {
+            return rawJson;
         }
-
-        if (cleanJson == null || cleanJson.isBlank() || !cleanJson.startsWith("{")) {
+        JsonNode node = parseResult.data();
+        if (!(node instanceof ObjectNode objectNode)) {
             return rawJson;
         }
         try {
-            JsonNode node = objectMapper.readTree(cleanJson);
-            if (!(node instanceof ObjectNode objectNode)) {
-                return rawJson;
-            }
             List<String> citations = readArrayText(objectNode.path("citations"));
             List<String> conflicts = readArrayText(objectNode.path("conflicts"));
             List<String> deductions = readArrayText(objectNode.path("deductions"));
@@ -1882,19 +1872,31 @@ public class RAGService {
                 return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
             }
 
-            // 清理 markdown 代码块标记
-            String clean = raw.replaceAll("```json", "").replaceAll("```", "").trim();
-            // 如果包含 [ 则定位到 JSON 数组
-            int arrayStart = clean.indexOf('[');
-            int arrayEnd = clean.lastIndexOf(']');
-            if (arrayStart >= 0 && arrayEnd > arrayStart) {
-                clean = clean.substring(arrayStart, arrayEnd + 1);
+            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
+            if (!parseResult.success() || !parseResult.data().isArray() || parseResult.data().isEmpty()) {
+                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+            }
+            JsonNode rootNode = parseResult.data();
+
+            List<CodingPracticeAgent.QuizQuestion> questions = new java.util.ArrayList<>();
+            for (JsonNode element : rootNode) {
+                List<String> options = new java.util.ArrayList<>();
+                JsonNode optsNode = element.path("options");
+                if (optsNode.isArray()) {
+                    for (JsonNode opt : optsNode) {
+                        options.add(opt.asText());
+                    }
+                }
+                questions.add(new CodingPracticeAgent.QuizQuestion(
+                    element.path("index").asInt(0),
+                    element.path("stem").asText(""),
+                    options,
+                    element.path("correctAnswer").asText(""),
+                    element.path("explanation").asText("")
+                ));
             }
 
-            List<CodingPracticeAgent.QuizQuestion> questions = objectMapper.readValue(clean,
-                objectMapper.getTypeFactory().constructCollectionType(List.class, CodingPracticeAgent.QuizQuestion.class));
-
-            if (questions == null || questions.isEmpty()) {
+            if (questions.isEmpty()) {
                 return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
             }
 
@@ -1990,8 +1992,11 @@ public class RAGService {
             ), 1, "刷题答案评估");
             logger.debug("====== [RAGService - evaluateCodingAnswer] Response ======");
             logger.debug("{}", raw);
-            String clean = normalizeJsonContent(raw);
-            JsonNode node = objectMapper.readTree(clean);
+            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
+            if (!parseResult.success()) {
+                throw new RuntimeException("Coding evaluation JSON parse failed: " + parseResult.failureReason());
+            }
+            JsonNode node = parseResult.data();
             int score = node.path("score").asInt(0);
             String feedback = node.path("feedback").asText("建议补充完整思路并说明复杂度。");
             String nextHint = node.path("nextHint").asText("请优先补充边界条件与复杂度分析。");
@@ -2175,48 +2180,20 @@ public class RAGService {
         return new CodingAssessment(score, feedback, nextHint, fallbackNextCodingQuestion("算法", score, "ALGORITHM"));
     }
 
-    private String normalizeJsonContent(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        String clean = raw.trim();
-        if (clean.startsWith("```json")) {
-            clean = clean.substring(7);
-        } else if (clean.startsWith("```")) {
-            clean = clean.substring(3);
-        }
-        if (clean.endsWith("```")) {
-            clean = clean.substring(0, clean.length() - 3);
-        }
-        return clean.trim();
-    }
-
     private String normalizeFirstQuestion(String raw, String topic) {
         if (raw == null || raw.isBlank()) {
             return buildFallbackFirstQuestion(topic);
         }
 
         // 尝试 JSON 解析：如果 LLM 返回了 JSON 格式，直接提取 question 字段
-        String trimmed = raw.trim();
-        String jsonCandidate = trimmed;
-        if (jsonCandidate.startsWith("```json")) {
-            jsonCandidate = jsonCandidate.substring(7);
-        } else if (jsonCandidate.startsWith("```")) {
-            jsonCandidate = jsonCandidate.substring(3);
-        }
-        if (jsonCandidate.endsWith("```")) {
-            jsonCandidate = jsonCandidate.substring(0, jsonCandidate.length() - 3);
-        }
-        jsonCandidate = jsonCandidate.trim();
-        if (jsonCandidate.startsWith("{")) {
-            try {
-                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(jsonCandidate);
+        JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw.trim(), null, null);
+        if (parseResult.success()) {
+            JsonNode node = parseResult.data();
+            if (node != null && node.isObject()) {
                 String q = node.path("question").asText("");
                 if (!q.isBlank()) {
                     return truncate(q.trim(), 200);
                 }
-            } catch (Exception ignored) {
-                // JSON 解析失败，继续走文本提取逻辑
             }
         }
 
