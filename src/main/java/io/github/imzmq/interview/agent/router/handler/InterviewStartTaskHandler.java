@@ -5,6 +5,7 @@ import io.github.imzmq.interview.agent.router.TaskHandler;
 import io.github.imzmq.interview.agent.router.TaskHandlerSupport;
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskType;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -37,12 +38,14 @@ public class InterviewStartTaskHandler implements TaskHandler {
                 skipIntro = Boolean.parseBoolean(text);
             }
         }
+        List<String> excludedTopics = TaskHandlerSupport.readTextList(request.payload(), "excludedTopics");
         return interviewOrchestratorAgent.startSession(
                 TaskHandlerSupport.readText(request.payload(), "userId"),
                 TaskHandlerSupport.readText(request.payload(), "topic"),
                 TaskHandlerSupport.readText(request.payload(), "resumePath"),
                 TaskHandlerSupport.readInt(request.payload(), "totalQuestions"),
-                skipIntro
+                skipIntro,
+                excludedTopics
         );
     }
 }

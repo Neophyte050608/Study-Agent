@@ -84,7 +84,7 @@ public class InterviewOrchestratorAgent {
      * @param totalQuestions 期望面试总题数（可选，默认5，范围1-20）
      * @return 包含首题、简历内容与画像快照的会话对象
      */
-    public InterviewSession startSession(String userId, String topic, String resumePath, Integer totalQuestions, boolean skipIntro) {
+    public InterviewSession startSession(String userId, String topic, String resumePath, Integer totalQuestions, boolean skipIntro, List<String> excludedTopics) {
         // 1) 装载简历上下文：作为首题生成与后续追问的背景资料
         String resumeContent = "";
         if (resumePath != null && !resumePath.isEmpty()) {
@@ -110,7 +110,7 @@ public class InterviewOrchestratorAgent {
 
         // 3) 生成首题：输入包含简历与画像，使问题更贴近个人经历与当前薄弱点
         // 这里在后续可以根据 currentStage 进行定制化生成，目前暂且复用原有首题生成
-        String firstQuestion = evaluationAgent.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, List.of());
+        String firstQuestion = evaluationAgent.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, excludedTopics);
         session.setCurrentQuestion(firstQuestion);
         
         // 持久化会话（支持断电恢复）
