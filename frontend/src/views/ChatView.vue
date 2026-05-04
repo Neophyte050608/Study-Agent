@@ -520,6 +520,14 @@ const normalizeMessages = (rawMessages) => {
         return { ...msg, ...metadata }
       }
     }
+    if (msg.contentType === 'interview_card' && msg.content) {
+      try {
+        const interviewPayload = JSON.parse(msg.content)
+        return { ...msg, ...metadata, interviewPayload, content: '' }
+      } catch (e) {
+        return { ...msg, ...metadata }
+      }
+    }
     if (msg.contentType === 'quiz' && msg.content) {
       try {
         const quizPayload = JSON.parse(msg.content)
