@@ -122,10 +122,120 @@ public class LlmJsonParser {
         return null;
     }
 
-    // ==================== 占位方法（后续 Task 实现） ====================
+    // ==================== Layer 2: JSON 修复 ====================
 
+    /**
+     * 修复 LLM 输出中常见的 JSON 语法错误。
+     * 按顺序修复 7 类问题：注释、单引号、无引号键、尾逗号、连续对象、截断。
+     */
     String repairJson(String jsonLike) {
-        throw new UnsupportedOperationException("待实现");
+        if (jsonLike == null || jsonLike.isBlank()) {
+            return jsonLike;
+        }
+        String repaired = jsonLike.trim();
+
+        // 1. 移除注释（在引号处理之前，避免注释内的引号干扰）
+        repaired = removeComments(repaired);
+
+        // 2. 单引号 → 双引号
+        repaired = fixSingleQuotes(repaired);
+
+        // 3. 无引号键名 → 加双引号
+        repaired = fixUnquotedKeys(repaired);
+
+        // 4. 尾逗号
+        repaired = fixTrailingCommas(repaired);
+
+        // 5. 连续对象合并
+        repaired = fixConcatenatedObjects(repaired);
+
+        // 6. 截断补全
+        repaired = fixTruncation(repaired);
+
+        return repaired;
+    }
+
+    private String removeComments(String s) {
+        s = s.replaceAll("(?m)^\\s*//.*$", "");
+        s = s.replaceAll("/\\*[\\s\\S]*?\\*/", "");
+        return s;
+    }
+
+    private String fixSingleQuotes(String s) {
+        StringBuilder sb = new StringBuilder();
+        boolean inDouble = false;
+        boolean inSingle = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"' && !inSingle) {
+                inDouble = !inDouble;
+                sb.append(c);
+            } else if (c == '\'' && !inDouble) {
+                inSingle = !inSingle;
+                sb.append('"');
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private String fixUnquotedKeys(String s) {
+        // 匹配 JSON 对象中未加引号的键名: ,{ 或 { 后跟空白 + 标识符 + 空白 + :
+        return s.replaceAll("(?<=[,{])\\s*(\\w+)\\s*:", "\"$1\":");
+    }
+
+    private String fixTrailingCommas(String s) {
+        s = s.replaceAll(",\\s*}", "}");
+        s = s.replaceAll(",\\s*]", "]");
+        return s;
+    }
+
+    private String fixConcatenatedObjects(String s) {
+        String fixed = s.replaceAll("\\}\\s*\\{", "},{");
+        if (fixed.startsWith("{") && fixed.contains("},{") && !fixed.startsWith("[")) {
+            fixed = "[" + fixed + "]";
+        }
+        return fixed;
+    }
+
+    private String fixTruncation(String s) {
+        int braceDepth = 0;
+        int bracketDepth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (c == '\\' && inString) {
+                escaped = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (c == '{') braceDepth++;
+            else if (c == '}') braceDepth--;
+            else if (c == '[') bracketDepth++;
+            else if (c == ']') bracketDepth--;
+        }
+
+        StringBuilder sb = new StringBuilder(s);
+        // 关闭未闭合的字符串
+        if (inString) {
+            sb.append('"');
+        }
+        for (int i = 0; i < bracketDepth; i++) sb.append(']');
+        for (int i = 0; i < braceDepth; i++) sb.append('}');
+        return sb.toString();
     }
 
     public JsonResult<JsonNode> parseTree(String raw, SchemaSpec schema, RetryCall retry) {

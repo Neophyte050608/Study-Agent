@@ -61,4 +61,66 @@ class LlmJsonParserTest {
         String extracted = parser.extractJson(raw);
         assertThat(extracted).isNull();
     }
+
+    // === Layer 2: 修复 ===
+
+    @Test
+    void repair_trailingCommaInObject_removes() {
+        String broken = "{\"a\":1,\"b\":2,}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).isEqualTo("{\"a\":1,\"b\":2}");
+    }
+
+    @Test
+    void repair_trailingCommaInArray_removes() {
+        String broken = "[1,2,3,]";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).isEqualTo("[1,2,3]");
+    }
+
+    @Test
+    void repair_singleQuotes_convertsToDouble() {
+        String broken = "{'taskType':'CODING'}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).isEqualTo("{\"taskType\":\"CODING\"}");
+    }
+
+    @Test
+    void repair_unquotedKeys_addsQuotes() {
+        String broken = "{taskType:\"CODING\",count:5}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).contains("\"taskType\"");
+        assertThat(repaired).contains("\"count\"");
+    }
+
+    @Test
+    void repair_lineComments_removes() {
+        String broken = "{\n// this is a comment\n\"a\":1\n}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).doesNotContain("//");
+        assertThat(repaired).contains("\"a\":1");
+    }
+
+    @Test
+    void repair_blockComments_removes() {
+        String broken = "{\"a\":1/* inline comment */,\"b\":2}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).isEqualTo("{\"a\":1,\"b\":2}");
+    }
+
+    @Test
+    void repair_truncated_closesOpenBraces() {
+        String broken = "{\"a\":1,\"b\":{\"c\":2}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).endsWith("}");
+    }
+
+    @Test
+    void repair_concatenatedObjects_wrapsInArray() {
+        String broken = "{\"a\":1}{\"b\":2}";
+        String repaired = parser.repairJson(broken);
+        assertThat(repaired).startsWith("[");
+        assertThat(repaired).endsWith("]");
+        assertThat(repaired).contains("},{");
+    }
 }
