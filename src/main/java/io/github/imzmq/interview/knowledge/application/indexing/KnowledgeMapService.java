@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.indexing;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphRetrievalException;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphFailureReason;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.ingestion.application.IngestConfigService;
@@ -37,16 +37,16 @@ public class KnowledgeMapService {
     public KnowledgeMapSnapshot loadValidatedIndex() {
         String indexFilePath = resolveIndexFilePath();
         if (indexFilePath == null || indexFilePath.isBlank()) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.INDEX_NOT_CONFIGURED,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_INDEX_NOT_CONFIGURED,
                     "Local knowledge index path is not configured"
             );
         }
 
         Path indexPath = Path.of(indexFilePath).toAbsolutePath().normalize();
         if (!Files.exists(indexPath) || !Files.isRegularFile(indexPath)) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.INDEX_NOT_FOUND,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_INDEX_NOT_FOUND,
                     "Local knowledge index file not found: " + indexPath
             );
         }
@@ -55,16 +55,16 @@ public class KnowledgeMapService {
             JsonNode root = objectMapper.readTree(indexPath.toFile());
             int schemaVersion = root.path("schemaVersion").asInt(root.path("version").asInt(-1));
             if (schemaVersion != properties.getRequiredSchemaVersion()) {
-                throw new LocalGraphRetrievalException(
-                        LocalGraphFailureReason.INDEX_SCHEMA_MISMATCH,
+                throw new BusinessException(
+                        ErrorCode.LOCAL_GRAPH_INDEX_SCHEMA_MISMATCH,
                         "Unexpected schemaVersion: " + schemaVersion
                 );
             }
 
             JsonNode nodes = root.path("nodes");
             if (!nodes.isArray() || nodes.isEmpty()) {
-                throw new LocalGraphRetrievalException(
-                        LocalGraphFailureReason.INDEX_EMPTY,
+                throw new BusinessException(
+                        ErrorCode.LOCAL_GRAPH_INDEX_EMPTY,
                         "Knowledge index has no nodes"
                 );
             }
@@ -89,17 +89,17 @@ public class KnowledgeMapService {
                 ));
             }
             if (parsedNodes.isEmpty()) {
-                throw new LocalGraphRetrievalException(
-                        LocalGraphFailureReason.INDEX_EMPTY,
+                throw new BusinessException(
+                        ErrorCode.LOCAL_GRAPH_INDEX_EMPTY,
                         "Knowledge index has no valid nodes"
                 );
             }
             return new KnowledgeMapSnapshot(indexPath, schemaVersion, buildId, vaultRoot, List.copyOf(parsedNodes));
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.INDEX_LOAD_FAILED,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_INDEX_LOAD_FAILED,
                     "Failed to load local knowledge index: " + indexPath,
                     e
             );

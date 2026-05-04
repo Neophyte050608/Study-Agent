@@ -6,8 +6,8 @@ import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.core.trace.RAGTraceContext;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphFailureReason;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphRetrievalException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
@@ -75,8 +75,8 @@ public class LocalGraphKnowledgeService {
                 .limit(properties.getMaxLocalMatches())
                 .toList();
         if (matchedNodes.isEmpty()) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.ROUTING_EMPTY,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_ROUTING_EMPTY,
                     "Local routing produced no matched nodes"
             );
         }
@@ -91,8 +91,8 @@ public class LocalGraphKnowledgeService {
 
         String context = buildContext(graphContext);
         if (context.length() < properties.getMinLocalContextChars()) {
-            throw new LocalGraphRetrievalException(
-                LocalGraphFailureReason.CONTEXT_TOO_THIN,
+            throw new BusinessException(
+                ErrorCode.LOCAL_GRAPH_CONTEXT_TOO_THIN,
                 "Local note context is too thin"
             );
         }
@@ -138,13 +138,13 @@ public class LocalGraphKnowledgeService {
                     null
             );
             return result;
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             ragObservabilityService.endNode(
                     traceId,
                     nodeId,
                     inputSummary,
                     null,
-                    e.getFailureReason().name()
+                    e.getMessage()
             );
             throw e;
         } catch (Exception e) {
@@ -155,8 +155,8 @@ public class LocalGraphKnowledgeService {
                     null,
                     e.getMessage()
             );
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.NOTE_PARSE_FAILED,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_NOTE_PARSE_FAILED,
                     "Local graph tracing step failed: " + definition.nodeName(),
                     e
             );

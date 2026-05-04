@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.localgraph;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphRetrievalException;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphFailureReason;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
@@ -29,8 +29,8 @@ public class LocalCandidateRecallService {
                                                           KnowledgeMapService.KnowledgeMapSnapshot snapshot) {
         String normalizedQuestion = normalize(question);
         if (normalizedQuestion.isBlank() || snapshot == null || snapshot.nodes() == null || snapshot.nodes().isEmpty()) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.CANDIDATE_RECALL_EMPTY,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_CANDIDATE_RECALL_EMPTY,
                     "No candidates recalled for empty question or index"
             );
         }
@@ -44,8 +44,8 @@ public class LocalCandidateRecallService {
         }
 
         if (scored.isEmpty()) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.CANDIDATE_RECALL_EMPTY,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_CANDIDATE_RECALL_EMPTY,
                     "No local candidates matched the question"
             );
         }

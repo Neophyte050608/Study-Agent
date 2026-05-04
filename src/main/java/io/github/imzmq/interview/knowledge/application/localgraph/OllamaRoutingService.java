@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.localgraph;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphRetrievalException;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphFailureReason;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
@@ -58,8 +58,8 @@ public class OllamaRoutingService {
 
     public List<String> route(String question, List<KnowledgeMapService.KnowledgeNode> candidates) {
         if (candidates == null || candidates.isEmpty()) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.CANDIDATE_RECALL_EMPTY,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_CANDIDATE_RECALL_EMPTY,
                     "No candidate nodes available for routing"
             );
         }
@@ -88,8 +88,8 @@ public class OllamaRoutingService {
 
     private List<String> routeViaLegacyOllama(String prompt, List<KnowledgeMapService.KnowledgeNode> candidates) {
         if (properties.getOllamaModel().isBlank()) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.OLLAMA_UNAVAILABLE,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_OLLAMA_UNAVAILABLE,
                     "No RETRIEVAL candidate available and legacy ollama model is not configured"
             );
         }
@@ -119,25 +119,25 @@ public class OllamaRoutingService {
                     compactForLog(raw));
             logger.debug("Ollama routing full response:\n{}", raw);
             return parseMatchesFromLegacyResponse(raw, candidates);
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             throw e;
         } catch (ResourceAccessException e) {
             Throwable cause = e.getCause();
             if (cause instanceof SocketTimeoutException) {
-                throw new LocalGraphRetrievalException(
-                        LocalGraphFailureReason.OLLAMA_TIMEOUT,
+                throw new BusinessException(
+                        ErrorCode.LOCAL_GRAPH_OLLAMA_TIMEOUT,
                         "Ollama routing request timed out",
                         e
                 );
             }
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.OLLAMA_UNAVAILABLE,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_OLLAMA_UNAVAILABLE,
                     "Ollama routing service is unavailable",
                     e
             );
         } catch (RestClientException e) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.OLLAMA_UNAVAILABLE,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_OLLAMA_UNAVAILABLE,
                     "Failed to call Ollama routing service",
                     e
             );
@@ -185,25 +185,25 @@ public class OllamaRoutingService {
         try {
             JsonResult<JsonNode> rootResult = llmJsonParser.parseTree(raw, null, null);
             if (!rootResult.success()) {
-                throw new LocalGraphRetrievalException(
-                        LocalGraphFailureReason.OLLAMA_INVALID_JSON,
+                throw new BusinessException(
+                        ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,
                         "Failed to parse Ollama routing response"
                 );
             }
             JsonNode root = rootResult.data();
             String responseText = root.path("response").asText("");
             if (responseText.isBlank()) {
-                throw new LocalGraphRetrievalException(
-                        LocalGraphFailureReason.OLLAMA_INVALID_JSON,
+                throw new BusinessException(
+                        ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,
                     "Ollama response is empty"
                 );
             }
             return parseMatchesFromRoutedText(responseText, candidates);
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.OLLAMA_INVALID_JSON,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,
                     "Failed to parse Ollama routing response",
                     e
             );
@@ -214,16 +214,16 @@ public class OllamaRoutingService {
         try {
             JsonResult<JsonNode> routedResult = llmJsonParser.parseTree(routedText, null, null);
             if (!routedResult.success()) {
-                throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.OLLAMA_INVALID_JSON,
+                throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,
                     "Failed to parse routing model response"
                 );
             }
             JsonNode routed = routedResult.data();
             JsonNode matches = routed.path("matches");
             if (!matches.isArray() || matches.isEmpty()) {
-                throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.ROUTING_EMPTY,
+                throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_ROUTING_EMPTY,
                     "Routing model returned no matched ids"
                 );
             }
@@ -242,17 +242,17 @@ public class OllamaRoutingService {
                 }
             }
             if (results.isEmpty()) {
-                throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.ROUTING_EMPTY,
+                throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_ROUTING_EMPTY,
                     "Routing model returned ids outside current candidates"
                 );
             }
             return List.copyOf(results);
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            throw new LocalGraphRetrievalException(
-                    LocalGraphFailureReason.OLLAMA_INVALID_JSON,
+            throw new BusinessException(
+                    ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,
                     "Failed to parse routing model response",
                     e
             );
