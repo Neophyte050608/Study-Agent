@@ -123,4 +123,77 @@ class LlmJsonParserTest {
         assertThat(repaired).endsWith("]");
         assertThat(repaired).contains("},{");
     }
+
+    // === 端到端: 五层洋葱 ===
+
+    @Test
+    void parseTree_validJsonNoSchema_returnsSuccess() {
+        JsonResult<JsonNode> result = parser.parseTree(
+                "{\"taskType\":\"CODING\",\"confidence\":0.9}", null, null);
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().get("taskType").asText()).isEqualTo("CODING");
+        assertThat(result.attempts()).isEqualTo(1);
+    }
+
+    @Test
+    void parseTree_markdownWrappedWithSchema_returnsSuccess() {
+        SchemaSpec schema = SchemaSpec.builder()
+                .required("taskType", "confidence")
+                .type("confidence", SchemaSpec.JsonType.NUMBER, 0.0)
+                .build();
+        String raw = "```json\n{\"taskType\":\"KNOWLEDGE_QA\",\"confidence\":0.85}\n```";
+        JsonResult<JsonNode> result = parser.parseTree(raw, schema, null);
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().get("confidence").asDouble()).isEqualTo(0.85);
+    }
+
+    @Test
+    void parseTree_missingRequiredFieldWithoutRetry_returnsFailure() {
+        SchemaSpec schema = SchemaSpec.builder()
+                .required("taskType", "intentId", "confidence")
+                .build();
+        String raw = "{\"taskType\":\"CODING\"}";
+        JsonResult<JsonNode> result = parser.parseTree(raw, schema, null);
+        assertThat(result.success()).isFalse();
+        assertThat(result.failureReason()).contains("intentId");
+    }
+
+    @Test
+    void parseTree_repairableJson_succeeds() {
+        SchemaSpec schema = SchemaSpec.builder()
+                .required("taskType")
+                .build();
+        String raw = "{'taskType':'CODING',}"; // 单引号 + 尾逗号
+        JsonResult<JsonNode> result = parser.parseTree(raw, schema, null);
+        assertThat(result.success()).isTrue();
+        assertThat(result.data().get("taskType").asText()).isEqualTo("CODING");
+        assertThat(result.warnings()).isNotEmpty();
+    }
+
+    @Test
+    void parseTree_retrySucceedsOnSecondAttempt() throws Exception {
+        SchemaSpec schema = SchemaSpec.builder()
+                .required("taskType")
+                .build();
+        RetryCall retry = (hint, attempt) -> {
+            if (attempt == 1) {
+                return "{\"taskType\":\"CODING\"}";
+            }
+            return "should not be called";
+        };
+        JsonResult<JsonNode> result = parser.parseTree("not json at all", schema, retry);
+        assertThat(result.success()).isTrue();
+        assertThat(result.attempts()).isEqualTo(2);
+    }
+
+    @Test
+    void parseTree_retryExhausted_returnsFailure() throws Exception {
+        SchemaSpec schema = SchemaSpec.builder()
+                .required("taskType")
+                .build();
+        RetryCall retry = (hint, attempt) -> "still not json {{{";
+        JsonResult<JsonNode> result = parser.parseTree("not json", schema, retry);
+        assertThat(result.success()).isFalse();
+        assertThat(result.attempts()).isEqualTo(3);
+    }
 }

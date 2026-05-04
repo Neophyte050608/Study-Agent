@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -238,7 +239,155 @@ public class LlmJsonParser {
         return sb.toString();
     }
 
+    // ==================== Layer 3+4+5: 解析/校验/重试/兜底 ====================
+
+    /**
+     * 解析 LLM 响应为 JsonNode，应用五层防御。
+     *
+     * @param raw    LLM 原始响应
+     * @param schema Schema 约束（可选，传 null 跳过校验）
+     * @param retry  重试回调（可选，传 null 跳过重试）
+     * @return 解析结果
+     */
     public JsonResult<JsonNode> parseTree(String raw, SchemaSpec schema, RetryCall retry) {
-        throw new UnsupportedOperationException("待实现");
+        List<String> allWarnings = new ArrayList<>();
+        String current = raw;
+        int attempt = 0;
+        String lastFailureReason = null;
+
+        while (true) {
+            attempt++;
+
+            // --- Layer 1: 提取 ---
+            String extracted = extractJson(current);
+            if (extracted == null) {
+                lastFailureReason = "无法从 LLM 响应中提取 JSON 片段";
+                if (shouldRetry(attempt, retry)) {
+                    current = doRetry(retry, buildSyntaxHint(null), attempt);
+                    if (current != null) continue;
+                }
+                break;
+            }
+
+            // --- Layer 2: 修复 ---
+            String repaired = repairJson(extracted);
+            if (!repaired.equals(extracted)) {
+                allWarnings.add("JSON 已自动修复");
+            }
+
+            // --- Layer 3: 解析 ---
+            JsonNode node;
+            try {
+                node = objectMapper.readTree(repaired);
+            } catch (Exception parseEx) {
+                lastFailureReason = "JSON 解析失败: " + parseEx.getMessage();
+                if (shouldRetry(attempt, retry)) {
+                    current = doRetry(retry, buildSyntaxHint(parseEx.getMessage()), attempt);
+                    if (current != null) continue;
+                }
+                break;
+            }
+
+            // --- Schema 校验 ---
+            if (schema != null && !schema.isEmpty()) {
+                ValidationReport report = validate(node, schema);
+                allWarnings.addAll(report.warnings());
+                if (!report.isValid()) {
+                    lastFailureReason = "Schema 校验失败: 缺少字段 " + String.join(", ", report.missingFields());
+                    if (shouldRetry(attempt, retry)) {
+                        current = doRetry(retry, buildSchemaHint(report), attempt);
+                        if (current != null) continue;
+                    }
+                    break;
+                }
+            }
+
+            return JsonResult.success(node, attempt, allWarnings);
+        }
+
+        log.debug("JSON 解析最终失败: reason={}, attempts={}", lastFailureReason, attempt);
+        return JsonResult.failure(lastFailureReason != null ? lastFailureReason : "未知解析失败", attempt);
+    }
+
+    private boolean shouldRetry(int attempt, RetryCall retry) {
+        return attempt <= MAX_RETRIES && retry != null;
+    }
+
+    private String doRetry(RetryCall retry, String hint, int attempt) {
+        try {
+            return retry.retry(hint, attempt);
+        } catch (Exception e) {
+            log.debug("重试调用异常: attempt={}, error={}", attempt, e.getMessage());
+            return null;
+        }
+    }
+
+    // ==================== Schema 校验 ====================
+
+    private ValidationReport validate(JsonNode node, SchemaSpec schema) {
+        List<String> missing = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        for (String field : schema.requiredFields()) {
+            if (!node.has(field) || node.get(field).isNull()) {
+                missing.add(field);
+            }
+        }
+
+        for (Map.Entry<String, SchemaSpec.JsonType> entry : schema.fieldTypes().entrySet()) {
+            String field = entry.getKey();
+            SchemaSpec.JsonType expectedType = entry.getValue();
+            if (!node.has(field) || node.get(field).isNull()) {
+                continue;
+            }
+            JsonNode fieldNode = node.get(field);
+            boolean typeOk = switch (expectedType) {
+                case STRING -> fieldNode.isTextual();
+                case NUMBER -> fieldNode.isNumber();
+                case BOOLEAN -> fieldNode.isBoolean();
+                case ARRAY -> fieldNode.isArray();
+                case OBJECT -> fieldNode.isObject();
+            };
+            if (!typeOk) {
+                warnings.add(field + " 类型不匹配，期望 " + expectedType);
+            }
+        }
+
+        for (Map.Entry<String, Set<String>> entry : schema.fieldAllowedValues().entrySet()) {
+            String field = entry.getKey();
+            Set<String> allowed = entry.getValue();
+            if (!node.has(field) || node.get(field).isNull()) {
+                continue;
+            }
+            String value = node.get(field).asText("").trim().toUpperCase();
+            if (!value.isBlank() && !allowed.contains(value)) {
+                warnings.add(field + "=" + value + " 不在允许值内");
+            }
+        }
+
+        return new ValidationReport(missing.isEmpty(), missing, warnings);
+    }
+
+    private record ValidationReport(boolean isValid, List<String> missingFields, List<String> warnings) {}
+
+    // ==================== 重试提示构建 ====================
+
+    private String buildSyntaxHint(String parseError) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n\n【格式修正要求】上一次返回的 JSON 无法解析。");
+        if (parseError != null && !parseError.isBlank()) {
+            sb.append(" 错误: ").append(parseError);
+        }
+        sb.append("\n请务必: 1) 只返回纯 JSON，不要包含解释文字或 markdown 标记；");
+        sb.append("2) 使用双引号而非单引号；3) 不要在最后一个元素后加逗号。");
+        return sb.toString();
+    }
+
+    private String buildSchemaHint(ValidationReport report) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n\n【格式修正要求】上一次返回的 JSON 缺少必填字段: ");
+        sb.append(String.join(", ", report.missingFields()));
+        sb.append("。请确保 JSON 中包含这些字段并赋予正确的值。只返回纯 JSON。");
+        return sb.toString();
     }
 }
