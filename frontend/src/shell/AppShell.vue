@@ -102,10 +102,10 @@ const toSpaPath = (rawUrl) => {
   const normalized = normalize(rawUrl)
   switch (normalized) {
     case '/':
-      return '/interview'
+      return '/chat'
     case '/interview':
     case '/interview.html':
-      return '/interview'
+      return '/chat'
     case '/monitoring':
     case '/monitoring.html':
       return '/monitoring'
@@ -118,7 +118,7 @@ const toSpaPath = (rawUrl) => {
     case '/practice.html':
     case '/coding':
     case '/coding.html':
-      return '/coding'
+      return '/chat'
     case '/profile':
     case '/profile.html':
       return '/profile'

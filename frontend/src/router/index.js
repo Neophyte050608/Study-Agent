@@ -1,9 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppShell from '../shell/AppShell.vue'
-import InterviewView from '../views/InterviewView.vue'
 import MonitoringView from '../views/MonitoringView.vue'
 import NotesView from '../views/NotesView.vue'
-import CodingView from '../views/CodingView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import OpsView from '../views/OpsView.vue'
 import SettingsView from '../views/SettingsView.vue'
@@ -25,13 +23,15 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: '/interview'
+        redirect: '/chat'
       },
       {
         path: 'interview',
-        name: 'interview',
-        component: InterviewView,
-        alias: ['interview.html']
+        redirect: '/chat'
+      },
+      {
+        path: 'interview.html',
+        redirect: '/chat'
       },
       {
         path: 'monitoring',
@@ -47,9 +47,19 @@ const routes = [
       },
       {
         path: 'coding',
-        name: 'coding',
-        component: CodingView,
-        alias: ['practice', 'practice.html', 'coding.html']
+        redirect: '/chat'
+      },
+      {
+        path: 'practice',
+        redirect: '/chat'
+      },
+      {
+        path: 'practice.html',
+        redirect: '/chat'
+      },
+      {
+        path: 'coding.html',
+        redirect: '/chat'
       },
       {
         path: 'profile',
