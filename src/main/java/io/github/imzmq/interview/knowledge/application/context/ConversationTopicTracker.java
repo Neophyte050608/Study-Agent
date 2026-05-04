@@ -5,8 +5,11 @@ import io.github.imzmq.interview.knowledge.domain.TopicState;
 import io.github.imzmq.interview.knowledge.domain.TurnAnalysis;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.chat.application.JsonResult;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,16 +41,19 @@ public class ConversationTopicTracker {
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
     private final ObjectMapper objectMapper;
+    private final LlmJsonParser llmJsonParser;
     private final AtomicLong turnCounter = new AtomicLong(0);
 
     public ConversationTopicTracker(StringRedisTemplate redisTemplate,
                                     RoutingChatService routingChatService,
                                     PromptManager promptManager,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    LlmJsonParser llmJsonParser) {
         this.redisTemplate = redisTemplate;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.objectMapper = objectMapper;
+        this.llmJsonParser = llmJsonParser;
     }
 
     public TurnAnalysis analyzeTurn(String sessionId, String currentQuestion, String recentHistory) {
@@ -244,30 +250,24 @@ public class ConversationTopicTracker {
         if (raw == null || raw.isBlank()) {
             return TurnAnalysis.defaultContinuation(resolveTopic(previousTopic, currentQuestion));
         }
-        try {
-            String cleaned = raw.trim();
-            if (cleaned.startsWith("```")) {
-                cleaned = cleaned.replaceAll("^```(?:json)?\\s*", "")
-                        .replaceAll("\\s*```$", "")
-                        .trim();
-            }
-            Map<String, Object> parsed = objectMapper.readValue(cleaned, new TypeReference<Map<String, Object>>() {
-            });
-            boolean topicSwitch = Boolean.TRUE.equals(parsed.get("topicSwitch"));
-            DialogAct dialogAct = DialogAct.fromString(parsed.get("dialogAct") instanceof String value ? value : null);
-            double infoNovelty = 0.5;
-            Object noveltyObj = parsed.get("infoNovelty");
-            if (noveltyObj instanceof Number number) {
-                infoNovelty = Math.max(0.0, Math.min(1.0, number.doubleValue()));
-            }
-            String currentTopic = parsed.get("currentTopic") instanceof String value && !value.isBlank()
-                    ? value.trim()
-                    : resolveTopic(previousTopic, currentQuestion);
-            return new TurnAnalysis(topicSwitch, dialogAct, infoNovelty, currentTopic, previousTopic == null ? "" : previousTopic);
-        } catch (Exception ex) {
-            log.warn("轮次分析 JSON 解析失败，降级为话题延续: raw={}", raw, ex);
+        JsonResult<JsonNode> result = llmJsonParser.parseTree(raw, null, null);
+        if (!result.success()) {
+            log.warn("轮次分析 JSON 解析失败，降级为话题延续: raw={}", raw);
             return TurnAnalysis.defaultContinuation(resolveTopic(previousTopic, currentQuestion));
         }
+        JsonNode parsed = result.data();
+        boolean topicSwitch = parsed.has("topicSwitch") && parsed.get("topicSwitch").asBoolean();
+        DialogAct dialogAct = DialogAct.fromString(
+                parsed.has("dialogAct") ? parsed.get("dialogAct").asText() : null);
+        double infoNovelty = 0.5;
+        if (parsed.has("infoNovelty") && !parsed.get("infoNovelty").isNull()) {
+            infoNovelty = Math.max(0.0, Math.min(1.0, parsed.get("infoNovelty").asDouble()));
+        }
+        String currentTopic = parsed.has("currentTopic") && !parsed.get("currentTopic").asText().isBlank()
+                ? parsed.get("currentTopic").asText().trim()
+                : resolveTopic(previousTopic, currentQuestion);
+        return new TurnAnalysis(topicSwitch, dialogAct, infoNovelty, currentTopic,
+                previousTopic == null ? "" : previousTopic);
     }
 
     private TopicState mergeDigest(TopicState topicState, String knowledgeDigest) {
