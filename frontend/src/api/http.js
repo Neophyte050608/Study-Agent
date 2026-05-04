@@ -1,3 +1,10 @@
+function unwrap(json) {
+  if (json && json.code === 0) {
+    return json.data
+  }
+  return json
+}
+
 function getAuthHeaders() {
   const headers = {}
   const token = localStorage.getItem('auth_token')
@@ -13,7 +20,7 @@ export async function httpGet(url) {
     const text = await response.text()
     throw new Error(text || `请求失败: ${response.status}`)
   }
-  return response.json()
+  return unwrap(await response.json())
 }
 
 export async function httpPostJson(url, payload) {
@@ -34,7 +41,7 @@ export async function httpPostJson(url, payload) {
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }
-  return data
+  return unwrap(data)
 }
 
 export async function httpPostFormData(url, formData) {
@@ -55,7 +62,7 @@ export async function httpPostFormData(url, formData) {
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }
-  return data
+  return unwrap(data)
 }
 
 export async function httpPut(url, payload = {}) {
@@ -76,7 +83,7 @@ export async function httpPut(url, payload = {}) {
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }
-  return data
+  return unwrap(data)
 }
 
 export async function httpPatch(url, payload = {}) {
@@ -97,7 +104,7 @@ export async function httpPatch(url, payload = {}) {
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }
-  return data
+  return unwrap(data)
 }
 
 export async function httpDelete(url) {
@@ -115,5 +122,5 @@ export async function httpDelete(url) {
   if (!response.ok) {
     throw new Error(data.message || `请求失败: ${response.status}`)
   }
-  return data
+  return unwrap(data)
 }
