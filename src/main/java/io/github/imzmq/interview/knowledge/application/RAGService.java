@@ -1863,7 +1863,7 @@ public class RAGService {
         } catch (Exception e) {
             // 模板不存在时使用内联 prompt
             sp = "你是一位专业的技术面试出题官。";
-            up = buildInlineBatchQuizPrompt(normalizedTopic, normalizedDifficulty, count);
+            up = buildInlineBatchQuizPrompt(buildTopicWithExclusion(normalizedTopic, excludedTopics), normalizedDifficulty, count);
         }
 
         final String finalSystemPrompt = sp;
@@ -1876,12 +1876,12 @@ public class RAGService {
             ), 1, "批量选择题生成");
 
             if (raw == null || raw.isBlank()) {
-                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
             }
 
             JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
             if (!parseResult.success() || !parseResult.data().isArray() || parseResult.data().isEmpty()) {
-                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
             }
             JsonNode rootNode = parseResult.data();
 
@@ -1904,7 +1904,7 @@ public class RAGService {
             }
 
             if (questions.isEmpty()) {
-                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
             }
 
             // 确保 index 正确
@@ -1917,7 +1917,7 @@ public class RAGService {
             return result;
         } catch (Exception e) {
             logger.warn("批量选择题生成失败，降级逐题生成。原因: {}", summarizeError(e));
-            return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot);
+            return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
         }
     }
 
@@ -1925,10 +1925,10 @@ public class RAGService {
      * 降级方案：逐题调用 generateCodingQuestion 生成（无正确答案和解析）。
      */
     private List<CodingPracticeAgent.QuizQuestion> fallbackBatchQuiz(
-            String topic, String difficulty, int count, String profileSnapshot) {
+            String topic, String difficulty, int count, String profileSnapshot, List<String> excludedTopics) {
         List<CodingPracticeAgent.QuizQuestion> result = new java.util.ArrayList<>();
         for (int i = 0; i < count; i++) {
-            String questionText = generateCodingQuestion(topic + "（选择题）", difficulty, profileSnapshot, List.of());
+            String questionText = generateCodingQuestion(topic + "（选择题）", difficulty, profileSnapshot, excludedTopics);
             result.add(new CodingPracticeAgent.QuizQuestion(
                 i + 1, questionText, List.of("A. 请参考题目", "B. 请参考题目", "C. 请参考题目", "D. 请参考题目"),
                 "A", "该题目由降级方案生成，暂无解析。请根据题干自行判断。"));
