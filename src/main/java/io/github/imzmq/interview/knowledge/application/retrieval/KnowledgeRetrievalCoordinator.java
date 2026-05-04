@@ -6,8 +6,8 @@ import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.core.trace.RAGTraceContext;
 import io.github.imzmq.interview.knowledge.application.localgraph.LocalGraphKnowledgeService;
 import io.github.imzmq.interview.media.application.ImageService;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphFailureReason;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphRetrievalException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
@@ -87,7 +87,7 @@ public class KnowledgeRetrievalCoordinator {
             KnowledgeContextPacket packet = localGraphKnowledgeService.retrieve(question, effectiveRequestedMode);
             traceRetrievalSnapshot(packet, TraceNodeDefinitions.LOCAL_GRAPH_RETRIEVE, "Local Graph Retrieve", false);
             return cacheAndReturn(question, userAnswer, effectiveRequestedMode, packet);
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             if (effectiveRequestedMode == KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY) {
                 throw e;
             }
@@ -97,7 +97,7 @@ public class KnowledgeRetrievalCoordinator {
                     userAnswer,
                     effectiveRequestedMode,
                     KnowledgeRetrievalMode.RAG_ONLY,
-                    e.getFailureReason().name()
+                    errorCodeName(e)
             );
             return cacheAndReturn(question, userAnswer, effectiveRequestedMode, packet);
         }
@@ -129,7 +129,7 @@ public class KnowledgeRetrievalCoordinator {
             traceRetrievalSnapshot(fusedPacket, TraceNodeDefinitions.HYBRID_FUSION_RETRIEVE, "Hybrid Fusion Retrieve", false);
             return fusedPacket;
         } catch (CompletionException e) {
-            LocalGraphRetrievalException localException = unwrapLocalGraphException(e);
+            BusinessException localException = unwrapLocalGraphException(e);
             if (localException == null) {
                 throw e;
             }
@@ -141,7 +141,7 @@ public class KnowledgeRetrievalCoordinator {
                     ragPacket.retrievalModeResolved(),
                     false,
                     ragPacket.ragUsed(),
-                    localException.getFailureReason().name(),
+                    errorCodeName(localException),
                     ragPacket.retrievalQuery(),
                     ragPacket.context(),
                     ragPacket.imageContext(),
@@ -151,7 +151,7 @@ public class KnowledgeRetrievalCoordinator {
                     ragPacket.retrievedDocCount(),
                     ragPacket.retrievedDocumentRefs()
             );
-        } catch (LocalGraphRetrievalException e) {
+        } catch (BusinessException e) {
             traceFallback(e);
             traceRetrievalSnapshot(ragPacket, TraceNodeDefinitions.DOC_RETRIEVE, "RAG Retrieve", false);
             traceRetrievalSnapshot(ragPacket, TraceNodeDefinitions.HYBRID_FUSION_RETRIEVE, "Hybrid Fusion Retrieve", false);
@@ -160,7 +160,7 @@ public class KnowledgeRetrievalCoordinator {
                     ragPacket.retrievalModeResolved(),
                     false,
                     ragPacket.ragUsed(),
-                    e.getFailureReason().name(),
+                    errorCodeName(e),
                     ragPacket.retrievalQuery(),
                     ragPacket.context(),
                     ragPacket.imageContext(),
@@ -223,7 +223,7 @@ public class KnowledgeRetrievalCoordinator {
         return normalizedQuestion + "|" + normalizedAnswer + "|" + modeStr;
     }
 
-    private void traceFallback(LocalGraphRetrievalException exception) {
+    private void traceFallback(BusinessException exception) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
         ragObservabilityService.startNode(
@@ -233,12 +233,13 @@ public class KnowledgeRetrievalCoordinator {
                 TraceNodeDefinitions.LOCAL_GRAPH_FALLBACK.nodeType(),
                 TraceNodeDefinitions.LOCAL_GRAPH_FALLBACK.nodeName()
         );
+        String reason = errorCodeName(exception);
         ragObservabilityService.endNode(
                 traceId,
                 nodeId,
                 exception.getMessage(),
                 "fallbackTo=RAG_ONLY",
-                exception.getFailureReason().name(),
+                reason,
                 null,
                 new RAGObservabilityService.NodeDetails(
                         1,
@@ -249,7 +250,7 @@ public class KnowledgeRetrievalCoordinator {
                         List.of(),
                         null,
                         null,
-                        exception.getFailureReason().name(),
+                        reason,
                         null,
                         null,
                         null
@@ -423,15 +424,19 @@ public class KnowledgeRetrievalCoordinator {
         return builder.toString().trim();
     }
 
-    private LocalGraphRetrievalException unwrapLocalGraphException(Throwable throwable) {
+    private BusinessException unwrapLocalGraphException(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
-            if (current instanceof LocalGraphRetrievalException exception) {
+            if (current instanceof BusinessException exception) {
                 return exception;
             }
             current = current.getCause();
         }
         return null;
+    }
+
+    private String errorCodeName(BusinessException e) {
+        return ErrorCode.fromCode(e.errorCode()).map(Enum::name).orElse(String.valueOf(e.errorCode()));
     }
 
     private java.util.function.Supplier<KnowledgeContextPacket> wrapWithTraceContext(String traceId,

@@ -27,7 +27,8 @@ import io.github.imzmq.interview.skill.core.SkillExecutionResult;
 import io.github.imzmq.interview.skill.core.SkillExecutionStatus;
 import io.github.imzmq.interview.skill.policy.SkillFailureFallbackMode;
 import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
-import io.github.imzmq.interview.skill.policy.SkillPolicyException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 @Service
 public class SkillExecutor {
@@ -109,7 +110,7 @@ public class SkillExecutor {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("线程中断", interruptedException);
             } catch (TimeoutException timeoutException) {
-                lastError = new SkillPolicyException("skill_timeout", timeoutException, true);
+                lastError = new BusinessException(ErrorCode.SKILL_EXECUTION_FAILED, "skill_timeout", timeoutException);
             } catch (ExecutionException executionException) {
                 lastError = wrapExecutionException(executionException);
             } catch (CompletionException completionException) {
@@ -213,8 +214,8 @@ public class SkillExecutor {
     }
 
     private boolean isRetryable(Throwable error) {
-        if (error instanceof SkillPolicyException policyException) {
-            return policyException.isRetryable();
+        if (error instanceof BusinessException ex) {
+            return ex.retryable();
         }
         if (error instanceof ResourceAccessException) {
             return true;

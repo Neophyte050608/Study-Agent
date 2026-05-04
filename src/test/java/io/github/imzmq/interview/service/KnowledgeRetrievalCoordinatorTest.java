@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphRetrievalException;
-import io.github.imzmq.interview.knowledge.domain.LocalGraphFailureReason;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
@@ -49,17 +49,17 @@ class KnowledgeRetrievalCoordinatorTest {
         KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
                 properties,
                 ragKnowledgeService,
-                new FakeLocalGraphKnowledgeService(true, LocalGraphFailureReason.LOCAL_RETRIEVAL_NOT_IMPLEMENTED),
+                new FakeLocalGraphKnowledgeService(true, ErrorCode.LOCAL_GRAPH_NOT_IMPLEMENTED),
                 new RAGObservabilityService(new ObservabilitySwitchProperties())
         );
 
         try {
             coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.LOCAL_GRAPH_ONLY);
-        } catch (LocalGraphRetrievalException e) {
-            assertEquals(LocalGraphFailureReason.LOCAL_RETRIEVAL_NOT_IMPLEMENTED, e.getFailureReason());
+        } catch (BusinessException e) {
+            assertEquals(ErrorCode.LOCAL_GRAPH_NOT_IMPLEMENTED.code(), e.errorCode());
             return;
         }
-        throw new AssertionError("Expected LocalGraphRetrievalException");
+        throw new AssertionError("Expected BusinessException");
     }
 
     @Test
@@ -128,14 +128,14 @@ class KnowledgeRetrievalCoordinatorTest {
         KnowledgeRetrievalCoordinator coordinator = new KnowledgeRetrievalCoordinator(
                 properties,
                 new FakeRagKnowledgeService(),
-                new FakeLocalGraphKnowledgeService(true, LocalGraphFailureReason.ROUTING_EMPTY),
+                new FakeLocalGraphKnowledgeService(true, ErrorCode.LOCAL_GRAPH_ROUTING_EMPTY),
                 new RAGObservabilityService(new ObservabilitySwitchProperties())
         );
 
         KnowledgeContextPacket packet = coordinator.retrieve("Redis 为什么快", "", KnowledgeRetrievalMode.HYBRID_FUSION);
 
         assertEquals(KnowledgeRetrievalMode.RAG_ONLY, packet.retrievalModeResolved());
-        assertEquals(LocalGraphFailureReason.ROUTING_EMPTY.name(), packet.fallbackReason());
+        assertEquals(ErrorCode.LOCAL_GRAPH_ROUTING_EMPTY.name(), packet.fallbackReason());
         assertTrue(packet.ragUsed());
         assertFalse(packet.localGraphUsed());
     }
@@ -225,13 +225,13 @@ class KnowledgeRetrievalCoordinatorTest {
     private static final class FakeLocalGraphKnowledgeService extends LocalGraphKnowledgeService {
 
         private final boolean alwaysFail;
-        private final LocalGraphFailureReason failureReason;
+        private final ErrorCode errorCode;
 
         FakeLocalGraphKnowledgeService() {
             this(false, null);
         }
 
-        FakeLocalGraphKnowledgeService(boolean alwaysFail, LocalGraphFailureReason failureReason) {
+        FakeLocalGraphKnowledgeService(boolean alwaysFail, ErrorCode errorCode) {
             super(
                     new KnowledgeRetrievalProperties(),
                     null,
@@ -242,13 +242,13 @@ class KnowledgeRetrievalCoordinatorTest {
                     null
             );
             this.alwaysFail = alwaysFail;
-            this.failureReason = failureReason;
+            this.errorCode = errorCode;
         }
 
         @Override
         public KnowledgeContextPacket retrieve(String question, KnowledgeRetrievalMode requestedMode) {
             if (alwaysFail) {
-                throw new LocalGraphRetrievalException(failureReason, "failed");
+                throw new BusinessException(errorCode, "failed");
             }
             return new KnowledgeContextPacket(
                     requestedMode,
