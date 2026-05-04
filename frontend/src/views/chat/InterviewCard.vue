@@ -413,6 +413,7 @@ const handleNext = () => {
   })
   timerSeconds.value = 0
   startTimer()
+  emit('updated')
 }
 
 const handleFinish = async () => {
