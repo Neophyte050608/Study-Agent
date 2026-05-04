@@ -14,6 +14,7 @@ public class InputSanitizer {
      */
     public String sanitize(String input) {
         if (input == null) return "";
+        //清除不可见字符
         String cleaned = input.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]", "");
         if (cleaned.length() > maxLength) {
             cleaned = cleaned.substring(0, maxLength);

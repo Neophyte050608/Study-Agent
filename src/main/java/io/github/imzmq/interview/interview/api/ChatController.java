@@ -42,7 +42,9 @@ public class ChatController {
     public ResponseEntity<ChatSessionDO> createSession(
             @RequestBody(required = false) Map<String, String> body,
             HttpServletRequest request) {
+        // 从请求上下文中解析当前用户身份（Web 端多会话隔离关键点）。
         String userId = userIdentityResolver.resolve(request);
+        // 允许前端不传 title，此时默认“新对话”。
         String title = body != null ? body.getOrDefault("title", "新对话") : "新对话";
         return ResponseEntity.ok(webChatService.createSession(userId, title));
     }
@@ -80,16 +82,21 @@ public class ChatController {
             @PathVariable String sessionId,
             @RequestBody Map<String, Object> body,
             HttpServletRequest request) {
+        // 鉴权后拿到 userId，防止跨用户访问会话。
         String userId = userIdentityResolver.resolve(request);
+        // 用户本次输入内容。
         String content = String.valueOf(body.getOrDefault("content", ""));
+        // 可选检索模式（RAG_ONLY / 混合策略等），空值时由下游决定默认行为。
         String retrievalModeValue = body == null ? null : String.valueOf(body.getOrDefault("retrievalMode", ""));
         KnowledgeRetrievalMode retrievalMode = KnowledgeRetrievalMode.fromNullable(retrievalModeValue, null);
+        // 转入应用层流式服务，返回 SSE emitter 给前端持续接收 token/event。
         return chatStreamingService.streamChat(sessionId, userId, content, retrievalMode);
     }
 
     @PostMapping("/stream/stop")
     public ResponseEntity<Map<String, Object>> stopStream(
             @RequestBody Map<String, String> body) {
+        // 前端通过 streamTaskId 精确停止某一个流式任务。
         String taskId = body.get("streamTaskId");
         boolean stopped = chatStreamingService.stopTask(taskId);
         return ResponseEntity.ok(Map.of("streamTaskId", taskId, "stopped", stopped));

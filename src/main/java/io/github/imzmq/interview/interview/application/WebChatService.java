@@ -44,6 +44,7 @@ public class WebChatService {
 
     // ======== Session CRUD ========
 
+    // 创建新会话：生成 sessionId，绑定 userId，并入库。
     public ChatSessionDO createSession(String userId, String title) {
         ChatSessionDO session = new ChatSessionDO();
         session.setSessionId(UUID.randomUUID().toString());
@@ -54,6 +55,7 @@ public class WebChatService {
         return session;
     }
 
+    // 列出用户会话，按最近更新时间倒序，满足聊天侧边栏展示。
     public List<ChatSessionDO> listSessions(String userId) {
         return sessionMapper.selectList(
                 new LambdaQueryWrapper<ChatSessionDO>()
@@ -62,6 +64,7 @@ public class WebChatService {
         );
     }
 
+    // 重命名会话标题。
     public ChatSessionDO renameSession(String sessionId, String newTitle) {
         sessionMapper.update(null,
                 new LambdaUpdateWrapper<ChatSessionDO>()
@@ -74,6 +77,7 @@ public class WebChatService {
         );
     }
 
+    // 删除会话（当前实现为直接删除记录）。
     public void deleteSession(String sessionId) {
         sessionMapper.delete(
                 new LambdaQueryWrapper<ChatSessionDO>()
@@ -81,6 +85,7 @@ public class WebChatService {
         );
     }
 
+    // 清空会话上下文摘要（用于重置上下文压缩状态）。
     public void clearSessionContext(String sessionId) {
         clearSessionContext(sessionId, null);
     }
@@ -112,6 +117,7 @@ public class WebChatService {
 
     // ======== Message Operations ========
 
+    // 拉取消息列表：可按 beforeId 向前翻页，且限制最大 200 条避免一次拉取过大。
     public List<ChatMessageDO> listMessages(String sessionId, int limit, Long beforeId) {
         LambdaQueryWrapper<ChatMessageDO> wrapper = new LambdaQueryWrapper<ChatMessageDO>()
                 .eq(ChatMessageDO::getSessionId, sessionId)
@@ -123,6 +129,7 @@ public class WebChatService {
         return messageMapper.selectList(wrapper);
     }
 
+    // 保存用户消息（用户发言落库）。
     public ChatMessageDO saveUserMessage(String sessionId, String content) {
         ChatMessageDO msg = new ChatMessageDO();
         msg.setMessageId(UUID.randomUUID().toString());
@@ -136,10 +143,12 @@ public class WebChatService {
         return msg;
     }
 
+    // 保存助手消息（默认 contentType=text）。
     public ChatMessageDO saveAssistantMessage(String sessionId, String content, Map<String, Object> metadata) {
         return saveAssistantMessage(sessionId, content, metadata, "text");
     }
 
+    // 保存助手消息（可带 contentType=quiz/rich/scenario_card 等）。
     public ChatMessageDO saveAssistantMessage(String sessionId, String content, Map<String, Object> metadata, String contentType) {
         ChatMessageDO msg = new ChatMessageDO();
         msg.setMessageId(UUID.randomUUID().toString());
@@ -154,6 +163,7 @@ public class WebChatService {
         return msg;
     }
 
+    // 创建占位消息：流式生成开始时先落一条“正在生成中...”。
     public ChatMessageDO createAssistantPlaceholder(String sessionId,
                                                     String content,
                                                     Map<String, Object> metadata,
@@ -161,6 +171,7 @@ public class WebChatService {
         return saveAssistantMessage(sessionId, content, metadata, contentType);
     }
 
+    // 更新占位消息：流式结束后把内容/状态回填。
     public void updateAssistantMessage(String messageId,
                                        String content,
                                        Map<String, Object> metadata,
@@ -198,18 +209,22 @@ public class WebChatService {
 
     // ======== Public helpers (used by ChatStreamingService) ========
 
+    // 构建压缩历史上下文，用于模型输入，控制 token 成本。
     public String buildHistoryContext(String sessionId) {
         return chatContextCompressor.buildCompressedContext(sessionId);
     }
 
+    // 构建更偏向意图判定的上下文（通常比完整历史更短更聚焦）。
     public String buildIntentRoutingContext(String sessionId) {
         return chatContextCompressor.buildIntentRoutingContext(sessionId);
     }
 
+    // 统一把任务响应转成 Web 展示文本。
     public String extractReplyText(TaskResponse response) {
         return taskResponsePresentationService.format(response, TaskResponsePresentationService.PresentationChannel.WEB);
     }
 
+    // 若会话是首轮用户输入，则自动更新标题，提升会话列表可读性。
     public void autoTitleIfNeeded(String sessionId, String firstUserContent) {
         long userMsgCount = messageMapper.selectCount(
                 new LambdaQueryWrapper<ChatMessageDO>()
@@ -232,6 +247,7 @@ public class WebChatService {
         return taskRouterAgent;
     }
 
+    // 当响应中要求 clearSession=true 时，表示下游明确要求重置会话上下文。
     public boolean shouldClearSession(TaskResponse response) {
         if (!(response != null && response.data() instanceof Map<?, ?> dataMap)) {
             return false;
@@ -281,6 +297,7 @@ public class WebChatService {
         return null;
     }
 
+    // 更新会话更新时间（让会话在列表里上浮）。
     private void touchSession(String sessionId) {
         sessionMapper.update(null,
                 new LambdaUpdateWrapper<ChatSessionDO>()

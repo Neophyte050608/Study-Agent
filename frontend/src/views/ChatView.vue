@@ -851,11 +851,12 @@ const handleSend = async () => {
   acVisible.value = false
   acHighlightIndex.value = -1
 
-  // Optimistic update
+  // 乐观更新：用户消息先入本地列表，提升输入反馈速度。
   messages.value.push({ role: 'user', content })
   inputContent.value = ''
   scrollToBottom()
 
+  // 初始化本次流式状态容器。
   isStreaming.value = true
   streamAbortExpected.value = false
   streamingContent.value = ''
@@ -875,21 +876,26 @@ const handleSend = async () => {
   const targetSessionId = currentSessionId.value
 
   try {
+    // 发起 SSE 请求；后端会持续推送 meta/progress/message/finish 等事件。
     streamHandle.value = streamChat(targetSessionId, content, {
+      // meta 阶段下发 streamTaskId，供“停止生成”接口使用。
       onMeta: (meta) => {
         if (meta && meta.taskId) streamTaskId.value = meta.taskId
         else if (meta && meta.streamTaskId) streamTaskId.value = meta.streamTaskId
         else if (typeof meta === 'string') streamTaskId.value = meta
       },
+      // 结构化卡片：测验题。
       onQuiz: (payload) => {
         currentQuizPayload.value = payload
       },
+      // 图片事件：边收边渲染。
       onImage: (payload) => {
         if (payload) {
           streamingImages.value.push(payload)
           scrollToBottom()
         }
       },
+      // 文本增量事件：不断拼接 delta。
       onMessage: (msg) => {
         if (typeof msg === 'object' && msg !== null) {
           if (msg.channel === 'answer' && msg.delta) {
@@ -905,6 +911,7 @@ const handleSend = async () => {
         scrollToBottom()
       },
       onFinish: (payload) => {
+        // finish 时将缓存中的流式数据组装为最终 assistant 消息。
         const result = payload?.result || {}
         const finalQuizPayload = currentQuizPayload.value || result?.quizPayload || null
         const finalScenarioPayload = result?.scenarioPayload || null
@@ -940,6 +947,7 @@ const handleSend = async () => {
         scrollToBottom()
       },
       onError: (err) => {
+        // 主动取消场景不提示错误；非预期错误展示失败消息。
         if (streamAbortExpected.value || isAbortLikeError(err)) {
           cleanupStreamingState()
           streamAbortExpected.value = false
@@ -952,6 +960,7 @@ const handleSend = async () => {
         scrollToBottom()
       },
       onDone: () => {
+        // done 是协议层“流结束”兜底事件。
         if (isStreaming.value) {
           isStreaming.value = false
           streamHandle.value = null
@@ -976,7 +985,9 @@ const handleSend = async () => {
 }
 
 const handleStop = async () => {
+  // 1) 先取消前端流读取。
   cancelActiveStream({ expected: true })
+  // 2) 再请求后端停止任务，确保后端计算也终止。
   if (streamTaskId.value) {
     try {
       await stopChatStream(streamTaskId.value)
@@ -985,6 +996,7 @@ const handleStop = async () => {
     }
   }
   if (isStreaming.value) {
+    // 3) 补一条“已停止”消息，避免界面停在半句。
     messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[已停止]**' })
     cleanupStreamingState()
   }
