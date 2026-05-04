@@ -3,7 +3,10 @@ package io.github.imzmq.interview.common.api;
 /**
  * 统一错误码枚举。
  *
- * <p>编码规则: A_BB_CC 五位数字，千位决定 HTTP 大类，百十位为模块编号，个位为具体场景。</p>
+ * <p>编码规则: 五位数字 ABCDE，A 为错误大类
+ * （1=参数校验, 2=认证授权, 3=资源不存在, 4=业务状态冲突, 5=服务端/网关, 9=系统内部），
+ * BC 为模块编号（00-15 为主模块，同一模块可通过 CC 子段划分二级域），
+ * DE 为模块内具体场景编号。</p>
  */
 public enum ErrorCode {
 
@@ -128,6 +131,15 @@ public enum ErrorCode {
     ENCRYPTION_FAILED(50054, "加密失败", false),
     DECRYPTION_FAILED(50055, "解密失败", false),
     CIPHER_FORMAT_INVALID(10056, "密文格式非法", false);
+
+    private static final java.util.Map<Integer, ErrorCode> BY_CODE =
+            java.util.Collections.unmodifiableMap(
+                    java.util.Arrays.stream(values())
+                            .collect(java.util.stream.Collectors.toMap(ErrorCode::code, e -> e)));
+
+    public static java.util.Optional<ErrorCode> fromCode(int code) {
+        return java.util.Optional.ofNullable(BY_CODE.get(code));
+    }
 
     private final int code;
     private final String defaultMessage;
