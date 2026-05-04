@@ -16,7 +16,8 @@ import io.github.imzmq.interview.skill.core.SkillExecutionMode;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
 import io.github.imzmq.interview.skill.policy.SkillFailureFallbackMode;
 import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
-import io.github.imzmq.interview.skill.policy.SkillPolicyException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 @Component
 public class QueryOptimizerSkill implements ExecutableSkill {
@@ -47,7 +48,7 @@ public class QueryOptimizerSkill implements ExecutableSkill {
         String question = context == null ? "" : context.text("question");
         String userAnswer = context == null ? "" : context.text("userAnswer");
         if (question.isBlank() && userAnswer.isBlank()) {
-            throw new SkillPolicyException("query_input_missing", false);
+            throw new BusinessException(ErrorCode.SKILL_INPUT_MISSING);
         }
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("query-optimizer"));
         String prompt = skillBlock + "\n" +
