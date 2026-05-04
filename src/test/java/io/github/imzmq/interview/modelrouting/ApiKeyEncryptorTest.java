@@ -3,6 +3,8 @@ package io.github.imzmq.interview.modelrouting;
 import io.github.imzmq.interview.modelrouting.security.ApiKeyEncryptor;
 import org.junit.jupiter.api.Test;
 
+import io.github.imzmq.interview.common.api.BusinessException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -10,25 +12,25 @@ class ApiKeyEncryptorTest {
 
     @Test
     void shouldRequireExplicitEncryptionKey() {
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> new ApiKeyEncryptor(""));
+        BusinessException exception = assertThrows(BusinessException.class, () -> new ApiKeyEncryptor(""));
 
-        assertEquals("缺少 app.security.encryption-key，必须提供 32 字节 AES 密钥", exception.getMessage());
+        assertEquals("缺少加密密钥，必须提供 32 字节 AES 密钥", exception.getMessage());
     }
 
     @Test
     void shouldRejectInsecureDefaultEncryptionKey() {
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        BusinessException exception = assertThrows(BusinessException.class,
                 () -> new ApiKeyEncryptor("default-dev-key-32bytes!!"));
 
-        assertEquals("禁止使用默认加密密钥，请设置独立的 app.security.encryption-key", exception.getMessage());
+        assertEquals("禁止使用默认加密密钥", exception.getMessage());
     }
 
     @Test
     void shouldRejectWrongKeyLength() {
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        BusinessException exception = assertThrows(BusinessException.class,
                 () -> new ApiKeyEncryptor("short-key"));
 
-        assertEquals("app.security.encryption-key 必须严格为 32 字节，当前为 9 字节", exception.getMessage());
+        assertEquals("加密密钥长度非法: 9", exception.getMessage());
     }
 
     @Test

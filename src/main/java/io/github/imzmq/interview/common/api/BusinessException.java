@@ -9,7 +9,7 @@ public class BusinessException extends RuntimeException {
     private final boolean retryable;
 
     public BusinessException(ErrorCode code) {
-        this(code, code.defaultMessage(), null);
+        this(code, null, null);
     }
 
     public BusinessException(ErrorCode code, String detail) {
