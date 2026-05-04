@@ -107,63 +107,50 @@ public class InterviewController {
      * @return 同步结果摘要
      */
     @PostMapping("/ingest")
-    public ResponseEntity<Map<String, String>> ingest(@RequestBody Map<String, String> payload) {
+    public Map<String, String> ingest(@RequestBody Map<String, String> payload) {
         // 同步本地知识库到向量库：path 指向笔记/资料目录，ignoreDirs 用逗号分隔过滤目录名。
         String path = payload.get("path");
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        try {
-            IngestionTaskExecutionResult executionResult = ingestionTaskService.executeLocal(path, ignoredList);
-            IngestionService.SyncSummary summary = executionResult.summary();
-            String message = String.format(
-                    "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
-                    summary.totalScanned,
-                    summary.newFiles,
-                    summary.modifiedFiles,
-                    summary.unchangedFiles,
-                    summary.deletedFiles,
-                    summary.failedFiles,
-                    summary.skippedEmptyFiles
-            );
-            return ResponseEntity.ok(Map.of(
-                    "message", message,
-                    "taskId", executionResult.taskId(),
-                    "taskStatus", executionResult.status().name()
-            ));
-        } catch (Exception e) {
-            String message = e.getMessage() == null ? "同步失败，请检查配置" : e.getMessage();
-            if (message.contains("401")) {
-                message = "同步失败：Embedding API 认证失败，请检查智谱 API Key 是否有效";
-            }
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
-        }
+        IngestionTaskExecutionResult executionResult = ingestionTaskService.executeLocal(path, ignoredList);
+        IngestionService.SyncSummary summary = executionResult.summary();
+        String message = String.format(
+                "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
+                summary.totalScanned,
+                summary.newFiles,
+                summary.modifiedFiles,
+                summary.unchangedFiles,
+                summary.deletedFiles,
+                summary.failedFiles,
+                summary.skippedEmptyFiles
+        );
+        return Map.of(
+                "message", message,
+                "taskId", executionResult.taskId(),
+                "taskStatus", executionResult.status().name()
+        );
     }
 
     @PostMapping("/ingestion/reindex/parent-child")
-    public ResponseEntity<Map<String, Object>> forceReindexParentChild(@RequestBody Map<String, String> payload) {
+    public Map<String, Object> forceReindexParentChild(@RequestBody Map<String, String> payload) {
         String path = payload.get("path");
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        try {
-            IngestionService.SyncSummary summary = ingestionService.forceReindexParentChild(path, ignoredList);
-            Map<String, Object> report = ingestionService.getParentChildReport();
-            String message = String.format(
-                    "Parent-Child 重建完成：共扫描 %d 个文件，新增 %d，重建 %d，删除 %d，失败 %d，空内容跳过 %d",
-                    summary.totalScanned,
-                    summary.newFiles,
-                    summary.modifiedFiles,
-                    summary.deletedFiles,
-                    summary.failedFiles,
-                    summary.skippedEmptyFiles
-            );
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("message", message);
-            result.put("report", report);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            String message = e.getMessage() == null ? "Parent-Child 重建失败，请检查参数与数据源" : e.getMessage();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
-        }
+        IngestionService.SyncSummary summary = ingestionService.forceReindexParentChild(path, ignoredList);
+        Map<String, Object> report = ingestionService.getParentChildReport();
+        String message = String.format(
+                "Parent-Child 重建完成：共扫描 %d 个文件，新增 %d，重建 %d，删除 %d，失败 %d，空内容跳过 %d",
+                summary.totalScanned,
+                summary.newFiles,
+                summary.modifiedFiles,
+                summary.deletedFiles,
+                summary.failedFiles,
+                summary.skippedEmptyFiles
+        );
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message", message);
+        result.put("report", report);
+        return result;
     }
 
     @GetMapping("/ingestion/reindex/parent-child/report")
@@ -182,35 +169,30 @@ public class InterviewController {
      * @return 同步结果摘要
      */
     @PostMapping("/ingest-files")
-    public ResponseEntity<Map<String, String>> ingestFiles(
+    public Map<String, String> ingestFiles(
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "relativePaths", required = false) List<String> relativePaths,
             @RequestParam(value = "folderName", required = false) String folderName,
             @RequestParam(value = "ignoreDirs", required = false) String ignoreDirs) {
         // 上传笔记文件后同步：支持保留相对路径（relativePaths）以恢复目录结构。
-        try {
-            List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-            IngestionTaskExecutionResult executionResult = ingestionTaskService.executeUpload(files, relativePaths, folderName, ignoredList);
-            IngestionService.SyncSummary summary = executionResult.summary();
-            String message = String.format(
-                    "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
-                    summary.totalScanned,
-                    summary.newFiles,
-                    summary.modifiedFiles,
-                    summary.unchangedFiles,
-                    summary.deletedFiles,
-                    summary.failedFiles,
-                    summary.skippedEmptyFiles
-            );
-            return ResponseEntity.ok(Map.of(
-                    "message", message,
-                    "taskId", executionResult.taskId(),
-                    "taskStatus", executionResult.status().name()
-            ));
-        } catch (Exception e) {
-            String message = e.getMessage() == null ? "同步失败，请检查文件内容" : e.getMessage();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", message));
-        }
+        List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
+        IngestionTaskExecutionResult executionResult = ingestionTaskService.executeUpload(files, relativePaths, folderName, ignoredList);
+        IngestionService.SyncSummary summary = executionResult.summary();
+        String message = String.format(
+                "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
+                summary.totalScanned,
+                summary.newFiles,
+                summary.modifiedFiles,
+                summary.unchangedFiles,
+                summary.deletedFiles,
+                summary.failedFiles,
+                summary.skippedEmptyFiles
+        );
+        return Map.of(
+                "message", message,
+                "taskId", executionResult.taskId(),
+                "taskStatus", executionResult.status().name()
+        );
     }
 
     /**
@@ -270,21 +252,14 @@ public class InterviewController {
      * @return 答题分析结果及下一题
      */
     @PostMapping("/answer")
-    public ResponseEntity<?> submitAnswer(@RequestBody Map<String, String> payload) {
+    public InterviewService.AnswerResult submitAnswer(@RequestBody Map<String, String> payload) {
         String sessionId = payload.get("sessionId");
         String answer = payload.get("answer");
         String traceId = payload.getOrDefault("traceId", UUID.randomUUID().toString());
 
         RAGTraceContext.setTraceId(traceId);
         try {
-            return ResponseEntity.ok(interviewService.submitAnswer(sessionId, answer));
-        } catch (Exception e) {
-            String message = e.getMessage() == null ? "回答分析失败，请稍后重试" : e.getMessage();
-            String lowerMessage = message.toLowerCase();
-            if (lowerMessage.contains("timeout")) {
-                message = "回答分析超时，请稍后重试或简化回答后再试";
-            }
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", message));
+            return interviewService.submitAnswer(sessionId, answer);
         } finally {
             RAGTraceContext.clear();
         }
@@ -298,17 +273,14 @@ public class InterviewController {
      * @return 最终面试报告
      */
     @PostMapping("/report")
-    public ResponseEntity<?> report(@RequestBody Map<String, String> payload, HttpServletRequest request) {
+    public InterviewService.FinalReport report(@RequestBody Map<String, String> payload, HttpServletRequest request) {
         String sessionId = payload.get("sessionId");
         String userId = userIdentityResolver.resolve(request);
         String traceId = payload.getOrDefault("traceId", UUID.randomUUID().toString());
 
         RAGTraceContext.setTraceId(traceId);
         try {
-            return ResponseEntity.ok(interviewService.generateFinalReport(sessionId, userId));
-        } catch (Exception e) {
-            String message = e.getMessage() == null ? "总结生成失败，请稍后重试" : e.getMessage();
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", message));
+            return interviewService.generateFinalReport(sessionId, userId);
         } finally {
             RAGTraceContext.clear();
         }
