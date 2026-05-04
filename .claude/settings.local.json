@@ -45,7 +45,9 @@
       "Bash(where mvn:*)",
       "Bash(mvn -q compile)",
       "Bash(mvn --version)",
-      "Bash(./mvnw -q verify -DskipTests)"
+      "Bash(./mvnw -q verify -DskipTests)",
+      "Bash(mvn:*)",
+      "mcp__plugin_claude-mem_mcp-search__smart_search"
     ],
     "additionalDirectories": [
       "D:\\Practice\\claude-code-main\\claude-code-main"

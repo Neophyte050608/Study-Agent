@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
+
+
+
 
 /**
  * 全局异常处理器，将所有异常统一转换为 {@link ApiResponse} JSON 响应。
@@ -132,7 +132,7 @@ public class GlobalExceptionHandler {
     }
 
     private HttpStatus mapToHttpStatus(int errorCode) {
-        int thousand = errorCode / 1000;
+        int thousand = errorCode / 10000;
         return switch (thousand) {
             case 1 -> HttpStatus.BAD_REQUEST;
             case 2 -> HttpStatus.FORBIDDEN;
