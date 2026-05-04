@@ -133,7 +133,39 @@
         <template v-if="!currentSessionId">
           <!-- 空状态 -->
           <div class="flex-1 flex flex-col items-center justify-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/50 pb-20">
-            <h3 class="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-8">有什么我能帮你的吗？</h3>
+            <h3 class="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-6">有什么我能帮你的吗？</h3>
+
+            <!-- 快捷入口 -->
+            <div class="flex gap-2 mb-8 flex-wrap justify-center">
+              <button
+                @click="inputContent = '我要刷3道Spring Boot的场景题'"
+                class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined text-sm">rocket_launch</span>
+                3道 Spring Boot 场景题
+              </button>
+              <button
+                @click="inputContent = '来一道中等难度的Redis选择题'"
+                class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined text-sm">database</span>
+                Redis 选择题
+              </button>
+              <button
+                @click="inputContent = '开始一场高级后端工程师面试'"
+                class="whitespace-nowrap px-4 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-full hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30"
+              >
+                <span class="material-symbols-outlined text-sm">psychology</span>
+                开始面试
+              </button>
+              <button
+                @click="inputContent = '直接开始刷题'"
+                class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined text-sm">play_arrow</span>
+                直接开始刷题
+              </button>
+            </div>
             
             <!-- 底部输入框 (空状态下) -->
             <div class="w-full max-w-4xl mx-auto px-6 relative">
