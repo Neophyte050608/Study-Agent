@@ -207,7 +207,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         }
 
         String resolvedProfileSnapshot = learningProfileAgent.snapshotForPrompt(session.userId(), session.topic());
-        String question = ragService.generateCodingQuestion(buildTopicWithType(session.topic(), session.type()), session.difficulty(), resolvedProfileSnapshot);
+        String question = ragService.generateCodingQuestion(buildTopicWithType(session.topic(), session.type()), session.difficulty(), resolvedProfileSnapshot, List.of());
         if (question == null || question.isBlank()) {
             question = buildQuestion(session.topic(), session.difficulty(), session.type()) + " (" + session.type() + ")";
         }
@@ -257,7 +257,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
      */
     private Map<String, Object> handleBatchQuiz(String userId, String topic,
             String difficulty, int count, String profileSnapshot) {
-        List<QuizQuestion> questions = ragService.generateBatchQuiz(topic, difficulty, count, profileSnapshot);
+        List<QuizQuestion> questions = ragService.generateBatchQuiz(topic, difficulty, count, profileSnapshot, List.of());
 
         String sessionId = UUID.randomUUID().toString();
         // 创建 session 记录（currentQuestion 留空，批量模式不逐题跟踪）
@@ -668,7 +668,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         String sessionId = UUID.randomUUID().toString();
         // 调用 RAG 生成题目，将类型融入主题描述中以获得更准确的题目生成
         String ragTopic = buildTopicWithType(normalizedTopic, normalizedType);
-        String question = ragService.generateCodingQuestion(ragTopic, normalizedDifficulty, resolvedProfileSnapshot);
+        String question = ragService.generateCodingQuestion(ragTopic, normalizedDifficulty, resolvedProfileSnapshot, List.of());
         if (question == null || question.isBlank()) {
             question = buildQuestion(normalizedTopic, normalizedDifficulty, normalizedType) + " (" + normalizedType + ")";
         }

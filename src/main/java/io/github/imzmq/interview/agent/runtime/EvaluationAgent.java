@@ -27,15 +27,19 @@ public class EvaluationAgent {
     }
 
     public String generateFirstQuestion(String resumeContent, String topic) {
-        return ragService.generateFirstQuestion(resumeContent, topic, "暂无历史画像。", false);
+        return ragService.generateFirstQuestion(resumeContent, topic, "暂无历史画像。", false, List.of());
     }
 
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot) {
-        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, false);
+        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, false, List.of());
     }
 
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro) {
-        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro);
+        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, List.of());
+    }
+
+    public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro, List<String> excludedTopics) {
+        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, excludedTopics);
     }
 
     public EvaluationResult evaluateAnswer(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot) {

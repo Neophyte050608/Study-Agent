@@ -370,7 +370,7 @@ class RAGServiceTest {
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("你好！欢迎参加今天的 JVM 模拟面试。在正式开始技术交流之前，能请你先花 1-2 分钟做一个简单的自我介绍吗？");
 
-        String firstQuestion = ragService.generateFirstQuestion("", "JVM", "画像", false);
+        String firstQuestion = ragService.generateFirstQuestion("", "JVM", "画像", false, List.of());
 
         assertTrue(firstQuestion.contains("JVM"));
         assertTrue(firstQuestion.contains("自我介绍"));
@@ -420,7 +420,7 @@ class RAGServiceTest {
                         - 学习画像关联
                         """);
 
-        String question = ragService.generateFirstQuestion("", "Java", "画像", false);
+        String question = ragService.generateFirstQuestion("", "Java", "画像", false, List.of());
 
         assertTrue(question.contains("HashMap"));
         assertFalse(question.contains("出题依据"));
@@ -434,7 +434,7 @@ class RAGServiceTest {
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("请你先做一个简短的自我介绍，然后聊聊 Spring Boot 自动配置原理。");
 
-        ragService.generateFirstQuestion("负责过订单系统重构", "Spring Boot", "高级后端开发", false);
+        ragService.generateFirstQuestion("负责过订单系统重构", "Spring Boot", "高级后端开发", false, List.of());
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(promptManager, atLeastOnce()).renderSplit(eq("interviewer"), eq("first-question"), captor.capture());
@@ -497,7 +497,7 @@ class RAGServiceTest {
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("请完成一道 Two Sum 算法题。");
 
-        ragService.generateCodingQuestion("数组与字符串", "medium", "高级后端开发");
+        ragService.generateCodingQuestion("数组与字符串", "medium", "高级后端开发", List.of());
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(promptManager, atLeastOnce()).renderSplit(eq("coding-coach"), eq("coding-question"), captor.capture());

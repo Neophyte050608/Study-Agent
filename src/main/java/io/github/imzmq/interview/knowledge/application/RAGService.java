@@ -1687,7 +1687,14 @@ public class RAGService {
         return truncate(sanitizeUpstreamText(text), maxLength);
     }
     
-    public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro) {
+    private String buildTopicWithExclusion(String topic, List<String> excludedTopics) {
+        if (excludedTopics == null || excludedTopics.isEmpty()) {
+            return topic;
+        }
+        return topic + "（注意：不得涉及以下知识点：" + String.join("、", excludedTopics) + "）";
+    }
+
+    public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro, List<String> excludedTopics) {
          String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("question-strategy", "interview-learning-profile"));
          try {
             logger.debug("[generateFirstQuestion] Params: topic={}, skipIntro={}", topic, skipIntro);
@@ -1705,7 +1712,7 @@ public class RAGService {
             vars.put("skillBlock", mergeSkillGuidance(skillBlock, strategySummary));
             vars.put("resume", truncate(resumeContent, 1500));
             vars.put("profileSnapshot", truncate(profileSnapshot, 500));
-            vars.put("topic", topic == null ? "" : topic);
+            vars.put("topic", buildTopicWithExclusion(topic == null ? "" : topic, excludedTopics));
             vars.put("skipIntro", skipIntro);
             PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "first-question", vars);
             String rawQuestion = routingChatService.callWithFirstPacketProbeSupplier(
@@ -1777,7 +1784,7 @@ public class RAGService {
         }
     }
 
-    public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot) {
+    public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot, List<String> excludedTopics) {
         String normalizedTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic.trim();
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
         String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
@@ -1794,7 +1801,7 @@ public class RAGService {
         
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
-        params.put("topic", normalizedTopic);
+        params.put("topic", buildTopicWithExclusion(normalizedTopic, excludedTopics));
         params.put("difficulty", normalizedDifficulty);
         params.put("questionType", normalizedQuestionType);
         params.put("profileSnapshot", truncate(profileSnapshot, 240));
@@ -1824,7 +1831,7 @@ public class RAGService {
      * 使用单次 LLM 调用生成 N 道题目。
      */
     public List<CodingPracticeAgent.QuizQuestion> generateBatchQuiz(
-            String topic, String difficulty, int count, String profileSnapshot) {
+            String topic, String difficulty, int count, String profileSnapshot, List<String> excludedTopics) {
         String normalizedTopic = topic == null || topic.isBlank() ? "Java基础" : topic.trim();
         String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
         String skillBlock = resolveCodingSkillBlock("选择题");
@@ -1840,7 +1847,7 @@ public class RAGService {
 
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
-        params.put("topic", normalizedTopic);
+        params.put("topic", buildTopicWithExclusion(normalizedTopic, excludedTopics));
         params.put("difficulty", normalizedDifficulty);
         params.put("count", String.valueOf(Math.min(count, 10)));
         params.put("questionType", "选择题");
@@ -1921,7 +1928,7 @@ public class RAGService {
             String topic, String difficulty, int count, String profileSnapshot) {
         List<CodingPracticeAgent.QuizQuestion> result = new java.util.ArrayList<>();
         for (int i = 0; i < count; i++) {
-            String questionText = generateCodingQuestion(topic + "（选择题）", difficulty, profileSnapshot);
+            String questionText = generateCodingQuestion(topic + "（选择题）", difficulty, profileSnapshot, List.of());
             result.add(new CodingPracticeAgent.QuizQuestion(
                 i + 1, questionText, List.of("A. 请参考题目", "B. 请参考题目", "C. 请参考题目", "D. 请参考题目"),
                 "A", "该题目由降级方案生成，暂无解析。请根据题干自行判断。"));
