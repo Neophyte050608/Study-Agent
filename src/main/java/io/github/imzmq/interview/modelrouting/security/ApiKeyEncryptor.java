@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.modelrouting.security;
 
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -39,7 +41,7 @@ public class ApiKeyEncryptor {
             System.arraycopy(encrypted, 0, combined, IV_LENGTH, encrypted.length);
             return Base64.getEncoder().encodeToString(combined);
         } catch (Exception ex) {
-            throw new IllegalStateException("API Key 加密失败", ex);
+            throw new BusinessException(ErrorCode.ENCRYPTION_FAILED, ex);
         }
     }
 
@@ -50,7 +52,7 @@ public class ApiKeyEncryptor {
         try {
             byte[] combined = Base64.getDecoder().decode(encryptedBase64);
             if (combined.length <= IV_LENGTH) {
-                throw new IllegalArgumentException("密文格式非法");
+                throw new BusinessException(ErrorCode.CIPHER_FORMAT_INVALID);
             }
             byte[] iv = new byte[IV_LENGTH];
             System.arraycopy(combined, 0, iv, 0, IV_LENGTH);
@@ -60,7 +62,7 @@ public class ApiKeyEncryptor {
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
         } catch (Exception ex) {
-            throw new IllegalStateException("API Key 解密失败", ex);
+            throw new BusinessException(ErrorCode.DECRYPTION_FAILED, ex);
         }
     }
 
@@ -78,14 +80,14 @@ public class ApiKeyEncryptor {
 
     private byte[] normalizeKey(String key) {
         if (key == null || key.isBlank()) {
-            throw new IllegalStateException("缺少 app.security.encryption-key，必须提供 32 字节 AES 密钥");
+            throw new BusinessException(ErrorCode.ENCRYPTION_KEY_MISSING);
         }
         if (INSECURE_DEFAULT_KEY.equals(key)) {
-            throw new IllegalStateException("禁止使用默认加密密钥，请设置独立的 app.security.encryption-key");
+            throw new BusinessException(ErrorCode.ENCRYPTION_KEY_DEFAULT_FORBIDDEN);
         }
         byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length != 32) {
-            throw new IllegalStateException("app.security.encryption-key 必须严格为 32 字节，当前为 " + keyBytes.length + " 字节");
+            throw new BusinessException(ErrorCode.ENCRYPTION_KEY_LENGTH_INVALID, String.valueOf(keyBytes.length));
         }
         return keyBytes;
     }

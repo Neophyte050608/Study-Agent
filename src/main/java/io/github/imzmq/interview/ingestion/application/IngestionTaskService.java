@@ -12,6 +12,8 @@ import io.github.imzmq.interview.ingestion.pipeline.IngestionPipelineRegistry;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionStageNode;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionStageNodeRegistry;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionStageResult;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.mapper.ingestion.IngestionTaskHistoryMapper;
 import io.github.imzmq.interview.rag.core.DocumentSplitter;
 import io.github.imzmq.interview.rag.core.NoteLoader;
@@ -646,7 +648,7 @@ public class IngestionTaskService {
     private IngestionPipelineDefinition resolveEnabledPipeline(String sourceType) {
         IngestionPipelineDefinition pipeline = pipelineRegistry.resolveRequiredBySource(sourceType);
         if (!pipeline.enabled()) {
-            throw new IllegalStateException("入库管道已禁用: " + pipeline.name());
+            throw new BusinessException(ErrorCode.INGESTION_PIPELINE_DISABLED, pipeline.name());
         }
         return pipeline;
     }
@@ -694,7 +696,7 @@ public class IngestionTaskService {
         }
         IngestionService.SyncSummary summary = context.getSummary();
         if (summary == null) {
-            throw new IllegalStateException("入库管道缺少落库阶段: " + pipeline.name());
+            throw new BusinessException(ErrorCode.INGESTION_PIPELINE_MISSING_STAGE, pipeline.name());
         }
         return summary;
     }
@@ -720,7 +722,7 @@ public class IngestionTaskService {
                 String filePath = resource.getFile().getAbsolutePath();
                 count += knowledgeExtractor.extract(content, filePath).documents().size();
             } catch (IOException e) {
-                throw new IllegalStateException("统计 PARSE 阶段失败: " + resource.getFilename(), e);
+                throw new BusinessException(ErrorCode.INGESTION_PARSE_FAILED, resource.getFilename(), e);
             }
         }
         return count;
@@ -743,7 +745,7 @@ public class IngestionTaskService {
                     count += documentSplitter.split(extraction.documents()).size();
                 }
             } catch (IOException e) {
-                throw new IllegalStateException("统计 CHUNK 阶段失败: " + resource.getFilename(), e);
+                throw new BusinessException(ErrorCode.INGESTION_CHUNK_FAILED, resource.getFilename(), e);
             }
         }
         return count;
@@ -844,7 +846,7 @@ public class IngestionTaskService {
                 }
                 candidates.add(new UploadCandidate(normalizedPath, content));
             } catch (IOException e) {
-                throw new IllegalStateException("读取上传文件失败: " + normalizedPath, e);
+                throw new BusinessException(ErrorCode.INGESTION_FILE_READ_FAILED, normalizedPath, e);
             }
         }
         return candidates;

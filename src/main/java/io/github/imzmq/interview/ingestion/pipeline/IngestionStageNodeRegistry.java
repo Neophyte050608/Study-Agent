@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.ingestion.pipeline;
 
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.util.EnumMap;
@@ -43,7 +45,7 @@ public class IngestionStageNodeRegistry {
     public IngestionStageNode require(IngestionNodeStage stage) {
         IngestionStageNode node = nodes.get(stage);
         if (node == null) {
-            throw new IllegalStateException("未找到阶段节点实现: " + stage);
+            throw new BusinessException(ErrorCode.INGESTION_STAGE_NOT_FOUND, stage.toString());
         }
         return node;
     }
