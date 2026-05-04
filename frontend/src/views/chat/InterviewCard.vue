@@ -183,6 +183,7 @@ const recording = ref(false)
 const streamTaskId = ref('')
 const streamAbort = ref(null)
 let streamAbortExpected = false
+let isAlive = true
 
 // Timer
 const timerSeconds = ref(props.payload.elapsedSeconds || 0)
@@ -219,11 +220,13 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  isAlive = false
   stopTimer()
   if (streamTaskId.value) {
     stopInterviewStream(streamTaskId.value).catch(() => {})
   }
   streamAbort.value?.()
+  recognition?.abort()
 })
 
 // Voice recognition
@@ -238,10 +241,12 @@ if (speechSupported) {
   recognition.interimResults = true
 
   recognition.onstart = () => {
+    if (!isAlive) return
     recording.value = true
   }
 
   recognition.onresult = (event) => {
+    if (!isAlive) return
     let final = ''
     for (let i = event.resultIndex; i < event.results.length; i++) {
       if (event.results[i].isFinal) {
@@ -252,10 +257,12 @@ if (speechSupported) {
   }
 
   recognition.onend = () => {
+    if (!isAlive) return
     recording.value = false
   }
 
   recognition.onerror = () => {
+    if (!isAlive) return
     recording.value = false
   }
 }
@@ -373,8 +380,10 @@ const handleSubmit = async () => {
     if (streamError) throw streamError
     if (shouldFinish) {
       await doGenerateReport()
+      // doGenerateReport already emits 'updated'
+    } else {
+      emit('updated')
     }
-    emit('updated')
   } catch (error) {
     if (streamAbortExpected || isAbortLikeError(error)) {
       streamAbortExpected = false
