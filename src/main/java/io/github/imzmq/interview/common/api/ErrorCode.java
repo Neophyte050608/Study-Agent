@@ -127,9 +127,7 @@ public enum ErrorCode {
     ENCRYPTION_KEY_LENGTH_INVALID(50053, "加密密钥长度非法", false),
     ENCRYPTION_FAILED(50054, "加密失败", false),
     DECRYPTION_FAILED(50055, "解密失败", false),
-    CIPHER_FORMAT_INVALID(10056, "密文格式非法", false),
-
-    INTERNAL_ERROR_UNEXPECTED(90000, "服务器内部错误", false);
+    CIPHER_FORMAT_INVALID(10056, "密文格式非法", false);
 
     private final int code;
     private final String defaultMessage;
