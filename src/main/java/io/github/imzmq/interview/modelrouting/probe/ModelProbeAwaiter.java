@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.modelrouting.probe;
 
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,21 +36,21 @@ public class ModelProbeAwaiter {
      *
      * @param firstPacketFuture 异步执行的模型调用任务
      * @return 校验通过后的模型响应文本
-     * @throws ModelRoutingException 当探测超时、返回为空或内容长度不足时抛出
+     * @throws BusinessException 当探测超时、返回为空或内容长度不足时抛出
      */
     public String awaitFirstPacket(CompletableFuture<String> firstPacketFuture) {
         try {
             String packet = firstPacketFuture.get(Math.max(500L, properties.getStream().getFirstPacketTimeoutMs()), TimeUnit.MILLISECONDS);
             if (packet == null) {
-                throw new ModelRoutingException("首包为空");
+                throw new BusinessException(ErrorCode.MODEL_PROBE_EMPTY);
             }
             String normalized = packet.trim();
             if (normalized.length() < Math.max(1, properties.getStream().getFirstPacketMinChars())) {
-                throw new ModelRoutingException("首包长度不足");
+                throw new BusinessException(ErrorCode.MODEL_PROBE_SHORT);
             }
             return normalized;
         } catch (Exception ex) {
-            throw new ModelRoutingException("首包探测失败", ex);
+            throw new BusinessException(ErrorCode.MODEL_PROBE_FAILED, ex);
         }
     }
 
@@ -78,7 +79,7 @@ public class ModelProbeAwaiter {
                         .doOnComplete(() -> {
                             if (!firstTokenReceived.get()) {
                                 firstTokenSignal.completeExceptionally(
-                                        new ModelRoutingException("流式返回为空，未收到任何Token"));
+                                        new BusinessException(ErrorCode.MODEL_STREAM_EMPTY, "未收到任何Token"));
                             }
                         })
                         .blockLast(Duration.ofMillis(totalMs));
@@ -97,24 +98,24 @@ public class ModelProbeAwaiter {
             firstTokenSignal.get(firstTokenMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             resultFuture.cancel(true);
-            throw new ModelRoutingException("首Token探测超时（" + firstTokenMs + "ms）", e);
+            throw new BusinessException(ErrorCode.MODEL_PROBE_TIMEOUT, "首Token探测超时（" + firstTokenMs + "ms）", e);
         } catch (Exception e) {
-            throw new ModelRoutingException("首Token探测失败", e);
+            throw new BusinessException(ErrorCode.MODEL_PROBE_FAILED, "首Token探测失败", e);
         }
 
         try {
             String result = resultFuture.get(totalMs, TimeUnit.MILLISECONDS);
             if (result == null || result.trim().isEmpty()) {
-                throw new ModelRoutingException("响应内容为空");
+                throw new BusinessException(ErrorCode.MODEL_RESPONSE_EMPTY);
             }
             return result.trim();
         } catch (TimeoutException e) {
-            throw new ModelRoutingException("总响应超时（" + totalMs + "ms）", e);
+            throw new BusinessException(ErrorCode.MODEL_RESPONSE_TIMEOUT, "总响应超时（" + totalMs + "ms）", e);
         } catch (Exception e) {
-            if (e.getCause() instanceof ModelRoutingException modelRoutingException) {
-                throw modelRoutingException;
+            if (e.getCause() instanceof BusinessException businessException) {
+                throw businessException;
             }
-            throw new ModelRoutingException("模型调用失败", e);
+            throw new BusinessException(ErrorCode.MODEL_CALL_FAILED, e);
         }
     }
 }

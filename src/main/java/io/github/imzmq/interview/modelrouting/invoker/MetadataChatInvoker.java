@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.modelrouting.invoker;
 
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -20,7 +21,7 @@ public class MetadataChatInvoker {
 
         long cost = System.currentTimeMillis() - start;
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
-            throw new ModelRoutingException("模型返回为空");
+            throw new BusinessException(ErrorCode.MODEL_RESPONSE_EMPTY);
         }
 
         String content = response.getResult().getOutput().getText();

@@ -5,7 +5,6 @@ import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapServ
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingException;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.chat.application.JsonResult;
@@ -67,7 +66,7 @@ public class OllamaRoutingService {
         String routedText;
         try {
             routedText = routeViaModelRouting(prompt);
-        } catch (ModelRoutingException ex) {
+        } catch (BusinessException ex) {
             logger.warn("RETRIEVAL route failed, fallback to legacy ollama direct call. reason={}", ex.getMessage());
             return routeViaLegacyOllama(prompt, candidates);
         }

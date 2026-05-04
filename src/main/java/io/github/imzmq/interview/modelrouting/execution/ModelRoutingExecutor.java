@@ -2,7 +2,8 @@ package io.github.imzmq.interview.modelrouting.execution;
 
 import io.github.imzmq.interview.modelrouting.core.ModelCircuitState;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import org.springframework.stereotype.Component;
 
@@ -30,11 +31,11 @@ public class ModelRoutingExecutor {
      * @param stage 当前业务阶段名称（用于日志和异常提示）
      * @param <T> 返回结果类型
      * @return 首次成功的调用结果
-     * @throws ModelRoutingException 当所有候选模型都不可用或调用失败时抛出
+     * @throws BusinessException 当所有候选模型都不可用或调用失败时抛出
      */
     public <T> T execute(List<ModelRoutingCandidate> candidates, Function<ModelRoutingCandidate, T> invoker, String stage) {
         if (candidates == null || candidates.isEmpty()) {
-            throw new ModelRoutingException(stage + "无可用候选模型");
+            throw new BusinessException(ErrorCode.MODEL_NO_CANDIDATE, stage + "无可用候选模型");
         }
         RuntimeException lastError = null;
         for (ModelRoutingCandidate candidate : candidates) {
@@ -54,7 +55,7 @@ public class ModelRoutingExecutor {
                 lastError = ex;
             }
         }
-        throw new ModelRoutingException(stage + "全部候选模型调用失败", lastError);
+        throw new BusinessException(ErrorCode.MODEL_ALL_FAILED, stage + "全部候选模型调用失败", lastError);
     }
 }
 

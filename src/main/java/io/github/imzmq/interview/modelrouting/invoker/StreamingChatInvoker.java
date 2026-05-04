@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.modelrouting.invoker;
 
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingException;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ public class StreamingChatInvoker {
                 .block();
 
         if (tokens == null || tokens.isEmpty()) {
-            throw new ModelRoutingException("模型流式返回为空");
+            throw new BusinessException(ErrorCode.MODEL_STREAM_EMPTY);
         }
         return String.join("", tokens);
     }

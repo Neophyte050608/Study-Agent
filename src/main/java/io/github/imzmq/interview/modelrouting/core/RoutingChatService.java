@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 @Service
 public class RoutingChatService {
@@ -104,7 +106,7 @@ public class RoutingChatService {
     public String callWithoutFallback(String prompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
         return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
                 () -> {
-                    throw new ModelRoutingException("模型路由不可用: routeType=" + routeType + ", stage=" + stage);
+                    throw new BusinessException(ErrorCode.MODEL_NO_CANDIDATE, "routeType=" + routeType + ", stage=" + stage);
                 },
                 candidate -> {
                     ChatModel chatModel = resolveChatModel(candidate);
@@ -357,7 +359,7 @@ public class RoutingChatService {
     private ChatModel resolveChatModel(ModelRoutingCandidate candidate) {
         ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
         if (chatModel == null) {
-            throw new ModelRoutingException("找不到可用模型实例: " + candidate.name());
+            throw new BusinessException(ErrorCode.MODEL_INSTANCE_NOT_FOUND, candidate.name());
         }
         return chatModel;
     }
