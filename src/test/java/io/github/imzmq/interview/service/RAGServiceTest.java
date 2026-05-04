@@ -27,6 +27,7 @@ import io.github.imzmq.interview.skill.builtin.PersonalizedLearningPlannerSkill;
 import io.github.imzmq.interview.skill.builtin.QueryOptimizerSkill;
 import io.github.imzmq.interview.skill.builtin.QuestionStrategySkill;
 import io.github.imzmq.interview.skill.runtime.SkillExecutor;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
@@ -139,6 +140,7 @@ class RAGServiceTest {
                 skillExecutionProperties
         );
         SkillMcpClient skillMcpClient = new SkillMcpClient(mcpGatewayService);
+        LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
                 vectorStore,
@@ -157,7 +159,8 @@ class RAGServiceTest {
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
-                skillMcpClient
+                skillMcpClient,
+                llmJsonParser
         );
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
                 .thenReturn(new PromptManager.PromptPair("system", "user"));

@@ -13,6 +13,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokeniz
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
@@ -37,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -120,6 +122,7 @@ class ParentChildRetrievalHydrationTest {
         );
         SkillMcpClient skillMcpClient = new SkillMcpClient(mcpGatewayService);
         Executor executor = Runnable::run;
+        LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
                 vectorStore,
@@ -138,7 +141,8 @@ class ParentChildRetrievalHydrationTest {
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
-                skillMcpClient
+                skillMcpClient,
+                llmJsonParser
         );
     }
 
