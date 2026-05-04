@@ -8,9 +8,12 @@ import io.github.imzmq.interview.observability.core.TraceNode;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.chat.application.JsonResult;
+import io.github.imzmq.interview.chat.application.SchemaSpec;
+import io.github.imzmq.interview.chat.application.RetryCall;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,7 +36,14 @@ public class IntentTreeRoutingService {
     private final IntentSlotRefineCaseService intentSlotRefineCaseService;
     private final RoutingChatService routingChatService;
     private final String intentPreferredModel;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final LlmJsonParser llmJsonParser;
+
+    private static final SchemaSpec INTENT_SCHEMA = SchemaSpec.builder()
+            .required("taskType", "intentId", "confidence")
+            .type("confidence", SchemaSpec.JsonType.NUMBER, 0.0)
+            .allowed("dialogAct", "FOLLOW_UP", "NEW_QUESTION", "COMPARISON", "SUMMARY", "RETURN", "")
+            .allowed("contextPolicy", "CONTINUE", "SWITCH", "RETURN", "SUMMARY", "SAFE_MIN", "")
+            .build();
 
     public IntentTreeRoutingService(
             PromptManager promptManager,
@@ -41,7 +51,8 @@ public class IntentTreeRoutingService {
             IntentTreeService intentTreeService,
             IntentSlotRefineCaseService intentSlotRefineCaseService,
             ModelRoutingProperties modelRoutingProperties,
-            RoutingChatService routingChatService
+            RoutingChatService routingChatService,
+            LlmJsonParser llmJsonParser
     ) {
         this.promptManager = promptManager;
         this.properties = properties;
@@ -49,6 +60,7 @@ public class IntentTreeRoutingService {
         this.intentSlotRefineCaseService = intentSlotRefineCaseService;
         this.routingChatService = routingChatService;
         this.intentPreferredModel = modelRoutingProperties.getIntentModel();
+        this.llmJsonParser = llmJsonParser;
     }
 
     public boolean enabled() {
@@ -105,7 +117,18 @@ public class IntentTreeRoutingService {
             logger.info("统一意图分类响应: query={}, rawResponse={}",
                     truncateForLog(query),
                     truncateForLog(response));
-            return normalizeDecision(response, query, sanitizedHistory);
+
+            RetryCall retry = (repairHint, attempt) -> routingChatService.call(
+                    pair.systemPrompt(),
+                    pair.userPrompt() + repairHint,
+                    ModelRouteType.GENERAL, intentPreferredModel,
+                    "意图分类-重试" + attempt);
+
+            JsonResult<JsonNode> result = llmJsonParser.parseTree(response, INTENT_SCHEMA, retry);
+            if (!result.success()) {
+                return routeFailureDecision("json_parse:" + result.failureReason());
+            }
+            return normalizeDecision(result.data(), query, sanitizedHistory);
         } catch (Exception ex) {
             logger.warn("统一意图分类失败: {}", ex.getMessage());
             return routeFailureDecision(ex.getMessage());
@@ -129,8 +152,11 @@ public class IntentTreeRoutingService {
             if (response == null || response.isBlank()) {
                 return Map.of();
             }
-            String clean = response.replace("```json", "").replace("```", "").trim();
-            JsonNode root = objectMapper.readTree(clean);
+            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(response, null, null);
+            if (!parseResult.success()) {
+                return Map.of();
+            }
+            JsonNode root = parseResult.data();
             JsonNode slotsNode = root.has("slots") ? root.get("slots") : root;
             Map<String, Object> slots = readSlots(slotsNode);
             String questionType = textOf(slots.get("questionType"));
@@ -196,12 +222,7 @@ public class IntentTreeRoutingService {
         return List.of();
     }
 
-    private IntentRoutingDecision normalizeDecision(String raw, String query, String history) throws Exception {
-        if (raw == null || raw.isBlank()) {
-            return IntentRoutingDecision.fallback();
-        }
-        String clean = raw.replace("```json", "").replace("```", "").trim();
-        JsonNode root = objectMapper.readTree(clean);
+    private IntentRoutingDecision normalizeDecision(JsonNode root, String query, String history) {
         String taskType = readText(root, "taskType").toUpperCase();
         String intentId = readText(root, "intentId");
         double confidence = readScore(root, "confidence");
