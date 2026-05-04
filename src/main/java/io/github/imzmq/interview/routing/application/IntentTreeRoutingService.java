@@ -453,6 +453,18 @@ public class IntentTreeRoutingService {
             slots.put("skipIntro", slotsNode.get("skipIntro").asBoolean());
         }
         putSlot(slots, "mode", readText(slotsNode, "mode"));
+        if (slotsNode.has("excludedTopics") && slotsNode.get("excludedTopics").isArray()) {
+            List<String> excluded = new ArrayList<>();
+            for (JsonNode item : slotsNode.get("excludedTopics")) {
+                String text = item.asText("").trim();
+                if (!text.isBlank()) {
+                    excluded.add(text);
+                }
+            }
+            if (!excluded.isEmpty()) {
+                slots.put("excludedTopics", excluded);
+            }
+        }
         return slots;
     }
 
