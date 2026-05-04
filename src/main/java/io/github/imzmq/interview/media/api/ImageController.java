@@ -23,6 +23,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -43,7 +44,7 @@ public class ImageController {
     }
 
     @GetMapping("/{imageId}/file")
-    public ResponseEntity<Resource> getImageFile(@PathVariable String imageId) {
+    public ResponseEntity<Resource> getImageFile(@PathVariable String imageId) throws IOException {
         ImageMetadataDO metadata = requireImage(imageId);
         if (metadata == null) {
             return ResponseEntity.notFound().build();
@@ -149,28 +150,20 @@ public class ImageController {
     }
 
     private MediaType parseMediaType(String mimeType) {
-        try {
-            return MediaType.parseMediaType(mimeType);
-        } catch (Exception ignored) {
-            return MediaType.APPLICATION_OCTET_STREAM;
-        }
+        return MediaType.parseMediaType(mimeType);
     }
 
-    private Path resolveAndValidatePath(Path path) {
-        try {
-            Path resolved = path.toRealPath();
-            for (Path allowedBase : allowedBasePaths()) {
-                if (resolved.startsWith(allowedBase)) {
-                    return resolved;
-                }
+    private Path resolveAndValidatePath(Path path) throws IOException {
+        Path resolved = path.toRealPath();
+        for (Path allowedBase : allowedBasePaths()) {
+            if (resolved.startsWith(allowedBase)) {
+                return resolved;
             }
-            return null;
-        } catch (Exception ignored) {
-            return null;
         }
+        return null;
     }
 
-    private List<Path> allowedBasePaths() {
+    private List<Path> allowedBasePaths() throws IOException {
         Map<String, String> config = ingestConfigService.getConfig();
         List<Path> allowed = new ArrayList<>();
         appendConfiguredPaths(allowed, config.get("imagePath"));
@@ -178,7 +171,7 @@ public class ImageController {
         return allowed;
     }
 
-    private void appendConfiguredPaths(List<Path> allowed, String raw) {
+    private void appendConfiguredPaths(List<Path> allowed, String raw) throws IOException {
         if (raw == null || raw.isBlank()) {
             return;
         }
@@ -187,10 +180,7 @@ public class ImageController {
             if (candidate == null || candidate.isBlank()) {
                 continue;
             }
-            try {
-                allowed.add(Path.of(candidate.trim()).toRealPath());
-            } catch (Exception ignored) {
-            }
+            allowed.add(Path.of(candidate.trim()).toRealPath());
         }
     }
 }

@@ -135,36 +135,29 @@ public class ModelRoutingController {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("candidateName", entity.getName());
-        try {
-            ModelRoutingCandidate candidate = new ModelRoutingCandidate(
-                    entity.getName(),
-                    entity.getProvider(),
-                    entity.getModel(),
-                    "",
-                    entity.getPriority() == null ? 100 : entity.getPriority(),
-                    Boolean.TRUE.equals(entity.getSupportsThinking()),
-                    entity.getBaseUrl() == null ? "" : entity.getBaseUrl(),
-                    entity.getApiKeyEncrypted() == null ? "" : entity.getApiKeyEncrypted(),
-                    entity.getRouteType() == null ? "" : entity.getRouteType(),
-                    "DATABASE"
-            );
-            ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
-            if (chatModel == null) {
-                throw new IllegalStateException("无法创建模型实例");
-            }
-            long start = System.currentTimeMillis();
-            String response = firstTokenProbeInvoker.invoke(chatModel, null, "ping", TimeoutHint.FAST);
-            long latency = System.currentTimeMillis() - start;
-            modelHealthStore.markSuccess(entity.getName());
-            result.put("status", "healthy");
-            result.put("latencyMs", latency);
-            result.put("response", response.length() > 100 ? response.substring(0, 100) + "..." : response);
-        } catch (Exception ex) {
-            modelHealthStore.markFailure(entity.getName(), ex.getMessage());
-            result.put("status", "unhealthy");
-            result.put("error", ex.getMessage());
-            logger.warn("模型探测失败: name={}, error={}", entity.getName(), ex.getMessage());
+        ModelRoutingCandidate candidate = new ModelRoutingCandidate(
+                entity.getName(),
+                entity.getProvider(),
+                entity.getModel(),
+                "",
+                entity.getPriority() == null ? 100 : entity.getPriority(),
+                Boolean.TRUE.equals(entity.getSupportsThinking()),
+                entity.getBaseUrl() == null ? "" : entity.getBaseUrl(),
+                entity.getApiKeyEncrypted() == null ? "" : entity.getApiKeyEncrypted(),
+                entity.getRouteType() == null ? "" : entity.getRouteType(),
+                "DATABASE"
+        );
+        ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
+        if (chatModel == null) {
+            throw new IllegalStateException("无法创建模型实例");
         }
+        long start = System.currentTimeMillis();
+        String response = firstTokenProbeInvoker.invoke(chatModel, null, "ping", TimeoutHint.FAST);
+        long latency = System.currentTimeMillis() - start;
+        modelHealthStore.markSuccess(entity.getName());
+        result.put("status", "healthy");
+        result.put("latencyMs", latency);
+        result.put("response", response.length() > 100 ? response.substring(0, 100) + "..." : response);
         result.put("circuitState", modelHealthStore.stateOf(entity.getName()).name());
         return ResponseEntity.ok(result);
     }

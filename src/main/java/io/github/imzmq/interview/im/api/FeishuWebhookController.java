@@ -4,6 +4,7 @@ import io.github.imzmq.interview.im.application.config.FeishuProperties;
 import io.github.imzmq.interview.im.domain.UnifiedMessage;
 import io.github.imzmq.interview.im.application.service.FeishuEventParser;
 import io.github.imzmq.interview.im.application.service.ImWebhookService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ public class FeishuWebhookController {
             @RequestHeader(value = "X-Lark-Signature", required = false) String signature,
             @RequestHeader(value = "X-Lark-Request-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "X-Lark-Request-Nonce", required = false) String nonce,
-            @RequestBody String body) {
+            @RequestBody String body) throws JsonProcessingException {
 
         log.debug("Received Feishu webhook for appId: {}", appId);
 
@@ -54,44 +55,39 @@ public class FeishuWebhookController {
             return ResponseEntity.status(401).build();
         }
 
-        try {
-            JsonNode rootNode = objectMapper.readTree(body);
+        JsonNode rootNode = objectMapper.readTree(body);
 
-            // 3. url_verification handshake
-            if (rootNode.has("type") && "url_verification".equals(rootNode.get("type").asText())) {
-                String challenge = rootNode.get("challenge").asText();
-                Map<String, Object> response = new HashMap<>();
-                response.put("challenge", challenge);
-                return ResponseEntity.ok(response);
-            }
-
-            // 4. Event processing
-            if (rootNode.has("header") && rootNode.has("event")) {
-                JsonNode headerNode = rootNode.get("header");
-                String eventType = headerNode.get("event_type").asText();
-                String eventId = headerNode.get("event_id").asText();
-
-                // Process specific event types
-                if ("im.message.receive_v1".equals(eventType)) {
-                    if (!imWebhookService.tryRecordEvent(eventId)) {
-                        log.info("Duplicate event_id detected, fast ack: {}", eventId);
-                        return ResponseEntity.ok(Map.of("code", 1, "msg", "Skip repeat event"));
-                    }
-                    UnifiedMessage message = feishuEventParser.parseMessageEvent(rootNode, appId);
-                    if (message != null) {
-                        imWebhookService.dispatchMessageAsync(message);
-                    }
-                } else {
-                    log.debug("Ignored event type: {}", eventType);
-                }
-            }
-
-            // Fast ACK
-            return ResponseEntity.ok(Map.of("code", 0, "msg", "success"));
-        } catch (Exception e) {
-            log.error("Error processing Feishu webhook", e);
-            return ResponseEntity.status(500).build();
+        // 3. url_verification handshake
+        if (rootNode.has("type") && "url_verification".equals(rootNode.get("type").asText())) {
+            String challenge = rootNode.get("challenge").asText();
+            Map<String, Object> response = new HashMap<>();
+            response.put("challenge", challenge);
+            return ResponseEntity.ok(response);
         }
+
+        // 4. Event processing
+        if (rootNode.has("header") && rootNode.has("event")) {
+            JsonNode headerNode = rootNode.get("header");
+            String eventType = headerNode.get("event_type").asText();
+            String eventId = headerNode.get("event_id").asText();
+
+            // Process specific event types
+            if ("im.message.receive_v1".equals(eventType)) {
+                if (!imWebhookService.tryRecordEvent(eventId)) {
+                    log.info("Duplicate event_id detected, fast ack: {}", eventId);
+                    return ResponseEntity.ok(Map.of("code", 1, "msg", "Skip repeat event"));
+                }
+                UnifiedMessage message = feishuEventParser.parseMessageEvent(rootNode, appId);
+                if (message != null) {
+                    imWebhookService.dispatchMessageAsync(message);
+                }
+            } else {
+                log.debug("Ignored event type: {}", eventType);
+            }
+        }
+
+        // Fast ACK
+        return ResponseEntity.ok(Map.of("code", 0, "msg", "success"));
     }
 }
 
