@@ -965,7 +965,8 @@ const handleSend = async () => {
         const finalScenarioPayload = result?.scenarioPayload || null
         const finalFillPayload = result?.fillPayload || null
         const finalImages = streamingImages.value.length ? [...streamingImages.value] : (Array.isArray(result?.images) ? result.images : [])
-        const finalContent = (finalQuizPayload || finalScenarioPayload || finalFillPayload) ? '' : (streamingContent.value || result?.content || '')
+        const finalInterviewPayload = result?.interviewPayload || null
+        const finalContent = (finalQuizPayload || finalScenarioPayload || finalFillPayload || finalInterviewPayload) ? '' : (streamingContent.value || result?.content || '')
         streamingMeta.value = {
           retrievalModeRequested: result?.retrievalModeRequested || selectedRetrievalMode.value,
           retrievalModeResolved: result?.retrievalModeResolved || '',
@@ -975,14 +976,15 @@ const handleSend = async () => {
           routeLabel: result?.routeLabel || '',
           routeSource: result?.routeSource || ''
         }
-        messages.value.push({ 
-          role: 'assistant', 
+        messages.value.push({
+          role: 'assistant',
           messageId: result?.assistantMessageId || '',
           content: finalContent,
           images: finalImages,
           quizPayload: finalQuizPayload,
           scenarioPayload: finalScenarioPayload,
           fillPayload: finalFillPayload,
+          interviewPayload: finalInterviewPayload,
           ...streamingMeta.value
         })
         streamingContent.value = ''
