@@ -1,7 +1,8 @@
 package io.github.imzmq.interview.tool.search;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.chat.application.JsonResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,11 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
 
     private static final Logger logger = LoggerFactory.getLogger(WebSearchTool.class);
     private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final LlmJsonParser llmJsonParser;
+
+    public WebSearchTool(LlmJsonParser llmJsonParser) {
+        this.llmJsonParser = llmJsonParser;
+    }
 
     @Override
     public List<String> run(Query input) {
@@ -45,7 +50,11 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
             if (response == null || response.isBlank()) {
                 return List.of();
             }
-            JsonNode root = objectMapper.readTree(response);
+            JsonResult<JsonNode> result = llmJsonParser.parseTree(response, null, null);
+            if (!result.success()) {
+                return List.of();
+            }
+            JsonNode root = result.data();
             List<String> snippets = new ArrayList<>();
             String abstractText = root.path("AbstractText").asText("");
             if (!abstractText.isBlank()) {

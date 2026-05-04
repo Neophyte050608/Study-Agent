@@ -2,6 +2,8 @@ package io.github.imzmq.interview.modelruntime.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.chat.application.JsonResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,18 +25,21 @@ public class VisionModelService {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    private final LlmJsonParser llmJsonParser;
     private final boolean enabled;
     private final String apiKey;
     private final String model;
 
     public VisionModelService(RestClient.Builder restClientBuilder,
                               ObjectMapper objectMapper,
+                              LlmJsonParser llmJsonParser,
                               @Value("${app.multimodal.vlm.enabled:false}") boolean enabled,
                               @Value("${app.multimodal.vlm.api-key:}") String apiKey,
                               @Value("${app.multimodal.vlm.base-url:https://open.bigmodel.cn/api/paas/v4}") String baseUrl,
                               @Value("${app.multimodal.vlm.model:glm-4v}") String model) {
         this.restClient = restClientBuilder.baseUrl(baseUrl).build();
         this.objectMapper = objectMapper;
+        this.llmJsonParser = llmJsonParser;
         this.enabled = enabled;
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model;
@@ -80,13 +85,21 @@ public class VisionModelService {
 
     private String parseSummary(String raw, String fallbackName, String sectionPath, String nearbyContext) {
         try {
-            JsonNode root = objectMapper.readTree(raw);
+            JsonResult<JsonNode> rootResult = llmJsonParser.parseTree(raw, null, null);
+            if (!rootResult.success()) {
+                return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
+            }
+            JsonNode root = rootResult.data();
             JsonNode content = root.path("choices").path(0).path("message").path("content");
             String text = content.asText("");
             if (text.isBlank()) {
                 return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
             }
-            JsonNode node = objectMapper.readTree(text);
+            JsonResult<JsonNode> innerResult = llmJsonParser.parseTree(text, null, null);
+            if (!innerResult.success()) {
+                return fallbackWithContext(fallbackName, sectionPath, nearbyContext);
+            }
+            JsonNode node = innerResult.data();
             String type = node.path("type").asText("其他");
             String description = node.path("description").asText("");
             List<String> keywords = objectMapper.convertValue(node.path("keywords"), objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));

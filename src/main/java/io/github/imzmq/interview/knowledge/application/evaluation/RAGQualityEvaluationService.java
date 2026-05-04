@@ -10,6 +10,8 @@ import io.github.imzmq.interview.mapper.knowledge.RagQualityEvalRunMapper;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.chat.application.JsonResult;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +58,7 @@ public class RAGQualityEvaluationService {
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final ResourceLoader resourceLoader;
     private final ObjectMapper objectMapper;
+    private final LlmJsonParser llmJsonParser;
     private final RagQualityEvalRunMapper ragQualityEvalRunMapper;
     private final RagQualityEvalCaseMapper ragQualityEvalCaseMapper;
     private final Executor ragRetrieveExecutor;
@@ -75,6 +78,7 @@ public class RAGQualityEvaluationService {
             ObservabilitySwitchProperties observabilitySwitchProperties,
             ResourceLoader resourceLoader,
             ObjectMapper objectMapper,
+            LlmJsonParser llmJsonParser,
             @Nullable RagQualityEvalRunMapper ragQualityEvalRunMapper,
             @Nullable RagQualityEvalCaseMapper ragQualityEvalCaseMapper,
             @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor
@@ -84,6 +88,7 @@ public class RAGQualityEvaluationService {
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.resourceLoader = resourceLoader;
         this.objectMapper = objectMapper;
+        this.llmJsonParser = llmJsonParser;
         this.ragQualityEvalRunMapper = ragQualityEvalRunMapper;
         this.ragQualityEvalCaseMapper = ragQualityEvalCaseMapper;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
@@ -95,9 +100,10 @@ public class RAGQualityEvaluationService {
             ObservabilitySwitchProperties observabilitySwitchProperties,
             ResourceLoader resourceLoader,
             ObjectMapper objectMapper,
+            LlmJsonParser llmJsonParser,
             @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor
     ) {
-        this(ragService, routingChatService, observabilitySwitchProperties, resourceLoader, objectMapper, null, null, ragRetrieveExecutor);
+        this(ragService, routingChatService, observabilitySwitchProperties, resourceLoader, objectMapper, llmJsonParser, null, null, ragRetrieveExecutor);
     }
 
     public QualityEvalReport runDefaultEval(String engine) {
@@ -590,11 +596,8 @@ public class RAGQualityEvaluationService {
     private JsonNode parseEvaluationJson(String systemPrompt, String userPrompt) {
         try {
             String raw = routingChatService.call(systemPrompt, userPrompt, ModelRouteType.GENERAL, "rag-quality-eval");
-            String clean = stripMarkdownCodeBlock(raw);
-            if (clean.isBlank()) {
-                return null;
-            }
-            return objectMapper.readTree(clean);
+            JsonResult<JsonNode> result = llmJsonParser.parseTree(raw, null, null);
+            return result.success() ? result.data() : null;
         } catch (Exception ignored) {
             return null;
         }
