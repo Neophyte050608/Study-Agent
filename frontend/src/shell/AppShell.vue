@@ -125,6 +125,8 @@ const toSpaPath = (rawUrl) => {
     case '/ops':
     case '/ops.html':
       return '/ops'
+    case '/rag-dashboard':
+      return '/rag-dashboard'
     case '/model-providers':
     case '/model-providers.html':
       return '/model-providers'
