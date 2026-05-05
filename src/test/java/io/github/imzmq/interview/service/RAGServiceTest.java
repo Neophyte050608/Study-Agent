@@ -546,8 +546,8 @@ class RAGServiceTest {
                 .thenReturn("<summary>整体表现一般</summary>");
 
         List<Question> history = List.of(
-                new Question("Redis 为什么快", "因为在内存", 45, "只回答了表层现象"),
-                new Question("说一下 JVM 垃圾回收器", "回答不完整", 68, "缺少分代与收集器对比")
+                new Question("Redis 为什么快", "因为在内存", 45, 0, 0, 0, 0, "", "", "", "只回答了表层现象"),
+                new Question("说一下 JVM 垃圾回收器", "回答不完整", 68, 0, 0, 0, 0, "", "", "", "缺少分代与收集器对比")
         );
 
         ragService.generateFinalReport("Java", history, "下一轮重点补 JVM 与 Redis 原理链路", "前几轮存在基础概念混淆");

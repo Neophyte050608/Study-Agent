@@ -1,7 +1,5 @@
 package io.github.imzmq.interview.modelruntime.application;
 
-import io.github.imzmq.interview.agent.application.AgentConfigService;
-import io.github.imzmq.interview.config.agent.AgentConfig;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.security.ApiKeyEncryptor;
 import io.github.imzmq.interview.modelrouting.registry.DynamicChatModelRegistry;
@@ -19,35 +17,19 @@ import org.springframework.stereotype.Service;
 @Service
 public class DynamicModelFactory {
 
-    private final AgentConfigService agentConfigService;
     private final ApplicationContext applicationContext;
     private final ModelBeanResolver modelBeanResolver;
     private final DynamicChatModelRegistry dynamicChatModelRegistry;
     private final ApiKeyEncryptor apiKeyEncryptor;
 
-    public DynamicModelFactory(AgentConfigService agentConfigService,
-                               ApplicationContext applicationContext,
+    public DynamicModelFactory(ApplicationContext applicationContext,
                                ModelBeanResolver modelBeanResolver,
                                DynamicChatModelRegistry dynamicChatModelRegistry,
                                ApiKeyEncryptor apiKeyEncryptor) {
-        this.agentConfigService = agentConfigService;
         this.applicationContext = applicationContext;
         this.modelBeanResolver = modelBeanResolver;
         this.dynamicChatModelRegistry = dynamicChatModelRegistry;
         this.apiKeyEncryptor = apiKeyEncryptor;
-    }
-
-    /**
-     * 根据 Agent 名称获取其专属的模型客户端。
-     * 如果该 Agent 被关闭，或者指定提供商不合法，将回退到默认的主模型。
-     */
-    public ChatModel getForAgent(String agentName) {
-        AgentConfig config = agentConfigService.getConfig(agentName);
-        return getByBeanNameOrDefault(modelBeanResolver.resolveForAgent(config));
-    }
-
-    public ChatModel getByRoutingCandidate(String provider, String beanName) {
-        return getByBeanNameOrDefault(modelBeanResolver.resolveByRoutingCandidate(provider, beanName));
     }
 
     public ChatModel getByCandidate(ModelRoutingCandidate candidate) {
@@ -67,7 +49,7 @@ public class DynamicModelFactory {
                     candidate.model()
             );
         }
-        return getByRoutingCandidate(candidate.provider(), candidate.beanName());
+        return getByBeanNameOrDefault(modelBeanResolver.resolveByRoutingCandidate(candidate.provider(), candidate.beanName()));
     }
 
     private ChatModel getByBeanNameOrDefault(String beanName) {

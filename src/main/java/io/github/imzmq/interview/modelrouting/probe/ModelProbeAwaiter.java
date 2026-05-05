@@ -31,29 +31,6 @@ public class ModelProbeAwaiter {
         this.executor = executor;
     }
 
-    /**
-     * 阻塞等待模型调用的异步结果，并执行超时与内容有效性校验。
-     *
-     * @param firstPacketFuture 异步执行的模型调用任务
-     * @return 校验通过后的模型响应文本
-     * @throws BusinessException 当探测超时、返回为空或内容长度不足时抛出
-     */
-    public String awaitFirstPacket(CompletableFuture<String> firstPacketFuture) {
-        try {
-            String packet = firstPacketFuture.get(Math.max(500L, properties.getStream().getFirstPacketTimeoutMs()), TimeUnit.MILLISECONDS);
-            if (packet == null) {
-                throw new BusinessException(ErrorCode.MODEL_PROBE_EMPTY);
-            }
-            String normalized = packet.trim();
-            if (normalized.length() < Math.max(1, properties.getStream().getFirstPacketMinChars())) {
-                throw new BusinessException(ErrorCode.MODEL_PROBE_SHORT);
-            }
-            return normalized;
-        } catch (Exception ex) {
-            throw new BusinessException(ErrorCode.MODEL_PROBE_FAILED, ex);
-        }
-    }
-
     public String awaitFirstToken(Flux<String> tokenFlux, TimeoutHint hint) {
         long firstTokenMs = hint != null ? hint.getFirstTokenTimeoutMs()
                 : Math.max(500L, properties.getStream().getFirstPacketTimeoutMs());

@@ -30,16 +30,6 @@ public enum InterviewStage {
         return description;
     }
 
-    /**
-     * 状态机流转：获取下一个正常环节
-     */
-    public InterviewStage next() {
-        int nextOrdinal = this.ordinal() + 1;
-        if (nextOrdinal < values().length) {
-            return values()[nextOrdinal];
-        }
-        return this; // 已经是最后一个环节
-    }
 }
 
 

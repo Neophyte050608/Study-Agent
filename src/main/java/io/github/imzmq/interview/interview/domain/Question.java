@@ -32,10 +32,6 @@ public class Question {
         // 默认构造函数，供 Jackson 反序列化使用
     }
 
-    public Question(String questionText, String userAnswer, int score, String feedback) {
-        this(questionText, userAnswer, score, 0, 0, 0, 0, "", "", "", feedback);
-    }
-
     public Question(String questionText, String userAnswer, int score, int accuracy, int logic, int depth, int boundary, String deductions, String citations, String conflicts, String feedback) {
         this.questionText = questionText;
         this.userAnswer = userAnswer;
