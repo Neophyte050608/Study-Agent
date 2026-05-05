@@ -56,55 +56,29 @@
             </div>
           </div>
           <div v-else class="text-xs text-slate-400 mb-4">无活跃告警</div>
-          <button @click="$router.push('/ops')" class="w-full py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all">
-            查看所有 Trace →
-          </button>
+          <a href="/ops" class="block w-full py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all text-center no-underline">
+            运维中心：查看 Trace 详情 →
+          </a>
         </div>
       </div>
 
-      <!-- Recent Traces -->
-      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-          <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">最近 Trace</h3>
-          <select v-model="feedbackFilter" @change="loadTraces" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold text-slate-600">
-            <option value="">全部</option>
-            <option value="onlyLiked">仅点赞</option>
-            <option value="onlyDisliked">仅点踩</option>
-            <option value="noFeedback">无反馈</option>
-          </select>
+      <!-- Feedback Summary -->
+      <div class="grid grid-cols-4 gap-4 mb-8">
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+          <div class="text-3xl mb-1">{{ feedbackSummary.thumbsUp }}</div>
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">点赞 👍</div>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
-              <tr>
-                <th class="px-4 py-3 text-left">时间</th>
-                <th class="px-4 py-3 text-left">Trace ID</th>
-                <th class="px-4 py-3 text-right">耗时</th>
-                <th class="px-4 py-3 text-right">召回数</th>
-                <th class="px-4 py-3 text-left">风险</th>
-                <th class="px-4 py-3 text-center">反馈</th>
-                <th class="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="trace in recentTraces" :key="trace.traceId"
-                  @click="$router.push(`/ops/${trace.traceId}`)"
-                  class="border-t border-slate-100 dark:border-slate-800 hover:bg-indigo-50/30 cursor-pointer transition-all">
-                <td class="px-4 py-3 font-mono text-slate-500">{{ formatTime(trace.startedAt) }}</td>
-                <td class="px-4 py-3 font-mono font-bold text-slate-700">{{ trace.traceId.slice(0, 12) }}...</td>
-                <td class="px-4 py-3 text-right font-mono">{{ trace.businessDurationMs }}ms</td>
-                <td class="px-4 py-3 text-right font-mono">{{ trace.retrievedDocCount ?? '-' }}</td>
-                <td class="px-4 py-3">
-                  <span v-if="trace.riskTags && trace.riskTags.length" class="text-amber-600 font-bold">{{ trace.riskTags[0] }}</span>
-                  <span v-else class="text-emerald-600">-</span>
-                </td>
-                <td class="px-4 py-3 text-center">{{ getTraceFeedbackIcon(trace.traceId) }}</td>
-                <td class="px-4 py-3">
-                  <span class="material-symbols-outlined text-slate-400 text-sm">chevron_right</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+          <div class="text-3xl mb-1">{{ feedbackSummary.thumbsDown }}</div>
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">点踩 👎</div>
+        </div>
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+          <div class="text-3xl mb-1">{{ feedbackSummary.copyCount }}</div>
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">复制 📋</div>
+        </div>
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+          <div class="text-3xl mb-1" :class="satisfactionColor">{{ feedbackSummary.satisfactionRate }}</div>
+          <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">满意度</div>
         </div>
       </div>
     </main>
@@ -114,15 +88,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { loadRagDashboard, loadMetricsHistory } from '../api/admin'
-import { loadOpsTraces } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: { type: Boolean, default: false }
 })
 
 const dashboard = ref({ currentHour: {}, alertLevel: 'NONE', alertTags: [], riskTagCounts: {} })
-const recentTraces = ref([])
-const feedbackFilter = ref('')
 const historySnapshots = ref([])
 const selectedRange = ref(24)
 const selectedMetrics = ref(['avgLatencyMs', 'p95LatencyMs', 'successRate'])
@@ -156,6 +127,24 @@ const metricCards = computed(() => {
     { label: 'Fallback 率', value: curr.fallbackRate ?? '0%' },
     { label: '满意度', value: feedback.satisfactionRate ?? '0%' }
   ].map(card => ({ ...card, change: null }))
+})
+
+const feedbackSummary = computed(() => {
+  const fb = dashboard.value.currentHour?.feedback || {}
+  return {
+    thumbsUp: fb.thumbsUp ?? 0,
+    thumbsDown: fb.thumbsDown ?? 0,
+    copyCount: fb.copy ?? 0,
+    satisfactionRate: fb.satisfactionRate ?? '0%'
+  }
+})
+
+const satisfactionColor = computed(() => {
+  const rate = parseFloat(feedbackSummary.value.satisfactionRate)
+  if (isNaN(rate)) return 'text-slate-900 dark:text-slate-100'
+  if (rate >= 80) return 'text-emerald-600'
+  if (rate >= 50) return 'text-amber-600'
+  return 'text-red-500'
 })
 
 const alertLevel = computed(() => dashboard.value.alertLevel || 'NONE')
@@ -192,27 +181,10 @@ const formatAlertTag = (tag) => {
   return map[tag] || tag
 }
 
-const formatTime = (ts) => {
-  if (!ts) return '-'
-  const d = new Date(ts)
-  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-const getTraceFeedbackIcon = () => {
-  return '—'
-}
-
 const loadDashboard = async () => {
   try {
     dashboard.value = await loadRagDashboard()
   } catch (err) { console.error('Failed to load dashboard:', err) }
-}
-
-const loadTraces = async () => {
-  try {
-    const filters = { limit: 20 }
-    recentTraces.value = await loadOpsTraces(filters) || []
-  } catch (err) { console.error('Failed to load traces:', err) }
 }
 
 const loadHistory = async () => {
@@ -243,7 +215,6 @@ const renderChart = () => {
 
   ctx.clearRect(0, 0, width, 300)
 
-  // Grid lines
   ctx.strokeStyle = '#e2e8f0'
   ctx.lineWidth = 0.5
   for (let i = 0; i <= 4; i++) {
@@ -277,7 +248,6 @@ const renderChart = () => {
     ctx.stroke()
   })
 
-  // X-axis labels
   ctx.fillStyle = '#94a3b8'
   ctx.font = '10px monospace'
   ctx.textAlign = 'center'
@@ -289,7 +259,7 @@ const renderChart = () => {
 }
 
 const loadAll = async () => {
-  await Promise.all([loadDashboard(), loadTraces(), loadHistory()])
+  await Promise.all([loadDashboard(), loadHistory()])
 }
 
 onMounted(() => {
