@@ -234,3 +234,7 @@ export async function loadMetricsHistory(hours = 168, metric = 'avgLatencyMs,p95
 export async function loadMetricsSummary() {
   return httpGet('/api/observability/rag/metrics/summary')
 }
+
+export async function triggerSnapshot() {
+  return httpPostJson('/api/observability/rag/metrics/snapshot/trigger', {})
+}

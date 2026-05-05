@@ -30,6 +30,14 @@
                       :class="selectedRange === range.value ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'">
                 {{ range.label }}
               </button>
+              <button @click="triggerAndReload"
+                      :disabled="snapshotLoading"
+                      class="px-3 py-1 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span v-if="snapshotLoading" class="inline-flex items-center gap-1">
+                  <span class="animate-spin material-symbols-outlined text-sm">progress_activity</span>
+                </span>
+                <span v-else>生成快照</span>
+              </button>
             </div>
           </div>
           <div class="flex flex-wrap gap-3 mb-4">
@@ -38,7 +46,25 @@
               {{ metric.label }}
             </label>
           </div>
-          <canvas ref="chartCanvas" height="300"></canvas>
+          <div v-if="snapshotMessage" class="mb-3 px-3 py-2 rounded-lg text-xs font-bold"
+               :class="snapshotMessage.includes('未生成') || snapshotMessage.includes('无数据') || snapshotMessage.includes('失败') ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'">
+            {{ snapshotMessage }}
+          </div>
+          <div v-if="historySnapshots.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+            <span class="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600 mb-3">monitoring</span>
+            <p class="text-sm font-bold text-slate-400 mb-2">暂无趋势数据，请先生成快照</p>
+            <p class="text-xs text-slate-400 mb-4">快照每小时自动生成一次（整点后 5 分钟），也可手动触发</p>
+            <button @click="triggerAndReload"
+                    :disabled="snapshotLoading"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              <span v-if="snapshotLoading" class="inline-flex items-center gap-1">
+                <span class="animate-spin material-symbols-outlined text-sm">progress_activity</span>
+                生成中...
+              </span>
+              <span v-else>生成快照</span>
+            </button>
+          </div>
+          <canvas v-else ref="chartCanvas" height="300"></canvas>
         </div>
 
         <!-- Alert Panel (1/3) -->
@@ -87,7 +113,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
-import { loadRagDashboard, loadMetricsHistory } from '../api/admin'
+import { loadRagDashboard, loadMetricsHistory, triggerSnapshot } from '../api/admin'
 
 defineProps({
   sidebarCollapsed: { type: Boolean, default: false }
@@ -98,6 +124,8 @@ const historySnapshots = ref([])
 const selectedRange = ref(24)
 const selectedMetrics = ref(['avgLatencyMs', 'p95LatencyMs', 'successRate'])
 const chartCanvas = ref(null)
+const snapshotLoading = ref(false)
+const snapshotMessage = ref('')
 let chartInstance = null
 let refreshTimer = null
 
@@ -260,6 +288,21 @@ const renderChart = () => {
 
 const loadAll = async () => {
   await Promise.all([loadDashboard(), loadHistory()])
+}
+
+const triggerAndReload = async () => {
+  snapshotLoading.value = true
+  snapshotMessage.value = ''
+  try {
+    const result = await triggerSnapshot()
+    snapshotMessage.value = result.message || ''
+    await loadAll()
+  } catch (err) {
+    snapshotMessage.value = '快照生成请求失败'
+    console.error('Failed to trigger snapshot:', err)
+  } finally {
+    snapshotLoading.value = false
+  }
 }
 
 onMounted(() => {

@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -34,11 +36,66 @@ public class MetricsSnapshotScheduler {
     }
 
     @Scheduled(cron = "0 5 * * * *")
-    public void aggregatePreviousHour() {
+    public void scheduledAggregate() {
+        aggregatePreviousHour();
+    }
+
+    public Map<String, Object> aggregatePreviousHour() {
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
         LocalDateTime windowStart = now.minusHours(1);
         LocalDateTime windowEnd = now;
+        return aggregateWindow(windowStart, windowEnd);
+    }
 
+    public Map<String, Object> aggregateCurrentHour() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime windowStart = now.truncatedTo(ChronoUnit.HOURS);
+        return aggregateWindow(windowStart, now);
+    }
+
+    public Map<String, Object> backfillMissingSnapshots(int maxHours) {
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
+        int created = 0;
+        int skipped = 0;
+        int emptyHours = 0;
+        int safeHours = Math.min(maxHours, 720);
+
+        for (int h = 1; h <= safeHours; h++) {
+            LocalDateTime hourStart = now.minusHours(h);
+            LocalDateTime hourEnd = hourStart.plusHours(1);
+
+            Long existingCount = snapshotMapper.selectCount(new LambdaQueryWrapper<RagMetricsSnapshotDO>()
+                    .eq(RagMetricsSnapshotDO::getSnapshotHour, hourStart));
+            if (existingCount != null && existingCount > 0) {
+                skipped++;
+                continue;
+            }
+
+            Map<String, Object> result = aggregateWindow(hourStart, hourEnd);
+            if (Boolean.TRUE.equals(result.get("created"))) {
+                created++;
+            } else {
+                emptyHours++;
+            }
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("created", created > 0);
+        summary.put("snapshotsCreated", created);
+        summary.put("snapshotsSkipped", skipped);
+        summary.put("emptyHours", emptyHours);
+        summary.put("totalHoursScanned", safeHours);
+        if (created > 0) {
+            summary.put("message", "回填完成：新增 " + created + " 个快照，跳过 " + skipped + " 个已有，" + emptyHours + " 小时无数据");
+        } else if (skipped > 0) {
+            summary.put("message", "最近 " + safeHours + " 小时内已有 " + skipped + " 个快照，无需新增");
+        } else {
+            summary.put("message", "最近 " + safeHours + " 小时内无 Trace 数据，未生成快照");
+        }
+        return summary;
+    }
+
+    private Map<String, Object> aggregateWindow(LocalDateTime windowStart, LocalDateTime windowEnd) {
         try {
             List<RagTraceDO> traces = ragTraceMapper.selectList(new LambdaQueryWrapper<RagTraceDO>()
                     .ge(RagTraceDO::getEndedAt, windowStart)
@@ -47,7 +104,7 @@ public class MetricsSnapshotScheduler {
             int traceCount = traces.size();
             if (traceCount == 0) {
                 logger.debug("No traces in window [{}, {}), skipping snapshot", windowStart, windowEnd);
-                return;
+                return Map.of("created", false, "message", "该时间段无 Trace 数据，未生成快照");
             }
 
             long totalDuration = traces.stream().mapToLong(t -> t.getDurationMs() == null ? 0 : t.getDurationMs()).sum();
@@ -79,7 +136,7 @@ public class MetricsSnapshotScheduler {
 
             RagMetricsSnapshotDO snapshot = new RagMetricsSnapshotDO();
             snapshot.setSnapshotId(UUID.randomUUID().toString());
-            snapshot.setSnapshotHour(windowStart);
+            snapshot.setSnapshotHour(windowStart.truncatedTo(ChronoUnit.HOURS));
             snapshot.setTraceCount(traceCount);
             snapshot.setAvgDurationMs(traceCount > 0 ? totalDuration / traceCount : 0);
             snapshot.setP95DurationMs(p95DurationMs);
@@ -100,9 +157,17 @@ public class MetricsSnapshotScheduler {
                     windowStart, windowEnd, traceCount, snapshot.getSatisfactionRate());
 
             cleanOldSnapshots();
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("created", true);
+            result.put("traceCount", traceCount);
+            result.put("snapshotHour", snapshot.getSnapshotHour().toString());
+            result.put("message", "快照生成成功，包含 " + traceCount + " 条 Trace");
+            return result;
         } catch (Exception e) {
             logger.error("Failed to aggregate metrics snapshot for window [{}, {}): {}",
                     windowStart, windowEnd, e.getMessage(), e);
+            return Map.of("created", false, "message", "快照生成失败: " + e.getMessage());
         }
     }
 

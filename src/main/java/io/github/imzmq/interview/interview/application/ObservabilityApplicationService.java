@@ -6,6 +6,7 @@ import io.github.imzmq.interview.entity.knowledge.RagMetricsSnapshotDO;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
+import io.github.imzmq.interview.feedback.application.MetricsSnapshotScheduler;
 import io.github.imzmq.interview.mapper.knowledge.RagFeedbackMapper;
 import io.github.imzmq.interview.mapper.knowledge.RagMetricsSnapshotMapper;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
@@ -35,6 +36,7 @@ public class ObservabilityApplicationService {
     private final SkillTelemetryRecorder skillTelemetryRecorder;
     private final RagFeedbackMapper ragFeedbackMapper;
     private final RagMetricsSnapshotMapper ragMetricsSnapshotMapper;
+    private final MetricsSnapshotScheduler metricsSnapshotScheduler;
 
     public ObservabilityApplicationService(RAGObservabilityService ragObservabilityService,
                                            RetrievalEvaluationService retrievalEvaluationService,
@@ -42,7 +44,8 @@ public class ObservabilityApplicationService {
                                            ObservabilitySwitchProperties observabilitySwitchProperties,
                                            SkillTelemetryRecorder skillTelemetryRecorder,
                                            RagFeedbackMapper ragFeedbackMapper,
-                                           RagMetricsSnapshotMapper ragMetricsSnapshotMapper) {
+                                           RagMetricsSnapshotMapper ragMetricsSnapshotMapper,
+                                           MetricsSnapshotScheduler metricsSnapshotScheduler) {
         this.ragObservabilityService = ragObservabilityService;
         this.retrievalEvaluationService = retrievalEvaluationService;
         this.ragQualityEvaluationService = ragQualityEvaluationService;
@@ -50,6 +53,7 @@ public class ObservabilityApplicationService {
         this.skillTelemetryRecorder = skillTelemetryRecorder;
         this.ragFeedbackMapper = ragFeedbackMapper;
         this.ragMetricsSnapshotMapper = ragMetricsSnapshotMapper;
+        this.metricsSnapshotScheduler = metricsSnapshotScheduler;
     }
 
     public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
@@ -486,6 +490,13 @@ public class ObservabilityApplicationService {
         summary.put("thisWeek", buildPeriodSummary(thisWeekStart, now));
         summary.put("lastWeek", buildPeriodSummary(lastWeekStart, lastWeekEnd));
         return summary;
+    }
+
+    public Map<String, Object> triggerSnapshot() {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return Map.of("message", "RAG Trace 已关闭，无法生成快照");
+        }
+        return metricsSnapshotScheduler.backfillMissingSnapshots(168);
     }
 
     private Map<String, Object> buildPeriodSummary(LocalDateTime from, LocalDateTime to) {

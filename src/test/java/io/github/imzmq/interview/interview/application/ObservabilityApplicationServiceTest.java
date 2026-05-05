@@ -4,6 +4,7 @@ import io.github.imzmq.interview.config.observability.ObservabilitySwitchPropert
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
+import io.github.imzmq.interview.feedback.application.MetricsSnapshotScheduler;
 import io.github.imzmq.interview.mapper.knowledge.RagFeedbackMapper;
 import io.github.imzmq.interview.mapper.knowledge.RagMetricsSnapshotMapper;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
@@ -43,7 +44,8 @@ class ObservabilityApplicationServiceTest {
                 properties,
                 new SkillTelemetryRecorder(),
                 mock(RagFeedbackMapper.class),
-                mock(RagMetricsSnapshotMapper.class)
+                mock(RagMetricsSnapshotMapper.class),
+                mock(MetricsSnapshotScheduler.class)
         );
 
         assertEquals(List.of("trace-success", "trace-fallback", "trace-empty"),
@@ -82,7 +84,8 @@ class ObservabilityApplicationServiceTest {
                 properties,
                 new SkillTelemetryRecorder(),
                 mock(RagFeedbackMapper.class),
-                mock(RagMetricsSnapshotMapper.class)
+                mock(RagMetricsSnapshotMapper.class),
+                mock(MetricsSnapshotScheduler.class)
         );
 
         assertEquals(
@@ -138,7 +141,8 @@ class ObservabilityApplicationServiceTest {
                 properties,
                 new SkillTelemetryRecorder(),
                 mock(RagFeedbackMapper.class),
-                mock(RagMetricsSnapshotMapper.class)
+                mock(RagMetricsSnapshotMapper.class),
+                mock(MetricsSnapshotScheduler.class)
         );
 
         Map<String, Object> result = service.getRetrievalMetrics(200, null, null);
@@ -169,7 +173,8 @@ class ObservabilityApplicationServiceTest {
                 properties,
                 new SkillTelemetryRecorder(),
                 mock(RagFeedbackMapper.class),
-                mock(RagMetricsSnapshotMapper.class)
+                mock(RagMetricsSnapshotMapper.class),
+                mock(MetricsSnapshotScheduler.class)
         );
 
         Map<String, Object> result = service.getRetrievalMetrics(100, 6, null);

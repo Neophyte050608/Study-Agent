@@ -117,4 +117,9 @@ public class RagObservabilityController {
     public Map<String, Object> getMetricsSummary() {
         return interviewService.getMetricsSummary();
     }
+
+    @PostMapping("/observability/rag/metrics/snapshot/trigger")
+    public Map<String, Object> triggerMetricsSnapshot() {
+        return interviewService.triggerMetricsSnapshot();
+    }
 }

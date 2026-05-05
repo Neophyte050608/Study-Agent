@@ -161,6 +161,10 @@ public class InterviewService {
         return observabilityApplicationService.getMetricsSummary();
     }
 
+    public Map<String, Object> triggerMetricsSnapshot() {
+        return observabilityApplicationService.triggerSnapshot();
+    }
+
     public java.util.Map<String, Object> getRetrievalMetrics(Integer limit, Integer hours, String dataset) {
         return observabilityApplicationService.getRetrievalMetrics(limit, hours, dataset);
     }

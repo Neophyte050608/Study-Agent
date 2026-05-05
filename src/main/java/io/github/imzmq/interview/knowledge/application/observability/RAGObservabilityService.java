@@ -270,6 +270,7 @@ public class RAGObservabilityService {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return Map.ofEntries(
                     Map.entry("enabled", false),
+                    Map.entry("traceCount", 0),
                     Map.entry("avgLatencyMs", 0),
                     Map.entry("avgRetrievedDocs", 0.0),
                     Map.entry("cacheHitRate", "0.0%"),
@@ -293,6 +294,7 @@ public class RAGObservabilityService {
         if (traces.isEmpty()) {
             return Map.ofEntries(
                     Map.entry("enabled", true),
+                    Map.entry("traceCount", 0),
                     Map.entry("avgLatencyMs", 0),
                     Map.entry("avgRetrievedDocs", 0.0),
                     Map.entry("cacheHitRate", "0.0%"),
@@ -368,6 +370,7 @@ public class RAGObservabilityService {
 
         return Map.ofEntries(
                 Map.entry("enabled", true),
+                Map.entry("traceCount", traces.size()),
                 Map.entry("avgLatencyMs", (int) avgLatency),
                 Map.entry("avgRetrievedDocs", String.format(Locale.ROOT, "%.1f", avgDocs)),
                 Map.entry("cacheHitRate", "N/A"),
