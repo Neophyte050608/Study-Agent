@@ -587,3 +587,47 @@ CREATE TABLE IF NOT EXISTS `t_model_candidate` (
     UNIQUE KEY `uk_model_candidate_name` (`name`, `deleted`),
     KEY `idx_model_candidate_priority` (`priority`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型路由候选池';
+
+-- 创建 RAG 用户反馈事件表
+CREATE TABLE IF NOT EXISTS `t_rag_feedback` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `feedback_id` VARCHAR(128) NOT NULL COMMENT '反馈唯一ID',
+    `trace_id` VARCHAR(128) COMMENT '关联RAG Trace ID',
+    `message_id` VARCHAR(128) COMMENT '关联聊天消息ID',
+    `user_id` VARCHAR(128) NOT NULL COMMENT '用户标识',
+    `feedback_type` VARCHAR(32) NOT NULL COMMENT 'THUMBS_UP|THUMBS_DOWN|COPY|REGENERATE',
+    `scene` VARCHAR(64) COMMENT 'CHAT|INTERVIEW|CODING|KNOWLEDGE_QA',
+    `query_text` VARCHAR(500) COMMENT '用户原始提问',
+    `meta` JSON COMMENT '扩展信息',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_feedback_id` (`feedback_id`),
+    KEY `idx_trace_id` (`trace_id`),
+    KEY `idx_user_scene_time` (`user_id`, `scene`, `created_at`),
+    KEY `idx_type_time` (`feedback_type`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG用户反馈事件表';
+
+-- 创建 RAG 时序指标快照表
+CREATE TABLE IF NOT EXISTS `t_rag_metrics_snapshot` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `snapshot_id` VARCHAR(128) NOT NULL COMMENT '快照唯一ID',
+    `snapshot_hour` DATETIME NOT NULL COMMENT '快照小时（整点）',
+    `trace_count` INT NOT NULL DEFAULT 0,
+    `avg_duration_ms` BIGINT NOT NULL DEFAULT 0,
+    `p95_duration_ms` BIGINT NOT NULL DEFAULT 0,
+    `success_count` INT NOT NULL DEFAULT 0,
+    `failed_count` INT NOT NULL DEFAULT 0,
+    `slow_count` INT NOT NULL DEFAULT 0,
+    `fallback_count` INT NOT NULL DEFAULT 0,
+    `empty_retrieval_count` INT NOT NULL DEFAULT 0,
+    `avg_retrieved_docs` DOUBLE NOT NULL DEFAULT 0,
+    `thumbs_up_count` INT NOT NULL DEFAULT 0,
+    `thumbs_down_count` INT NOT NULL DEFAULT 0,
+    `copy_count` INT NOT NULL DEFAULT 0,
+    `satisfaction_rate` DOUBLE NOT NULL DEFAULT 0 COMMENT '满意度(点赞/(点赞+点踩))',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_snapshot_id` (`snapshot_id`),
+    UNIQUE KEY `uk_snapshot_hour` (`snapshot_hour`),
+    KEY `idx_snapshot_hour` (`snapshot_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG时序指标快照表';
