@@ -409,7 +409,7 @@ public class KnowledgeRetrievalCoordinator {
         }
     }
 
-    private String buildImageContext(List<ImageService.ImageResult> images) {
+    public static String buildImageContext(List<ImageService.ImageResult> images) {
         if (images == null || images.isEmpty()) {
             return "";
         }

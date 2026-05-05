@@ -44,7 +44,7 @@ public class LlmJsonParser {
      * @param raw LLM 原始响应文本
      * @return JSON 候选字符串，无法提取时返回 null
      */
-    String extractJson(String raw) {
+    public String extractJson(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }

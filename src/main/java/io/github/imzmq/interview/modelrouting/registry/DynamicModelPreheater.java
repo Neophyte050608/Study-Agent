@@ -53,18 +53,7 @@ public class DynamicModelPreheater {
     }
 
     private ModelRoutingCandidate toRoutingCandidate(ModelCandidateDO candidate) {
-        return new ModelRoutingCandidate(
-                candidate.getName(),
-                candidate.getProvider(),
-                candidate.getModel(),
-                "",
-                candidate.getPriority() == null ? 100 : candidate.getPriority(),
-                Boolean.TRUE.equals(candidate.getSupportsThinking()),
-                candidate.getBaseUrl() == null ? "" : candidate.getBaseUrl(),
-                candidate.getApiKeyEncrypted() == null ? "" : candidate.getApiKeyEncrypted(),
-                candidate.getRouteType() == null ? "" : candidate.getRouteType(),
-                "DATABASE"
-        );
+        return ModelRoutingCandidate.from(candidate);
     }
 }
 

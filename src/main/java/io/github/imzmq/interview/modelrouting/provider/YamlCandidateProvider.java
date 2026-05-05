@@ -1,5 +1,6 @@
 package io.github.imzmq.interview.modelrouting.provider;
 
+import io.github.imzmq.interview.common.StringUtils;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import org.springframework.stereotype.Component;
@@ -20,10 +21,10 @@ public class YamlCandidateProvider implements CandidateProvider {
         return properties.getCandidates().stream()
                 .filter(ModelRoutingProperties.Candidate::isEnabled)
                 .map(candidate -> new ModelRoutingCandidate(
-                        normalize(candidate.getName()),
-                        normalize(candidate.getProvider()),
-                        normalize(candidate.getModel()),
-                        normalize(candidate.getBeanName()),
+                        StringUtils.trimToEmpty(candidate.getName()),
+                        StringUtils.trimToEmpty(candidate.getProvider()),
+                        StringUtils.trimToEmpty(candidate.getModel()),
+                        StringUtils.trimToEmpty(candidate.getBeanName()),
                         candidate.getPriority(),
                         candidate.isSupportsThinking(),
                         "",
@@ -33,11 +34,4 @@ public class YamlCandidateProvider implements CandidateProvider {
                 ))
                 .toList();
     }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim();
-    }
 }
-
-
-

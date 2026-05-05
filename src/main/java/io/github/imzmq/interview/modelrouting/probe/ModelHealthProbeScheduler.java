@@ -50,18 +50,7 @@ public class ModelHealthProbeScheduler {
 
         for (ModelCandidateDO primary : primaries) {
             try {
-                ModelRoutingCandidate candidate = new ModelRoutingCandidate(
-                        primary.getName(),
-                        primary.getProvider(),
-                        primary.getModel(),
-                        "",
-                        primary.getPriority() == null ? 100 : primary.getPriority(),
-                        Boolean.TRUE.equals(primary.getSupportsThinking()),
-                        primary.getBaseUrl() == null ? "" : primary.getBaseUrl(),
-                        primary.getApiKeyEncrypted() == null ? "" : primary.getApiKeyEncrypted(),
-                        primary.getRouteType() == null ? "" : primary.getRouteType(),
-                        "DATABASE"
-                );
+                ModelRoutingCandidate candidate = ModelRoutingCandidate.from(primary);
                 ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
                 if (chatModel == null) {
                     modelHealthStore.markFailure(primary.getName(), "无法创建模型实例");

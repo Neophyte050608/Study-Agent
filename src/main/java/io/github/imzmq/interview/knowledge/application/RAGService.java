@@ -18,6 +18,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
@@ -266,7 +267,7 @@ public class RAGService {
                     null
             ));
             List<ImageService.ImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
-            String imageContext = buildImageContext(retrievedImages);
+            String imageContext = KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
             boolean webFallbackUsed = false;
             SkillExecutionResult evidenceDecision = evaluateEvidenceSkill(
@@ -2486,21 +2487,6 @@ public class RAGService {
                                boolean webFallbackUsed) {
             this(retrievalQuery, retrievedDocs, List.of(), context, "", retrievalEvidence, webFallbackUsed);
         }
-    }
-
-    private String buildImageContext(List<ImageService.ImageResult> retrievedImages) {
-        if (retrievedImages == null || retrievedImages.isEmpty()) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (ImageService.ImageResult image : retrievedImages) {
-            builder.append("[图").append(index++).append("] ")
-                    .append(image.summaryText() == null ? image.imageName() : image.summaryText())
-                    .append(" - 来源: ").append(image.imageName())
-                    .append("\n");
-        }
-        return builder.toString().trim();
     }
 
     private List<String> summarizeRetrievedDocuments(List<Document> retrievedDocs) {

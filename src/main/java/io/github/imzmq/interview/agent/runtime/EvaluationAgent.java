@@ -2,6 +2,7 @@ package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -20,10 +21,12 @@ public class EvaluationAgent {
 
     private final RAGService ragService;
     private final ObjectMapper objectMapper;
+    private final LlmJsonParser llmJsonParser;
 
-    public EvaluationAgent(RAGService ragService, ObjectMapper objectMapper) {
+    public EvaluationAgent(RAGService ragService, ObjectMapper objectMapper, LlmJsonParser llmJsonParser) {
         this.ragService = ragService;
         this.objectMapper = objectMapper;
+        this.llmJsonParser = llmJsonParser;
     }
 
     public String generateFirstQuestion(String resumeContent, String topic) {
@@ -93,17 +96,9 @@ public class EvaluationAgent {
 
     private ParsedEvaluation parseEvaluation(String raw) {
         String cleanRaw = raw;
-        if (cleanRaw != null) {
-            cleanRaw = cleanRaw.trim();
-            if (cleanRaw.startsWith("```json")) {
-                cleanRaw = cleanRaw.substring(7);
-            } else if (cleanRaw.startsWith("```")) {
-                cleanRaw = cleanRaw.substring(3);
-            }
-            if (cleanRaw.endsWith("```")) {
-                cleanRaw = cleanRaw.substring(0, cleanRaw.length() - 3);
-            }
-            cleanRaw = cleanRaw.trim();
+        if (raw != null) {
+            String extracted = llmJsonParser.extractJson(raw);
+            cleanRaw = extracted != null ? extracted : raw.trim();
         }
         try {
             // 优先解析 JSON 结构，失败时再回退到标签提取，提升兼容性。

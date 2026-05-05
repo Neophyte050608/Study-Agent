@@ -11,6 +11,7 @@ import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
+import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -106,7 +107,7 @@ public class LocalGraphKnowledgeService {
                 "",
                 question,
                 context,
-                buildImageContext(retrievedImages),
+                KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages),
                 buildEvidence(graphContext),
                 retrievedImages,
                 false,
@@ -290,21 +291,6 @@ public class LocalGraphKnowledgeService {
                 notePaths.merge(filePath, weight, Math::max);
             }
         }
-    }
-
-    private String buildImageContext(List<ImageService.ImageResult> retrievedImages) {
-        if (retrievedImages == null || retrievedImages.isEmpty()) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder();
-        int index = 1;
-        for (ImageService.ImageResult image : retrievedImages) {
-            builder.append("[图").append(index++).append("] ")
-                    .append(image.summaryText() == null ? image.imageName() : image.summaryText())
-                    .append(" - 来源: ").append(image.imageName())
-                    .append("\n");
-        }
-        return builder.toString().trim();
     }
 }
 

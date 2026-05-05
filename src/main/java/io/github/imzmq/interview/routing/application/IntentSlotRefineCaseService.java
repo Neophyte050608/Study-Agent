@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.routing.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import io.github.imzmq.interview.common.StringUtils;
 import io.github.imzmq.interview.config.routing.IntentTreeProperties;
 import io.github.imzmq.interview.entity.intent.IntentSlotRefineCaseDO;
 import io.github.imzmq.interview.mapper.intent.IntentSlotRefineCaseMapper;
@@ -30,9 +31,9 @@ public class IntentSlotRefineCaseService {
         List<IntentTreeProperties.SlotRefineCase> result = new ArrayList<>();
         for (IntentSlotRefineCaseDO row : rows) {
             IntentTreeProperties.SlotRefineCase item = new IntentTreeProperties.SlotRefineCase();
-            item.setTaskType(normalize(row.getTaskType()));
-            item.setUserQuery(normalize(row.getUserQuery()));
-            item.setAiOutput(normalize(row.getAiOutput()));
+            item.setTaskType(StringUtils.trimToEmpty(row.getTaskType()));
+            item.setUserQuery(StringUtils.trimToEmpty(row.getUserQuery()));
+            item.setAiOutput(StringUtils.trimToEmpty(row.getAiOutput()));
             if (!item.getUserQuery().isBlank() && !item.getAiOutput().isBlank()) {
                 result.add(item);
             }
@@ -48,16 +49,16 @@ public class IntentSlotRefineCaseService {
     }
 
     public List<Map<String, String>> listEnabledByTaskType(String taskType) {
-        String normalizedTaskType = normalize(taskType).toUpperCase();
+        String normalizedTaskType = StringUtils.trimToEmpty(taskType).toUpperCase();
         List<Map<String, String>> result = new ArrayList<>();
         for (IntentTreeProperties.SlotRefineCase item : listEnabled()) {
-            String caseTaskType = normalize(item.getTaskType()).toUpperCase();
+            String caseTaskType = StringUtils.trimToEmpty(item.getTaskType()).toUpperCase();
             if (!caseTaskType.isBlank() && !caseTaskType.equals(normalizedTaskType)) {
                 continue;
             }
             Map<String, String> mapped = new LinkedHashMap<>();
-            mapped.put("user_query", normalize(item.getUserQuery()));
-            mapped.put("ai_response", normalize(item.getAiOutput()));
+            mapped.put("user_query", StringUtils.trimToEmpty(item.getUserQuery()));
+            mapped.put("ai_response", StringUtils.trimToEmpty(item.getAiOutput()));
             result.add(mapped);
         }
         return result;
@@ -79,13 +80,13 @@ public class IntentSlotRefineCaseService {
             if (item == null) {
                 continue;
             }
-            String userQuery = normalize(item.getUserQuery());
-            String aiOutput = normalize(item.getAiOutput());
+            String userQuery = StringUtils.trimToEmpty(item.getUserQuery());
+            String aiOutput = StringUtils.trimToEmpty(item.getAiOutput());
             if (userQuery.isBlank() || aiOutput.isBlank()) {
                 continue;
             }
             IntentSlotRefineCaseDO row = new IntentSlotRefineCaseDO();
-            row.setTaskType(normalize(item.getTaskType()));
+            row.setTaskType(StringUtils.trimToEmpty(item.getTaskType()));
             row.setUserQuery(userQuery);
             row.setAiOutput(aiOutput);
             row.setSortOrder(index++);
@@ -94,15 +95,4 @@ public class IntentSlotRefineCaseService {
             mapper.insert(row);
         }
     }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim();
-    }
 }
-
-
-
-
-
-
-

@@ -1,5 +1,6 @@
 package io.github.imzmq.interview.modelrouting.provider;
 
+import io.github.imzmq.interview.common.StringUtils;
 import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
@@ -21,23 +22,12 @@ public class DatabaseCandidateProvider implements CandidateProvider {
     public List<ModelRoutingCandidate> getCandidates() {
         return modelCandidateService.listEnabled().stream()
                 .filter(this::matchesRouteType)
-                .map(candidate -> new ModelRoutingCandidate(
-                        normalize(candidate.getName()),
-                        normalize(candidate.getProvider()),
-                        normalize(candidate.getModel()),
-                        "",
-                        candidate.getPriority() == null ? 100 : candidate.getPriority(),
-                        Boolean.TRUE.equals(candidate.getSupportsThinking()),
-                        normalize(candidate.getBaseUrl()),
-                        normalize(candidate.getApiKeyEncrypted()),
-                        normalize(candidate.getRouteType()),
-                        "DATABASE"
-                ))
+                .map(ModelRoutingCandidate::from)
                 .toList();
     }
 
     private boolean matchesRouteType(ModelCandidateDO candidate) {
-        String routeType = normalize(candidate.getRouteType());
+        String routeType = StringUtils.trimToEmpty(candidate.getRouteType());
         if (routeType.isBlank()) {
             return true;
         }
@@ -48,9 +38,6 @@ public class DatabaseCandidateProvider implements CandidateProvider {
                 || "ALL".equals(normalized);
     }
 
-    private String normalize(String value) {
-        return value == null ? "" : value.trim();
-    }
 }
 
 

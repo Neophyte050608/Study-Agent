@@ -135,18 +135,7 @@ public class ModelRoutingController {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("candidateName", entity.getName());
-        ModelRoutingCandidate candidate = new ModelRoutingCandidate(
-                entity.getName(),
-                entity.getProvider(),
-                entity.getModel(),
-                "",
-                entity.getPriority() == null ? 100 : entity.getPriority(),
-                Boolean.TRUE.equals(entity.getSupportsThinking()),
-                entity.getBaseUrl() == null ? "" : entity.getBaseUrl(),
-                entity.getApiKeyEncrypted() == null ? "" : entity.getApiKeyEncrypted(),
-                entity.getRouteType() == null ? "" : entity.getRouteType(),
-                "DATABASE"
-        );
+        ModelRoutingCandidate candidate = ModelRoutingCandidate.from(entity);
         ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
         if (chatModel == null) {
             throw new IllegalStateException("无法创建模型实例");

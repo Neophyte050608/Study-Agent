@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.routing.api;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import io.github.imzmq.interview.common.StringUtils;
 import io.github.imzmq.interview.config.routing.IntentTreeProperties;
 import io.github.imzmq.interview.entity.intent.IntentNodeDO;
 import io.github.imzmq.interview.routing.application.IntentSlotRefineCaseService;
@@ -20,7 +21,7 @@ import java.util.stream.Collectors;
 
 /**
  * 意图树配置管理控制器。
- * 
+ *
  * 职责：
  * 1. 提供意图树核心参数（阈值、开关等）的查询与修改。
  * 2. 提供叶子意图节点（LeafIntents）的管理。
@@ -92,7 +93,7 @@ public class IntentTreeController {
         );
         Map<String, IntentNodeDO> existingByCode = new HashMap<>();
         for (IntentNodeDO existingNode : existingNodes) {
-            String code = normalize(existingNode.getIntentCode());
+            String code = StringUtils.trimToEmpty(existingNode.getIntentCode());
             if (!code.isBlank()) {
                 existingByCode.put(code, existingNode);
             }
@@ -102,7 +103,7 @@ public class IntentTreeController {
             List<IntentTreeProperties.LeafIntentConfig> normalizedLeafIntents = normalizeLeafIntents(newProps.getLeafIntents());
             Set<String> incomingCodes = new LinkedHashSet<>();
             for (IntentTreeProperties.LeafIntentConfig config : normalizedLeafIntents) {
-                String code = normalize(config.getIntentId());
+                String code = StringUtils.trimToEmpty(config.getIntentId());
                 if (!incomingCodes.add(code)) {
                     throw new IllegalArgumentException("叶子意图编码重复: " + code);
                 }
@@ -132,7 +133,7 @@ public class IntentTreeController {
                 intentTreeService.updateById(existing);
             }
             for (IntentNodeDO existing : existingNodes) {
-                String code = normalize(existing.getIntentCode());
+                String code = StringUtils.trimToEmpty(existing.getIntentCode());
                 if (code.isBlank() || incomingCodes.contains(code) || !Boolean.TRUE.equals(existing.getEnabled())) {
                     continue;
                 }
@@ -172,16 +173,16 @@ public class IntentTreeController {
             if (leafIntent == null) {
                 continue;
             }
-            String intentId = normalize(leafIntent.getIntentId());
+            String intentId = StringUtils.trimToEmpty(leafIntent.getIntentId());
             if (intentId.isBlank()) {
                 continue;
             }
             IntentTreeProperties.LeafIntentConfig item = new IntentTreeProperties.LeafIntentConfig();
             item.setIntentId(intentId);
-            item.setPath(normalize(leafIntent.getPath()));
-            item.setName(normalize(leafIntent.getName()));
-            item.setDescription(normalize(leafIntent.getDescription()));
-            item.setTaskType(normalize(leafIntent.getTaskType()));
+            item.setPath(StringUtils.trimToEmpty(leafIntent.getPath()));
+            item.setName(StringUtils.trimToEmpty(leafIntent.getName()));
+            item.setDescription(StringUtils.trimToEmpty(leafIntent.getDescription()));
+            item.setTaskType(StringUtils.trimToEmpty(leafIntent.getTaskType()));
             item.setExamples(normalizeArray(leafIntent.getExamples()));
             item.setSlotHints(normalizeArray(leafIntent.getSlotHints()));
             normalized.add(item);
@@ -195,7 +196,7 @@ public class IntentTreeController {
             return normalized;
         }
         for (String value : values) {
-            String text = normalize(value);
+            String text = StringUtils.trimToEmpty(value);
             if (!text.isBlank()) {
                 normalized.add(text);
             }
@@ -204,12 +205,12 @@ public class IntentTreeController {
     }
 
     private String resolveParentCode(IntentTreeProperties.LeafIntentConfig config) {
-        String path = normalize(config.getPath());
-        String intentId = normalize(config.getIntentId());
+        String path = StringUtils.trimToEmpty(config.getPath());
+        String intentId = StringUtils.trimToEmpty(config.getIntentId());
         if (!path.isBlank()) {
             int slashIndex = path.lastIndexOf("/");
             if (slashIndex > 0) {
-                String parentFromPath = normalize(path.substring(0, slashIndex));
+                String parentFromPath = StringUtils.trimToEmpty(path.substring(0, slashIndex));
                 if (!parentFromPath.isBlank()) {
                     return parentFromPath;
                 }
@@ -217,14 +218,14 @@ public class IntentTreeController {
         }
         int dotIndex = intentId.lastIndexOf(".");
         if (dotIndex > 0) {
-            return normalize(intentId.substring(0, dotIndex));
+            return StringUtils.trimToEmpty(intentId.substring(0, dotIndex));
         }
         return "";
     }
 
     private String buildPath(String parentCode, String intentId) {
-        String normalizedParent = normalize(parentCode);
-        String normalizedIntentId = normalize(intentId);
+        String normalizedParent = StringUtils.trimToEmpty(parentCode);
+        String normalizedIntentId = StringUtils.trimToEmpty(intentId);
         if (normalizedIntentId.isBlank()) {
             return "";
         }
@@ -233,15 +234,4 @@ public class IntentTreeController {
         }
         return normalizedParent + "/" + normalizedIntentId;
     }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim();
-    }
 }
-
-
-
-
-
-
-

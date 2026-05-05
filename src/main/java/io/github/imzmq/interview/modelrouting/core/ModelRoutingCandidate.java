@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.modelrouting.core;
 
+import io.github.imzmq.interview.common.StringUtils;
+import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
+
 /**
  * 模型路由候选者记录。
  * 封装了从配置中解析出的单个模型定义，并由选择器 (ModelSelector) 排序后提供给执行器 (ModelRoutingExecutor)。
@@ -27,5 +30,24 @@ public record ModelRoutingCandidate(
         String routeType,
         String source
 ) {
+
+    /**
+     * 从数据库实体创建 ModelRoutingCandidate。
+     * 所有字符串字段经过 trim-to-empty 归一化，来源标记为 DATABASE。
+     */
+    public static ModelRoutingCandidate from(ModelCandidateDO candidate) {
+        return new ModelRoutingCandidate(
+                StringUtils.trimToEmpty(candidate.getName()),
+                StringUtils.trimToEmpty(candidate.getProvider()),
+                StringUtils.trimToEmpty(candidate.getModel()),
+                "",
+                candidate.getPriority() == null ? 100 : candidate.getPriority(),
+                Boolean.TRUE.equals(candidate.getSupportsThinking()),
+                StringUtils.trimToEmpty(candidate.getBaseUrl()),
+                StringUtils.trimToEmpty(candidate.getApiKeyEncrypted()),
+                StringUtils.trimToEmpty(candidate.getRouteType()),
+                "DATABASE"
+        );
+    }
 }
 
