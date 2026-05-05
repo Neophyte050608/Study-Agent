@@ -380,9 +380,6 @@ const handleSubmit = async () => {
     if (streamError) throw streamError
     if (shouldFinish) {
       await doGenerateReport()
-      // doGenerateReport already emits 'updated'
-    } else {
-      emit('updated')
     }
   } catch (error) {
     if (streamAbortExpected || isAbortLikeError(error)) {
@@ -395,7 +392,6 @@ const handleSubmit = async () => {
       feedback: feedbackBuffer + '\n\n**[提交失败]**',
       userAnswer: answer
     })
-    emit('updated')
   }
 }
 
@@ -422,7 +418,6 @@ const handleNext = () => {
   })
   timerSeconds.value = 0
   startTimer()
-  emit('updated')
 }
 
 const handleFinish = async () => {
@@ -471,7 +466,6 @@ const doGenerateReport = async () => {
     streamAbortExpected = false
     await stream.start()
     if (streamError) throw streamError
-    emit('updated')
   } catch (error) {
     if (streamAbortExpected || isAbortLikeError(error)) {
       streamAbortExpected = false
@@ -481,7 +475,6 @@ const doGenerateReport = async () => {
       interviewState: 'finished',
       report: reportBuffer + '\n\n**[报告生成失败]**'
     })
-    emit('updated')
   } finally {
     finishing.value = false
     streamAbort.value = null
