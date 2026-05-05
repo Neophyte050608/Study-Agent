@@ -2,7 +2,7 @@ package io.github.imzmq.interview.controller;
 
 import io.github.imzmq.interview.dto.modelrouting.ModelCandidateDTO;
 import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
-import io.github.imzmq.interview.modelrouting.invoker.FirstTokenProbeInvoker;
+import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import io.github.imzmq.interview.modelrouting.api.ModelRoutingController;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
@@ -37,7 +37,7 @@ class ModelRoutingControllerTest {
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
         ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
         DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
         when(ollamaHealthService.getHealthInfo()).thenReturn(Map.of("status", "UP", "serviceUp", true, "modelReady", true));
         properties.setEnabled(true);
         properties.setDefaultModel("deepseek-chat");
@@ -54,7 +54,7 @@ class ModelRoutingControllerTest {
                 modelCandidateService,
                 modelHealthStore,
                 dynamicModelFactory,
-                firstTokenProbeInvoker,
+                modelProbeAwaiter,
                 false
         );
         ResponseEntity<Map<String, Object>> response = controller.stats();
@@ -76,7 +76,7 @@ class ModelRoutingControllerTest {
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
         ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
         DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
 
         ModelCandidateDO entity = new ModelCandidateDO();
         entity.setId(1L);
@@ -97,7 +97,7 @@ class ModelRoutingControllerTest {
                 modelCandidateService,
                 modelHealthStore,
                 dynamicModelFactory,
-                firstTokenProbeInvoker,
+                modelProbeAwaiter,
                 false
         );
 
@@ -117,7 +117,7 @@ class ModelRoutingControllerTest {
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
         ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
         DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
 
         ModelRoutingController controller = new ModelRoutingController(
                 routingChatService,
@@ -126,7 +126,7 @@ class ModelRoutingControllerTest {
                 modelCandidateService,
                 modelHealthStore,
                 dynamicModelFactory,
-                firstTokenProbeInvoker,
+                modelProbeAwaiter,
                 false
         );
 
@@ -144,7 +144,7 @@ class ModelRoutingControllerTest {
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
         ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
         DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
         when(modelCandidateService.decryptApiKey(1L)).thenReturn("sk-live");
 
         ModelRoutingController controller = new ModelRoutingController(
@@ -154,7 +154,7 @@ class ModelRoutingControllerTest {
                 modelCandidateService,
                 modelHealthStore,
                 dynamicModelFactory,
-                firstTokenProbeInvoker,
+                modelProbeAwaiter,
                 true
         );
 
@@ -172,7 +172,7 @@ class ModelRoutingControllerTest {
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
         ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
         DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
 
         ModelCandidateDO entity = new ModelCandidateDO();
         entity.setId(1L);
@@ -190,7 +190,7 @@ class ModelRoutingControllerTest {
                 modelCandidateService,
                 modelHealthStore,
                 dynamicModelFactory,
-                firstTokenProbeInvoker,
+                modelProbeAwaiter,
                 true
         );
 

@@ -2,7 +2,7 @@ package io.github.imzmq.interview.modelrouting;
 
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelruntime.application.DynamicModelFactory;
-import io.github.imzmq.interview.modelrouting.invoker.FirstTokenProbeInvoker;
+import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.probe.ModelHealthProbeScheduler;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
@@ -19,20 +19,20 @@ class ModelHealthProbeSchedulerTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         properties.setEnabled(false);
         DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        FirstTokenProbeInvoker firstTokenProbeInvoker = mock(FirstTokenProbeInvoker.class);
+        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
         ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
 
         ModelHealthProbeScheduler scheduler = new ModelHealthProbeScheduler(
                 modelCandidateService,
                 properties,
                 dynamicModelFactory,
-                firstTokenProbeInvoker,
+                modelProbeAwaiter,
                 modelHealthStore
         );
 
         scheduler.probePrimaryModels();
 
-        verifyNoInteractions(modelCandidateService, dynamicModelFactory, firstTokenProbeInvoker, modelHealthStore);
+        verifyNoInteractions(modelCandidateService, dynamicModelFactory, modelProbeAwaiter, modelHealthStore);
     }
 }
 

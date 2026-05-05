@@ -2,7 +2,7 @@ package io.github.imzmq.interview.modelrouting.api;
 
 import io.github.imzmq.interview.dto.modelrouting.ModelCandidateDTO;
 import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
-import io.github.imzmq.interview.modelrouting.invoker.FirstTokenProbeInvoker;
+import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
@@ -35,7 +35,7 @@ public class ModelRoutingController {
     private final ModelCandidateService modelCandidateService;
     private final ModelHealthStore modelHealthStore;
     private final DynamicModelFactory dynamicModelFactory;
-    private final FirstTokenProbeInvoker firstTokenProbeInvoker;
+    private final ModelProbeAwaiter modelProbeAwaiter;
     private final boolean allowPlaintextKeyExport;
 
     public ModelRoutingController(RoutingChatService routingChatService,
@@ -44,7 +44,7 @@ public class ModelRoutingController {
                                   ModelCandidateService modelCandidateService,
                                   ModelHealthStore modelHealthStore,
                                   DynamicModelFactory dynamicModelFactory,
-                                  FirstTokenProbeInvoker firstTokenProbeInvoker,
+                                  ModelProbeAwaiter modelProbeAwaiter,
                                   @Value("${app.security.allow-plaintext-key-export:false}") boolean allowPlaintextKeyExport) {
         this.routingChatService = routingChatService;
         this.properties = properties;
@@ -52,7 +52,7 @@ public class ModelRoutingController {
         this.modelCandidateService = modelCandidateService;
         this.modelHealthStore = modelHealthStore;
         this.dynamicModelFactory = dynamicModelFactory;
-        this.firstTokenProbeInvoker = firstTokenProbeInvoker;
+        this.modelProbeAwaiter = modelProbeAwaiter;
         this.allowPlaintextKeyExport = allowPlaintextKeyExport;
     }
 
@@ -141,7 +141,9 @@ public class ModelRoutingController {
             throw new IllegalStateException("无法创建模型实例");
         }
         long start = System.currentTimeMillis();
-        String response = firstTokenProbeInvoker.invoke(chatModel, null, "ping", TimeoutHint.FAST);
+        var builder = org.springframework.ai.chat.client.ChatClient.builder(chatModel).build().prompt();
+        reactor.core.publisher.Flux<String> tokenFlux = builder.user("ping").stream().content();
+        String response = modelProbeAwaiter.awaitFirstToken(tokenFlux, TimeoutHint.FAST);
         long latency = System.currentTimeMillis() - start;
         modelHealthStore.markSuccess(entity.getName());
         result.put("status", "healthy");

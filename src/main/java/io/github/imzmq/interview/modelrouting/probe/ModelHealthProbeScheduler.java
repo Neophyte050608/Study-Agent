@@ -7,7 +7,7 @@ import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
-import io.github.imzmq.interview.modelrouting.invoker.FirstTokenProbeInvoker;
+import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -24,18 +24,18 @@ public class ModelHealthProbeScheduler {
     private final ModelCandidateService modelCandidateService;
     private final ModelRoutingProperties properties;
     private final DynamicModelFactory dynamicModelFactory;
-    private final FirstTokenProbeInvoker firstTokenProbeInvoker;
+    private final ModelProbeAwaiter modelProbeAwaiter;
     private final ModelHealthStore modelHealthStore;
 
     public ModelHealthProbeScheduler(ModelCandidateService modelCandidateService,
                                      ModelRoutingProperties properties,
                                      DynamicModelFactory dynamicModelFactory,
-                                     FirstTokenProbeInvoker firstTokenProbeInvoker,
+                                     ModelProbeAwaiter modelProbeAwaiter,
                                      ModelHealthStore modelHealthStore) {
         this.modelCandidateService = modelCandidateService;
         this.properties = properties;
         this.dynamicModelFactory = dynamicModelFactory;
-        this.firstTokenProbeInvoker = firstTokenProbeInvoker;
+        this.modelProbeAwaiter = modelProbeAwaiter;
         this.modelHealthStore = modelHealthStore;
     }
 
@@ -56,7 +56,9 @@ public class ModelHealthProbeScheduler {
                     modelHealthStore.markFailure(primary.getName(), "无法创建模型实例");
                     continue;
                 }
-                firstTokenProbeInvoker.invoke(chatModel, null, "ping", TimeoutHint.FAST);
+                var builder = org.springframework.ai.chat.client.ChatClient.builder(chatModel).build().prompt();
+                reactor.core.publisher.Flux<String> tokenFlux = builder.user("ping").stream().content();
+                modelProbeAwaiter.awaitFirstToken(tokenFlux, TimeoutHint.FAST);
                 modelHealthStore.markSuccess(primary.getName());
                 logger.debug("主模型健康探测通过: {}", primary.getName());
             } catch (Exception ex) {

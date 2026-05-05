@@ -29,17 +29,17 @@ import java.util.stream.Collectors;
 
 /**
  * 面试编排中枢（InterviewOrchestratorAgent）。
- * 
+ *
  * 核心职责：作为面试流程的"总导演"，协调多个专业智能体（Agent）完成一次完整的面试。
- * 
+ *
  * 职责边界（按一次答题回合）：
  * <ul>
- *   <li>1. 决策层 (DecisionLayerAgent)：根据会话状态（难度、追问阶段、掌握度、历史轮次）生成本轮出题策略。</li>
+ *   <li>1. 决策层：根据会话状态（难度、追问阶段、掌握度、历史轮次）生成本轮出题策略。</li>
  *   <li>2. 知识层 (KnowledgeLayerAgent)：对"题目 + 回答"进行检索增强（RAG），产出支撑评估的专业证据包。</li>
- *   <li>3. 评估层 (EvaluationLayerAgent)：将策略、证据包及上下文输入模型，产出结构化评分与下一题。</li>
- *   <li>4. 成长层 (GrowthLayerAgent)：将评估结果加工为可解释的成长反馈，并在报告阶段生成训练重点。</li>
+ *   <li>3. 评估层：将策略、证据包及上下文输入模型，产出结构化评分与下一题。</li>
+ *   <li>4. 成长层：将评估结果加工为可解释的成长反馈，并在报告阶段生成训练重点。</li>
  * </ul>
- * 
+ *
  * 会话状态管理：每轮将题目、回答、评分、证据写入 history，并实时更新自适应状态机（难度、追问、掌握度）。
  */
 @Component
@@ -49,9 +49,6 @@ public class InterviewOrchestratorAgent {
 
     private final EvaluationAgent evaluationAgent;
     private final KnowledgeLayerAgent knowledgeLayerAgent;
-    private final DecisionLayerAgent decisionLayerAgent;
-    private final EvaluationLayerAgent evaluationLayerAgent;
-    private final GrowthLayerAgent growthLayerAgent;
     private final ResumeLoader resumeLoader;
     private final SessionRepository sessionRepository;
     private final LearningProfileAgent learningProfileAgent;
@@ -61,12 +58,9 @@ public class InterviewOrchestratorAgent {
     /** 自定义画像异步更新线程池 */
     private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, DecisionLayerAgent decisionLayerAgent, EvaluationLayerAgent evaluationLayerAgent, GrowthLayerAgent growthLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileAgent learningProfileAgent, InputSanitizer inputSanitizer, io.github.imzmq.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
+    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileAgent learningProfileAgent, InputSanitizer inputSanitizer, io.github.imzmq.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.evaluationAgent = evaluationAgent;
         this.knowledgeLayerAgent = knowledgeLayerAgent;
-        this.decisionLayerAgent = decisionLayerAgent;
-        this.evaluationLayerAgent = evaluationLayerAgent;
-        this.growthLayerAgent = growthLayerAgent;
         this.resumeLoader = resumeLoader;
         this.sessionRepository = sessionRepository;
         this.learningProfileAgent = learningProfileAgent;
@@ -100,7 +94,7 @@ public class InterviewOrchestratorAgent {
         session.setUserId(normalizedUserId);
         String profileSnapshot = learningProfileAgent.snapshotForPrompt(normalizedUserId, topic);
         session.setProfileSnapshot(profileSnapshot);
-        
+
         // SOP 状态机增强：初始化状态并生成对应环节的首题
         if (skipIntro) {
             session.setCurrentStage(io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE);
@@ -112,7 +106,7 @@ public class InterviewOrchestratorAgent {
         // 这里在后续可以根据 currentStage 进行定制化生成，目前暂且复用原有首题生成
         String firstQuestion = evaluationAgent.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, excludedTopics);
         session.setCurrentQuestion(firstQuestion);
-        
+
         // 持久化会话（支持断电恢复）
         return sessionRepository.save(session);
     }
@@ -121,7 +115,7 @@ public class InterviewOrchestratorAgent {
      * 提交用户回答并推进面试进度。
      *
      * 核心流程：决策(plan) -> 知识检索(gather) -> 评估(evaluate) -> 成长反馈(compose) -> 状态更新。
-     * 
+     *
      * @param sessionId 会话ID
      * @param userAnswer 用户输入的回答文本
      * @return 包含评分、反馈、下一题及实时画像统计的结果对象
@@ -160,13 +154,13 @@ public class InterviewOrchestratorAgent {
         String wrappedAnswer = inputSanitizer.wrapWithBoundary(sanitizedAnswer);
 
         String currentQ = session.getCurrentQuestion();
-        
+
         // 1. 预判下一题的阶段 (因为当前轮结束也就是 history.size() + 1)
         io.github.imzmq.interview.interview.domain.InterviewStage currentStage = session.getCurrentStage();
         io.github.imzmq.interview.interview.domain.InterviewStage expectedNextStage = currentStage;
         int nextHistorySize = session.getHistory().size() + 1;
         int totalQ = session.getTotalQuestions();
-        
+
         if (currentStage == io.github.imzmq.interview.interview.domain.InterviewStage.INTRODUCTION && InterviewStateMachineConfig.isReadyForResumeDive(nextHistorySize, totalQ)) {
             expectedNextStage = io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE;
         } else if (currentStage == io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE && InterviewStateMachineConfig.isReadyForCoreKnowledge(nextHistorySize, totalQ)) {
@@ -177,8 +171,8 @@ public class InterviewOrchestratorAgent {
             expectedNextStage = io.github.imzmq.interview.interview.domain.InterviewStage.CLOSING;
         }
 
-        // 1.1 决策层：确定本轮出题/评估策略
-        DecisionLayerAgent.DecisionPlan decisionPlan = decisionLayerAgent.plan(
+        // 1.1 决策层：确定本轮出题/评估策略（inlined from DecisionLayerAgent）
+        DecisionPlan decisionPlan = planDecision(
                 session.getTopic(),
                 session.getDifficultyLevel().name(),
                 session.getFollowUpState().name(),
@@ -192,8 +186,9 @@ public class InterviewOrchestratorAgent {
         // 2. 知识层：针对问答进行检索增强（用净化后的原文检索，非包装版本）
         RAGService.KnowledgePacket packet = knowledgeLayerAgent.gatherKnowledge(currentQ, sanitizedAnswer);
 
-        // 3. 评估层：产出结构化打分（总分+各维度）与下一题（传入边界包装版本防注入）
-        EvaluationAgent.LayeredEvaluation layeredEvaluation = evaluationLayerAgent.evaluate(
+        // 3. 评估层：产出结构化打分（总分+各维度）与下一题（inlined from EvaluationLayerAgent）
+        String strategy = decisionPlan == null ? "" : decisionPlan.strategyHint();
+        EvaluationAgent.LayeredEvaluation layeredEvaluation = evaluationAgent.evaluateAnswerWithKnowledge(
                 session.getTopic(),
                 currentQ,
                 wrappedAnswer,
@@ -201,14 +196,14 @@ public class InterviewOrchestratorAgent {
                 session.getFollowUpState().name(),
                 session.getTopicMastery(session.getTopic()),
                 session.getProfileSnapshot(),
-                decisionPlan,
+                strategy,
                 packet
         );
         EvaluationAgent.EvaluationResult evaluation = layeredEvaluation.result();
 
-        // 4. 成长层：加工生成更具指导性的成长反馈
-        String growthFeedback = growthLayerAgent.composeRoundFeedback(evaluation.feedback(), decisionPlan, layeredEvaluation.trace());
-        
+        // 4. 成长层：加工生成更具指导性的成长反馈（inlined from GrowthLayerAgent.composeRoundFeedback）
+        String growthFeedback = evaluation.feedback() == null ? "" : evaluation.feedback().trim();
+
         // 5. 记录历史并更新状态（存历史用净化后原文，不带边界标记）
         session.addHistory(new Question(
                 currentQ,
@@ -223,14 +218,14 @@ public class InterviewOrchestratorAgent {
                 String.join("\n", evaluation.conflicts()),
                 growthFeedback
         ));
-        
+
         // 5.1 引入 COLA 状态机进行严格的 SOP 流程控场
-        StateMachine<io.github.imzmq.interview.interview.domain.InterviewStage, InterviewEvent, InterviewContext> stateMachine = 
+        StateMachine<io.github.imzmq.interview.interview.domain.InterviewStage, InterviewEvent, InterviewContext> stateMachine =
                 StateMachineFactory.get(InterviewStateMachineConfig.MACHINE_ID);
-        
+
         InterviewContext context = new InterviewContext(session, sanitizedAnswer, evaluation.score());
         io.github.imzmq.interview.interview.domain.InterviewStage previousStage = session.getCurrentStage();
-        
+
         // 尝试触发多个阶段流转事件（COLA 状态机会根据 Condition 自动决定是否流转）
         // 因为在一个回合中，可能刚好满足进入下一个阶段的条件
         io.github.imzmq.interview.interview.domain.InterviewStage nextStage = session.getCurrentStage();
@@ -330,7 +325,7 @@ public class InterviewOrchestratorAgent {
      * 生成最终面试报告，并将本次练习结果沉淀进学习画像。
      *
      * 流程：总结报告 -> 写入画像事件 -> 生成成长建议 -> 返回报告对象。
-     * 
+     *
      * @param sessionId 会话ID
      * @param userId 用户ID
      * @return 包含总结、薄弱点、错误、改进方向及平均分的最终报告
@@ -348,11 +343,11 @@ public class InterviewOrchestratorAgent {
             profileUserId = learningProfileAgent.normalizeUserId(userId);
             session.setUserId(profileUserId);
         }
-        
+
         // 生成总结与画像更新
         String targetedSuggestion = learningProfileAgent.recommend(profileUserId, "interview");
         EvaluationAgent.FinalReportContent report = evaluationAgent.summarize(session.getTopic(), session.getHistory(), targetedSuggestion, session.getRollingSummary());
-        
+
         // 异步沉淀为画像事件（LearningEvent），避免阻塞最终报告的返回，使用自定义线程池 profileUpdateExecutor
         final String finalProfileUserId = profileUserId;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
@@ -374,7 +369,7 @@ public class InterviewOrchestratorAgent {
                 logger.error("====== [InterviewOrchestratorAgent] 异步更新学习画像失败 ======", e);
             }
         }, profileUpdateExecutor);
-        
+
         // 填充默认值与精炼成长建议
         String summary = report.summary().isBlank() ? "本次面试已完成。建议重点复习评分较低题目的核心知识点。" : report.summary();
         String incomplete = report.incomplete().isBlank() ? "暂无明显不完整回答。" : report.incomplete();
@@ -382,19 +377,96 @@ public class InterviewOrchestratorAgent {
         String wrong = report.wrong().isBlank() ? "暂无明确错误结论。" : report.wrong();
         String obsidianUpdates = report.obsidianUpdates().isBlank() ? "建议补充：核心定义、实现原理、常见误区、边界条件。" : report.obsidianUpdates();
         String nextFocusSeed = report.nextFocus().isBlank() ? targetedSuggestion : report.nextFocus();
-        
-        // 成长层精炼最终建议
-        String nextFocus = growthLayerAgent.refineNextFocus(nextFocusSeed, targetedSuggestion, session.getAverageScore());
+
+        // 成长层精炼最终建议（inlined from GrowthLayerAgent.refineNextFocus）
+        String nextFocus = refineNextFocus(nextFocusSeed, targetedSuggestion, session.getAverageScore());
 
         FinalReport finalReport = new FinalReport(summary, incomplete, weak, wrong, obsidianUpdates, nextFocus, session.getAverageScore(), session.getHistory().size());
-        
-        // 发布面试完成事件到 MQ (A2ABus) 以便后续解耦处理（如更新画像、推送通知等）
-        io.github.imzmq.interview.agent.task.TaskResponse a2aResponse = io.github.imzmq.interview.agent.task.TaskResponse.ok(finalReport);
-        // 这里不直接依赖 A2ABus，因为我们在 TaskRouterAgent 层面统一处理了 TaskResponse 的回传，
-        // 但由于 generateFinalReport 是被调用的，路由代理会在结束时发出 A2AStatus.DONE 的消息。
-        // 如果想要发送业务意义更强的事件，应该通过 TaskRouterAgent 的上层或由 Orchestrator 直接注入 A2ABus。
-        
+
         return finalReport;
+    }
+
+    // ---------------------------------------------------------------
+    // Private helpers — inlined from former LayerAgents
+    // ---------------------------------------------------------------
+
+    /**
+     * Inlined from DecisionLayerAgent — 生成当前轮次的决策计划。
+     */
+    private DecisionPlan planDecision(String topic, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, int answeredCount, io.github.imzmq.interview.interview.domain.InterviewStage currentStage, io.github.imzmq.interview.interview.domain.InterviewStage nextStage) {
+        String safeTopic = topic == null ? "当前主题" : topic;
+        String safeDifficulty = difficultyLevel == null ? "BASIC" : difficultyLevel;
+        String safeFollowUp = followUpState == null ? "PROBE" : followUpState;
+        String safeProfile = profileSnapshot == null ? "" : profileSnapshot;
+
+        StringBuilder strategy = new StringBuilder();
+
+        // 1. 评估当前回答的策略
+        strategy.append("【评估策略】：");
+        if (topicMastery < 45 || "REMEDIATE".equalsIgnoreCase(safeFollowUp)) {
+            strategy.append("当前掌握度较低或处于补救追问状态。请优先关注候选人对基础定义、关键机制的理解，指出其明显误区。");
+        } else if (topicMastery > 78 || "ADVANCE".equalsIgnoreCase(safeFollowUp) || "ADVANCED".equalsIgnoreCase(safeDifficulty)) {
+            strategy.append("当前处于高级深挖状态。请严格审视候选人对设计取舍、复杂度与故障处理的回答，避免给空泛的背诵打高分。");
+        } else {
+            strategy.append("保持中等强度评估，兼顾理论与实践。");
+        }
+
+        // 2. 结合历史画像进行针对性强化
+        if (!safeProfile.isBlank()) {
+            strategy.append(" 评估和追问时，请务必参考历史画像中的薄弱点(Weaknesses)。");
+        }
+
+        // 3. 生成下一题的 SOP 策略
+        strategy.append("\n【出题策略】：当前处于【").append(currentStage != null ? currentStage.getDescription() : "未知环节").append("】阶段。");
+        if (nextStage != null && currentStage != nextStage) {
+            strategy.append("注意：根据面试进度，下一题将**进入全新的【").append(nextStage.getDescription()).append("】阶段**！");
+        }
+
+        String targetStageName = nextStage != null ? nextStage.name() : (currentStage != null ? currentStage.name() : "");
+        if ("INTRODUCTION".equals(targetStageName)) {
+            strategy.append("请礼貌回应自我介绍，并基于简历内容或常见破冰话题生成一个轻松的切入问题。");
+        } else if ("RESUME_DEEP_DIVE".equals(targetStageName)) {
+            strategy.append("请务必结合用户的项目经验，针对实际项目难点、系统设计取舍、高并发场景等进行深挖。");
+        } else if ("CORE_KNOWLEDGE".equals(targetStageName)) {
+            strategy.append("重点考察核心专业技能（如八股文、底层原理、框架源码），检验技术深度。");
+        } else if ("SCENARIO_OR_CODING".equals(targetStageName)) {
+            strategy.append("请给出一个具体的业务场景设计题或算法手撕题，要求给出实现思路或伪代码。");
+        } else if ("CLOSING".equals(targetStageName)) {
+            strategy.append("面试已接近尾声，请进行简短收尾，并询问候选人是否有关于团队、业务或技术栈的反问。");
+        }
+
+        // 4. 构建当前轮次的聚焦重点
+        String focus = "围绕" + safeTopic + "进行第" + (answeredCount + 1) + "题，当前难度为" + safeDifficulty + "。";
+
+        return new DecisionPlan(strategy.toString(), focus);
+    }
+
+    /**
+     * Inlined from GrowthLayerAgent.refineNextFocus — 精炼下一阶段的学习/面试重点建议。
+     */
+    private String refineNextFocus(String nextFocus, String targetedSuggestion, double averageScore) {
+        String base = (nextFocus == null || nextFocus.isBlank()) ? targetedSuggestion : nextFocus;
+        String safeBase = base == null ? "" : base.trim();
+
+        if (averageScore >= 85) {
+            return safeBase + "\n- 增加跨场景追问与设计取舍题。";
+        }
+        if (averageScore < 60) {
+            return safeBase + "\n- 先做基础概念与边界条件专项复练。";
+        }
+        return safeBase + "\n- 继续保持原理与实战结合训练。";
+    }
+
+    /**
+     * 决策计划结果类（inlined from DecisionLayerAgent.DecisionPlan）。
+     *
+     * @param strategyHint 给大模型的策略提示词
+     * @param focusHint 给大模型的聚焦重点提示词
+     */
+    private record DecisionPlan(
+            String strategyHint,
+            String focusHint
+    ) {
     }
 
     /**
@@ -487,11 +559,3 @@ public class InterviewOrchestratorAgent {
     ) {
     }
 }
-
-
-
-
-
-
-
-

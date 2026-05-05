@@ -6,22 +6,24 @@ import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHa
 import io.github.imzmq.interview.knowledge.application.observability.TraceService;
 import io.github.imzmq.interview.modelrouting.execution.ModelRoutingExecutor;
 import io.github.imzmq.interview.modelrouting.execution.ModelSelector;
-import io.github.imzmq.interview.modelrouting.execution.RoutingExecutionTemplate;
-import io.github.imzmq.interview.modelrouting.invoker.FirstTokenProbeInvoker;
-import io.github.imzmq.interview.modelrouting.invoker.MetadataChatInvoker;
-import io.github.imzmq.interview.modelrouting.invoker.StreamingChatInvoker;
 import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import java.util.concurrent.atomic.AtomicBoolean;
+import reactor.core.publisher.Flux;
+
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import io.github.imzmq.interview.core.trace.RAGTraceContext;
 import io.github.imzmq.interview.common.api.BusinessException;
@@ -35,10 +37,9 @@ public class RoutingChatService {
     private final ModelRoutingProperties properties;
     private final ModelHealthStore modelHealthStore;
     private final DynamicModelFactory dynamicModelFactory;
-    private final RoutingExecutionTemplate routingExecutionTemplate;
-    private final MetadataChatInvoker metadataChatInvoker;
-    private final FirstTokenProbeInvoker firstTokenProbeInvoker;
-    private final StreamingChatInvoker streamingChatInvoker;
+    private final ModelProbeAwaiter modelProbeAwaiter;
+    private final ModelSelector modelSelector;
+    private final ModelRoutingExecutor modelRoutingExecutor;
     private final ChatModel fallbackChatModel;
     private final AtomicLong routeFallbackCount = new AtomicLong(0);
     private final AtomicLong firstPacketTimeoutCount = new AtomicLong(0);
@@ -53,50 +54,19 @@ public class RoutingChatService {
             ModelHealthStore modelHealthStore,
             DynamicModelFactory dynamicModelFactory,
             ModelProbeAwaiter modelProbeAwaiter,
-            RoutingExecutionTemplate routingExecutionTemplate,
-            MetadataChatInvoker metadataChatInvoker,
-            FirstTokenProbeInvoker firstTokenProbeInvoker,
-            StreamingChatInvoker streamingChatInvoker,
             @Qualifier("openAiChatModel") ChatModel fallbackChatModel
     ) {
         this.properties = properties;
         this.modelHealthStore = modelHealthStore;
         this.dynamicModelFactory = dynamicModelFactory;
-        this.routingExecutionTemplate = routingExecutionTemplate;
-        this.metadataChatInvoker = metadataChatInvoker;
-        this.firstTokenProbeInvoker = firstTokenProbeInvoker;
-        this.streamingChatInvoker = streamingChatInvoker;
+        this.modelProbeAwaiter = modelProbeAwaiter;
+        this.modelSelector = modelSelector;
+        this.modelRoutingExecutor = modelRoutingExecutor;
         this.fallbackChatModel = fallbackChatModel;
     }
 
-    public RoutingChatService(
-            java.util.concurrent.Executor ragRetrieveExecutor,
-            ModelRoutingProperties properties,
-            ModelSelector modelSelector,
-            ModelRoutingExecutor modelRoutingExecutor,
-            ModelHealthStore modelHealthStore,
-            DynamicModelFactory dynamicModelFactory,
-            ModelProbeAwaiter modelProbeAwaiter,
-            ChatModel fallbackChatModel
-    ) {
-        this(
-                ragRetrieveExecutor,
-                properties,
-                modelSelector,
-                modelRoutingExecutor,
-                modelHealthStore,
-                dynamicModelFactory,
-                modelProbeAwaiter,
-                new RoutingExecutionTemplate(properties, modelSelector, modelRoutingExecutor),
-                new MetadataChatInvoker(),
-                new FirstTokenProbeInvoker(modelProbeAwaiter),
-                new StreamingChatInvoker(),
-                fallbackChatModel
-        );
-    }
-
     public String call(String prompt, ModelRouteType routeType, String stage) {
-        return routingExecutionTemplate.execute(routeType, null, stage,
+        return executeRoutingTemplate(routeType, null, stage,
                 () -> callWithModel(fallbackChatModel, prompt),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -116,7 +86,7 @@ public class RoutingChatService {
     }
 
     public String callWithoutFallback(String prompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
-        return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
+        return executeRoutingTemplate(routeType, preferredCandidateName, stage,
                 () -> {
                     throw new BusinessException(ErrorCode.MODEL_NO_CANDIDATE, "routeType=" + routeType + ", stage=" + stage);
                 },
@@ -138,7 +108,7 @@ public class RoutingChatService {
     }
 
     public String call(String systemPrompt, String userPrompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
-        return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
+        return executeRoutingTemplate(routeType, preferredCandidateName, stage,
                 () -> callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content(),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -159,11 +129,11 @@ public class RoutingChatService {
      * 如果某候选模型响应过慢（未在规定时间内返回首包），将抛出超时异常，触发熔断器状态转换并降级到下一个模型。
      */
     public String callWithFirstPacketProbe(String prompt, ModelRouteType routeType, TimeoutHint hint, String stage) {
-        return routingExecutionTemplate.execute(routeType, stage + "-first-token",
+        return executeRoutingTemplate(routeType, stage + "-first-token",
                 () -> callWithModel(fallbackChatModel, prompt),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
-            String result = firstTokenProbeInvoker.invoke(chatModel, null, prompt, hint);
+            String result = invokeFirstTokenProbe(chatModel, null, prompt, hint);
             logger.info("首Token探测通过: stage={}, candidate={}, hint={}, state={}",
                     stage, candidate.name(), hint, modelHealthStore.stateOf(candidate.name()));
             return result;
@@ -180,7 +150,7 @@ public class RoutingChatService {
      */
     public String callStream(String prompt, ModelRouteType routeType, String stage,
                              Consumer<String> tokenConsumer) {
-        return routingExecutionTemplate.execute(routeType, stage,
+        return executeRoutingTemplate(routeType, stage,
                 () -> streamWithModel(fallbackChatModel, null, prompt, tokenConsumer),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -196,7 +166,7 @@ public class RoutingChatService {
 
     public String callStream(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage,
                              Consumer<String> tokenConsumer) {
-        return routingExecutionTemplate.execute(routeType, stage,
+        return executeRoutingTemplate(routeType, stage,
                 () -> streamWithModel(fallbackChatModel, systemPrompt, userPrompt, tokenConsumer),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -250,10 +220,6 @@ public class RoutingChatService {
         }
     }
 
-    private String streamWithModel(ChatModel chatModel, String systemPrompt, String userPrompt, Consumer<String> tokenConsumer) {
-        return streamingChatInvoker.invoke(chatModel, systemPrompt, userPrompt, tokenConsumer);
-    }
-
     /**
      * 执行带首包探测与兜底逻辑的模型调用。
      * 常用于前端对响应实时性要求极高的场景（如首题生成），超时或失败后返回统一的 fallback 文本。
@@ -296,11 +262,11 @@ public class RoutingChatService {
                                                    TimeoutHint hint,
                                                    String stage) {
         try {
-            return routingExecutionTemplate.execute(routeType, stage + "-first-token",
+            return executeRoutingTemplate(routeType, stage + "-first-token",
                     () -> callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt).content(),
                     candidate -> {
                 ChatModel chatModel = resolveChatModel(candidate);
-                String result = firstTokenProbeInvoker.invoke(chatModel, systemPrompt, userPrompt, hint);
+                String result = invokeFirstTokenProbe(chatModel, systemPrompt, userPrompt, hint);
                 logger.info("首Token探测通过: stage={}, candidate={}, hint={}, state={}",
                         stage, candidate.name(), hint, modelHealthStore.stateOf(candidate.name()));
                 return result;
@@ -348,7 +314,7 @@ public class RoutingChatService {
      * @return 包含响应内容与元数据的 RoutingResult
      */
     public RoutingResult callWithMetadata(String prompt, ModelRouteType routeType, String stage) {
-        return routingExecutionTemplate.execute(routeType, stage,
+        return executeRoutingTemplate(routeType, stage,
                 () -> callWithModelMetadata(fallbackChatModel, null, prompt),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -368,7 +334,7 @@ public class RoutingChatService {
     }
 
     public RoutingResult callWithMetadata(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage) {
-        return routingExecutionTemplate.execute(routeType, stage,
+        return executeRoutingTemplate(routeType, stage,
                 () -> callWithModelMetadata(fallbackChatModel, systemPrompt, userPrompt),
                 candidate -> {
             ChatModel chatModel = resolveChatModel(candidate);
@@ -387,12 +353,109 @@ public class RoutingChatService {
         });
     }
 
+    // ---------------------------------------------------------------
+    // Private helpers — inlined from former invoker/execution classes
+    // ---------------------------------------------------------------
+
+    /**
+     * Inlined from MetadataChatInvoker — non-streaming chat call with token metadata.
+     */
     private RoutingResult callWithModelMetadata(ChatModel chatModel, String systemPrompt, String userPrompt) {
-        return metadataChatInvoker.invoke(chatModel, systemPrompt, userPrompt);
+        long start = System.currentTimeMillis();
+        var builder = ChatClient.builder(chatModel).build().prompt();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.system(systemPrompt);
+        }
+        ChatResponse response = builder.user(userPrompt).call().chatResponse();
+
+        long cost = System.currentTimeMillis() - start;
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            throw new BusinessException(ErrorCode.MODEL_RESPONSE_EMPTY);
+        }
+
+        String content = response.getResult().getOutput().getText();
+        int inputTokens = 0;
+        int outputTokens = 0;
+        if (response.getMetadata() != null && response.getMetadata().getUsage() != null) {
+            inputTokens = response.getMetadata().getUsage().getPromptTokens() != null
+                    ? response.getMetadata().getUsage().getPromptTokens().intValue() : 0;
+            outputTokens = response.getMetadata().getUsage().getCompletionTokens() != null
+                    ? response.getMetadata().getUsage().getCompletionTokens().intValue() : 0;
+        }
+
+        return new RoutingResult(content, inputTokens, outputTokens, cost);
     }
 
     private String callWithModel(ChatModel chatModel, String prompt) {
         return callWithModelMetadata(chatModel, null, prompt).content();
+    }
+
+    /**
+     * Inlined from StreamingChatInvoker — streaming chat call with per-token callback.
+     */
+    private String streamWithModel(ChatModel chatModel, String systemPrompt, String userPrompt, Consumer<String> tokenConsumer) {
+        var builder = ChatClient.builder(chatModel).build().prompt();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.system(systemPrompt);
+        }
+        Flux<String> tokenFlux = builder.user(userPrompt).stream().content();
+
+        List<String> tokens = tokenFlux
+                .doOnNext(token -> {
+                    if (token != null && !token.isEmpty()) {
+                        tokenConsumer.accept(token);
+                    }
+                })
+                .collectList()
+                .block();
+
+        if (tokens == null || tokens.isEmpty()) {
+            throw new BusinessException(ErrorCode.MODEL_STREAM_EMPTY);
+        }
+        return String.join("", tokens);
+    }
+
+    /**
+     * Inlined from FirstTokenProbeInvoker — stream call with first-token timeout probe.
+     */
+    private String invokeFirstTokenProbe(ChatModel chatModel, String systemPrompt, String userPrompt, TimeoutHint hint) {
+        var builder = ChatClient.builder(chatModel).build().prompt();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.system(systemPrompt);
+        }
+        Flux<String> tokenFlux = builder.user(userPrompt).stream().content();
+        return modelProbeAwaiter.awaitFirstToken(tokenFlux, hint);
+    }
+
+    /**
+     * Inlined from RoutingExecutionTemplate — select candidates, execute with circuit breaker, fallback on failure.
+     */
+    private <T> T executeRoutingTemplate(ModelRouteType routeType,
+                                         String stage,
+                                         Supplier<T> fallbackSupplier,
+                                         Function<ModelRoutingCandidate, T> candidateExecutor) {
+        return executeRoutingTemplate(routeType, null, stage, fallbackSupplier, candidateExecutor);
+    }
+
+    private <T> T executeRoutingTemplate(ModelRouteType routeType,
+                                         String preferredCandidateName,
+                                         String stage,
+                                         Supplier<T> fallbackSupplier,
+                                         Function<ModelRoutingCandidate, T> candidateExecutor) {
+        if (!properties.isEnabled()) {
+            return fallbackSupplier.get();
+        }
+        List<ModelRoutingCandidate> candidates = modelSelector.select(routeType, preferredCandidateName);
+        if (candidates.isEmpty()) {
+            return fallbackSupplier.get();
+        }
+        try {
+            return modelRoutingExecutor.execute(candidates, candidateExecutor::apply, stage);
+        } catch (RuntimeException ex) {
+            logger.warn("模型路由候选全部失败，执行fallback: stage={}, routeType={}, reason={}",
+                    stage, routeType, ex.getMessage());
+            return fallbackSupplier.get();
+        }
     }
 
     private boolean containsTimeout(Throwable throwable) {
@@ -407,8 +470,3 @@ public class RoutingChatService {
         return false;
     }
 }
-
-
-
-
-

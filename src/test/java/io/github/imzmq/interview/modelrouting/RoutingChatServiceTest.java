@@ -4,6 +4,7 @@ import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.modelrouting.execution.ModelRoutingExecutor;
 import io.github.imzmq.interview.modelrouting.execution.ModelSelector;
 import io.github.imzmq.interview.modelrouting.provider.YamlCandidateProvider;
@@ -48,6 +49,7 @@ class RoutingChatServiceTest {
                 () -> "fallback-ok",
                 "prompt",
                 ModelRouteType.GENERAL,
+                TimeoutHint.NORMAL,
                 "first-packet-test"
         );
 
