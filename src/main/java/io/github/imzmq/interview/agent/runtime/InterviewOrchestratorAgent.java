@@ -1,12 +1,8 @@
 package io.github.imzmq.interview.agent.runtime;
 
-import com.alibaba.cola.statemachine.StateMachine;
-import com.alibaba.cola.statemachine.StateMachineFactory;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
+import io.github.imzmq.interview.interview.domain.InterviewStage;
 import io.github.imzmq.interview.interview.domain.Question;
-import io.github.imzmq.interview.interview.domain.statemachine.InterviewContext;
-import io.github.imzmq.interview.interview.domain.statemachine.InterviewEvent;
-import io.github.imzmq.interview.interview.domain.statemachine.InterviewStateMachineConfig;
 import io.github.imzmq.interview.rag.core.ResumeLoader;
 import io.github.imzmq.interview.security.core.InputSanitizer;
 import io.github.imzmq.interview.learning.application.LearningEvent;
@@ -97,9 +93,9 @@ public class InterviewOrchestratorAgent {
 
         // SOP 状态机增强：初始化状态并生成对应环节的首题
         if (skipIntro) {
-            session.setCurrentStage(io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE);
+            session.setCurrentStage(InterviewStage.RESUME_DEEP_DIVE);
         } else {
-            session.setCurrentStage(io.github.imzmq.interview.interview.domain.InterviewStage.INTRODUCTION);
+            session.setCurrentStage(InterviewStage.INTRODUCTION);
         }
 
         // 3) 生成首题：输入包含简历与画像，使问题更贴近个人经历与当前薄弱点
@@ -156,19 +152,19 @@ public class InterviewOrchestratorAgent {
         String currentQ = session.getCurrentQuestion();
 
         // 1. 预判下一题的阶段 (因为当前轮结束也就是 history.size() + 1)
-        io.github.imzmq.interview.interview.domain.InterviewStage currentStage = session.getCurrentStage();
-        io.github.imzmq.interview.interview.domain.InterviewStage expectedNextStage = currentStage;
+        InterviewStage currentStage = session.getCurrentStage();
+        InterviewStage expectedNextStage = currentStage;
         int nextHistorySize = session.getHistory().size() + 1;
         int totalQ = session.getTotalQuestions();
 
-        if (currentStage == io.github.imzmq.interview.interview.domain.InterviewStage.INTRODUCTION && InterviewStateMachineConfig.isReadyForResumeDive(nextHistorySize, totalQ)) {
-            expectedNextStage = io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE;
-        } else if (currentStage == io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE && InterviewStateMachineConfig.isReadyForCoreKnowledge(nextHistorySize, totalQ)) {
-            expectedNextStage = io.github.imzmq.interview.interview.domain.InterviewStage.CORE_KNOWLEDGE;
-        } else if (currentStage == io.github.imzmq.interview.interview.domain.InterviewStage.CORE_KNOWLEDGE && InterviewStateMachineConfig.isReadyForCoding(nextHistorySize, totalQ)) {
-            expectedNextStage = io.github.imzmq.interview.interview.domain.InterviewStage.SCENARIO_OR_CODING;
-        } else if (currentStage == io.github.imzmq.interview.interview.domain.InterviewStage.SCENARIO_OR_CODING && InterviewStateMachineConfig.isReadyForClosing(nextHistorySize, totalQ)) {
-            expectedNextStage = io.github.imzmq.interview.interview.domain.InterviewStage.CLOSING;
+        if (currentStage == InterviewStage.INTRODUCTION && isReadyForResumeDive(nextHistorySize, totalQ)) {
+            expectedNextStage = InterviewStage.RESUME_DEEP_DIVE;
+        } else if (currentStage == InterviewStage.RESUME_DEEP_DIVE && isReadyForCoreKnowledge(nextHistorySize, totalQ)) {
+            expectedNextStage = InterviewStage.CORE_KNOWLEDGE;
+        } else if (currentStage == InterviewStage.CORE_KNOWLEDGE && isReadyForCoding(nextHistorySize, totalQ)) {
+            expectedNextStage = InterviewStage.SCENARIO_OR_CODING;
+        } else if (currentStage == InterviewStage.SCENARIO_OR_CODING && isReadyForClosing(nextHistorySize, totalQ)) {
+            expectedNextStage = InterviewStage.CLOSING;
         }
 
         // 1.1 决策层：确定本轮出题/评估策略（inlined from DecisionLayerAgent）
@@ -219,36 +215,20 @@ public class InterviewOrchestratorAgent {
                 growthFeedback
         ));
 
-        // 5.1 引入 COLA 状态机进行严格的 SOP 流程控场
-        StateMachine<io.github.imzmq.interview.interview.domain.InterviewStage, InterviewEvent, InterviewContext> stateMachine =
-                StateMachineFactory.get(InterviewStateMachineConfig.MACHINE_ID);
-
-        InterviewContext context = new InterviewContext(session, sanitizedAnswer, evaluation.score());
-        io.github.imzmq.interview.interview.domain.InterviewStage previousStage = session.getCurrentStage();
-
-        // 尝试触发多个阶段流转事件（COLA 状态机会根据 Condition 自动决定是否流转）
-        // 因为在一个回合中，可能刚好满足进入下一个阶段的条件
-        io.github.imzmq.interview.interview.domain.InterviewStage nextStage = session.getCurrentStage();
-        if (previousStage == io.github.imzmq.interview.interview.domain.InterviewStage.INTRODUCTION) {
-            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.FINISH_INTRO, context);
-            if (nextStage != null) session.setCurrentStage(nextStage);
-        } else if (previousStage == io.github.imzmq.interview.interview.domain.InterviewStage.RESUME_DEEP_DIVE) {
-            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_RESUME_DIVE, context);
-            if (nextStage != null) session.setCurrentStage(nextStage);
-        } else if (previousStage == io.github.imzmq.interview.interview.domain.InterviewStage.CORE_KNOWLEDGE) {
-            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_CORE_KNOWLEDGE, context);
-            if (nextStage != null) session.setCurrentStage(nextStage);
-        } else if (previousStage == io.github.imzmq.interview.interview.domain.InterviewStage.SCENARIO_OR_CODING) {
-            nextStage = stateMachine.fireEvent(previousStage, InterviewEvent.COMPLETE_CODING, context);
-            if (nextStage != null) session.setCurrentStage(nextStage);
-        }
-
-        // 当面试已结束但状态机还没到达 CLOSING 时，强制跳转
+        // 5.1 Direct stage transition (replaces COLA statemachine ceremonial overlay)
         boolean finished = session.getHistory().size() >= session.getTotalQuestions();
-        if (finished && nextStage != io.github.imzmq.interview.interview.domain.InterviewStage.CLOSING) {
-            nextStage = io.github.imzmq.interview.interview.domain.InterviewStage.CLOSING;
-            session.setCurrentStage(nextStage);
+        InterviewStage nextStage;
+        if (finished) {
+            nextStage = InterviewStage.CLOSING;
+        } else if (expectedNextStage != null && expectedNextStage != currentStage) {
+            nextStage = expectedNextStage;
+        } else {
+            nextStage = currentStage;
         }
+        session.setCurrentStage(nextStage);
+        logger.info("====== [Interview] SOP 阶段流转: {} -> {} (会话: {}, 历史: {}/{}) ======",
+                currentStage.name(), nextStage.name(), session.getId(),
+                session.getHistory().size(), session.getTotalQuestions());
 
         // [长对话滚动式总结优化]：当对话轮数达到阈值（如5轮）时，触发 RocketMQ 异步总结任务
         int dialogueCount = session.getHistory().size();
@@ -393,7 +373,7 @@ public class InterviewOrchestratorAgent {
     /**
      * Inlined from DecisionLayerAgent — 生成当前轮次的决策计划。
      */
-    private DecisionPlan planDecision(String topic, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, int answeredCount, io.github.imzmq.interview.interview.domain.InterviewStage currentStage, io.github.imzmq.interview.interview.domain.InterviewStage nextStage) {
+    private DecisionPlan planDecision(String topic, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, int answeredCount, InterviewStage currentStage, InterviewStage nextStage) {
         String safeTopic = topic == null ? "当前主题" : topic;
         String safeDifficulty = difficultyLevel == null ? "BASIC" : difficultyLevel;
         String safeFollowUp = followUpState == null ? "PROBE" : followUpState;
@@ -524,6 +504,29 @@ public class InterviewOrchestratorAgent {
                 .filter(item -> !item.isBlank())
                 .limit(5)
                 .toList();
+    }
+
+    // --- Stage transition threshold helpers (inlined from InterviewStateMachineConfig) ---
+
+    private static boolean isReadyForResumeDive(int historySize, int totalQuestions) {
+        return historySize >= 1;
+    }
+
+    private static boolean isReadyForCoreKnowledge(int historySize, int totalQuestions) {
+        int remaining = Math.max(0, totalQuestions - 2);
+        int resumeCount = Math.max(1, (int) (remaining * 0.3));
+        return historySize >= 1 + resumeCount;
+    }
+
+    private static boolean isReadyForCoding(int historySize, int totalQuestions) {
+        int remaining = Math.max(0, totalQuestions - 2);
+        int resumeCount = Math.max(1, (int) (remaining * 0.3));
+        int coreCount = Math.max(1, (int) (remaining * 0.4));
+        return historySize >= 1 + resumeCount + coreCount;
+    }
+
+    private static boolean isReadyForClosing(int historySize, int totalQuestions) {
+        return historySize >= Math.max(1, totalQuestions - 1);
     }
 
     public record AnswerResult(
