@@ -1,0 +1,306 @@
+<template>
+  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased min-h-screen">
+    <!-- Header -->
+    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+      <div class="flex items-center gap-4">
+        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">RAG 监控 <span class="text-slate-500 dark:text-slate-400 font-medium text-sm ml-2">/ 检索质量仪表盘</span></h1>
+      </div>
+    </header>
+
+    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-[#f9fafb] dark:bg-slate-950 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+      <!-- Metric Cards Row -->
+      <div class="grid grid-cols-6 gap-4 mb-8">
+        <div v-for="card in metricCards" :key="card.label" class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{{ card.label }}</div>
+          <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ card.value }}</div>
+          <div v-if="card.change !== null" class="text-xs mt-1 font-bold" :class="card.change >= 0 ? 'text-emerald-600' : 'text-red-500'">
+            {{ card.change >= 0 ? '↑' : '↓' }} {{ Math.abs(card.change) }}% vs 昨日
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-6 mb-8">
+        <!-- Trend Chart (2/3) -->
+        <div class="col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">趋势分析</h3>
+            <div class="flex gap-2">
+              <button v-for="range in timeRanges" :key="range.value" @click="selectedRange = range.value; loadHistory()"
+                      class="px-3 py-1 rounded-lg text-xs font-bold transition-all"
+                      :class="selectedRange === range.value ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'">
+                {{ range.label }}
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-3 mb-4">
+            <label v-for="metric in metrics" :key="metric.key" class="flex items-center gap-1 text-xs font-bold text-slate-500 cursor-pointer">
+              <input type="checkbox" :value="metric.key" v-model="selectedMetrics" @change="renderChart" class="accent-indigo-600" />
+              {{ metric.label }}
+            </label>
+          </div>
+          <canvas ref="chartCanvas" height="300"></canvas>
+        </div>
+
+        <!-- Alert Panel (1/3) -->
+        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+          <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">告警状态</h3>
+          <div class="rounded-xl p-6 mb-4 text-center"
+               :class="alertBgClass">
+            <div class="text-4xl font-black">{{ alertLevel }}</div>
+            <div class="text-xs font-bold mt-2 uppercase tracking-widest">当前级别</div>
+          </div>
+          <div v-if="alertTags.length > 0" class="space-y-2 mb-4">
+            <div v-for="tag in alertTags" :key="tag" class="px-3 py-2 rounded-lg text-xs font-bold"
+                 :class="alertTagClass(tag)">
+              {{ formatAlertTag(tag) }}
+            </div>
+          </div>
+          <div v-else class="text-xs text-slate-400 mb-4">无活跃告警</div>
+          <button @click="$router.push('/ops')" class="w-full py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all">
+            查看所有 Trace →
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent Traces -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+          <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">最近 Trace</h3>
+          <select v-model="feedbackFilter" @change="loadTraces" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold text-slate-600">
+            <option value="">全部</option>
+            <option value="onlyLiked">仅点赞</option>
+            <option value="onlyDisliked">仅点踩</option>
+            <option value="noFeedback">无反馈</option>
+          </select>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
+              <tr>
+                <th class="px-4 py-3 text-left">时间</th>
+                <th class="px-4 py-3 text-left">Trace ID</th>
+                <th class="px-4 py-3 text-right">耗时</th>
+                <th class="px-4 py-3 text-right">召回数</th>
+                <th class="px-4 py-3 text-left">风险</th>
+                <th class="px-4 py-3 text-center">反馈</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="trace in recentTraces" :key="trace.traceId"
+                  @click="$router.push(`/ops/${trace.traceId}`)"
+                  class="border-t border-slate-100 dark:border-slate-800 hover:bg-indigo-50/30 cursor-pointer transition-all">
+                <td class="px-4 py-3 font-mono text-slate-500">{{ formatTime(trace.startedAt) }}</td>
+                <td class="px-4 py-3 font-mono font-bold text-slate-700">{{ trace.traceId.slice(0, 12) }}...</td>
+                <td class="px-4 py-3 text-right font-mono">{{ trace.businessDurationMs }}ms</td>
+                <td class="px-4 py-3 text-right font-mono">{{ trace.retrievedDocCount ?? '-' }}</td>
+                <td class="px-4 py-3">
+                  <span v-if="trace.riskTags && trace.riskTags.length" class="text-amber-600 font-bold">{{ trace.riskTags[0] }}</span>
+                  <span v-else class="text-emerald-600">-</span>
+                </td>
+                <td class="px-4 py-3 text-center">{{ getTraceFeedbackIcon(trace.traceId) }}</td>
+                <td class="px-4 py-3">
+                  <span class="material-symbols-outlined text-slate-400 text-sm">chevron_right</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { loadRagDashboard, loadMetricsHistory } from '../api/admin'
+import { loadOpsTraces } from '../api/admin'
+
+defineProps({
+  sidebarCollapsed: { type: Boolean, default: false }
+})
+
+const dashboard = ref({ currentHour: {}, alertLevel: 'NONE', alertTags: [], riskTagCounts: {} })
+const recentTraces = ref([])
+const feedbackFilter = ref('')
+const historySnapshots = ref([])
+const selectedRange = ref(24)
+const selectedMetrics = ref(['avgLatencyMs', 'p95LatencyMs', 'successRate'])
+const chartCanvas = ref(null)
+let chartInstance = null
+let refreshTimer = null
+
+const timeRanges = [
+  { label: '24h', value: 24 },
+  { label: '7d', value: 168 }
+]
+
+const metrics = [
+  { key: 'avgLatencyMs', label: '平均延迟' },
+  { key: 'p95LatencyMs', label: 'P95延迟' },
+  { key: 'successRate', label: '成功率' },
+  { key: 'satisfactionRate', label: '满意度' },
+  { key: 'fallbackRate', label: 'Fallback率' },
+  { key: 'emptyRetrievalRate', label: '空召回率' },
+  { key: 'traceCount', label: '请求量' }
+]
+
+const metricCards = computed(() => {
+  const curr = dashboard.value.currentHour || {}
+  const feedback = curr.feedback || {}
+  return [
+    { label: 'Trace 总数', value: curr.traceCount ?? 0 },
+    { label: '成功率', value: curr.successRate ?? '0%' },
+    { label: '平均延迟', value: (curr.avgLatencyMs ?? 0) + 'ms' },
+    { label: 'P95 延迟', value: (curr.p95LatencyMs ?? 0) + 'ms' },
+    { label: 'Fallback 率', value: curr.fallbackRate ?? '0%' },
+    { label: '满意度', value: feedback.satisfactionRate ?? '0%' }
+  ].map(card => ({ ...card, change: null }))
+})
+
+const alertLevel = computed(() => dashboard.value.alertLevel || 'NONE')
+const alertTags = computed(() => dashboard.value.alertTags || [])
+
+const alertBgClass = computed(() => {
+  switch (alertLevel.value) {
+    case 'HIGH': return 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200'
+    case 'MEDIUM': return 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200'
+    case 'INFO': return 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200'
+    default: return 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200'
+  }
+})
+
+const alertTagClass = (tag) => {
+  if (tag.includes('satisfaction') || tag.includes('latency_degrading')) return 'bg-red-50 text-red-700 border border-red-200'
+  return 'bg-amber-50 text-amber-700 border border-amber-200'
+}
+
+const formatAlertTag = (tag) => {
+  const map = {
+    failed_traces_elevated: '失败 Trace 增多',
+    fallback_rate_elevated: 'Fallback 率过高',
+    satisfaction_dropped: '满意度下降',
+    slow_traces_elevated: '慢请求增多',
+    empty_retrieval_elevated: '空召回增多',
+    latency_degrading: '延迟劣化 (vs 昨日)',
+    success_rate_degrading: '成功率下降 (vs 昨日)',
+    high_active_trace_load: '活跃 Trace 负载高',
+    degrading_risky_trend: '风险趋势上升',
+    degrading_slow_trend: '慢请求趋势上升',
+    degrading_failed_trend: '失败趋势上升'
+  }
+  return map[tag] || tag
+}
+
+const formatTime = (ts) => {
+  if (!ts) return '-'
+  const d = new Date(ts)
+  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+const getTraceFeedbackIcon = () => {
+  return '—'
+}
+
+const loadDashboard = async () => {
+  try {
+    dashboard.value = await loadRagDashboard()
+  } catch (err) { console.error('Failed to load dashboard:', err) }
+}
+
+const loadTraces = async () => {
+  try {
+    const filters = { limit: 20 }
+    recentTraces.value = await loadOpsTraces(filters) || []
+  } catch (err) { console.error('Failed to load traces:', err) }
+}
+
+const loadHistory = async () => {
+  try {
+    historySnapshots.value = await loadMetricsHistory(selectedRange.value, selectedMetrics.value.join(','))
+    await nextTick()
+    renderChart()
+  } catch (err) { console.error('Failed to load history:', err) }
+}
+
+const renderChart = () => {
+  const canvas = chartCanvas.value
+  if (!canvas || !historySnapshots.value.length) return
+
+  if (chartInstance) chartInstance.destroy()
+
+  const ctx = canvas.getContext('2d')
+  const width = canvas.parentElement.clientWidth
+  canvas.width = width
+  canvas.height = 300
+
+  const data = historySnapshots.value
+  const step = Math.max(1, Math.floor(data.length / 12))
+
+  const padding = { top: 20, right: 60, bottom: 40, left: 60 }
+  const chartW = width - padding.left - padding.right
+  const chartH = 300 - padding.top - padding.bottom
+
+  ctx.clearRect(0, 0, width, 300)
+
+  // Grid lines
+  ctx.strokeStyle = '#e2e8f0'
+  ctx.lineWidth = 0.5
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (chartH / 4) * i
+    ctx.beginPath()
+    ctx.moveTo(padding.left, y)
+    ctx.lineTo(width - padding.right, y)
+    ctx.stroke()
+  }
+
+  const colors = { avgLatencyMs: '#6366f1', p95LatencyMs: '#f59e0b', successRate: '#10b981', satisfactionRate: '#8b5cf6', fallbackRate: '#ef4444', emptyRetrievalRate: '#f97316', traceCount: '#6b7280' }
+
+  selectedMetrics.value.forEach(metricKey => {
+    const color = colors[metricKey] || '#6b7280'
+    const values = data.map(d => parseFloat(String(d[metricKey] || '0').replace('%', '')))
+    if (values.length < 2) return
+
+    const maxVal = Math.max(...values, 1)
+    const minVal = Math.min(...values, 0)
+
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    values.forEach((val, i) => {
+      const x = padding.left + (chartW / (values.length - 1)) * i
+      const normalized = maxVal === minVal ? 0.5 : (val - minVal) / (maxVal - minVal)
+      const y = padding.top + chartH - normalized * chartH
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.stroke()
+  })
+
+  // X-axis labels
+  ctx.fillStyle = '#94a3b8'
+  ctx.font = '10px monospace'
+  ctx.textAlign = 'center'
+  for (let i = 0; i < data.length; i += step) {
+    const x = padding.left + (chartW / (data.length - 1)) * i
+    const hour = String(data[i].hour).slice(11, 16)
+    ctx.fillText(hour, x, 300 - 5)
+  }
+}
+
+const loadAll = async () => {
+  await Promise.all([loadDashboard(), loadTraces(), loadHistory()])
+}
+
+onMounted(() => {
+  loadAll()
+  refreshTimer = setInterval(loadDashboard, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+  if (chartInstance) chartInstance.destroy()
+})
+
+watch(selectedRange, () => loadHistory())
+</script>
