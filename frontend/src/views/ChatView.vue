@@ -820,10 +820,30 @@ const getReaction = (msg, idx) => {
   return reactionState.value[getMessageActionKey(msg, idx)] || ''
 }
 
+const submitFeedback = (type, traceId, messageId) => {
+  fetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      traceId: traceId,
+      messageId: messageId,
+      type: type,
+      scene: 'CHAT'
+    })
+  }).catch(() => { /* 静默失败，不阻塞 UI */ })
+}
+
 const toggleReaction = (msg, idx, reaction) => {
   const key = getMessageActionKey(msg, idx)
   const prev = reactionState.value[key] || ''
-  reactionState.value[key] = prev === reaction ? '' : reaction
+  const newReaction = prev === reaction ? '' : reaction
+  reactionState.value[key] = newReaction
+
+  // Send feedback to backend
+  if (newReaction) {
+    const type = newReaction === 'like' ? 'THUMBS_UP' : 'THUMBS_DOWN'
+    submitFeedback(type, msg.traceId, msg.messageId)
+  }
 }
 
 const copyMessage = async (msg, idx) => {
@@ -849,6 +869,7 @@ const copyMessage = async (msg, idx) => {
       document.body.removeChild(textarea)
     }
     copiedState.value[key] = true
+    submitFeedback('COPY', msg.traceId, msg.messageId)
     setTimeout(() => {
       copiedState.value[key] = false
     }, 1500)
