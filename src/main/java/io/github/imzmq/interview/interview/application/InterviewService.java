@@ -55,28 +55,14 @@ public class InterviewService {
      * 提交回答：将外部字段映射为编排 Agent 期望的 payload 结构，并把编排结果裁剪为前端展示模型。
      */
     public AnswerResult submitAnswer(String sessionId, String userAnswer) {
-        InterviewAnswerView result = interviewSessionApplicationService.submitAnswer(sessionId, userAnswer);
-        return new AnswerResult(
-                result.score(), result.feedback(), result.nextQuestion(), result.averageScore(), result.finished(),
-                result.answeredCount(), result.totalQuestions(), result.difficultyLevel(), result.followUpState(),
-                result.topicMastery(), result.accuracy(), result.logic(), result.depth(), result.boundary(),
-                result.deductions(), result.citations(), result.conflicts()
-        );
-    }
-    
-    public InterviewSession getSession(String sessionId) {
-        return interviewSessionApplicationService.getSession(sessionId);
+        return interviewSessionApplicationService.submitAnswer(sessionId, userAnswer);
     }
 
     /**
      * 生成最终报告：同样走任务路由，以便记录状态并与画像更新/审计链路保持一致。
      */
     public FinalReport generateFinalReport(String sessionId, String userId) {
-        InterviewFinalReportView report = interviewSessionApplicationService.generateFinalReport(sessionId, userId);
-        return new FinalReport(
-                report.summary(), report.incomplete(), report.weak(), report.wrong(),
-                report.obsidianUpdates(), report.nextFocus(), report.averageScore(), report.answeredCount()
-        );
+        return interviewSessionApplicationService.generateFinalReport(sessionId, userId);
     }
 
     public LearningProfileAgent.TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
@@ -93,10 +79,6 @@ public class InterviewService {
 
     public java.util.List<Map<String, Object>> getProfileEvents(String userId, int limit) {
         return profileApplicationService.getProfileEvents(userId, limit);
-    }
-
-    public java.util.List<String> discoverMcpCapabilities(String userId) {
-        return mcpApplicationService.discoverCapabilities(userId);
     }
 
     public java.util.List<String> discoverMcpCapabilities(String userId, String traceId) {

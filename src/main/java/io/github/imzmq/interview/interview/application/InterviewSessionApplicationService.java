@@ -42,7 +42,7 @@ public class InterviewSessionApplicationService {
         return session;
     }
 
-    public InterviewAnswerView submitAnswer(String sessionId, String userAnswer) {
+    public InterviewService.AnswerResult submitAnswer(String sessionId, String userAnswer) {
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("source", "InterviewService.submitAnswer");
         context.put("traceId", RAGTraceContext.getTraceId());
@@ -55,7 +55,7 @@ public class InterviewSessionApplicationService {
         if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.AnswerResult result)) {
             throw new IllegalStateException(response.message());
         }
-        return new InterviewAnswerView(
+        return new InterviewService.AnswerResult(
                 result.score(), result.feedback(), result.nextQuestion(), result.averageScore(), result.finished(),
                 result.answeredCount(), result.totalQuestions(), result.difficultyLevel(), result.followUpState(),
                 result.topicMastery(), result.accuracy(), result.logic(), result.depth(), result.boundary(),
@@ -67,7 +67,7 @@ public class InterviewSessionApplicationService {
         return orchestratorAgent.getSession(sessionId);
     }
 
-    public InterviewFinalReportView generateFinalReport(String sessionId, String userId) {
+    public InterviewService.FinalReport generateFinalReport(String sessionId, String userId) {
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("source", "InterviewService.generateFinalReport");
         context.put("traceId", RAGTraceContext.getTraceId());
@@ -80,7 +80,7 @@ public class InterviewSessionApplicationService {
         if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.FinalReport report)) {
             throw new IllegalStateException(response.message());
         }
-        return new InterviewFinalReportView(
+        return new InterviewService.FinalReport(
                 report.summary(), report.incomplete(), report.weak(), report.wrong(),
                 report.obsidianUpdates(), report.nextFocus(), report.averageScore(), report.answeredCount()
         );

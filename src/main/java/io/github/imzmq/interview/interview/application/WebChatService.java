@@ -86,10 +86,6 @@ public class WebChatService {
     }
 
     // 清空会话上下文摘要（用于重置上下文压缩状态）。
-    public void clearSessionContext(String sessionId) {
-        clearSessionContext(sessionId, null);
-    }
-
     public void clearSessionContext(String sessionId, String boundaryMessageId) {
         if (sessionId == null || sessionId.isBlank()) {
             return;

@@ -96,7 +96,19 @@ public class RoutingChatService {
     }
 
     public String call(String prompt, ModelRouteType routeType, String stage) {
-        return call(prompt, routeType, null, stage);
+        return routingExecutionTemplate.execute(routeType, null, stage,
+                () -> callWithModel(fallbackChatModel, prompt),
+                candidate -> {
+            ChatModel chatModel = resolveChatModel(candidate);
+            RoutingResult result = callWithModelMetadata(chatModel, null, prompt);
+            logger.info("模型路由命中: stage={}, candidate={}, provider={}, state={}, costMs={}",
+                    stage,
+                    candidate.name(),
+                    candidate.provider(),
+                    modelHealthStore.stateOf(candidate.name()),
+                    result.costMs());
+            return result.content();
+        });
     }
 
     public String callWithoutFallback(String prompt, ModelRouteType routeType, String stage) {
@@ -119,22 +131,6 @@ public class RoutingChatService {
                             result.costMs());
                     return result.content();
                 });
-    }
-
-    public String call(String prompt, ModelRouteType routeType, String preferredCandidateName, String stage) {
-        return routingExecutionTemplate.execute(routeType, preferredCandidateName, stage,
-                () -> callWithModel(fallbackChatModel, prompt),
-                candidate -> {
-            ChatModel chatModel = resolveChatModel(candidate);
-            RoutingResult result = callWithModelMetadata(chatModel, null, prompt);
-            logger.info("模型路由命中: stage={}, candidate={}, provider={}, state={}, costMs={}",
-                    stage,
-                    candidate.name(),
-                    candidate.provider(),
-                    modelHealthStore.stateOf(candidate.name()),
-                    result.costMs());
-            return result.content();
-        });
     }
 
     public String call(String systemPrompt, String userPrompt, ModelRouteType routeType, String stage) {
@@ -259,26 +255,6 @@ public class RoutingChatService {
     }
 
     /**
-     * 执行带有统一兜底逻辑的常规模型调用。
-     * 当所有路由候选模型均失败时，不会抛出异常，而是调用 fallbackSupplier 提供降级结果。
-     *
-     * @param fallbackSupplier 降级结果提供者
-     * @param prompt 输入提示词
-     * @param routeType 路由类型
-     * @param stage 业务阶段名称
-     * @return 模型响应文本或降级结果
-     */
-    public String callSupplier(Supplier<String> fallbackSupplier, String prompt, ModelRouteType routeType, String stage) {
-        try {
-            return call(prompt, routeType, stage);
-        } catch (RuntimeException ex) {
-            routeFallbackCount.incrementAndGet();
-            logger.warn("模型路由失败，执行降级: stage={}, reason={}", stage, ex.getMessage());
-            return fallbackSupplier.get();
-        }
-    }
-
-    /**
      * 执行带首包探测与兜底逻辑的模型调用。
      * 常用于前端对响应实时性要求极高的场景（如首题生成），超时或失败后返回统一的 fallback 文本。
      *
@@ -288,10 +264,6 @@ public class RoutingChatService {
      * @param stage 业务阶段名称
      * @return 模型响应文本或降级结果
      */
-    public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier, String prompt, ModelRouteType routeType, String stage) {
-        return callWithFirstPacketProbeSupplier(fallbackSupplier, prompt, routeType, TimeoutHint.NORMAL, stage);
-    }
-
     public String callWithFirstPacketProbeSupplier(Supplier<String> fallbackSupplier,
                                                    String prompt, ModelRouteType routeType,
                                                    TimeoutHint hint, String stage) {
