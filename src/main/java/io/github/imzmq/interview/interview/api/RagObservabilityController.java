@@ -32,8 +32,7 @@ public class RagObservabilityController {
                                        @RequestParam(value = "slowOnly", required = false, defaultValue = "false") boolean slowOnly,
                                        @RequestParam(value = "q", required = false) String query,
                                        @RequestParam(value = "startedAfter", required = false) Instant startedAfter,
-                                       @RequestParam(value = "endedBefore", required = false) Instant endedBefore,
-                                       @RequestParam(value = "feedbackFilter", required = false) String feedbackFilter) {
+                                       @RequestParam(value = "endedBefore", required = false) Instant endedBefore) {
         if (!interviewService.isRagTraceEnabled()) {
             return ResponseEntity.ok(List.of());
         }

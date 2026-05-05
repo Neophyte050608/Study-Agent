@@ -433,7 +433,7 @@ public class ObservabilityApplicationService {
                         .orderByAsc(RagMetricsSnapshotDO::getSnapshotHour));
 
         Set<String> requestedMetrics = metricsParam == null || metricsParam.isBlank()
-                ? Set.of("avgDurationMs", "p95DurationMs", "satisfactionRate")
+                ? Set.of("avgLatencyMs", "p95LatencyMs", "satisfactionRate")
                 : Set.of(metricsParam.split(","));
 
         List<Map<String, Object>> result = new ArrayList<>();
