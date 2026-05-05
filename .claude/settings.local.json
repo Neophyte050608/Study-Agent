@@ -47,7 +47,10 @@
       "Bash(mvn --version)",
       "Bash(./mvnw -q verify -DskipTests)",
       "Bash(mvn:*)",
-      "mcp__plugin_claude-mem_mcp-search__smart_search"
+      "mcp__plugin_claude-mem_mcp-search__smart_search",
+      "Bash(git:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(./mvnw -q compile -DskipTests)"
     ],
     "additionalDirectories": [
       "D:\\Practice\\claude-code-main\\claude-code-main"

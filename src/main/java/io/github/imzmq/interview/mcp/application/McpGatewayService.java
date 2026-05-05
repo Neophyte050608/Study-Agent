@@ -5,6 +5,7 @@ import io.github.imzmq.interview.tool.gateway.FastMcpCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpBridgeCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
 import io.github.imzmq.interview.common.api.BusinessException;
+import io.github.imzmq.interview.common.api.ErrorCode;
 
 import io.github.imzmq.interview.tool.gateway.McpSseCapabilityGateway;
 import io.github.imzmq.interview.tool.gateway.McpStdioCapabilityGateway;
@@ -17,19 +18,30 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class McpGatewayService {
 
     private final McpCapabilityGateway stubGateway;
     private final GatewaySelectionStrategy gatewaySelectionStrategy;
-    private final GatewayInvocationExecutor gatewayInvocationExecutor;
-    private final GatewayAuditRecorder gatewayAuditRecorder;
-    private final CapabilityParamNormalizer capabilityParamNormalizer;
+    private final OpsAuditService opsAuditService;
     private final int timeoutMillis;
     private final int retries;
     private final String mode;
     private final boolean fallbackToStub;
+
+    private static final int MAX_READ_LIMIT = 2000;
+    private static final Set<String> FILE_READ_CAPABILITIES = Set.of(
+            "obsidian.read",
+            "file.read",
+            "filesystem.read",
+            "mcp.file.read"
+    );
 
     @Autowired
     public McpGatewayService(
@@ -39,22 +51,18 @@ public class McpGatewayService {
             @Autowired(required = false) McpStdioCapabilityGateway stdioGateway,
             @Autowired(required = false) FastMcpCapabilityGateway fastMcpGateway,
             @Autowired(required = false) DatabaseMcpAdapterRouter databaseMcpAdapterRouter,
-            GatewayAuditRecorder gatewayAuditRecorder,
-            GatewayInvocationExecutor gatewayInvocationExecutor,
             GatewaySelectionStrategy gatewaySelectionStrategy,
-            CapabilityParamNormalizer capabilityParamNormalizer,
+            OpsAuditService opsAuditService,
             @Value("${app.mcp.timeout-millis:1500}") int timeoutMillis,
             @Value("${app.mcp.retries:2}") int retries,
             @Value("${app.mcp.mode:stub}") String mode,
             @Value("${app.mcp.fallback-to-stub:true}") boolean fallbackToStub
     ) {
         this.stubGateway = stubGateway;
-        this.gatewayAuditRecorder = gatewayAuditRecorder;
-        this.gatewayInvocationExecutor = gatewayInvocationExecutor;
         this.gatewaySelectionStrategy = gatewaySelectionStrategy != null
                 ? gatewaySelectionStrategy
                 : new GatewaySelectionStrategy(stubGateway, bridgeGateway, sseGateway, stdioGateway, fastMcpGateway, databaseMcpAdapterRouter);
-        this.capabilityParamNormalizer = capabilityParamNormalizer;
+        this.opsAuditService = opsAuditService;
         this.timeoutMillis = Math.max(200, timeoutMillis);
         this.retries = Math.max(0, retries);
         this.mode = mode == null ? "stub" : mode.trim().toLowerCase();
@@ -72,7 +80,7 @@ public class McpGatewayService {
         } catch (RuntimeException ex) {
             if (fallbackToStub) {
                 List<String> capabilities = mergeCapabilities(stubGateway.listCapabilities(), gatewaySelectionStrategy.databaseCapabilities());
-                gatewayAuditRecorder.record(
+                record(
                         operator,
                         "MCP_DISCOVER_CAPABILITIES",
                         Map.of("count", capabilities == null ? 0 : capabilities.size()),
@@ -85,7 +93,7 @@ public class McpGatewayService {
                 );
                 return capabilities == null ? List.of() : capabilities;
             }
-            gatewayAuditRecorder.record(
+            record(
                     operator,
                     "MCP_DISCOVER_CAPABILITIES",
                     Map.of("count", 0),
@@ -110,7 +118,7 @@ public class McpGatewayService {
                 success = false;
                 message = "fallback to stub";
             } else {
-                gatewayAuditRecorder.record(
+                record(
                         operator,
                         "MCP_DISCOVER_CAPABILITIES",
                         Map.of("count", 0),
@@ -125,7 +133,7 @@ public class McpGatewayService {
             }
         }
 
-        gatewayAuditRecorder.record(
+        record(
                 operator,
                 "MCP_DISCOVER_CAPABILITIES",
                 Map.of("count", capabilities == null ? 0 : capabilities.size()),
@@ -145,7 +153,7 @@ public class McpGatewayService {
 
         Map<String, Object> normalizedParams;
         try {
-            normalizedParams = capabilityParamNormalizer.normalizeInvokeParams(normalizedCapability, params);
+            normalizedParams = normalizeInvokeParams(normalizedCapability, params);
         } catch (RuntimeException ex) {
             return fallbackPayload(operator, normalizedCapability, params == null ? Map.of() : params, normalizedContext, 1, ex);
         }
@@ -156,7 +164,7 @@ public class McpGatewayService {
         } catch (RuntimeException ex) {
             if (fallbackToStub) {
                 Object fallbackResult = stubGateway.invokeCapability(normalizedCapability, normalizedParams);
-                gatewayAuditRecorder.record(
+                record(
                         operator,
                         "MCP_INVOKE",
                         invokeAuditBase(normalizedCapability, 1, normalizedContext),
@@ -177,7 +185,7 @@ public class McpGatewayService {
                         retryableOf(ex)
                 );
             }
-            gatewayAuditRecorder.record(
+            record(
                     operator,
                     "MCP_INVOKE",
                     invokeAuditBase(normalizedCapability, 1, normalizedContext),
@@ -196,14 +204,14 @@ public class McpGatewayService {
         for (int attempt = 1; attempt <= retries + 1; attempt++) {
             actualAttempts = attempt;
             try {
-                Object result = gatewayInvocationExecutor.invoke(
+                Object result = invoke(
                         gateway,
                         normalizedCapability,
                         normalizedParams,
                         normalizedContext,
                         timeoutMillis
                 );
-                gatewayAuditRecorder.record(
+                record(
                         operator,
                         "MCP_INVOKE",
                         invokeAuditBase(normalizedCapability, attempt, normalizedContext),
@@ -226,7 +234,7 @@ public class McpGatewayService {
         if (shouldFallback(gateway)) {
             try {
                 Object fallbackResult = stubGateway.invokeCapability(normalizedCapability, normalizedParams);
-                gatewayAuditRecorder.record(
+                record(
                         operator,
                         "MCP_INVOKE",
                         invokeAuditBase(normalizedCapability, actualAttempts, normalizedContext),
@@ -264,7 +272,7 @@ public class McpGatewayService {
                 "params", normalizedParams,
                 "context", normalizedContext
         ));
-        gatewayAuditRecorder.record(
+        record(
                 operator,
                 "MCP_INVOKE",
                 invokeAuditBase(normalizedCapability, actualAttempts, normalizedContext),
@@ -297,7 +305,7 @@ public class McpGatewayService {
                 "params", params,
                 "context", context
         ));
-        gatewayAuditRecorder.record(
+        record(
                 operator,
                 "MCP_INVOKE",
                 invokeAuditBase(capability, attempt, context),
@@ -409,6 +417,147 @@ public class McpGatewayService {
             }
         }
         return merged.keySet().stream().toList();
+    }
+
+    // ── inlined from GatewayAuditRecorder ──
+
+    private void record(String operator,
+                        String action,
+                        Map<String, Object> base,
+                        String status,
+                        String errorCode,
+                        Boolean retryable,
+                        boolean success,
+                        String message,
+                        String traceId) {
+        opsAuditService.record(
+                operator,
+                action,
+                buildPayload(base, status, errorCode, retryable),
+                success,
+                message,
+                traceId
+        );
+    }
+
+    private Map<String, Object> buildPayload(Map<String, Object> base,
+                                             String status,
+                                             String errorCode,
+                                             Boolean retryable) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (base != null) {
+            payload.putAll(base);
+        }
+        if (status != null && !status.isBlank()) {
+            payload.put("status", status);
+        }
+        if (errorCode != null && !errorCode.isBlank()) {
+            payload.put("errorCode", errorCode);
+        }
+        if (retryable != null) {
+            payload.put("retryable", retryable);
+        }
+        return payload;
+    }
+
+    // ── inlined from CapabilityParamNormalizer ──
+
+    private Map<String, Object> normalizeInvokeParams(String capability, Map<String, Object> params) {
+        Map<String, Object> normalizedParams = params == null ? Map.of() : params;
+        if (!isFileReadCapability(capability)) {
+            return normalizedParams;
+        }
+        LinkedHashMap<String, Object> adjusted = new LinkedHashMap<>(normalizedParams);
+        Integer offset = positiveInteger(adjusted.get("offset"), "offset");
+        Integer limit = positiveInteger(adjusted.get("limit"), "limit");
+        Integer lineStart = positiveInteger(firstNonNull(adjusted, "lineStart", "fromLine"), "lineStart");
+        Integer lineEnd = positiveInteger(firstNonNull(adjusted, "lineEnd", "toLine"), "lineEnd");
+        if (lineStart != null && lineEnd != null && lineEnd < lineStart) {
+            throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, "lineEnd 不能小于 lineStart");
+        }
+        if (offset == null && lineStart != null) {
+            offset = lineStart;
+        }
+        if (limit == null && lineStart != null && lineEnd != null) {
+            limit = lineEnd - lineStart + 1;
+        }
+        if (offset != null) {
+            adjusted.put("offset", offset);
+        }
+        if (limit != null) {
+            if (limit > MAX_READ_LIMIT) {
+                throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, "limit 超过最大允许值 " + MAX_READ_LIMIT);
+            }
+            adjusted.put("limit", limit);
+        }
+        return adjusted;
+    }
+
+    private boolean isFileReadCapability(String capability) {
+        if (capability == null) {
+            return false;
+        }
+        String normalized = capability.trim().toLowerCase();
+        return FILE_READ_CAPABILITIES.contains(normalized);
+    }
+
+    private Object firstNonNull(Map<String, Object> map, String firstKey, String secondKey) {
+        if (map == null) {
+            return null;
+        }
+        Object first = map.get(firstKey);
+        if (first != null) {
+            return first;
+        }
+        return map.get(secondKey);
+    }
+
+    private Integer positiveInteger(Object rawValue, String field) {
+        if (rawValue == null) {
+            return null;
+        }
+        int parsed;
+        if (rawValue instanceof Number number) {
+            parsed = number.intValue();
+        } else {
+            String text = String.valueOf(rawValue).trim();
+            if (text.isBlank()) {
+                return null;
+            }
+            try {
+                parsed = Integer.parseInt(text);
+            } catch (NumberFormatException ex) {
+                throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, field + " 必须为正整数");
+            }
+        }
+        if (parsed <= 0) {
+            throw new BusinessException(ErrorCode.MCP_INVALID_PARAMS, field + " 必须大于 0");
+        }
+        return parsed;
+    }
+
+    // ── inlined from GatewayInvocationExecutor ──
+
+    private Object invoke(McpCapabilityGateway gateway,
+                          String capability,
+                          Map<String, Object> params,
+                          Map<String, Object> context,
+                          int timeoutMillis) {
+        try {
+            return CompletableFuture
+                    .supplyAsync(() -> gateway.invokeCapability(capability, params, context))
+                    .orTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+                    .join();
+        } catch (CompletionException ex) {
+            Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            if (cause instanceof TimeoutException timeoutException) {
+                throw new BusinessException(ErrorCode.MCP_TIMEOUT, timeoutException.getMessage() == null ? "invoke timeout" : timeoutException.getMessage());
+            }
+            throw new RuntimeException(cause);
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.modelruntime.application;
+package io.github.imzmq.interview.modelrouting.application;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -109,8 +109,3 @@ public class OllamaHealthService {
         return message;
     }
 }
-
-
-
-
-

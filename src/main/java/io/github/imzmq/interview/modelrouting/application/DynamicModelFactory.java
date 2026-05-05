@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.modelruntime.application;
+package io.github.imzmq.interview.modelrouting.application;
 
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.security.ApiKeyEncryptor;
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 动态模型工厂。
- * 
+ *
  * 职责：
  * 根据 Agent 的动态配置，返回对应的 ChatModel 实例。
  */
@@ -64,12 +64,3 @@ public class DynamicModelFactory {
         }
     }
 }
-
-
-
-
-
-
-
-
-

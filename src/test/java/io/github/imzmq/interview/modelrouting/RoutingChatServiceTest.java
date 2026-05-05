@@ -10,7 +10,7 @@ import io.github.imzmq.interview.modelrouting.execution.ModelSelector;
 import io.github.imzmq.interview.modelrouting.provider.YamlCandidateProvider;
 import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
-import io.github.imzmq.interview.modelruntime.application.DynamicModelFactory;
+import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.modelruntime.application;
+package io.github.imzmq.interview.modelrouting.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -155,7 +155,3 @@ public class VisionModelService {
         return sb.toString();
     }
 }
-
-
-
-

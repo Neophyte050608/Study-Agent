@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.modelrouting;
 
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
-import io.github.imzmq.interview.modelruntime.application.DynamicModelFactory;
+import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.probe.ModelHealthProbeScheduler;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;

@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.agent.core.Agent;
-import io.github.imzmq.interview.modelruntime.application.DynamicModelFactory;
+import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import io.github.imzmq.interview.learning.application.LearningEvent;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.learning.application.LearningSource;

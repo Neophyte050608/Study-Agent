@@ -4,7 +4,7 @@ import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
-import io.github.imzmq.interview.modelruntime.application.DynamicModelFactory;
+import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
