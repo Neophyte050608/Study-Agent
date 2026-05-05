@@ -628,6 +628,5 @@ CREATE TABLE IF NOT EXISTS `t_rag_metrics_snapshot` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_snapshot_id` (`snapshot_id`),
-    UNIQUE KEY `uk_snapshot_hour` (`snapshot_hour`),
-    KEY `idx_snapshot_hour` (`snapshot_hour`)
+    UNIQUE KEY `uk_snapshot_hour` (`snapshot_hour`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RAG时序指标快照表';
