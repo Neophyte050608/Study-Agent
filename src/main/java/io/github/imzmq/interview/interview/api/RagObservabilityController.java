@@ -32,7 +32,8 @@ public class RagObservabilityController {
                                        @RequestParam(value = "slowOnly", required = false, defaultValue = "false") boolean slowOnly,
                                        @RequestParam(value = "q", required = false) String query,
                                        @RequestParam(value = "startedAfter", required = false) Instant startedAfter,
-                                       @RequestParam(value = "endedBefore", required = false) Instant endedBefore) {
+                                       @RequestParam(value = "endedBefore", required = false) Instant endedBefore,
+                                       @RequestParam(value = "feedbackFilter", required = false) String feedbackFilter) {
         if (!interviewService.isRagTraceEnabled()) {
             return ResponseEntity.ok(List.of());
         }
@@ -98,5 +99,23 @@ public class RagObservabilityController {
     @GetMapping("/observability/rag/overview")
     public Map<String, Object> getRagOverview() {
         return interviewService.getRagOverview();
+    }
+
+    @GetMapping("/observability/rag/dashboard")
+    public Map<String, Object> getRagDashboard() {
+        return interviewService.getRagDashboard();
+    }
+
+    @GetMapping("/observability/rag/metrics/history")
+    public ResponseEntity<?> getMetricsHistory(
+            @RequestParam(value = "hours", required = false, defaultValue = "168") Integer hours,
+            @RequestParam(value = "metric", required = false) String metric) {
+        return ResponseEntity.ok(interviewService.getMetricsHistory(
+                hours == null ? 168 : hours, metric));
+    }
+
+    @GetMapping("/observability/rag/metrics/summary")
+    public Map<String, Object> getMetricsSummary() {
+        return interviewService.getMetricsSummary();
     }
 }

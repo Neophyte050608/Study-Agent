@@ -357,7 +357,11 @@ public class RAGObservabilityService {
                 slowTraceCount,
                 fallbackTraceCount,
                 emptyRetrievalTraceCount,
-                trendBuckets
+                trendBuckets,
+                0.0,
+                0.0,
+                0.0,
+                0
         );
         String alertLevel = resolveAlertLevel(alertTags);
         double successRate = ((double) (traces.size() - failedTraceCount) / traces.size()) * 100.0D;
@@ -389,7 +393,11 @@ public class RAGObservabilityService {
                                                 long slowTraceCount,
                                                 long fallbackTraceCount,
                                                 long emptyRetrievalTraceCount,
-                                                List<Map<String, Object>> trendBuckets) {
+                                                List<Map<String, Object>> trendBuckets,
+                                                double satisfactionRate,
+                                                double latencyVsYesterdayPct,
+                                                double successRateChangePct,
+                                                long feedbackTotal) {
         List<String> tags = new ArrayList<>();
         if (activeTraceCount >= 5) {
             tags.add("high_active_trace_load");
@@ -416,6 +424,15 @@ public class RAGObservabilityService {
         }
         if (hasRisingTrend(trendBuckets, "failed")) {
             tags.add("degrading_failed_trend");
+        }
+        if (satisfactionRate >= 0 && satisfactionRate < 0.5 && feedbackTotal >= 5) {
+            tags.add("satisfaction_dropped");
+        }
+        if (latencyVsYesterdayPct > 50) {
+            tags.add("latency_degrading");
+        }
+        if (successRateChangePct < -5) {
+            tags.add("success_rate_degrading");
         }
         return tags;
     }
@@ -461,6 +478,9 @@ public class RAGObservabilityService {
                         || "empty_retrieval_elevated".equals(tag)
                         || "degrading_risky_trend".equals(tag)
                         || "degrading_slow_trend".equals(tag)
+                        || "satisfaction_dropped".equals(tag)
+                        || "latency_degrading".equals(tag)
+                        || "success_rate_degrading".equals(tag)
         );
         if (hasWarning) {
             return "MEDIUM";
@@ -1390,8 +1410,22 @@ public class RAGObservabilityService {
             Integer nodeCount,
             Integer retrievalNodeCount,
             Instant startedAt,
-            Instant endedAt
+            Instant endedAt,
+            Integer followUpCount
     ) {
+        public TraceSummary(
+                String traceId, String traceStatus, Long businessDurationMs,
+                Long connectionDurationMs, Long firstTokenMs, Long streamDispatchMs,
+                Integer retrievedDocCount, Integer displayedDocCount,
+                Integer fallbackCount, Integer failedNodeCount, Boolean slowTrace,
+                List<String> riskTags, Integer riskCount, Integer nodeCount,
+                Integer retrievalNodeCount, Instant startedAt, Instant endedAt
+        ) {
+            this(traceId, traceStatus, businessDurationMs, connectionDurationMs,
+                    firstTokenMs, streamDispatchMs, retrievedDocCount, displayedDocCount,
+                    fallbackCount, failedNodeCount, slowTrace, riskTags, riskCount,
+                    nodeCount, retrievalNodeCount, startedAt, endedAt, null);
+        }
     }
 
     public record TraceDetailView(

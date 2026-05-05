@@ -149,6 +149,18 @@ public class InterviewService {
         return observabilityApplicationService.getRagOverview();
     }
 
+    public Map<String, Object> getRagDashboard() {
+        return observabilityApplicationService.getDashboard();
+    }
+
+    public List<Map<String, Object>> getMetricsHistory(int hours, String metric) {
+        return observabilityApplicationService.getMetricsHistory(hours, metric);
+    }
+
+    public Map<String, Object> getMetricsSummary() {
+        return observabilityApplicationService.getMetricsSummary();
+    }
+
     public java.util.Map<String, Object> getRetrievalMetrics(Integer limit, Integer hours, String dataset) {
         return observabilityApplicationService.getRetrievalMetrics(limit, hours, dataset);
     }

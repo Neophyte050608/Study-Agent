@@ -1,18 +1,27 @@
 package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.entity.knowledge.RagFeedbackDO;
+import io.github.imzmq.interview.entity.knowledge.RagMetricsSnapshotDO;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
+import io.github.imzmq.interview.mapper.knowledge.RagFeedbackMapper;
+import io.github.imzmq.interview.mapper.knowledge.RagMetricsSnapshotMapper;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ObservabilityApplicationService {
@@ -24,17 +33,23 @@ public class ObservabilityApplicationService {
     private final RAGQualityEvaluationService ragQualityEvaluationService;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final SkillTelemetryRecorder skillTelemetryRecorder;
+    private final RagFeedbackMapper ragFeedbackMapper;
+    private final RagMetricsSnapshotMapper ragMetricsSnapshotMapper;
 
     public ObservabilityApplicationService(RAGObservabilityService ragObservabilityService,
                                            RetrievalEvaluationService retrievalEvaluationService,
                                            RAGQualityEvaluationService ragQualityEvaluationService,
                                            ObservabilitySwitchProperties observabilitySwitchProperties,
-                                           SkillTelemetryRecorder skillTelemetryRecorder) {
+                                           SkillTelemetryRecorder skillTelemetryRecorder,
+                                           RagFeedbackMapper ragFeedbackMapper,
+                                           RagMetricsSnapshotMapper ragMetricsSnapshotMapper) {
         this.ragObservabilityService = ragObservabilityService;
         this.retrievalEvaluationService = retrievalEvaluationService;
         this.ragQualityEvaluationService = ragQualityEvaluationService;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.skillTelemetryRecorder = skillTelemetryRecorder;
+        this.ragFeedbackMapper = ragFeedbackMapper;
+        this.ragMetricsSnapshotMapper = ragMetricsSnapshotMapper;
     }
 
     public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
@@ -364,6 +379,134 @@ public class ObservabilityApplicationService {
             return false;
         }
         return true;
+    }
+
+    public Map<String, Object> getDashboard() {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return Map.of("enabled", false, "alertLevel", "NONE", "alertTags", List.of());
+        }
+
+        Map<String, Object> overview = ragObservabilityService.getOverview();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime hourStart = now.truncatedTo(ChronoUnit.HOURS);
+
+        long thumbsUp = ragFeedbackMapper.selectCount(new LambdaQueryWrapper<RagFeedbackDO>()
+                .eq(RagFeedbackDO::getFeedbackType, "THUMBS_UP")
+                .ge(RagFeedbackDO::getCreatedAt, hourStart));
+        long thumbsDown = ragFeedbackMapper.selectCount(new LambdaQueryWrapper<RagFeedbackDO>()
+                .eq(RagFeedbackDO::getFeedbackType, "THUMBS_DOWN")
+                .ge(RagFeedbackDO::getCreatedAt, hourStart));
+        long copyCount = ragFeedbackMapper.selectCount(new LambdaQueryWrapper<RagFeedbackDO>()
+                .eq(RagFeedbackDO::getFeedbackType, "COPY")
+                .ge(RagFeedbackDO::getCreatedAt, hourStart));
+        long feedbackTotal = thumbsUp + thumbsDown;
+        double satisfactionRate = feedbackTotal > 0 ? (double) thumbsUp / feedbackTotal : 0.0;
+
+        Map<String, Object> feedback = new LinkedHashMap<>();
+        feedback.put("thumbsUp", thumbsUp);
+        feedback.put("thumbsDown", thumbsDown);
+        feedback.put("copy", copyCount);
+        feedback.put("satisfactionRate", String.format(Locale.ROOT, "%.1f%%", satisfactionRate * 100));
+
+        Map<String, Object> currentHour = new LinkedHashMap<>(overview);
+        currentHour.put("feedback", feedback);
+
+        Map<String, Object> dashboard = new LinkedHashMap<>();
+        dashboard.put("enabled", true);
+        dashboard.put("currentHour", currentHour);
+        dashboard.put("alertLevel", overview.get("alertLevel"));
+        dashboard.put("alertTags", overview.get("alertTags"));
+        dashboard.put("trendBuckets", overview.get("trendBuckets"));
+        dashboard.put("riskTagCounts", overview.get("riskTagCounts"));
+        return dashboard;
+    }
+
+    public List<Map<String, Object>> getMetricsHistory(int hours, String metricsParam) {
+        if (!observabilitySwitchProperties.isRagTraceEnabled() || hours <= 0) {
+            return List.of();
+        }
+        int safeHours = Math.min(hours, 720);
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(safeHours);
+        List<RagMetricsSnapshotDO> snapshots = ragMetricsSnapshotMapper.selectList(
+                new LambdaQueryWrapper<RagMetricsSnapshotDO>()
+                        .ge(RagMetricsSnapshotDO::getSnapshotHour, cutoff)
+                        .orderByAsc(RagMetricsSnapshotDO::getSnapshotHour));
+
+        Set<String> requestedMetrics = metricsParam == null || metricsParam.isBlank()
+                ? Set.of("avgDurationMs", "p95DurationMs", "satisfactionRate")
+                : Set.of(metricsParam.split(","));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (RagMetricsSnapshotDO snap : snapshots) {
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("hour", snap.getSnapshotHour().toString());
+            if (requestedMetrics.contains("avgLatencyMs"))
+                point.put("avgLatencyMs", snap.getAvgDurationMs());
+            if (requestedMetrics.contains("p95LatencyMs"))
+                point.put("p95LatencyMs", snap.getP95DurationMs());
+            if (requestedMetrics.contains("satisfactionRate"))
+                point.put("satisfactionRate", String.format(Locale.ROOT, "%.1f%%", snap.getSatisfactionRate() * 100));
+            if (requestedMetrics.contains("fallbackRate")) {
+                double fbRate = snap.getTraceCount() > 0
+                        ? (double) snap.getFallbackCount() / snap.getTraceCount() * 100 : 0;
+                point.put("fallbackRate", String.format(Locale.ROOT, "%.1f%%", fbRate));
+            }
+            if (requestedMetrics.contains("emptyRetrievalRate")) {
+                double erRate = snap.getTraceCount() > 0
+                        ? (double) snap.getEmptyRetrievalCount() / snap.getTraceCount() * 100 : 0;
+                point.put("emptyRetrievalRate", String.format(Locale.ROOT, "%.1f%%", erRate));
+            }
+            if (requestedMetrics.contains("successRate")) {
+                double sRate = snap.getTraceCount() > 0
+                        ? (double) snap.getSuccessCount() / snap.getTraceCount() * 100 : 0;
+                point.put("successRate", String.format(Locale.ROOT, "%.1f%%", sRate));
+            }
+            if (requestedMetrics.contains("traceCount"))
+                point.put("traceCount", snap.getTraceCount());
+            result.add(point);
+        }
+        return result;
+    }
+
+    public Map<String, Object> getMetricsSummary() {
+        if (!observabilitySwitchProperties.isRagTraceEnabled()) {
+            return Map.of("enabled", false);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime todayStart = now.truncatedTo(ChronoUnit.DAYS);
+        LocalDateTime yesterdayStart = todayStart.minusDays(1);
+        LocalDateTime yesterdayEnd = todayStart;
+        LocalDateTime thisWeekStart = todayStart.minusDays(now.getDayOfWeek().getValue() % 7);
+        LocalDateTime lastWeekStart = thisWeekStart.minusDays(7);
+        LocalDateTime lastWeekEnd = thisWeekStart;
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("today", buildPeriodSummary(todayStart, now));
+        summary.put("yesterday", buildPeriodSummary(yesterdayStart, yesterdayEnd));
+        summary.put("thisWeek", buildPeriodSummary(thisWeekStart, now));
+        summary.put("lastWeek", buildPeriodSummary(lastWeekStart, lastWeekEnd));
+        return summary;
+    }
+
+    private Map<String, Object> buildPeriodSummary(LocalDateTime from, LocalDateTime to) {
+        List<RagMetricsSnapshotDO> snapshots = ragMetricsSnapshotMapper.selectList(
+                new LambdaQueryWrapper<RagMetricsSnapshotDO>()
+                        .ge(RagMetricsSnapshotDO::getSnapshotHour, from)
+                        .lt(RagMetricsSnapshotDO::getSnapshotHour, to));
+
+        int totalTraces = snapshots.stream().mapToInt(RagMetricsSnapshotDO::getTraceCount).sum();
+        long totalDuration = snapshots.stream().mapToLong(s -> s.getAvgDurationMs() * s.getTraceCount()).sum();
+        long avgLatency = totalTraces > 0 ? totalDuration / totalTraces : 0;
+        long totalThumbsUp = snapshots.stream().mapToLong(RagMetricsSnapshotDO::getThumbsUpCount).sum();
+        long totalThumbsDown = snapshots.stream().mapToLong(RagMetricsSnapshotDO::getThumbsDownCount).sum();
+        long totalFeedback = totalThumbsUp + totalThumbsDown;
+        double satRate = totalFeedback > 0 ? (double) totalThumbsUp / totalFeedback * 100 : 0;
+
+        Map<String, Object> period = new LinkedHashMap<>();
+        period.put("traceCount", totalTraces);
+        period.put("avgLatencyMs", avgLatency);
+        period.put("satisfactionRate", String.format(Locale.ROOT, "%.1f%%", satRate));
+        return period;
     }
 }
 
