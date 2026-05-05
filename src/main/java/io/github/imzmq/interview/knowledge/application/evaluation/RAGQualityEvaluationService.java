@@ -62,8 +62,6 @@ public class RAGQualityEvaluationService {
     private final RagQualityEvalRunMapper ragQualityEvalRunMapper;
     private final RagQualityEvalCaseMapper ragQualityEvalCaseMapper;
     private final Executor ragRetrieveExecutor;
-    @Autowired(required = false)
-    private RagasEvalClient ragasEvalClient;
 
     @Value("${app.eval.rag-quality.engine:java}")
     private String evaluationEngine;
@@ -203,14 +201,9 @@ public class RAGQualityEvaluationService {
             return emptyReport;
         }
 
-        List<QualityEvalCaseResult> results;
-        if ("ragas".equalsIgnoreCase(resolvedEngine) && ragasEvalClient != null && ragasEvalClient.isAvailable()) {
-            results = evaluateWithRagas(normalizedCases);
-        } else {
-            results = new ArrayList<>();
-            for (QualityEvalCase evalCase : normalizedCases) {
-                results.add(evaluateSingleCase(evalCase));
-            }
+        List<QualityEvalCaseResult> results = new ArrayList<>();
+        for (QualityEvalCase evalCase : normalizedCases) {
+            results.add(evaluateSingleCase(evalCase));
         }
 
         int total = results.size();
@@ -401,74 +394,8 @@ public class RAGQualityEvaluationService {
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("currentEngine", resolveEngine(null));
         status.put("javaEngineAvailable", true);
-        boolean ragasAvailable = ragasEvalClient != null && ragasEvalClient.isAvailable();
-        status.put("ragasEngineAvailable", ragasAvailable);
-        if (ragasEvalClient != null) {
-            status.put("ragasServiceInfo", ragasEvalClient.getHealthInfo());
-        }
+        status.put("ragasEngineAvailable", false);
         return status;
-    }
-
-    /**
-     * 使用 Ragas Python 服务批量评测所有用例。
-     */
-    private List<QualityEvalCaseResult> evaluateWithRagas(List<QualityEvalCase> cases) {
-        List<Map<String, Object>> preparedCases = new ArrayList<>();
-        List<String> generatedAnswers = new ArrayList<>();
-        List<String> retrievedContexts = new ArrayList<>();
-
-        for (QualityEvalCase evalCase : cases) {
-            RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(evalCase.query(), "", false);
-            String retrievedContext = packet == null || packet.context() == null ? "" : packet.context();
-            String generatedAnswer = generateAnswer(evalCase.query(), retrievedContext);
-
-            generatedAnswers.add(generatedAnswer);
-            retrievedContexts.add(retrievedContext);
-
-            Map<String, Object> caseMap = new LinkedHashMap<>();
-            caseMap.put("query", evalCase.query());
-            caseMap.put("answer", generatedAnswer);
-            caseMap.put("contexts", List.of(retrievedContext));
-            caseMap.put("ground_truth", evalCase.groundTruthAnswer());
-            preparedCases.add(caseMap);
-        }
-
-        List<Map<String, Object>> ragasResults = ragasEvalClient.evaluateWithPreparedData(preparedCases);
-
-        List<QualityEvalCaseResult> results = new ArrayList<>();
-        for (int i = 0; i < cases.size(); i++) {
-            QualityEvalCase evalCase = cases.get(i);
-            Map<String, Object> ragasResult = i < ragasResults.size() ? ragasResults.get(i) : Map.of();
-
-            double faith = toDoubleMetric(ragasResult.get("faithfulness"));
-            double relevancy = toDoubleMetric(ragasResult.get("answer_relevancy"));
-            if (relevancy == 0.0D && ragasResult.containsKey("answer_relevancy")) {
-                relevancy = toDoubleMetric(ragasResult.get("answer_relevancy"));
-            } else if (relevancy == 0.0D && ragasResult.containsKey("answer_correctness")) {
-                relevancy = toDoubleMetric(ragasResult.get("answer_correctness"));
-            }
-            double precision = toDoubleMetric(ragasResult.get("context_precision"));
-            double recall = toDoubleMetric(ragasResult.get("context_recall"));
-
-            @SuppressWarnings("unchecked")
-            Map<String, String> rationales = ragasResult.containsKey("rationales")
-                    ? (Map<String, String>) ragasResult.get("rationales")
-                    : Map.of("engine", "ragas");
-
-            results.add(new QualityEvalCaseResult(
-                    evalCase.query(),
-                    evalCase.tag(),
-                    evalCase.groundTruthAnswer(),
-                    generatedAnswers.get(i),
-                    retrievedContexts.get(i),
-                    faith,
-                    relevancy,
-                    precision,
-                    recall,
-                    rationales
-            ));
-        }
-        return results;
     }
 
     private String generateAnswer(String query, String context) {
@@ -870,20 +797,6 @@ public class RAGQualityEvaluationService {
 
     private boolean persistenceAvailable() {
         return ragQualityEvalRunMapper != null && ragQualityEvalCaseMapper != null;
-    }
-
-    private double toDoubleMetric(Object val) {
-        if (val == null) {
-            return 0.0D;
-        }
-        if (val instanceof Number number) {
-            return EvaluationServiceHelper.clamp01(number.doubleValue());
-        }
-        try {
-            return EvaluationServiceHelper.clamp01(Double.parseDouble(val.toString()));
-        } catch (Exception ignored) {
-            return 0.0D;
-        }
     }
 
     private EvalRunOptions buildDatasetRunOptions(String datasetFile, String experimentTag, String notes) {
