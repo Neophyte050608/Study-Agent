@@ -187,11 +187,11 @@ public class RetrievalEvaluationService {
         String runId = UUID.randomUUID().toString();
         String reportTimestamp = Instant.now().toString();
         EvalRunOptions safeOptions = options == null ? new EvalRunOptions("manual", "manual-eval", "", Map.of(), "") : options;
-        String safeDatasetSource = normalizeText(safeOptions.datasetSource(), "manual");
-        String safeRunLabel = normalizeText(safeOptions.runLabel(), safeDatasetSource + "-eval");
-        String safeExperimentTag = normalizeText(safeOptions.experimentTag(), "");
+        String safeDatasetSource = EvaluationServiceHelper.normalizeText(safeOptions.datasetSource(), "manual");
+        String safeRunLabel = EvaluationServiceHelper.normalizeText(safeOptions.runLabel(), safeDatasetSource + "-eval");
+        String safeExperimentTag = EvaluationServiceHelper.normalizeText(safeOptions.experimentTag(), "");
         Map<String, Object> safeParameterSnapshot = safeOptions.parameterSnapshot() == null ? Map.of() : new LinkedHashMap<>(safeOptions.parameterSnapshot());
-        String safeNotes = normalizeText(safeOptions.notes(), "");
+        String safeNotes = EvaluationServiceHelper.normalizeText(safeOptions.notes(), "");
         if (normalizedCases.isEmpty()) {
             RetrievalEvalReport emptyReport = new RetrievalEvalReport(
                     runId,
@@ -401,7 +401,7 @@ public class RetrievalEvaluationService {
      */
     public RetrievalEvalReport getRunDetail(String runId) {
         ensureEvalEnabled();
-        String safeRunId = normalizeText(runId, "");
+        String safeRunId = EvaluationServiceHelper.normalizeText(runId, "");
         if (safeRunId.isBlank()) {
             return null;
         }
@@ -505,7 +505,7 @@ public class RetrievalEvaluationService {
         double avgMrr = runs.stream().mapToDouble(RetrievalEvalRunSummary::mrr).average().orElse(0.0D);
         double bestRecallAt5 = runs.stream().mapToDouble(RetrievalEvalRunSummary::recallAt5).max().orElse(0.0D);
         Map<String, Long> experimentDistribution = runs.stream()
-                .map(item -> normalizeText(item.experimentTag(), "default"))
+                .map(item -> EvaluationServiceHelper.normalizeText(item.experimentTag(), "default"))
                 .collect(Collectors.groupingBy(item -> item, LinkedHashMap::new, Collectors.counting()));
         return new RetrievalEvalTrend(runs, avgRecallAt5, avgMrr, bestRecallAt5, experimentDistribution);
     }
@@ -525,7 +525,7 @@ public class RetrievalEvaluationService {
         Map<String, List<EvalResult>> grouped = report.results().stream()
                 .filter(item -> !item.hit())
                 .collect(Collectors.groupingBy(
-                        item -> normalizeText(item.tag(), "unknown"),
+                        item -> EvaluationServiceHelper.normalizeText(item.tag(), "unknown"),
                         LinkedHashMap::new,
                         Collectors.toList()
                 ));
@@ -754,12 +754,12 @@ public class RetrievalEvaluationService {
                 runDO.getExperimentTag(),
                 runDO.getParameterSnapshot() == null ? Map.of() : runDO.getParameterSnapshot(),
                 runDO.getNotes() == null ? "" : runDO.getNotes(),
-                safeInt(runDO.getTotalCases()),
-                safeInt(runDO.getHitCases()),
-                safeDouble(runDO.getRecallAt1()),
-                safeDouble(runDO.getRecallAt3()),
-                safeDouble(runDO.getRecallAt5()),
-                safeDouble(runDO.getMrr())
+                EvaluationServiceHelper.safeInt(runDO.getTotalCases()),
+                EvaluationServiceHelper.safeInt(runDO.getHitCases()),
+                EvaluationServiceHelper.safeDouble(runDO.getRecallAt1()),
+                EvaluationServiceHelper.safeDouble(runDO.getRecallAt3()),
+                EvaluationServiceHelper.safeDouble(runDO.getRecallAt5()),
+                EvaluationServiceHelper.safeDouble(runDO.getMrr())
         );
     }
 
@@ -813,25 +813,14 @@ public class RetrievalEvaluationService {
                 runDO.getExperimentTag(),
                 runDO.getParameterSnapshot() == null ? Map.of() : runDO.getParameterSnapshot(),
                 runDO.getNotes() == null ? "" : runDO.getNotes(),
-                safeInt(runDO.getTotalCases()),
-                safeInt(runDO.getHitCases()),
-                safeDouble(runDO.getRecallAt1()),
-                safeDouble(runDO.getRecallAt3()),
-                safeDouble(runDO.getRecallAt5()),
-                safeDouble(runDO.getMrr()),
+                EvaluationServiceHelper.safeInt(runDO.getTotalCases()),
+                EvaluationServiceHelper.safeInt(runDO.getHitCases()),
+                EvaluationServiceHelper.safeDouble(runDO.getRecallAt1()),
+                EvaluationServiceHelper.safeDouble(runDO.getRecallAt3()),
+                EvaluationServiceHelper.safeDouble(runDO.getRecallAt5()),
+                EvaluationServiceHelper.safeDouble(runDO.getMrr()),
                 results
         );
-    }
-
-    /**
-     * 统一规范文本字段。
-     *
-     * @param value 原始值
-     * @param defaultValue 默认值
-     * @return 规范化结果
-     */
-    private String normalizeText(String value, String defaultValue) {
-        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
     /**
@@ -854,21 +843,13 @@ public class RetrievalEvaluationService {
         return baselineRank - candidateRank;
     }
 
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
-    }
-
-    private double safeDouble(Double value) {
-        return value == null ? 0.0D : value;
-    }
-
     private boolean persistenceAvailable() {
         return retrievalEvalRunMapper != null && retrievalEvalCaseMapper != null;
     }
 
     private EvalRunOptions buildDatasetRunOptions(String datasetFile, String experimentTag, String notes) {
-        String normalizedDatasetFile = normalizeDatasetFilename(datasetFile);
-        String datasetSource = stripJsonSuffix(normalizedDatasetFile);
+        String normalizedDatasetFile = EvaluationServiceHelper.normalizeDatasetFilename(datasetFile, DEFAULT_DATASET_FILE, "rag_ground_truth");
+        String datasetSource = EvaluationServiceHelper.stripJsonSuffix(normalizedDatasetFile);
         return new EvalRunOptions(
                 normalizedDatasetFile,
                 datasetSource,
@@ -879,35 +860,7 @@ public class RetrievalEvaluationService {
     }
 
     private String resolveDatasetFilename(String dataset) {
-        if (dataset == null || dataset.isBlank()) {
-            return DEFAULT_DATASET_FILE;
-        }
-        String normalized = dataset.trim().toLowerCase(Locale.ROOT);
-        if (DATASET_FILE_MAPPING.containsKey(normalized)) {
-            return DATASET_FILE_MAPPING.get(normalized);
-        }
-        return normalizeDatasetFilename(dataset);
-    }
-
-    private String normalizeDatasetFilename(String dataset) {
-        String candidate = dataset == null ? DEFAULT_DATASET_FILE : dataset.trim();
-        if (candidate.isBlank()) {
-            return DEFAULT_DATASET_FILE;
-        }
-        if (!candidate.endsWith(".json")) {
-            candidate = candidate + ".json";
-        }
-        if (!candidate.startsWith("rag_ground_truth")) {
-            throw new IllegalArgumentException("不支持的检索评测数据集: " + dataset);
-        }
-        return candidate;
-    }
-
-    private String stripJsonSuffix(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        return value.endsWith(".json") ? value.substring(0, value.length() - 5) : value;
+        return EvaluationServiceHelper.resolveDatasetFilename(dataset, DEFAULT_DATASET_FILE, DATASET_FILE_MAPPING, "rag_ground_truth");
     }
 
     /**

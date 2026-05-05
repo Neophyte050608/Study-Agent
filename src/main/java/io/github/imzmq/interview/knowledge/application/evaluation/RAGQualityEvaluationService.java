@@ -174,13 +174,13 @@ public class RAGQualityEvaluationService {
         EvalRunOptions safeOptions = options == null
                 ? new EvalRunOptions("manual", "manual-rag-quality-eval", "", Map.of(), "")
                 : options;
-        String safeDatasetSource = normalizeText(safeOptions.datasetSource(), "manual");
-        String safeRunLabel = normalizeText(safeOptions.runLabel(), safeDatasetSource + "-rag-quality-eval");
-        String safeExperimentTag = normalizeText(safeOptions.experimentTag(), "");
-        Map<String, Object> safeParameterSnapshot = new LinkedHashMap<>(safeMap(safeOptions.parameterSnapshot()));
+        String safeDatasetSource = EvaluationServiceHelper.normalizeText(safeOptions.datasetSource(), "manual");
+        String safeRunLabel = EvaluationServiceHelper.normalizeText(safeOptions.runLabel(), safeDatasetSource + "-rag-quality-eval");
+        String safeExperimentTag = EvaluationServiceHelper.normalizeText(safeOptions.experimentTag(), "");
+        Map<String, Object> safeParameterSnapshot = new LinkedHashMap<>(EvaluationServiceHelper.safeMap(safeOptions.parameterSnapshot()));
         String resolvedEngine = resolveEngine(engine);
         safeParameterSnapshot.put("engine", resolvedEngine);
-        String safeNotes = normalizeText(safeOptions.notes(), "");
+        String safeNotes = EvaluationServiceHelper.normalizeText(safeOptions.notes(), "");
 
         if (normalizedCases.isEmpty()) {
             QualityEvalReport emptyReport = new QualityEvalReport(
@@ -277,8 +277,8 @@ public class RAGQualityEvaluationService {
 
         return new QualityEvalCaseResult(
                 safeCase.query(),
-                normalizeText(safeCase.tag(), "manual"),
-                normalizeText(safeCase.groundTruthAnswer(), ""),
+                EvaluationServiceHelper.normalizeText(safeCase.tag(), "manual"),
+                EvaluationServiceHelper.normalizeText(safeCase.groundTruthAnswer(), ""),
                 generatedAnswer,
                 retrievedContext,
                 faithfulness.score(),
@@ -307,7 +307,7 @@ public class RAGQualityEvaluationService {
 
     public QualityEvalReport getRunDetail(String runId) {
         ensureEvalEnabled();
-        String safeRunId = normalizeText(runId, "");
+        String safeRunId = EvaluationServiceHelper.normalizeText(runId, "");
         if (safeRunId.isBlank()) {
             return null;
         }
@@ -475,7 +475,7 @@ public class RAGQualityEvaluationService {
         String systemPrompt = "你是一位面试辅导助手。根据提供的参考资料回答面试问题。如果参考资料不足，请基于你的知识回答。";
         String userPrompt = "参考资料：\n" + (context == null ? "" : context) + "\n\n问题：" + (query == null ? "" : query);
         try {
-            return normalizeText(routingChatService.call(systemPrompt, userPrompt, ModelRouteType.GENERAL, "rag-quality-eval-generate"), "");
+            return EvaluationServiceHelper.normalizeText(routingChatService.call(systemPrompt, userPrompt, ModelRouteType.GENERAL, "rag-quality-eval-generate"), "");
         } catch (Exception ignored) {
             return "";
         }
@@ -485,8 +485,8 @@ public class RAGQualityEvaluationService {
         String systemPrompt = "你是RAG评测专家。请基于检索上下文评估答案忠实度。输出严格JSON，不要输出其他文本。";
         String userPrompt = "请将生成答案拆分为原子声明，并判断每条声明是否被检索上下文支持。\n"
                 + "返回格式：{\"claims\":[{\"claim\":\"...\",\"supported\":true,\"reason\":\"...\"}]}\n"
-                + "生成答案：\n" + normalizeText(generatedAnswer, "") + "\n\n"
-                + "检索上下文：\n" + normalizeText(retrievedContext, "");
+                + "生成答案：\n" + EvaluationServiceHelper.normalizeText(generatedAnswer, "") + "\n\n"
+                + "检索上下文：\n" + EvaluationServiceHelper.normalizeText(retrievedContext, "");
         JsonNode root = parseEvaluationJson(systemPrompt, userPrompt);
         if (root == null || !root.has("claims") || !root.get("claims").isArray()) {
             return new MetricScore(0.0D, "faithfulness 解析失败，按0分处理");
@@ -503,7 +503,7 @@ public class RAGQualityEvaluationService {
         if (total <= 0) {
             return new MetricScore(0.0D, "未拆分出有效声明");
         }
-        double score = clamp01((double) supported / total);
+        double score = EvaluationServiceHelper.clamp01((double) supported / total);
         return new MetricScore(score, "supportedClaims=" + supported + "/" + total);
     }
 
@@ -511,14 +511,14 @@ public class RAGQualityEvaluationService {
         String systemPrompt = "你是RAG评测专家。请评估回答与问题的相关性、完整性和聚焦度。输出严格JSON。";
         String userPrompt = "请给出0到1分，并简要说明原因。\n"
                 + "返回格式：{\"score\":0.85,\"reason\":\"...\"}\n"
-                + "问题：" + normalizeText(query, "") + "\n"
-                + "回答：" + normalizeText(generatedAnswer, "");
+                + "问题：" + EvaluationServiceHelper.normalizeText(query, "") + "\n"
+                + "回答：" + EvaluationServiceHelper.normalizeText(generatedAnswer, "");
         JsonNode root = parseEvaluationJson(systemPrompt, userPrompt);
         if (root == null) {
             return new MetricScore(0.0D, "answerRelevancy 解析失败，按0分处理");
         }
-        double score = clamp01(root.path("score").asDouble(0.0D));
-        String reason = normalizeText(root.path("reason").asText(""), "模型未提供原因");
+        double score = EvaluationServiceHelper.clamp01(root.path("score").asDouble(0.0D));
+        String reason = EvaluationServiceHelper.normalizeText(root.path("reason").asText(""), "模型未提供原因");
         return new MetricScore(score, reason);
     }
 
@@ -532,7 +532,7 @@ public class RAGQualityEvaluationService {
         String systemPrompt = "你是RAG评测专家。请判断每个检索分块是否与问题相关。输出严格JSON。";
         String userPrompt = "请对每个chunk判断relevant true/false，并说明原因。\n"
                 + "返回格式：{\"chunks\":[{\"index\":0,\"relevant\":true,\"reason\":\"...\"}]}\n"
-                + "问题：" + normalizeText(query, "") + "\n"
+                + "问题：" + EvaluationServiceHelper.normalizeText(query, "") + "\n"
                 + "分块：\n" + chunkText;
 
         JsonNode root = parseEvaluationJson(systemPrompt, userPrompt);
@@ -563,7 +563,7 @@ public class RAGQualityEvaluationService {
         if (totalRelevant == 0) {
             return new MetricScore(0.0D, "相关分块数为0");
         }
-        double score = clamp01(precisionSum / totalRelevant);
+        double score = EvaluationServiceHelper.clamp01(precisionSum / totalRelevant);
         return new MetricScore(score, "relevantChunks=" + totalRelevant + "/" + chunks.size());
     }
 
@@ -571,8 +571,8 @@ public class RAGQualityEvaluationService {
         String systemPrompt = "你是RAG评测专家。请判断检索上下文是否覆盖标准答案要点。输出严格JSON。";
         String userPrompt = "请将标准答案拆分为要点，并判断每个要点是否被上下文覆盖。\n"
                 + "返回格式：{\"statements\":[{\"statement\":\"...\",\"supported\":true}]}\n"
-                + "标准答案：\n" + normalizeText(groundTruthAnswer, "") + "\n\n"
-                + "检索上下文：\n" + normalizeText(retrievedContext, "");
+                + "标准答案：\n" + EvaluationServiceHelper.normalizeText(groundTruthAnswer, "") + "\n\n"
+                + "检索上下文：\n" + EvaluationServiceHelper.normalizeText(retrievedContext, "");
         JsonNode root = parseEvaluationJson(systemPrompt, userPrompt);
         if (root == null || !root.has("statements") || !root.get("statements").isArray()) {
             return new MetricScore(0.0D, "contextRecall 解析失败，按0分处理");
@@ -589,7 +589,7 @@ public class RAGQualityEvaluationService {
         if (total <= 0) {
             return new MetricScore(0.0D, "未拆分出有效要点");
         }
-        double score = clamp01((double) supported / total);
+        double score = EvaluationServiceHelper.clamp01((double) supported / total);
         return new MetricScore(score, "coveredStatements=" + supported + "/" + total);
     }
 
@@ -620,7 +620,7 @@ public class RAGQualityEvaluationService {
     }
 
     private List<String> splitContextChunks(String retrievedContext) {
-        String source = normalizeText(retrievedContext, "");
+        String source = EvaluationServiceHelper.normalizeText(retrievedContext, "");
         if (source.isBlank()) {
             return List.of();
         }
@@ -663,9 +663,9 @@ public class RAGQualityEvaluationService {
                             .toList();
                     return new QualityEvalCase(
                             item.query().trim(),
-                            normalizeText(item.groundTruthAnswer(), ""),
+                            EvaluationServiceHelper.normalizeText(item.groundTruthAnswer(), ""),
                             concepts,
-                            normalizeText(item.tag(), "manual")
+                            EvaluationServiceHelper.normalizeText(item.tag(), "manual")
                     );
                 })
                 .toList();
@@ -774,7 +774,7 @@ public class RAGQualityEvaluationService {
         caseDO.setGroundTruthAnswer(result.groundTruthAnswer());
         caseDO.setGeneratedAnswer(result.generatedAnswer());
         caseDO.setRetrievedContext(result.retrievedContext());
-        caseDO.setTag(normalizeText(result.tag(), normalizeText(evalCase.tag(), "")));
+        caseDO.setTag(EvaluationServiceHelper.normalizeText(result.tag(), EvaluationServiceHelper.normalizeText(evalCase.tag(), "")));
         caseDO.setFaithfulness(result.faithfulness());
         caseDO.setAnswerRelevancy(result.answerRelevancy());
         caseDO.setContextPrecision(result.contextPrecision());
@@ -784,7 +784,7 @@ public class RAGQualityEvaluationService {
     }
 
     private QualityEvalRunSummary toRunSummary(RagQualityEvalRunDO runDO) {
-        Map<String, Object> snapshot = safeMap(runDO.getParameterSnapshot());
+        Map<String, Object> snapshot = EvaluationServiceHelper.safeMap(runDO.getParameterSnapshot());
         String engine = snapshot.containsKey("engine") ? String.valueOf(snapshot.get("engine")) : "java";
         return new QualityEvalRunSummary(
                 runDO.getRunId(),
@@ -793,11 +793,11 @@ public class RAGQualityEvaluationService {
                 runDO.getRunLabel(),
                 runDO.getExperimentTag(),
                 engine,
-                safeInt(runDO.getTotalCases()),
-                safeDouble(runDO.getAvgFaithfulness()),
-                safeDouble(runDO.getAvgAnswerRelevancy()),
-                safeDouble(runDO.getAvgContextPrecision()),
-                safeDouble(runDO.getAvgContextRecall())
+                EvaluationServiceHelper.safeInt(runDO.getTotalCases()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgFaithfulness()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgAnswerRelevancy()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgContextPrecision()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgContextRecall())
         );
     }
 
@@ -825,15 +825,15 @@ public class RAGQualityEvaluationService {
                         item.getGroundTruthAnswer() == null ? "" : item.getGroundTruthAnswer(),
                         item.getGeneratedAnswer() == null ? "" : item.getGeneratedAnswer(),
                         item.getRetrievedContext() == null ? "" : item.getRetrievedContext(),
-                        safeDouble(item.getFaithfulness()),
-                        safeDouble(item.getAnswerRelevancy()),
-                        safeDouble(item.getContextPrecision()),
-                        safeDouble(item.getContextRecall()),
+                        EvaluationServiceHelper.safeDouble(item.getFaithfulness()),
+                        EvaluationServiceHelper.safeDouble(item.getAnswerRelevancy()),
+                        EvaluationServiceHelper.safeDouble(item.getContextPrecision()),
+                        EvaluationServiceHelper.safeDouble(item.getContextRecall()),
                         item.getMetricRationales() == null ? Map.of() : item.getMetricRationales()
                 ))
                 .toList();
 
-        Map<String, Object> snapshot = safeMap(runDO.getParameterSnapshot());
+        Map<String, Object> snapshot = EvaluationServiceHelper.safeMap(runDO.getParameterSnapshot());
         String engine = snapshot.containsKey("engine") ? String.valueOf(snapshot.get("engine")) : "java";
 
         return new QualityEvalReport(
@@ -844,12 +844,12 @@ public class RAGQualityEvaluationService {
                 runDO.getExperimentTag(),
                 engine,
                 snapshot,
-                normalizeText(runDO.getNotes(), ""),
-                safeInt(runDO.getTotalCases()),
-                safeDouble(runDO.getAvgFaithfulness()),
-                safeDouble(runDO.getAvgAnswerRelevancy()),
-                safeDouble(runDO.getAvgContextPrecision()),
-                safeDouble(runDO.getAvgContextRecall()),
+                EvaluationServiceHelper.normalizeText(runDO.getNotes(), ""),
+                EvaluationServiceHelper.safeInt(runDO.getTotalCases()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgFaithfulness()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgAnswerRelevancy()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgContextPrecision()),
+                EvaluationServiceHelper.safeDouble(runDO.getAvgContextRecall()),
                 results
         );
     }
@@ -872,49 +872,23 @@ public class RAGQualityEvaluationService {
         return ragQualityEvalRunMapper != null && ragQualityEvalCaseMapper != null;
     }
 
-    private Map<String, Object> safeMap(Map<String, Object> source) {
-        return source == null ? Map.of() : new LinkedHashMap<>(source);
-    }
-
-    private String normalizeText(String value, String defaultValue) {
-        return value == null || value.isBlank() ? defaultValue : value.trim();
-    }
-
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
-    }
-
-    private double safeDouble(Double value) {
-        return value == null ? 0.0D : value;
-    }
-
     private double toDoubleMetric(Object val) {
         if (val == null) {
             return 0.0D;
         }
         if (val instanceof Number number) {
-            return clamp01(number.doubleValue());
+            return EvaluationServiceHelper.clamp01(number.doubleValue());
         }
         try {
-            return clamp01(Double.parseDouble(val.toString()));
+            return EvaluationServiceHelper.clamp01(Double.parseDouble(val.toString()));
         } catch (Exception ignored) {
             return 0.0D;
         }
     }
 
-    private double clamp01(double score) {
-        if (score < 0.0D) {
-            return 0.0D;
-        }
-        if (score > 1.0D) {
-            return 1.0D;
-        }
-        return score;
-    }
-
     private EvalRunOptions buildDatasetRunOptions(String datasetFile, String experimentTag, String notes) {
-        String normalizedDatasetFile = normalizeDatasetFilename(datasetFile);
-        String datasetSource = stripJsonSuffix(normalizedDatasetFile);
+        String normalizedDatasetFile = EvaluationServiceHelper.normalizeDatasetFilename(datasetFile, DEFAULT_DATASET_FILE, "rag_quality_ground_truth");
+        String datasetSource = EvaluationServiceHelper.stripJsonSuffix(normalizedDatasetFile);
         return new EvalRunOptions(
                 normalizedDatasetFile,
                 datasetSource,
@@ -925,35 +899,7 @@ public class RAGQualityEvaluationService {
     }
 
     private String resolveDatasetFilename(String dataset) {
-        if (dataset == null || dataset.isBlank()) {
-            return DEFAULT_DATASET_FILE;
-        }
-        String normalized = dataset.trim().toLowerCase();
-        if (DATASET_FILE_MAPPING.containsKey(normalized)) {
-            return DATASET_FILE_MAPPING.get(normalized);
-        }
-        return normalizeDatasetFilename(dataset);
-    }
-
-    private String normalizeDatasetFilename(String dataset) {
-        String candidate = dataset == null ? DEFAULT_DATASET_FILE : dataset.trim();
-        if (candidate.isBlank()) {
-            return DEFAULT_DATASET_FILE;
-        }
-        if (!candidate.endsWith(".json")) {
-            candidate = candidate + ".json";
-        }
-        if (!candidate.startsWith("rag_quality_ground_truth")) {
-            throw new IllegalArgumentException("不支持的质量评测数据集: " + dataset);
-        }
-        return candidate;
-    }
-
-    private String stripJsonSuffix(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        return value.endsWith(".json") ? value.substring(0, value.length() - 5) : value;
+        return EvaluationServiceHelper.resolveDatasetFilename(dataset, DEFAULT_DATASET_FILE, DATASET_FILE_MAPPING, "rag_quality_ground_truth");
     }
 
     private record MetricScore(double score, String reason) {
