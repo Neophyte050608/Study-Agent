@@ -222,3 +222,15 @@ export function copyModelCandidateKey(id) {
 export function loadModelRoutingStats() {
   return httpGet('/api/model-routing/stats')
 }
+
+export async function loadRagDashboard() {
+  return httpGet('/api/observability/rag/dashboard')
+}
+
+export async function loadMetricsHistory(hours = 168, metric = 'avgLatencyMs,p95LatencyMs,satisfactionRate') {
+  return httpGet(`/api/observability/rag/metrics/history?hours=${hours}&metric=${encodeURIComponent(metric)}`)
+}
+
+export async function loadMetricsSummary() {
+  return httpGet('/api/observability/rag/metrics/summary')
+}
