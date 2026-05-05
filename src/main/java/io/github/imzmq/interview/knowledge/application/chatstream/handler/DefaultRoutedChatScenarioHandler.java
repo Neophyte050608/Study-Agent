@@ -138,6 +138,48 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             return true;
         }
 
+        if (response.data() instanceof InterviewSession session) {
+            context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+                    "stage", "GENERATING", "label", "正在生成面试题目", "status", "running", "percent", 100));
+
+            String questionText = session.getCurrentQuestion();
+            if (questionText == null || questionText.isBlank()) {
+                questionText = webChatService.extractReplyText(response);
+            }
+
+            Map<String, Object> interviewPayload = new LinkedHashMap<>();
+            interviewPayload.put("interviewState", "asking");
+            interviewPayload.put("interviewSessionId", session.getId());
+            interviewPayload.put("question", questionText);
+            interviewPayload.put("questionIndex", 1);
+            interviewPayload.put("totalQuestions", session.getTotalQuestions());
+            interviewPayload.put("score", 0);
+
+            String interviewJson = chatStreamingSupport.toJson(interviewPayload, questionText);
+
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("traceId", context.traceId());
+            metadata.put("interviewSessionId", session.getId());
+            metadata.put("type", "interview_start");
+            metadata.put("routeLabel", "interview-start");
+            metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
+            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), interviewJson, metadata, "interview_card", "COMPLETED");
+
+            context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+                    "action", "chat",
+                    "result", Map.of(
+                            "content", "",
+                            "interviewPayload", interviewPayload,
+                            "assistantMessageId", context.assistantMessageId(),
+                            "traceId", context.traceId(),
+                            "routeLabel", "interview-start",
+                            "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
+                    )));
+            context.emitter().done();
+            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            return true;
+        }
+
         String replyText = webChatService.extractReplyText(response);
         context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成回答", "status", "running", "percent", 70));
