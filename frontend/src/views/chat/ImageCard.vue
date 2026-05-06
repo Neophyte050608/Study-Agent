@@ -1,5 +1,5 @@
 <template>
-  <div class="mt-3 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 shadow-sm">
+  <div class="mt-3 rounded-2xl overflow-hidden border border-divider bg-slate-50 dark:bg-slate-900/60 shadow-sm">
     <button class="block w-full text-left" @click="openPreview = true">
       <img
         :src="image.thumbnailUrl || image.accessUrl"
@@ -10,7 +10,7 @@
     </button>
     <div class="px-4 py-3">
       <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{{ image.retrieveChannel || 'image' }}</div>
-      <div class="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{{ image.imageName || '未命名图片' }}</div>
+      <div class="mt-1 text-sm font-semibold text-content">{{ image.imageName || '未命名图片' }}</div>
       <div v-if="image.summaryText" class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{{ image.summaryText }}</div>
     </div>
   </div>
@@ -23,10 +23,10 @@
     @click.self="openPreview = false"
     @keydown.esc="openPreview = false"
   >
-    <div class="max-w-5xl w-full bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-        <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{ image.imageName || '图片预览' }}</div>
-        <button @click="openPreview = false" class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+    <div class="max-w-5xl w-full bg-surface-raised rounded-3xl overflow-hidden shadow-2xl border border-divider">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-divider">
+        <div class="text-sm font-semibold text-content">{{ image.imageName || '图片预览' }}</div>
+        <button @click="openPreview = false" class="p-2 rounded-xl text-slate-500 hover:bg-surface-hover">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

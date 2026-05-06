@@ -1,10 +1,10 @@
 <template>
-  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden my-4">
+  <div class="bg-white dark:bg-slate-800 border border-divider rounded-xl shadow-sm overflow-hidden my-4">
     <!-- Header: progress + timer -->
     <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/60 flex items-center justify-between gap-4">
       <div class="flex items-center gap-2">
         <span class="material-symbols-outlined text-indigo-500">psychology</span>
-        <span class="font-bold text-slate-800 dark:text-slate-200">面试</span>
+        <span class="font-bold text-content">面试</span>
         <span class="text-sm text-slate-500 font-medium">
           第 {{ payload.questionIndex }} / {{ payload.totalQuestions }} 题
         </span>
@@ -18,7 +18,7 @@
     <div class="p-6 space-y-5">
       <!-- Question text -->
       <div
-        class="markdown-body text-[15px] leading-relaxed text-slate-800 dark:text-slate-200"
+        class="markdown-body text-[15px] leading-relaxed text-content"
         v-html="renderMarkdown(payload.question || '')"
       ></div>
 
@@ -46,14 +46,14 @@
             <button
               v-if="submitting"
               @click="handleStop"
-              class="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors hover:bg-slate-200 dark:hover:bg-slate-600"
+              class="px-5 py-2.5 rounded-xl bg-surface-hover text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors hover:bg-slate-200 dark:hover:bg-slate-600"
             >
               停止
             </button>
             <button
               @click="handleSubmit"
               :disabled="submitting || !draftAnswer.trim()"
-              class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+              class="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
             >
               {{ submitting ? '提交中...' : '提交回答' }}
             </button>
@@ -67,7 +67,7 @@
           v-model="draftAnswer"
           disabled
           rows="8"
-          class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 px-4 py-3 text-[14px] leading-relaxed text-slate-500 resize-y"
+          class="w-full rounded-xl border border-divider bg-slate-100 dark:bg-slate-800/50 px-4 py-3 text-[14px] leading-relaxed text-slate-500 resize-y"
         ></textarea>
         <div class="flex items-center gap-3 text-sm text-slate-500">
           <span class="flex gap-1">
@@ -80,7 +80,7 @@
         <div class="flex justify-end">
           <button
             @click="handleStop"
-            class="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors hover:bg-slate-200 dark:hover:bg-slate-600"
+            class="px-5 py-2.5 rounded-xl bg-surface-hover text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors hover:bg-slate-200 dark:hover:bg-slate-600"
           >
             停止
           </button>
@@ -89,13 +89,13 @@
 
       <!-- feedback: score + feedback -->
       <div v-if="payload.interviewState === 'feedback'" class="space-y-4">
-        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-4">
+        <div class="rounded-xl border border-divider bg-slate-50 dark:bg-slate-900/30 p-4">
           <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">你的回答</div>
           <div class="text-[14px] leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{{ draftAnswer }}</div>
         </div>
 
         <div class="grid gap-4 md:grid-cols-[140px_minmax(0,1fr)]">
-          <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/70 text-center">
+          <div class="rounded-xl border border-divider p-4 bg-white dark:bg-slate-800/70 text-center">
             <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">评分</div>
             <svg class="w-20 h-20 mx-auto -rotate-90" viewBox="0 0 36 36">
               <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-200 dark:text-slate-700" />
@@ -104,13 +104,13 @@
                 stroke-width="2.5"
                 stroke-linecap="round"
                 stroke="currentColor"
-                class="text-indigo-600 dark:text-indigo-400"
+                class="text-brand-text"
                 :stroke-dasharray="`${(payload.score || 0) * 97.4 / 100} 97.4`"
               />
             </svg>
-            <div class="text-xl font-black text-indigo-600 dark:text-indigo-400 -mt-12">{{ payload.score ?? '-' }}</div>
+            <div class="text-xl font-black text-brand-text -mt-12">{{ payload.score ?? '-' }}</div>
           </div>
-          <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/70">
+          <div class="rounded-xl border border-divider p-4 bg-white dark:bg-slate-800/70">
             <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">点评</div>
             <div
               class="markdown-body text-[14px] leading-relaxed text-slate-700 dark:text-slate-200"
@@ -131,7 +131,7 @@
             v-else
             @click="handleFinish"
             :disabled="finishing"
-            class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-sm font-semibold transition-colors"
+            class="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover disabled:bg-slate-300 text-white text-sm font-semibold transition-colors"
           >
             {{ finishing ? '生成中...' : '生成报告' }}
           </button>
@@ -141,7 +141,7 @@
       <!-- finished: final report -->
       <div v-if="payload.interviewState === 'finished'" class="space-y-4">
         <div
-          class="markdown-body text-[15px] leading-relaxed text-slate-800 dark:text-slate-200"
+          class="markdown-body text-[15px] leading-relaxed text-content"
           v-html="renderMarkdown(payload.report || '报告已生成')"
         ></div>
       </div>

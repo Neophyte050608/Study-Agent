@@ -8,7 +8,7 @@
 
     <!-- 自定义删除确认弹窗 -->
     <div v-if="sessionToDelete" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm transition-all">
-      <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100 dark:border-slate-800">
+      <div class="bg-surface-raised w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-divider-light">
         <div class="p-7 relative">
           <button @click="cancelDelete" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
             <span class="material-symbols-outlined text-xl">close</span>
@@ -16,12 +16,12 @@
           
           <div class="flex items-center gap-3 mb-3">
             <span class="material-symbols-outlined text-3xl text-orange-500 drop-shadow-sm" style="font-variation-settings: 'FILL' 1;">warning</span>
-            <h3 class="text-[21px] font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">确认删除吗？</h3>
+            <h3 class="text-[21px] font-extrabold text-content tracking-tight">确认删除吗？</h3>
           </div>
-          <p class="text-[19px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed">删除后不可以恢复哦 🥺</p>
+          <p class="text-[19px] text-content-secondary font-medium leading-relaxed">删除后不可以恢复哦 🥺</p>
         </div>
         <div class="px-6 py-5 flex justify-end gap-3 mt-2">
-          <button @click="cancelDelete" class="px-6 py-2 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">
+          <button @click="cancelDelete" class="px-6 py-2 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-divider hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">
             取消
           </button>
           <button @click="confirmDelete" class="px-6 py-2 rounded-xl text-sm font-bold text-white bg-[#ff4d4f] hover:bg-[#ef4444] transition-all shadow-md shadow-red-500/20 active:scale-[0.97]">
@@ -31,11 +31,11 @@
       </div>
     </div>
 
-    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">AI 助手 <span class="text-slate-500 font-medium text-sm ml-2">/ 随时随地为您提供智能对话与解答</span></h1>
+    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+      <h1 class="text-xl font-bold tracking-tight text-brand-text">AI 助手 <span class="text-slate-500 font-medium text-sm ml-2">/ 随时随地为您提供智能对话与解答</span></h1>
     </header>
 
-    <main class="pt-16 flex-1 flex h-full bg-white dark:bg-slate-900 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <main class="pt-16 flex-1 flex h-full bg-surface-raised transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- 左侧会话列表 -->
       <div 
         class="border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-900/50 h-full transition-all duration-300"
@@ -44,7 +44,7 @@
         <div class="p-4 border-b border-slate-200 dark:border-slate-800">
           <button
             @click="handleCreateSession"
-            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors"
+            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-brand hover:bg-brand-hover text-white rounded-xl font-medium transition-colors"
           >
             <span class="material-symbols-outlined text-sm">add</span>
             新建对话
@@ -60,7 +60,7 @@
               :key="session.sessionId || session.id"
               @click="selectSession(session.sessionId || session.id)"
               class="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors"
-              :class="isCurrentSession(session.sessionId || session.id) ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-700 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'"
+              :class="isCurrentSession(session.sessionId || session.id) ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-text' : 'text-content-secondary hover:bg-slate-200/50 dark:hover:bg-slate-800/50'"
             >
               <div class="flex items-center gap-3 overflow-hidden w-full">
                 <span class="material-symbols-outlined text-lg opacity-70">chat_bubble</span>
@@ -94,14 +94,14 @@
         <div class="absolute top-4 left-4 z-20 flex items-center gap-2">
           <button 
             @click="historyCollapsed = !historyCollapsed"
-            class="p-2 bg-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm transition-all"
+            class="p-2 bg-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl hover:bg-surface-hover hover:shadow-sm transition-all"
             title="切换侧边栏"
           >
             <span class="material-symbols-outlined text-[36px]">{{ historyCollapsed ? 'dock_to_right' : 'dock_to_left' }}</span>
           </button>
           <button 
             @click="handleCreateSession"
-            class="p-2 bg-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm transition-all"
+            class="p-2 bg-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl hover:bg-surface-hover hover:shadow-sm transition-all"
             title="新建对话"
           >
             <span class="material-symbols-outlined text-[36px]">edit_square</span>
@@ -112,10 +112,10 @@
         <div v-if="currentSessionId && currentSession" class="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
           <div 
             v-if="editingId !== currentSessionId"
-            class="group flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm transition-all cursor-pointer"
+            class="group flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-surface-hover hover:shadow-sm transition-all cursor-pointer"
             @click="startRename(currentSession)"
           >
-            <span class="text-[15px] font-bold text-slate-800 dark:text-slate-200">{{ currentSession.title || '新对话' }}</span>
+            <span class="text-[15px] font-bold text-content">{{ currentSession.title || '新对话' }}</span>
             <span class="material-symbols-outlined text-[16px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">edit</span>
           </div>
           <div v-else class="flex items-center gap-2 px-3 py-1.5">
@@ -124,7 +124,7 @@
                v-model="editTitle"
                @blur="saveRename(currentSessionId)"
                @keyup.enter="saveRename(currentSessionId)"
-               class="bg-transparent border-b border-indigo-500 focus:outline-none text-[15px] font-bold text-slate-800 dark:text-slate-200 text-center w-48"
+               class="bg-transparent border-b border-indigo-500 focus:outline-none text-[15px] font-bold text-content text-center w-48"
              />
           </div>
           <span class="text-[11px] text-slate-400 mt-0.5">内容由 AI 生成</span>
@@ -133,34 +133,34 @@
         <template v-if="!currentSessionId">
           <!-- 空状态 -->
           <div class="flex-1 flex flex-col items-center justify-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/50 pb-20">
-            <h3 class="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-6">有什么我能帮你的吗？</h3>
+            <h3 class="text-3xl font-bold text-content mb-6">有什么我能帮你的吗？</h3>
 
             <!-- 快捷入口 -->
             <div class="flex gap-2 mb-8 flex-wrap justify-center">
               <button
                 @click="inputContent = '我要刷3道Spring Boot的场景题'"
-                class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
+                class="whitespace-nowrap px-4 py-2.5 bg-brand-subtle/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
               >
                 <span class="material-symbols-outlined text-sm">rocket_launch</span>
                 3道 Spring Boot 场景题
               </button>
               <button
                 @click="inputContent = '来一道中等难度的Redis选择题'"
-                class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
+                class="whitespace-nowrap px-4 py-2.5 bg-brand-subtle/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
               >
                 <span class="material-symbols-outlined text-sm">database</span>
                 Redis 选择题
               </button>
               <button
                 @click="inputContent = '开始一场高级后端工程师面试'"
-                class="whitespace-nowrap px-4 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-full hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30"
+                class="whitespace-nowrap px-4 py-2.5 bg-brand text-white text-xs font-bold rounded-full hover:bg-brand-hover transition-colors flex items-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-indigo-900/30"
               >
                 <span class="material-symbols-outlined text-sm">psychology</span>
                 开始面试
               </button>
               <button
                 @click="inputContent = '直接开始刷题'"
-                class="whitespace-nowrap px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
+                class="whitespace-nowrap px-4 py-2.5 bg-brand-subtle/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-full border border-indigo-100 dark:border-indigo-900/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors flex items-center gap-2"
               >
                 <span class="material-symbols-outlined text-sm">play_arrow</span>
                 直接开始刷题
@@ -191,7 +191,7 @@
                   <button
                     @click="handleSendFromEmpty"
                     :disabled="!inputContent.trim()"
-                    class="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-xl transition-colors"
+                    class="w-9 h-9 flex items-center justify-center bg-brand hover:bg-brand-hover disabled:opacity-40 disabled:hover:bg-brand text-white rounded-xl transition-colors"
                   >
                     <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
                   </button>
@@ -220,11 +220,11 @@
                 :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
               >
                 <div v-if="msg.role !== 'user'" class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center mr-3 flex-shrink-0 mt-1">
-                  <span class="material-symbols-outlined text-sm text-indigo-600 dark:text-indigo-400">robot_2</span>
+                  <span class="material-symbols-outlined text-sm text-brand-text">robot_2</span>
                 </div>
                 <div
                   class="max-w-[85%] rounded-2xl px-5 py-3.5"
-                  :class="msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-sm shadow-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-tl-sm text-slate-800 dark:text-slate-200'"
+                  :class="msg.role === 'user' ? 'bg-brand text-white rounded-tr-sm shadow-sm' : 'bg-white dark:bg-slate-800 border border-divider shadow-sm rounded-tl-sm text-content'"
                 >
                   <div v-if="msg.role === 'user'" class="whitespace-pre-wrap leading-relaxed">{{ msg.content }}</div>
                   <div v-else class="markdown-body text-[15px] leading-relaxed">
@@ -281,7 +281,7 @@
                         via: {{ formatRouteLabel(msg.routeSource) }}
                       </span>
                     </div>
-                    <div class="mt-3 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <div class="mt-3 flex items-center gap-1.5 text-xs text-content-secondary">
                       <button
                         class="inline-flex items-center gap-1 px-2 py-1 rounded-md border transition-colors"
                         :class="getReaction(msg, idx) === 'like'
@@ -316,13 +316,13 @@
               
               <div v-if="isStreaming" class="flex justify-start">
                  <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center mr-3 flex-shrink-0 mt-1">
-                  <span class="material-symbols-outlined text-sm text-indigo-600 dark:text-indigo-400">robot_2</span>
+                  <span class="material-symbols-outlined text-sm text-brand-text">robot_2</span>
                 </div>
-                <div class="max-w-[85%] rounded-2xl px-5 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-tl-sm text-slate-800 dark:text-slate-200 min-h-[52px] flex items-center">
+                <div class="max-w-[85%] rounded-2xl px-5 py-3.5 bg-white dark:bg-slate-800 border border-divider shadow-sm rounded-tl-sm text-content min-h-[52px] flex items-center">
                    <div v-if="!streamingContent" class="flex items-center gap-1.5 px-2">
                      <div class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-[bounce_1s_infinite_-0.3s]"></div>
                      <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-[bounce_1s_infinite_-0.15s]"></div>
-                     <div class="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-[bounce_1s_infinite]"></div>
+                     <div class="w-2.5 h-2.5 rounded-full bg-brand animate-[bounce_1s_infinite]"></div>
                    </div>
                    <div v-else class="markdown-body text-[15px] leading-relaxed">
                      <span v-html="renderMarkdown(streamingContent)"></span>
@@ -357,7 +357,7 @@
           <!-- 底部输入框 -->
           <div class="p-6 bg-transparent z-10 w-full max-w-6xl mx-auto">
             <div class="mb-3 flex items-center justify-between">
-              <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div class="flex items-center gap-2 text-xs text-content-secondary">
                 <span class="font-semibold">检索模式</span>
                 <select v-model="selectedRetrievalMode" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
                   <option value="RAG_ONLY">RAG_ONLY</option>
@@ -365,7 +365,7 @@
                   <option value="HYBRID_FUSION">HYBRID_FUSION</option>
                 </select>
               </div>
-              <div class="text-[11px] text-slate-400 dark:text-slate-500">
+              <div class="text-[11px] text-content-muted">
                 当前请求级模式
               </div>
             </div>
@@ -401,14 +401,14 @@
                     v-else
                     @click="handleSend"
                     :disabled="!inputContent.trim()"
-                    class="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-xl transition-colors"
+                    class="w-9 h-9 flex items-center justify-center bg-brand hover:bg-brand-hover disabled:opacity-40 disabled:hover:bg-brand text-white rounded-xl transition-colors"
                   >
                     <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
                   </button>
                 </div>
               </div>
             </div>
-            <div class="text-center mt-3 text-xs text-slate-400 dark:text-slate-500">
+            <div class="text-center mt-3 text-xs text-content-muted">
               AI 可能会犯错。请核查重要信息。
             </div>
           </div>

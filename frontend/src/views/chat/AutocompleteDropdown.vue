@@ -2,7 +2,7 @@
   <Transition name="fade">
     <div
       v-if="visible && suggestions.length > 0"
-      class="autocomplete-dropdown absolute bottom-full left-0 right-0 mb-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-50 max-h-[320px] overflow-y-auto"
+      class="autocomplete-dropdown absolute bottom-full left-0 right-0 mb-1 bg-white dark:bg-slate-800 border border-divider rounded-xl shadow-lg overflow-hidden z-50 max-h-[320px] overflow-y-auto"
     >
       <div
         v-for="(item, index) in suggestions"
@@ -20,7 +20,7 @@
         <span class="text-sm text-slate-700 dark:text-slate-200" v-html="highlightMatch(item.phrase)"></span>
         <span
           v-if="item.category"
-          class="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 shrink-0"
+          class="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-surface-hover text-content-muted shrink-0"
         >
           {{ item.category }}
         </span>

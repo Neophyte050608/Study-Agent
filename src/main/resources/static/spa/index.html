@@ -10,6 +10,43 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
       body { font-family: 'Inter', sans-serif; }
+
+      /* === semantic color tokens === */
+      :root {
+        --color-surface: 248 250 252;
+        --color-surface-raised: 255 255 255;
+        --color-surface-overlay: 255 255 255;
+        --color-surface-field: 248 250 252;
+        --color-surface-hover: 241 245 249;
+        --color-divider: 226 232 240;
+        --color-divider-light: 241 245 249;
+        --color-divider-hover: 199 210 254;
+        --color-content: 15 23 42;
+        --color-content-secondary: 100 116 139;
+        --color-content-muted: 148 163 184;
+        --color-brand: 79 70 229;
+        --color-brand-hover: 67 56 202;
+        --color-brand-text: 67 56 202;
+        --color-brand-subtle: 238 242 255;
+      }
+      .dark {
+        --color-surface: 2 6 23;
+        --color-surface-raised: 15 23 42;
+        --color-surface-overlay: 2 6 23;
+        --color-surface-field: 30 41 59;
+        --color-surface-hover: 30 41 59;
+        --color-divider: 51 65 85;
+        --color-divider-light: 30 41 59;
+        --color-divider-hover: 55 48 163;
+        --color-content: 241 245 249;
+        --color-content-secondary: 148 163 184;
+        --color-content-muted: 100 116 139;
+        --color-brand: 99 102 241;
+        --color-brand-hover: 129 140 248;
+        --color-brand-text: 129 140 248;
+        --color-brand-subtle: 49 46 129;
+      }
+      /* ================================ */
       .material-symbols-outlined {
           font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
           display: inline-block;
@@ -18,10 +55,7 @@
       .glass-effect {
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
-          background: rgba(255, 255, 255, 0.8);
-      }
-      .dark .glass-effect {
-          background: rgba(2, 6, 23, 0.8);
+          background: rgb(var(--color-surface-overlay) / 0.8);
       }
       .chat-scroll::-webkit-scrollbar { width: 5px; }
       .chat-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -53,11 +87,30 @@
             theme: {
                 extend: {
                     colors: {
-                        "primary": "#4338CA",
-                        "surface": "#f8f9fa",
-                        "on-surface": "#191c1d",
-                        "surface-container-low": "#f3f4f5",
-                        "primary-container": "#4338ca",
+                        // semantic surface tokens → bg-surface, bg-surface-raised, etc.
+                        "surface": "rgb(var(--color-surface) / <alpha-value>)",
+                        "surface-raised": "rgb(var(--color-surface-raised) / <alpha-value>)",
+                        "surface-overlay": "rgb(var(--color-surface-overlay) / <alpha-value>)",
+                        "surface-field": "rgb(var(--color-surface-field) / <alpha-value>)",
+                        "surface-hover": "rgb(var(--color-surface-hover) / <alpha-value>)",
+                        // semantic border tokens → border-divider, border-divider-light, etc.
+                        "divider": "rgb(var(--color-divider) / <alpha-value>)",
+                        "divider-light": "rgb(var(--color-divider-light) / <alpha-value>)",
+                        "divider-hover": "rgb(var(--color-divider-hover) / <alpha-value>)",
+                        // semantic text tokens → text-content, text-content-secondary, etc.
+                        "content": "rgb(var(--color-content) / <alpha-value>)",
+                        "content-secondary": "rgb(var(--color-content-secondary) / <alpha-value>)",
+                        "content-muted": "rgb(var(--color-content-muted) / <alpha-value>)",
+                        // semantic brand tokens → bg-brand, text-brand-text, etc.
+                        "brand": "rgb(var(--color-brand) / <alpha-value>)",
+                        "brand-hover": "rgb(var(--color-brand-hover) / <alpha-value>)",
+                        "brand-text": "rgb(var(--color-brand-text) / <alpha-value>)",
+                        "brand-subtle": "rgb(var(--color-brand-subtle) / <alpha-value>)",
+                        // legacy MD3 tokens (kept for backward compat)
+                        "primary": "rgb(var(--color-brand) / <alpha-value>)",
+                        "on-surface": "rgb(var(--color-content) / <alpha-value>)",
+                        "surface-container-low": "rgb(var(--color-surface-field) / <alpha-value>)",
+                        "primary-container": "rgb(var(--color-brand) / <alpha-value>)",
                         "secondary-container": "#c0bdff",
                         "on-secondary-container": "#4c4a84",
                         "error": "#ba1a1a",
@@ -72,8 +125,8 @@
             },
         }
     </script>
-    <script type="module" crossorigin src="/spa/assets/index-DRkXnbbz.js"></script>
-    <link rel="stylesheet" crossorigin href="/spa/assets/index-DF63YW5Q.css">
+    <script type="module" crossorigin src="/spa/assets/index-C5H-y4Gr.js"></script>
+    <link rel="stylesheet" crossorigin href="/spa/assets/index-RwbmhDKv.css">
   </head>
   <body class="bg-surface text-on-surface antialiased">
     <div id="app" class="min-h-screen"></div>

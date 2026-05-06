@@ -1,9 +1,9 @@
 <template>
-  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden my-4">
+  <div class="bg-white dark:bg-slate-800 border border-divider rounded-xl shadow-sm overflow-hidden my-4">
     <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/60 flex items-center justify-between gap-4">
       <div class="flex items-center gap-2">
         <span class="material-symbols-outlined text-sky-500">format_list_bulleted_add</span>
-        <span class="font-bold text-slate-800 dark:text-slate-200">{{ payload.topic }} 填空题</span>
+        <span class="font-bold text-content">{{ payload.topic }} 填空题</span>
         <span class="text-xs text-slate-400 font-normal px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded-full">{{ payload.difficulty }}</span>
       </div>
       <div class="text-sm font-medium text-slate-500">
@@ -12,7 +12,7 @@
     </div>
 
     <div class="p-6 space-y-5">
-      <div class="markdown-body text-[15px] leading-relaxed text-slate-800 dark:text-slate-200" v-html="renderMarkdown(payload.stem)"></div>
+      <div class="markdown-body text-[15px] leading-relaxed text-content" v-html="renderMarkdown(payload.stem)"></div>
 
       <div v-if="!payload.submitted" class="space-y-4">
         <textarea
@@ -27,7 +27,7 @@
           <button
             @click="handleSubmit"
             :disabled="submitting || !draftAnswer.trim() || !messageId"
-            class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+            class="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
           >
             {{ submitting ? '提交中...' : '提交答案' }}
           </button>
@@ -35,20 +35,20 @@
       </div>
 
       <div v-else class="space-y-4">
-        <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-4">
+        <div class="rounded-xl border border-divider bg-slate-50 dark:bg-slate-900/30 p-4">
           <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">你的答案</div>
           <div class="text-[14px] leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{{ payload.userAnswer }}</div>
         </div>
 
         <div class="grid gap-4 md:grid-cols-[140px_minmax(0,1fr)]">
-          <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/70">
+          <div class="rounded-xl border border-divider p-4 bg-white dark:bg-slate-800/70">
             <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">评分</div>
             <div class="flex items-end gap-1">
-              <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400">{{ payload.score ?? '-' }}</span>
+              <span class="text-2xl font-black text-brand-text">{{ payload.score ?? '-' }}</span>
               <span class="text-xs font-semibold text-slate-400 pb-1">/100</span>
             </div>
           </div>
-          <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800/70">
+          <div class="rounded-xl border border-divider p-4 bg-white dark:bg-slate-800/70">
             <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">点评</div>
             <div class="markdown-body text-[14px] leading-relaxed text-slate-700 dark:text-slate-200" v-html="renderMarkdown(payload.feedback || '暂无点评')"></div>
           </div>
@@ -76,7 +76,7 @@
           <div v-else-if="payload.isLast" class="text-sm text-emerald-600 dark:text-emerald-300 font-semibold">
             本轮填空题已完成
           </div>
-          <div v-else class="text-sm text-slate-500 dark:text-slate-400 font-semibold">
+          <div v-else class="text-sm text-content-secondary font-semibold">
             已进入下一题
           </div>
         </div>

@@ -1,18 +1,18 @@
 <template>
-  <div class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased min-h-screen">
+  <div class="bg-surface text-content antialiased min-h-screen">
     <!-- Header -->
-    <header class="fixed top-0 right-0 h-16 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
       <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-indigo-700 dark:text-indigo-400">RAG 监控 <span class="text-slate-500 dark:text-slate-400 font-medium text-sm ml-2">/ 检索质量仪表盘</span></h1>
+        <h1 class="text-xl font-bold tracking-tight text-brand-text">RAG 监控 <span class="text-content-secondary font-medium text-sm ml-2">/ 检索质量仪表盘</span></h1>
       </div>
     </header>
 
-    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-[#f9fafb] dark:bg-slate-950 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-surface transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Metric Cards Row -->
       <div class="grid grid-cols-6 gap-4 mb-8">
-        <div v-for="card in metricCards" :key="card.label" class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div v-for="card in metricCards" :key="card.label" class="bg-surface-raised p-4 rounded-xl border border-divider shadow-sm">
           <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{{ card.label }}</div>
-          <div class="text-2xl font-black text-slate-900 dark:text-slate-100">{{ card.value }}</div>
+          <div class="text-2xl font-black text-content">{{ card.value }}</div>
           <div v-if="card.change !== null" class="text-xs mt-1 font-bold" :class="card.change >= 0 ? 'text-emerald-600' : 'text-red-500'">
             {{ card.change >= 0 ? '↑' : '↓' }} {{ Math.abs(card.change) }}% vs 昨日
           </div>
@@ -21,13 +21,13 @@
 
       <div class="grid grid-cols-3 gap-6 mb-8">
         <!-- Trend Chart (2/3) -->
-        <div class="col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+        <div class="col-span-2 bg-surface-raised rounded-xl border border-divider p-6 shadow-sm">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">趋势分析</h3>
+            <h3 class="text-sm font-bold text-content-secondary uppercase tracking-wider">趋势分析</h3>
             <div class="flex gap-2">
               <button v-for="range in timeRanges" :key="range.value" @click="selectedRange = range.value; loadHistory()"
                       class="px-3 py-1 rounded-lg text-xs font-bold transition-all"
-                      :class="selectedRange === range.value ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'">
+                      :class="selectedRange === range.value ? 'bg-indigo-600 text-white' : 'bg-surface-hover text-content-secondary'">
                 {{ range.label }}
               </button>
               <button @click="triggerAndReload"
@@ -68,8 +68,8 @@
         </div>
 
         <!-- Alert Panel (1/3) -->
-        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
-          <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">告警状态</h3>
+        <div class="bg-surface-raised rounded-xl border border-divider p-6 shadow-sm">
+          <h3 class="text-sm font-bold text-content-secondary uppercase tracking-wider mb-4">告警状态</h3>
           <div class="rounded-xl p-6 mb-4 text-center"
                :class="alertBgClass">
             <div class="text-4xl font-black">{{ alertLevel }}</div>
@@ -82,7 +82,7 @@
             </div>
           </div>
           <div v-else class="text-xs text-slate-400 mb-4">无活跃告警</div>
-          <a href="/ops" class="block w-full py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all text-center no-underline">
+          <a href="/ops" class="block w-full py-2 bg-surface-hover text-content-secondary rounded-lg text-xs font-bold hover:bg-slate-200 transition-all text-center no-underline">
             运维中心：查看 Trace 详情 →
           </a>
         </div>
@@ -90,19 +90,19 @@
 
       <!-- Feedback Summary -->
       <div class="grid grid-cols-4 gap-4 mb-8">
-        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+        <div class="bg-surface-raised rounded-xl border border-divider p-5 shadow-sm text-center">
           <div class="text-3xl mb-1">{{ feedbackSummary.thumbsUp }}</div>
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">点赞 👍</div>
         </div>
-        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+        <div class="bg-surface-raised rounded-xl border border-divider p-5 shadow-sm text-center">
           <div class="text-3xl mb-1">{{ feedbackSummary.thumbsDown }}</div>
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">点踩 👎</div>
         </div>
-        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+        <div class="bg-surface-raised rounded-xl border border-divider p-5 shadow-sm text-center">
           <div class="text-3xl mb-1">{{ feedbackSummary.copyCount }}</div>
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">复制 📋</div>
         </div>
-        <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm text-center">
+        <div class="bg-surface-raised rounded-xl border border-divider p-5 shadow-sm text-center">
           <div class="text-3xl mb-1" :class="satisfactionColor">{{ feedbackSummary.satisfactionRate }}</div>
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">满意度</div>
         </div>
@@ -169,7 +169,7 @@ const feedbackSummary = computed(() => {
 
 const satisfactionColor = computed(() => {
   const rate = parseFloat(feedbackSummary.value.satisfactionRate)
-  if (isNaN(rate)) return 'text-slate-900 dark:text-slate-100'
+  if (isNaN(rate)) return 'text-content'
   if (rate >= 80) return 'text-emerald-600'
   if (rate >= 50) return 'text-amber-600'
   return 'text-red-500'

@@ -1,10 +1,10 @@
 <template>
-  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden my-4">
+  <div class="bg-white dark:bg-slate-800 border border-divider rounded-xl shadow-sm overflow-hidden my-4">
     <!-- Header -->
     <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="material-symbols-outlined text-indigo-500">quiz</span>
-        <span class="font-bold text-slate-800 dark:text-slate-200">{{ payload.topic }} 答题卡</span>
+        <span class="font-bold text-content">{{ payload.topic }} 答题卡</span>
         <span class="text-xs text-slate-400 font-normal px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded-full">{{ payload.difficulty }}</span>
       </div>
       <div v-if="!submitted" class="text-sm font-medium text-slate-500">
@@ -17,7 +17,7 @@
       <template v-if="!submitted">
         <!-- Question Stem -->
         <div class="mb-6">
-          <div class="text-[16px] font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
+          <div class="text-[16px] font-bold text-content leading-relaxed">
             {{ currentQuestion.index }}. {{ currentQuestion.stem }}
           </div>
         </div>
@@ -44,7 +44,7 @@
         </div>
 
         <!-- Feedback & Explanation -->
-        <div v-if="showResult" class="mt-8 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div v-if="showResult" class="mt-8 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-divider animate-in fade-in slide-in-from-top-2 duration-300">
           <div class="flex items-center gap-2 mb-2">
              <span :class="isCurrentCorrect ? 'text-green-600' : 'text-red-600'" class="font-bold flex items-center gap-1">
                <span class="material-symbols-outlined text-sm">{{ isCurrentCorrect ? 'check_circle' : 'cancel' }}</span>
@@ -52,7 +52,7 @@
              </span>
              <span v-if="!isCurrentCorrect" class="text-slate-500 text-sm">正确答案: {{ currentQuestion.correctAnswer }}</span>
           </div>
-          <div class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed italic">
+          <div class="text-sm text-content-secondary leading-relaxed italic">
             <strong>解析:</strong> {{ currentQuestion.explanation }}
           </div>
         </div>
@@ -61,7 +61,7 @@
         <div v-if="showResult" class="mt-6 flex justify-end">
           <button 
             @click="nextQuestion"
-            class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
+            class="px-6 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl font-medium transition-colors flex items-center gap-2"
           >
             {{ isLast ? '完成并提交' : '下一题' }}
             <span class="material-symbols-outlined text-sm">arrow_forward</span>
@@ -72,21 +72,21 @@
       <!-- Results View -->
       <div v-else class="flex flex-col items-center py-6 text-center animate-in zoom-in duration-500">
         <div class="w-24 h-24 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mb-4 border-4 border-indigo-100 dark:border-indigo-800">
-          <span class="text-3xl font-black text-indigo-600 dark:text-indigo-400">{{ score }}</span>
+          <span class="text-3xl font-black text-brand-text">{{ score }}</span>
         </div>
-        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">练习已完成!</h3>
+        <h3 class="text-xl font-bold text-content">练习已完成!</h3>
         <p class="text-slate-500 mt-2 mb-6">
           您答对了 {{ correctCount }} / {{ payload.totalQuestions }} 道题
         </p>
         
         <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
-          <div class="p-3 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-slate-100 dark:border-slate-800">
+          <div class="p-3 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-divider-light">
             <div class="text-xs text-slate-400 mb-1">正确率</div>
-            <div class="font-bold text-slate-700 dark:text-slate-300">{{ score }}%</div>
+            <div class="font-bold text-content-secondary">{{ score }}%</div>
           </div>
-          <div class="p-3 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-slate-100 dark:border-slate-800">
+          <div class="p-3 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-divider-light">
             <div class="text-xs text-slate-400 mb-1">耗时</div>
-            <div class="font-bold text-slate-700 dark:text-slate-300">{{ duration }}秒</div>
+            <div class="font-bold text-content-secondary">{{ duration }}秒</div>
           </div>
         </div>
       </div>
