@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.menu;
+package io.github.imzmq.interview.menu.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.menu.MenuConfigDO;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
