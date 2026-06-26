@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.dto.search;
+package io.github.imzmq.interview.search.application.dto;
 
 import lombok.Data;
 
