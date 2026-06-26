@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.chatstream;
 
-import io.github.imzmq.interview.entity.chat.ChatMessageDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.interview.application.WebChatService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;

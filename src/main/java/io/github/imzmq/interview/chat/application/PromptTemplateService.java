@@ -2,8 +2,8 @@ package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.github.imzmq.interview.entity.chat.PromptTemplateDO;
-import io.github.imzmq.interview.mapper.chat.PromptTemplateMapper;
+import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.io.Resource;

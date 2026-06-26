@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.chat.api;
 
-import io.github.imzmq.interview.entity.chat.PromptTemplateDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import org.springframework.http.HttpStatus;

@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.api;
 
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
-import io.github.imzmq.interview.entity.chat.ChatMessageDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.interview.application.WebChatService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
