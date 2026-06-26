@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.ingestion.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.ingestion.SyncIndexDO;
+import io.github.imzmq.interview.ingestion.infrastructure.persistence.SyncIndexDO;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
-import io.github.imzmq.interview.mapper.ingestion.SyncIndexMapper;
+import io.github.imzmq.interview.ingestion.infrastructure.persistence.SyncIndexMapper;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.rag.core.DocumentSplitter;
 import io.github.imzmq.interview.rag.core.NoteLoader;

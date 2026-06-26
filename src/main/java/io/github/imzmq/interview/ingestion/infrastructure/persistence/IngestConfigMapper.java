@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.ingestion;
+package io.github.imzmq.interview.ingestion.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.ingestion.IngestConfigDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper

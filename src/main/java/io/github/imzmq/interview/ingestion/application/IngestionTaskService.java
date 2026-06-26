@@ -2,7 +2,7 @@ package io.github.imzmq.interview.ingestion.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import io.github.imzmq.interview.entity.ingestion.IngestionTaskHistoryDO;
+import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestionTaskHistoryDO;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionExecutionContext;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionNodeLog;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionNodeStage;
@@ -14,7 +14,7 @@ import io.github.imzmq.interview.ingestion.pipeline.IngestionStageNodeRegistry;
 import io.github.imzmq.interview.ingestion.pipeline.IngestionStageResult;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
-import io.github.imzmq.interview.mapper.ingestion.IngestionTaskHistoryMapper;
+import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestionTaskHistoryMapper;
 import io.github.imzmq.interview.rag.core.DocumentSplitter;
 import io.github.imzmq.interview.rag.core.NoteLoader;
 import io.github.imzmq.interview.rag.core.ObsidianKnowledgeExtractor;
