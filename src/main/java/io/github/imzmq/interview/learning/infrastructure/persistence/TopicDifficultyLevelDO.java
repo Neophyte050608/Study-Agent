@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.entity.learning;
+package io.github.imzmq.interview.learning.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -11,30 +11,30 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
-@TableName(value = "t_capability_curve", autoResultMap = true)
-public class CapabilityCurveDO {
+@TableName(value = "t_topic_difficulty_level", autoResultMap = true)
+public class TopicDifficultyLevelDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String userId;
-
     private String topic;
 
-    private Integer eventSequence;
+    private Integer difficultyLevel;
 
-    @TableField(value = "scores_array", typeHandler = JacksonTypeHandler.class)
-    private List<Integer> scoresArray;
+    private String category;
 
-    @TableField(value = "timestamps_array", typeHandler = JacksonTypeHandler.class)
-    private List<String> timestampsArray;
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> prerequisites;
 
-    private String trendDirection;
+    private Double avgMasteryScore;
 
-    private Double trendStrength;
+    private Integer totalAssessments;
+
+    private Boolean enabled;
 
     private LocalDateTime updatedAt;
 
     private LocalDateTime createdAt;
 }
+
 

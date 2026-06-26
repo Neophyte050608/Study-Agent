@@ -1,16 +1,16 @@
 package io.github.imzmq.interview.learning.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.learning.CapabilityCurveDO;
-import io.github.imzmq.interview.entity.learning.LearningDecayConfigDO;
-import io.github.imzmq.interview.entity.learning.LearningTrajectoryDO;
-import io.github.imzmq.interview.entity.learning.TopicDifficultyLevelDO;
-import io.github.imzmq.interview.entity.learning.UserKnowledgeStateDO;
-import io.github.imzmq.interview.mapper.learning.CapabilityCurveMapper;
-import io.github.imzmq.interview.mapper.learning.LearningDecayConfigMapper;
-import io.github.imzmq.interview.mapper.learning.LearningTrajectoryMapper;
-import io.github.imzmq.interview.mapper.learning.TopicDifficultyLevelMapper;
-import io.github.imzmq.interview.mapper.learning.UserKnowledgeStateMapper;
+import io.github.imzmq.interview.learning.infrastructure.persistence.CapabilityCurveDO;
+import io.github.imzmq.interview.learning.infrastructure.persistence.LearningDecayConfigDO;
+import io.github.imzmq.interview.learning.infrastructure.persistence.LearningTrajectoryDO;
+import io.github.imzmq.interview.learning.infrastructure.persistence.TopicDifficultyLevelDO;
+import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateDO;
+import io.github.imzmq.interview.learning.infrastructure.persistence.CapabilityCurveMapper;
+import io.github.imzmq.interview.learning.infrastructure.persistence.LearningDecayConfigMapper;
+import io.github.imzmq.interview.learning.infrastructure.persistence.LearningTrajectoryMapper;
+import io.github.imzmq.interview.learning.infrastructure.persistence.TopicDifficultyLevelMapper;
+import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateMapper;
 import io.github.imzmq.interview.learning.domain.TrainingProfileSnapshot;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;

@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.learning;
+package io.github.imzmq.interview.learning.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.learning.CapabilityCurveDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
