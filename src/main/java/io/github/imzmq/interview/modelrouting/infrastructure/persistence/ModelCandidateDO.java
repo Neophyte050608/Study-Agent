@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.entity.modelrouting;
+package io.github.imzmq.interview.modelrouting.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

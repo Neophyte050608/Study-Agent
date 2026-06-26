@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.controller;
 
-import io.github.imzmq.interview.dto.modelrouting.ModelCandidateDTO;
-import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
+import io.github.imzmq.interview.modelrouting.api.ModelCandidateDTO;
+import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import io.github.imzmq.interview.modelrouting.api.ModelRoutingController;

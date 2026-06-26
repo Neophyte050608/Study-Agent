@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.modelrouting.registry;
 
-import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
+import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;

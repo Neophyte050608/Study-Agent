@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.modelrouting.core;
 
 import io.github.imzmq.interview.common.StringUtils;
-import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
+import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
 
 /**
  * 模型路由候选者记录。

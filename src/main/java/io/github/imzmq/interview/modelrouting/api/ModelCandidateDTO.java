@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.dto.modelrouting;
+package io.github.imzmq.interview.modelrouting.api;
 
 import lombok.Data;
 

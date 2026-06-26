@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.modelrouting;
+package io.github.imzmq.interview.modelrouting.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
