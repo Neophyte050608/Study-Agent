@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.agent;
+package io.github.imzmq.interview.agent.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.agent.AgentConfigDO;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
