@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.interview;
+package io.github.imzmq.interview.interview.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.interview.InterviewSessionDO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;

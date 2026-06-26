@@ -2,8 +2,8 @@ package io.github.imzmq.interview.session.repository;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.entity.interview.InterviewSessionDO;
-import io.github.imzmq.interview.mapper.interview.InterviewSessionMapper;
+import io.github.imzmq.interview.interview.infrastructure.persistence.InterviewSessionDO;
+import io.github.imzmq.interview.interview.infrastructure.persistence.InterviewSessionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
