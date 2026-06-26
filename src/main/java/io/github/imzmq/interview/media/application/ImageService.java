@@ -1,13 +1,13 @@
 package io.github.imzmq.interview.media.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.media.ImageMetadataDO;
+import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import io.github.imzmq.interview.entity.knowledge.RagParentDO;
-import io.github.imzmq.interview.entity.media.TextImageRelationDO;
+import io.github.imzmq.interview.media.infrastructure.persistence.TextImageRelationDO;
 import io.github.imzmq.interview.ingestion.application.IngestConfigService;
-import io.github.imzmq.interview.mapper.media.ImageMetadataMapper;
+import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
 import io.github.imzmq.interview.mapper.knowledge.RagParentMapper;
-import io.github.imzmq.interview.mapper.media.TextImageRelationMapper;
+import io.github.imzmq.interview.media.infrastructure.persistence.TextImageRelationMapper;
 import io.github.imzmq.interview.rag.core.ImageReferenceExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

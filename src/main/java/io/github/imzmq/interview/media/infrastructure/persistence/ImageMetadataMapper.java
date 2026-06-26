@@ -1,7 +1,7 @@
-package io.github.imzmq.interview.mapper.media;
+package io.github.imzmq.interview.media.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.media.ImageMetadataDO;
+import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
