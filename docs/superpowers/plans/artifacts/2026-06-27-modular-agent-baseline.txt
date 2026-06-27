@@ -1,0 +1,39 @@
+# Modular Agent Architecture Baseline
+
+## Git
+- Branch: `refactor/codebase-structure-cleanup`
+- Baseline commit SHA: `525e72aae7bf081681933bb721e9bdfeee70b015`
+- Working tree status at capture: clean (`git status --short --branch` output: `## refactor/codebase-structure-cleanup...origin/refactor/codebase-structure-cleanup`)
+- Command/source used: Task 1 baseline capture command combining `git status --short --branch`, top-level package `find`, and ArchUnit rule `grep`.
+
+## Top-level packages after cleanup baseline
+agent
+chat
+common
+config
+feedback
+graph
+identity
+im
+ingestion
+intent
+interview
+knowledge
+learning
+mcp
+media
+menu
+modelrouting
+observability
+rag
+routing
+search
+security
+skill
+stream
+
+## Current ArchUnit rules
+33:    static final ArchRule controller_should_not_access_mapper_directly =
+70:    static final ArchRule agent_should_not_depend_on_controller =
+75:    static final ArchRule entity_should_not_depend_on_service_or_controller =
+81:    static final ArchRule main_code_should_not_use_retired_top_level_entity_mapper_or_dto_packages =
