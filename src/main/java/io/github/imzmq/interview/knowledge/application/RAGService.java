@@ -19,6 +19,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndex
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
+import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
@@ -68,17 +69,6 @@ import java.util.stream.Stream;
  */
 @Service
 public class RAGService {
-
-    /**
-     * 结构化查询改写结果。
-     * <p>coreTerms 用于高精度检索通道（词法、图谱），
-     * fullQuery（core + expand 拼接）用于语义向量检索。</p>
-     */
-    record RewrittenQuery(String coreTerms, String expandTerms, String fullQuery) {
-        static RewrittenQuery fallback(String raw) {
-            return new RewrittenQuery(raw, "", raw);
-        }
-    }
 
     private static final Logger logger = LoggerFactory.getLogger(RAGService.class);
     private static final Pattern EVIDENCE_LINE_PATTERN = Pattern.compile("^(\\d+)\\.\\s+(.*)$");
