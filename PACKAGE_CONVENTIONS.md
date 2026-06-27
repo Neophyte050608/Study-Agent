@@ -60,10 +60,10 @@ DTO placement:
 - Autocomplete and ranking: `search.application`; internal autocomplete DTOs: `search.application.dto`
 
 Knowledge package breakdown (mandatory for new code):
-- RAG core entry only: `knowledge.application` (currently only `RAGService`).
+- RAG compatibility entry and packet builder: `knowledge.application` (`RAGService` remains a facade; new code should prefer focused services where possible).
 - Indexing and chunk/lexical tokenizer/index structures: `knowledge.application.indexing`.
 - Local graph chain (candidate recall, llm route, note resolve, wiki/backlink expansion): `knowledge.application.localgraph`.
-- Retrieval orchestration/fusion and RAG adapter: `knowledge.application.retrieval`.
+- Retrieval orchestration/fusion, query rewrite, evidence evaluation, Web fallback, and RAG adapters: `knowledge.application.retrieval`.
 - Multi-turn topic state and dynamic context policy: `knowledge.application.context`.
 - Streaming chat handlers and stream utilities: `knowledge.application.chatstream`.
 - Retrieval/generation offline eval: `knowledge.application.evaluation`.
@@ -71,7 +71,7 @@ Knowledge package breakdown (mandatory for new code):
 - Knowledge base/document catalog operations: `knowledge.application.catalog`.
 
 Forbidden placement:
-- Do not add new non-core classes into `knowledge.application` root.
+- Do not add new non-core classes into `knowledge.application` root; do not add new responsibilities directly to `RAGService`.
 - Do not place new knowledge features under legacy `...service`.
 - Do not place new business persistence classes under top-level `entity`, `mapper`, or `dto`.
 
