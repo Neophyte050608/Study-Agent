@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.rag.core;
+package io.github.imzmq.interview.knowledge.application.indexing;
 
 /**
  * 分块策略枚举。

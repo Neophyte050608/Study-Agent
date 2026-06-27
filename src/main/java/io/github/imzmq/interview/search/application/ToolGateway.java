@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.tool.gateway;
+package io.github.imzmq.interview.search.application;
 
 /**
  * 通用工具网关抽象。

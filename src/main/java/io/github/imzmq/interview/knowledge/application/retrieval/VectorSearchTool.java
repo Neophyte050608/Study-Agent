@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.tool.search;
+package io.github.imzmq.interview.knowledge.application.retrieval;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -6,7 +6,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import io.github.imzmq.interview.tool.gateway.ToolGateway;
+import io.github.imzmq.interview.search.application.ToolGateway;
 
 /**
  * 向量检索工具。

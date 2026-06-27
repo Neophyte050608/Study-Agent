@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.rag.core;
+package io.github.imzmq.interview.knowledge.application.indexing;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;

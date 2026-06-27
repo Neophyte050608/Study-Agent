@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.rag.core;
+package io.github.imzmq.interview.media.application;
 
 import org.springframework.stereotype.Component;
 

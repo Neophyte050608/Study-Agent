@@ -4,7 +4,7 @@ import io.github.imzmq.interview.agent.a2a.A2ABus;
 import io.github.imzmq.interview.agent.a2a.A2AMessage;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.interview.infrastructure.persistence.InterviewSessionMapper;
-import io.github.imzmq.interview.session.repository.SessionRepository;
+import io.github.imzmq.interview.interview.infrastructure.persistence.SessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;

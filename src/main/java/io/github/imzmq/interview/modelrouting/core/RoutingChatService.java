@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 

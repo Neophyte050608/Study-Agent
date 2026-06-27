@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.stream.runtime.ObservableStreamEmitter;
 import io.github.imzmq.interview.stream.runtime.InterviewSseEmitterSender;
 import io.github.imzmq.interview.stream.runtime.InterviewStreamEventType;

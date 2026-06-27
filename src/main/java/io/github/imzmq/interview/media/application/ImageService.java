@@ -8,7 +8,7 @@ import io.github.imzmq.interview.ingestion.application.IngestConfigService;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentMapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.TextImageRelationMapper;
-import io.github.imzmq.interview.rag.core.ImageReferenceExtractor;
+import io.github.imzmq.interview.media.application.ImageReferenceExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;

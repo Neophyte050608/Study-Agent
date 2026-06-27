@@ -1,5 +1,6 @@
-package io.github.imzmq.interview.tool.gateway;
+package io.github.imzmq.interview.mcp.infrastructure;
 
+import io.github.imzmq.interview.mcp.application.McpCapabilityGateway;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

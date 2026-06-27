@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.core.trace;
+package io.github.imzmq.interview.observability.core;
 
 import com.alibaba.ttl.TransmittableThreadLocal;
 import java.util.ArrayDeque;

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.tool.search;
+package io.github.imzmq.interview.search.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
@@ -12,7 +12,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import io.github.imzmq.interview.tool.gateway.ToolGateway;
 
 /**
  * 网络搜索工具（基于 DuckDuckGo 免费 API）。

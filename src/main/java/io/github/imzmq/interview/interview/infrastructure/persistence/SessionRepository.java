@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.session.repository;
+package io.github.imzmq.interview.interview.infrastructure.persistence;
 
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 

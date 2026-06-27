@@ -1,5 +1,6 @@
-package io.github.imzmq.interview.tool.gateway;
+package io.github.imzmq.interview.mcp.infrastructure;
 
+import io.github.imzmq.interview.mcp.application.McpCapabilityGateway;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;

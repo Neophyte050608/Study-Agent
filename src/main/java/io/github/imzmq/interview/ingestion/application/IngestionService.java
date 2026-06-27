@@ -6,9 +6,9 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.SyncIndexMapper;
 import io.github.imzmq.interview.media.application.ImageService;
-import io.github.imzmq.interview.rag.core.DocumentSplitter;
-import io.github.imzmq.interview.rag.core.NoteLoader;
-import io.github.imzmq.interview.rag.core.ObsidianKnowledgeExtractor;
+import io.github.imzmq.interview.knowledge.application.indexing.DocumentSplitter;
+import io.github.imzmq.interview.ingestion.application.NoteLoader;
+import io.github.imzmq.interview.ingestion.application.ObsidianKnowledgeExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.tools.runner;
+package io.github.imzmq.interview.ingestion.application;
 
 import io.github.imzmq.interview.ingestion.application.IngestionService;
 import org.slf4j.Logger;

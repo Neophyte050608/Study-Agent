@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.tool.gateway;
+package io.github.imzmq.interview.mcp.application;
 
 import java.util.List;
 import java.util.Map;

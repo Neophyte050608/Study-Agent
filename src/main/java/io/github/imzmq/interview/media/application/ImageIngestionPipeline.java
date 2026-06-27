@@ -3,7 +3,7 @@ package io.github.imzmq.interview.media.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
-import io.github.imzmq.interview.rag.core.ImageReferenceExtractor;
+import io.github.imzmq.interview.media.application.ImageReferenceExtractor;
 import io.github.imzmq.interview.modelrouting.application.VisionModelService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

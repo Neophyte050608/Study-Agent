@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.rag.core;
+package io.github.imzmq.interview.ingestion.application;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

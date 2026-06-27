@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.rag;
 
-import io.github.imzmq.interview.rag.core.ChunkingProperties;
-import io.github.imzmq.interview.rag.core.ChunkingStrategy;
-import io.github.imzmq.interview.rag.core.DocumentSplitter;
+import io.github.imzmq.interview.knowledge.application.indexing.ChunkingProperties;
+import io.github.imzmq.interview.knowledge.application.indexing.ChunkingStrategy;
+import io.github.imzmq.interview.knowledge.application.indexing.DocumentSplitter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;

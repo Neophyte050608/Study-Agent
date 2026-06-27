@@ -28,7 +28,7 @@ import io.github.imzmq.interview.skill.runtime.SkillExecutor;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
-import io.github.imzmq.interview.tool.search.WebSearchTool;
+import io.github.imzmq.interview.search.application.WebSearchTool;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

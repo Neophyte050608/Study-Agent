@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.tool.adapter;
+package io.github.imzmq.interview.mcp.infrastructure;
 
 import org.springframework.stereotype.Component;
 
@@ -6,7 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
+import io.github.imzmq.interview.mcp.application.McpCapabilityGateway;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 

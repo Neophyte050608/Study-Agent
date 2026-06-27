@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.rag.core;
+package io.github.imzmq.interview.knowledge.application.indexing;
 
 import java.util.ArrayList;
 import java.util.List;

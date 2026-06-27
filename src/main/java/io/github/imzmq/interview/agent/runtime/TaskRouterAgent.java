@@ -12,7 +12,7 @@ import io.github.imzmq.interview.agent.task.ExecutionMode;
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.TaskType;
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.intent.domain.IntentPreFilter;
 import io.github.imzmq.interview.intent.domain.IntentRoutingDecision;
 import io.github.imzmq.interview.intent.domain.PreFilterResult;

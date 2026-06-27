@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.rag.core;
+package io.github.imzmq.interview.knowledge.application.indexing;
 
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import org.springframework.ai.document.Document;
