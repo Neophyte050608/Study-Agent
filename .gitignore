@@ -21,3 +21,4 @@ frontend/node_modules/
 /AICodeFixLog/
 /AGENTS.md
 .worktrees/
+.superpowers/
