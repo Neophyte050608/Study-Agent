@@ -15,9 +15,11 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@ConditionalOnProperty(prefix = "app.multimodal.image-store", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class ImageVectorStoreConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(ImageVectorStoreConfig.class);
