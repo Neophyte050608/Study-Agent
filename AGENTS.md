@@ -121,6 +121,7 @@ mvn -q -Dtest=ArchitectureRulesTest test
 - 新增数据库表、外部服务、模型提供商或重要配置项。
 - 前端页面结构、路由、API contract 变化。
 - AI agent 开发规则或验证命令变化。
+- 成熟框架、Agent Runtime、观测系统或长任务框架引入路线变化，见 `docs/architecture/framework-adoption-roadmap.md`。
 
 ## Commit 约定
 
