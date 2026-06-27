@@ -8,7 +8,7 @@ import io.github.imzmq.interview.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.ingestion.application.IngestionService;
 import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
 import io.github.imzmq.interview.interview.application.InterviewService;
-import io.github.imzmq.interview.mcp.application.OpsAuditService;
+import io.github.imzmq.interview.integration.mcp.application.OpsAuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

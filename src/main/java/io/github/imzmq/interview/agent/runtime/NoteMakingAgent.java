@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.agent.core.Agent;
-import io.github.imzmq.interview.mcp.application.McpGatewayService;
+import io.github.imzmq.interview.integration.mcp.application.McpGatewayService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;

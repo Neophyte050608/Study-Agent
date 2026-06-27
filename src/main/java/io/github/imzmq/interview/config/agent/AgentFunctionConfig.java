@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.config.agent;
 
 import io.github.imzmq.interview.knowledge.application.retrieval.VectorSearchTool;
-import io.github.imzmq.interview.search.application.WebSearchTool;
+import io.github.imzmq.interview.integration.search.application.WebSearchTool;
 import org.springframework.ai.document.Document;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

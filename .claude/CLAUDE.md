@@ -62,10 +62,8 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 | `model/` | 多模型候选、优先级、三态熔断、动态模型运行时选择、健康检查、VLM |
 | `identity/` | 用户身份提取 |
 | `observability/` | Trace 属性清洗、RAG 链路追踪 |
-| `mcp/` | FastMCP Java 实现，暴露 Neo4j/Milvus 工具 |
-| `search/` | 自动补全与排序 |
 | `menu/` | 菜单/工作区配置 |
-| `im/` | IM 渠道集成（飞书、QQ WebSocket） |
+| `integration/` | 外部适配器与客户端：IM 渠道集成、FastMCP、自动补全/搜索、供应商 API |
 | `skill/` | Skill 技能定义 |
 
 ### 分层约束（ArchUnit 强制）

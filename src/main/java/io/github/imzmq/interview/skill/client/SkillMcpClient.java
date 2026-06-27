@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.skill.client;
 
-import io.github.imzmq.interview.mcp.application.McpGatewayService;
+import io.github.imzmq.interview.integration.mcp.application.McpGatewayService;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
