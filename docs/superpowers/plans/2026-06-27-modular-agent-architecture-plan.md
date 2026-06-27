@@ -245,19 +245,9 @@ private static final Set<String> ALLOWED_TOP_LEVEL_PACKAGES = Set.of(
 
 This set is intentionally transitional. It allows the current cleanup baseline plus target modules.
 
-- [ ] **Step 2: Add top-level package allowlist rule**
+- [ ] **Step 2: Add top-level package allowlist test**
 
-Add this `@ArchTest` rule:
-
-```java
-@ArchTest
-static final ArchRule main_code_should_only_use_known_top_level_packages =
-        noClasses().that().resideOutsideOfPackage("io.github.imzmq.interview..")
-                .should().exist()
-                .allowEmptyShould(true);
-```
-
-Then add this JUnit test instead of relying only on ArchRule DSL:
+Add this JUnit test. Do not add an ArchUnit `should().exist()` rule here; ArchUnit 1.3.0 does not expose that DSL method, and this JUnit assertion performs the actual allowlist check.
 
 ```java
 @Test

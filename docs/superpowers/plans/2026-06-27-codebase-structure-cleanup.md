@@ -57,10 +57,14 @@ Modify `ArchitectureRulesTest.java` to add imports and a rule that fails while o
 ```java
 package io.github.imzmq.interview.architecture;
 
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -92,7 +96,16 @@ class ArchitectureRulesTest {
                             "io.github.imzmq.interview.mapper..",
                             "io.github.imzmq.interview.dto.."
                     )
-                    .should().exist();
+                    .should(exist());
+
+    private static ArchCondition<JavaClass> exist() {
+        return new ArchCondition<>("exist") {
+            @Override
+            public void check(JavaClass item, ConditionEvents events) {
+                events.add(SimpleConditionEvent.satisfied(item, item.getName() + " exists"));
+            }
+        };
+    }
 }
 ```
 
