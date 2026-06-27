@@ -65,6 +65,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -166,6 +167,44 @@ class RAGServiceTest {
                 .thenReturn(new PromptManager.PromptPair("system", "user"));
         when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
                 .thenReturn(new RoutingChatService.RoutingResult("{\"score\":80,\"accuracy\":80,\"logic\":80,\"depth\":80,\"boundary\":80,\"deductions\":[],\"citations\":[\"1. [ok]\"],\"conflicts\":[],\"feedback\":\"ok\",\"nextQuestion\":\"继续\"}", 0, 0, 0L));
+    }
+
+    @Test
+    void shouldSkipQueryRewriteForShortQuestionWithoutAnswer() {
+        when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "blocked",
+                "result", Map.of()
+        ));
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("Redis", "", false);
+
+        assertEquals("Redis", packet.retrievalQuery());
+        assertFalse(packet.webFallbackUsed());
+        verify(routingChatService, never()).callWithFirstPacketProbeSupplier(
+                any(Supplier.class),
+                nullable(String.class),
+                any(ModelRouteType.class),
+                any(TimeoutHint.class),
+                anyString()
+        );
+    }
+
+    @Test
+    void shouldNotUseWebFallbackWhenCallerDisablesIt() {
+        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
+        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
+                .thenReturn("Java Concurrency");
+        when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("什么是并发", "同时执行", false);
+
+        assertFalse(packet.webFallbackUsed());
+        assertEquals("[]", packet.retrievalEvidence());
+        verify(webSearchTool, never()).run(any(WebSearchTool.Query.class));
+        verify(mcpGatewayService, never()).invoke(anyString(), eq("web.search"), anyMap(), anyMap());
     }
 
     @Test
