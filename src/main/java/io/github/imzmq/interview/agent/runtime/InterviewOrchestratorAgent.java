@@ -9,7 +9,7 @@ import io.github.imzmq.interview.learning.application.LearningEvent;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.learning.application.LearningSource;
 import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.session.repository.SessionRepository;
+import io.github.imzmq.interview.interview.infrastructure.persistence.SessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;

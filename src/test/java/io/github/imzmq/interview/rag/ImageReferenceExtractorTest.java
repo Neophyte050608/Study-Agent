@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.rag;
 
-import io.github.imzmq.interview.rag.core.ImageReferenceExtractor;
+import io.github.imzmq.interview.media.application.ImageReferenceExtractor;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

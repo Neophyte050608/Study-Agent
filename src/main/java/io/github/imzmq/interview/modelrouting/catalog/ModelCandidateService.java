@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.modelrouting.catalog;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.dto.modelrouting.ModelCandidateDTO;
-import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
-import io.github.imzmq.interview.mapper.modelrouting.ModelCandidateMapper;
+import io.github.imzmq.interview.modelrouting.api.ModelCandidateDTO;
+import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
+import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateMapper;
 import io.github.imzmq.interview.modelrouting.registry.DynamicChatModelRegistry;
 import io.github.imzmq.interview.modelrouting.security.ApiKeyEncryptor;
 import org.slf4j.Logger;

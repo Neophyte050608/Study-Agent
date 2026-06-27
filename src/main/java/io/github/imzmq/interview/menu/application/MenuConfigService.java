@@ -2,8 +2,8 @@ package io.github.imzmq.interview.menu.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.github.imzmq.interview.config.menu.MenuConfig;
-import io.github.imzmq.interview.entity.menu.MenuConfigDO;
-import io.github.imzmq.interview.mapper.menu.MenuConfigMapper;
+import io.github.imzmq.interview.menu.infrastructure.persistence.MenuConfigDO;
+import io.github.imzmq.interview.menu.infrastructure.persistence.MenuConfigMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;

@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.chat.PromptTemplateDO;
-import io.github.imzmq.interview.mapper.chat.PromptTemplateMapper;
+import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateMapper;
 import com.hubspot.jinjava.Jinjava;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;

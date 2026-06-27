@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.entity.chat.ChatMessageDO;
-import io.github.imzmq.interview.entity.chat.ChatSessionDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 import io.github.imzmq.interview.interview.application.ChatStreamingService;
 import io.github.imzmq.interview.identity.application.UserIdentityResolver;

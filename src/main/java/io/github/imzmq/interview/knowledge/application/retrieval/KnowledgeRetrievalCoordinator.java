@@ -3,7 +3,7 @@ import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.knowledge.application.localgraph.LocalGraphKnowledgeService;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.common.api.BusinessException;

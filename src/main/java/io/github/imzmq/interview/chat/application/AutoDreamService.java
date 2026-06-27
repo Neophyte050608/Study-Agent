@@ -2,10 +2,10 @@ package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.github.imzmq.interview.entity.chat.ChatSessionDO;
-import io.github.imzmq.interview.entity.chat.UserChatMemoryDO;
-import io.github.imzmq.interview.mapper.chat.ChatSessionMapper;
-import io.github.imzmq.interview.mapper.chat.UserChatMemoryMapper;
+import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryDO;
+import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
+import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryMapper;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import org.slf4j.Logger;

@@ -2,8 +2,8 @@ package io.github.imzmq.interview.knowledge.application.localgraph;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
-import io.github.imzmq.interview.rag.core.MarkdownSection;
-import io.github.imzmq.interview.rag.core.MarkdownSectionBuilder;
+import io.github.imzmq.interview.knowledge.application.indexing.MarkdownSection;
+import io.github.imzmq.interview.knowledge.application.indexing.MarkdownSectionBuilder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

@@ -8,25 +8,25 @@
 ## Package Strategy
 - Root package: `io.github.imzmq.interview`
 - Main style: `package-by-feature` (domain-first), then layered subpackages.
-- Legacy aggregate package `...service` has been fully migrated (no main code remains there).
+- Legacy aggregate packages `...service`, top-level `entity`, top-level `mapper`, and top-level `dto` have been retired for main business code.
 
-Current domain/application packages:
-- `agent.application`
-- `chat.application`
+Current domain-owned packages include:
+- `agent.api`, `agent.application`, `agent.infrastructure.persistence`
+- `chat.api`, `chat.application`, `chat.infrastructure.persistence`
+- `feedback.api`, `feedback.application`, `feedback.domain`
 - `identity.application`
-- `ingestion.application`
-- `interview.application`
-- `knowledge.application`
-- `learning.application`
-- `learning.domain`
-- `mcp.application`
-- `media.application`
-- `menu.application`
-- `modelruntime.application`
-- `modelrouting`
-- `observability.application`
-- `routing.application`
-- `search.application`
+- `im.api`, `im.application`, `im.domain`
+- `ingestion.application`, `ingestion.infrastructure.persistence`
+- `interview.api`, `interview.application`, `interview.domain`, `interview.infrastructure.persistence`
+- `knowledge.api`, `knowledge.application`, `knowledge.domain`, `knowledge.infrastructure.persistence`
+- `learning.application`, `learning.domain`, `learning.infrastructure.persistence`
+- `mcp.application`, `mcp.infrastructure`
+- `media.api`, `media.application`, `media.infrastructure.persistence`
+- `menu.api`, `menu.application`, `menu.infrastructure.persistence`
+- `modelrouting.api`, `modelrouting.application`, `modelrouting.infrastructure.persistence`
+- `observability.api`, `observability.application`
+- `routing.api`, `routing.application`, `routing.infrastructure.persistence`
+- `search.api`, `search.application`, `search.application.dto`, `search.infrastructure.persistence`
 
 Knowledge application subpackages (current):
 - `knowledge.application` (root): only `RAGService` as RAG core pipeline entry.
@@ -40,20 +40,34 @@ Knowledge application subpackages (current):
 - `knowledge.application.catalog`: knowledge base/document catalog query and operations.
 
 ## Layering Rules
-- API layer: controller and transport-facing DTO/input-output.
-- Application layer: orchestration and use-case flow.
+- API layer: controllers and controller-facing DTO/input-output types.
+- Application layer: orchestration, use-case flow, and application-internal DTOs.
 - Domain layer: business model, value objects, pure rules.
-- Infrastructure layer: mapper/repository/external gateways.
+- Infrastructure layer: domain-owned persistence and external system adapters.
 
 Dependency direction:
 - `api -> application -> domain`
 - `application -> infrastructure` through injected interfaces/components
 - `domain` must not depend on `api`
 - Cross-domain direct mapper/repository access is prohibited.
+- Controllers must not directly access MyBatis Mapper interfaces.
+
+## Persistence Placement
+
+MyBatis persistence classes are domain-owned. DO classes and Mapper interfaces live under:
+
+`io.github.imzmq.interview.<domain>.infrastructure.persistence`
+
+Do not add new business persistence code under top-level `entity`, `mapper`, or `dto` packages. These type-first packages are retired for main business code and must not be treated as an acceptable baseline.
+
+DTO placement follows caller-facing ownership:
+- Controller-facing request/response DTOs belong in `<domain>.api`.
+- Application-internal DTOs belong in `<domain>.application.dto`.
+- Persistence-specific transfer objects belong with the domain persistence adapter under `<domain>.infrastructure.persistence`, not in API DTO packages.
 
 ## Placement Quick Rules
 - New prompt/template/context orchestration code -> `chat.application`
-- New model runtime selection/health/VLM code -> `modelruntime.application`
+- New model routing/runtime selection/health/VLM code -> `modelrouting`
 - New learning profile/event logic -> `learning.application` and `learning.domain`
 - New identity/auth identity extraction -> `identity.application`
 - New observability sanitize/trace helper -> `observability.application`
@@ -65,7 +79,7 @@ Dependency direction:
 
 ## Enforcement
 - ArchUnit tests enforce key boundaries.
-- Checkstyle enforces naming/package/import baseline.
+- Checkstyle enforces naming/package/import conventions.
 - Required validation before merge:
   - `mvn -q compile`
   - `mvn test`
