@@ -11,6 +11,7 @@ import io.github.imzmq.interview.knowledge.application.observability.RAGObservab
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
+import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
@@ -132,6 +133,11 @@ class ParentChildRetrievalHydrationTest {
                 skillOrchestrator,
                 ragRetrievalProperties
         );
+        WebFallbackService webFallbackService = new WebFallbackService(
+                skillOrchestrator,
+                skillMcpClient,
+                webSearchTool
+        );
         Executor executor = Runnable::run;
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
@@ -154,6 +160,7 @@ class ParentChildRetrievalHydrationTest {
                 skillOrchestrator,
                 queryRewriteService,
                 evidenceEvaluationService,
+                webFallbackService,
                 skillMcpClient,
                 llmJsonParser
         );

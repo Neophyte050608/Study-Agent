@@ -22,10 +22,10 @@ import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluat
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
+import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
 import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
@@ -109,9 +109,10 @@ public class RAGService {
     private final SkillOrchestrator skillOrchestrator;
     private final QueryRewriteService queryRewriteService;
     private final EvidenceEvaluationService evidenceEvaluationService;
+    private final WebFallbackService webFallbackService;
     private final SkillMcpClient skillMcpClient;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, EvidenceEvaluationService evidenceEvaluationService, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, EvidenceEvaluationService evidenceEvaluationService, WebFallbackService webFallbackService, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -131,6 +132,7 @@ public class RAGService {
         this.skillOrchestrator = skillOrchestrator;
         this.queryRewriteService = queryRewriteService;
         this.evidenceEvaluationService = evidenceEvaluationService;
+        this.webFallbackService = webFallbackService;
         this.skillMcpClient = skillMcpClient;
         this.llmJsonParser = llmJsonParser;
     }
@@ -268,7 +270,7 @@ public class RAGService {
             String externalLookupReason = evidenceDecision.reason();
             if (allowExternalLookup) {
                 TraceNodeHandle webFallbackTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
-                List<String> webContext = runControlledWebSearch(rewrittenQuery.fullQuery(), traceId, externalLookupReason, skillBudget);
+                List<String> webContext = webFallbackService.search(rewrittenQuery.fullQuery(), traceId, externalLookupReason, skillBudget);
                 context = webContext.stream().collect(Collectors.joining("\n\n"));
                 retrievalEvidence = buildWebEvidence(webContext);
                 webFallbackUsed = true;
@@ -1159,99 +1161,6 @@ public class RAGService {
             }
         }
         throw last == null ? new IllegalStateException(stage + "失败") : last;
-    }
-
-    private List<String> runControlledWebSearch(String query,
-                                                String traceId,
-                                                String reason,
-                                                SkillExecutionBudget skillBudget) {
-        SkillDefinition definition = skillOrchestrator.definition("evidence-evaluator");
-        SkillExecutionContext skillContext = new SkillExecutionContext(
-                traceId,
-                "rag-service",
-                Map.of(
-                        "query", query == null ? "" : query,
-                        "reason", reason == null ? "" : reason
-                ),
-                skillBudget
-        );
-        Map<String, Object> mcpResult = skillMcpClient.invokeForSkill(
-                "rag-service",
-                definition,
-                skillContext,
-                "web.search",
-                Map.of(
-                        "query", query == null ? "" : query,
-                        "limit", 3,
-                        "reason", reason == null ? "" : reason
-                )
-        );
-        List<String> snippets = extractSearchSnippets(mcpResult);
-        if (!snippets.isEmpty()) {
-            return snippets;
-        }
-        return webSearchTool.run(new WebSearchTool.Query(query, 3));
-    }
-
-    private List<String> extractSearchSnippets(Map<String, Object> mcpResult) {
-        if (mcpResult == null || mcpResult.isEmpty()) {
-            return List.of();
-        }
-        Object result = mcpResult.get("result");
-        if (result instanceof List<?> list) {
-            return stringifySearchList(list);
-        }
-        if (result instanceof Map<?, ?> map) {
-            Object items = map.get("results");
-            if (!(items instanceof List<?>)) {
-                items = map.get("items");
-            }
-            if (!(items instanceof List<?>)) {
-                items = map.get("snippets");
-            }
-            if (items instanceof List<?> list) {
-                return stringifySearchList(list);
-            }
-            Object content = map.get("content");
-            if (content instanceof String text && !text.isBlank()) {
-                return List.of(text.trim());
-            }
-        }
-        return List.of();
-    }
-
-    private List<String> stringifySearchList(List<?> list) {
-        if (list == null || list.isEmpty()) {
-            return List.of();
-        }
-        return list.stream()
-                .map(this::searchSnippetOf)
-                .filter(item -> item != null && !item.isBlank())
-                .limit(3)
-                .toList();
-    }
-
-    private String searchSnippetOf(Object item) {
-        if (item instanceof String text) {
-            return text.trim();
-        }
-        if (item instanceof Map<?, ?> map) {
-            Object title = map.get("title");
-            Object snippet = map.get("snippet");
-            if (snippet == null) {
-                snippet = map.get("content");
-            }
-            if (snippet == null) {
-                snippet = map.get("summary");
-            }
-            String titleText = title == null ? "" : String.valueOf(title).trim();
-            String snippetText = snippet == null ? "" : String.valueOf(snippet).trim();
-            if (!titleText.isBlank() && !snippetText.isBlank()) {
-                return titleText + " - " + snippetText;
-            }
-            return snippetText;
-        }
-        return item == null ? "" : String.valueOf(item).trim();
     }
 
     private <T> T callWithRetry(Supplier<T> action, int maxAttempts, String stage) {
