@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.observability;
 
-import io.github.imzmq.interview.stream.runtime.InterviewSseEmitterSender;
+import io.github.imzmq.interview.conversation.stream.runtime.InterviewSseEmitterSender;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -115,8 +115,3 @@ public class RagTraceEventBus {
     ) {
     }
 }
-
-
-
-
-

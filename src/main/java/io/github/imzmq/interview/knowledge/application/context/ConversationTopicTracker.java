@@ -5,9 +5,9 @@ import io.github.imzmq.interview.knowledge.domain.TopicState;
 import io.github.imzmq.interview.knowledge.domain.TurnAnalysis;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.conversation.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.conversation.chat.application.JsonResult;
+import io.github.imzmq.interview.conversation.chat.application.PromptManager;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -332,8 +332,3 @@ public class ConversationTopicTracker {
         return text.length() <= maxLen ? text : text.substring(text.length() - maxLen);
     }
 }
-
-
-
-
-

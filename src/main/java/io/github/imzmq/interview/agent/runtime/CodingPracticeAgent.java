@@ -38,7 +38,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     /** 动态模型工厂 */
     private final DynamicModelFactory dynamicModelFactory;
     /** Prompt 模板服务 */
-    private final io.github.imzmq.interview.chat.application.PromptManager promptManager;
+    private final io.github.imzmq.interview.conversation.chat.application.PromptManager promptManager;
     /** JSON 处理 */
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** 内存中的编程练习会话缓存 */
@@ -48,7 +48,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     /** 路由服务 */
     private final RoutingChatService routingChatService;
 
-    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, io.github.imzmq.interview.chat.application.PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor, RoutingChatService routingChatService) {
+    public CodingPracticeAgent(RAGService ragService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, io.github.imzmq.interview.conversation.chat.application.PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor, RoutingChatService routingChatService) {
         this.ragService = ragService;
         this.learningProfileAgent = learningProfileAgent;
         this.dynamicModelFactory = dynamicModelFactory;
@@ -136,7 +136,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             logger.debug("加载 intent_cases.json 失败: {}", e.getMessage());
         }
 
-        io.github.imzmq.interview.chat.application.PromptManager.PromptPair pair = promptManager.renderSplit(
+        io.github.imzmq.interview.conversation.chat.application.PromptManager.PromptPair pair = promptManager.renderSplit(
                 "coding-coach", "coding-intent", Map.of("message", message, "cases", cases));
         logger.debug("[CodingPracticeAgent - Intent] Prompt length={}", pair.userPrompt().length());
         String jsonStr = routingChatService.call(
@@ -1239,8 +1239,3 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     ) {
     }
 }
-
-
-
-
-

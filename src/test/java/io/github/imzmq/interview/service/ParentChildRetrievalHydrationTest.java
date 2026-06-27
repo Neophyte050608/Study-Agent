@@ -11,9 +11,9 @@ import io.github.imzmq.interview.knowledge.application.observability.RAGObservab
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
-import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.chat.application.PromptTemplateService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.conversation.chat.application.PromptManager;
+import io.github.imzmq.interview.conversation.chat.application.PromptTemplateService;
+import io.github.imzmq.interview.conversation.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.knowledge.internal.media.application.ImageService;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;

@@ -10,8 +10,8 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQuality
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.platform.observability.application.TraceAttributeSanitizer;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
+import io.github.imzmq.interview.conversation.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.conversation.chat.application.JsonResult;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

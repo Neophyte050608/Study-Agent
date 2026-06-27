@@ -374,16 +374,16 @@ git commit -m "refactor: 迁移模型路由持久化和DTO包"
 ### Task 6: Migrate `chat` Persistence
 
 **Files:**
-- Move all files in `entity/chat` to `chat/infrastructure/persistence`.
-- Move all files in `mapper/chat` to `chat/infrastructure/persistence`.
+- Move all files in `entity/chat` to `conversation/chat/infrastructure/persistence`.
+- Move all files in `mapper/chat` to `conversation/chat/infrastructure/persistence`.
 - Modify imports.
 
 - [ ] **Step 1: Move files**
 
 ```bash
-mkdir -p src/main/java/io/github/imzmq/interview/chat/infrastructure/persistence
-mv src/main/java/io/github/imzmq/interview/entity/chat/*.java src/main/java/io/github/imzmq/interview/chat/infrastructure/persistence/
-mv src/main/java/io/github/imzmq/interview/mapper/chat/*.java src/main/java/io/github/imzmq/interview/chat/infrastructure/persistence/
+mkdir -p src/main/java/io/github/imzmq/interview/conversation/chat/infrastructure/persistence
+mv src/main/java/io/github/imzmq/interview/entity/chat/*.java src/main/java/io/github/imzmq/interview/conversation/chat/infrastructure/persistence/
+mv src/main/java/io/github/imzmq/interview/mapper/chat/*.java src/main/java/io/github/imzmq/interview/conversation/chat/infrastructure/persistence/
 ```
 
 - [ ] **Step 2: Update package declarations in moved files**
@@ -393,12 +393,12 @@ Run:
 ```bash
 python3 - <<'PY'
 from pathlib import Path
-base = Path('src/main/java/io/github/imzmq/interview/chat/infrastructure/persistence')
+base = Path('src/main/java/io/github/imzmq/interview/conversation/chat/infrastructure/persistence')
 for p in base.glob('*.java'):
     s = p.read_text()
-    s = s.replace('package io.github.imzmq.interview.entity.chat;', 'package io.github.imzmq.interview.chat.infrastructure.persistence;')
-    s = s.replace('package io.github.imzmq.interview.mapper.chat;', 'package io.github.imzmq.interview.chat.infrastructure.persistence;')
-    s = s.replace('import io.github.imzmq.interview.entity.chat.', 'import io.github.imzmq.interview.chat.infrastructure.persistence.')
+    s = s.replace('package io.github.imzmq.interview.entity.chat;', 'package io.github.imzmq.interview.conversation.chat.infrastructure.persistence;')
+    s = s.replace('package io.github.imzmq.interview.mapper.chat;', 'package io.github.imzmq.interview.conversation.chat.infrastructure.persistence;')
+    s = s.replace('import io.github.imzmq.interview.entity.chat.', 'import io.github.imzmq.interview.conversation.chat.infrastructure.persistence.')
     p.write_text(s)
 PY
 ```
@@ -411,8 +411,8 @@ from pathlib import Path
 for root in ['src/main/java', 'src/test/java']:
     for p in Path(root).rglob('*.java'):
         s = p.read_text()
-        ns = s.replace('io.github.imzmq.interview.entity.chat.', 'io.github.imzmq.interview.chat.infrastructure.persistence.')
-        ns = ns.replace('io.github.imzmq.interview.mapper.chat.', 'io.github.imzmq.interview.chat.infrastructure.persistence.')
+        ns = s.replace('io.github.imzmq.interview.entity.chat.', 'io.github.imzmq.interview.conversation.chat.infrastructure.persistence.')
+        ns = ns.replace('io.github.imzmq.interview.mapper.chat.', 'io.github.imzmq.interview.conversation.chat.infrastructure.persistence.')
         if ns != s:
             p.write_text(ns)
 PY
@@ -755,7 +755,7 @@ rag.core chunking/markdown/note/image-reference utilities -> knowledge.applicati
 tool.gateway and tool.adapter MCP gateways -> mcp.application or mcp.infrastructure
 tool.search.WebSearchTool / VectorSearchTool -> search.application or knowledge.application.retrieval
 tools.runner.IngestionRunner -> ingestion.application or ingestion.pipeline
-session.repository.* -> interview.infrastructure.persistence or chat.infrastructure.persistence based on stored aggregate
+session.repository.* -> interview.infrastructure.persistence or conversation.chat.infrastructure.persistence based on stored aggregate
 core.trace.RAGTraceContext -> observability.core or knowledge.application.observability
 ```
 
@@ -881,4 +881,3 @@ git log --oneline -8
 ```
 
 Expected: clean working tree after final commits.
-

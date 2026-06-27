@@ -4,7 +4,7 @@ import io.github.imzmq.interview.knowledge.application.observability.RAGObservab
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus;
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus.RagTraceStreamEvent;
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus.TraceSummary;
-import io.github.imzmq.interview.stream.runtime.InterviewSseEmitterSender;
+import io.github.imzmq.interview.conversation.stream.runtime.InterviewSseEmitterSender;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

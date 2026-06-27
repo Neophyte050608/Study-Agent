@@ -6,9 +6,9 @@ import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapServ
 import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.conversation.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.conversation.chat.application.JsonResult;
+import io.github.imzmq.interview.conversation.chat.application.PromptManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

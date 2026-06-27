@@ -67,7 +67,7 @@ DTO placement:
 - Minimal business-neutral types only: `shared`.
 
 Migration reference only; do not use these as preferred placement for new code:
-- Existing chat/prompt/context code migrates toward `conversation`.
+- Chat/prompt/context and streaming response protocol code lives under `conversation`.
 - Identity and observability infrastructure lives under `platform/identity` and `platform/observability`.
 - Retired `modelrouting` package code has migrated to `model`; keep new model providers, routing, runtime health, and execution policy under `model`.
 - Existing IM, MCP, search, and vendor adapter code migrates toward `integration`.

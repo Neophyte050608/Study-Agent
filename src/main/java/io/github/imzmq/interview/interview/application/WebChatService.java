@@ -4,12 +4,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
 import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
+import io.github.imzmq.interview.conversation.chat.infrastructure.persistence.ChatMessageDO;
+import io.github.imzmq.interview.conversation.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.interview.application.TaskResponsePresentationService;
-import io.github.imzmq.interview.chat.application.ChatContextCompressor;
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
+import io.github.imzmq.interview.conversation.chat.application.ChatContextCompressor;
+import io.github.imzmq.interview.conversation.chat.infrastructure.persistence.ChatMessageMapper;
+import io.github.imzmq.interview.conversation.chat.infrastructure.persistence.ChatSessionMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -302,9 +302,3 @@ public class WebChatService {
         );
     }
 }
-
-
-
-
-
-

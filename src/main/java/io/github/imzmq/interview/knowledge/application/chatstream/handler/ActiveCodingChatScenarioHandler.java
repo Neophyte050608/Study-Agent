@@ -8,7 +8,7 @@ import io.github.imzmq.interview.knowledge.application.chatstream.ChatIntentHeur
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
 import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
-import io.github.imzmq.interview.stream.runtime.InterviewStreamEventType;
+import io.github.imzmq.interview.conversation.stream.runtime.InterviewStreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -201,10 +201,3 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
         return true;
     }
 }
-
-
-
-
-
-
-

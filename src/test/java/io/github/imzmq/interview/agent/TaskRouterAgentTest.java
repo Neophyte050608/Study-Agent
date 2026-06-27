@@ -21,7 +21,7 @@ import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.model.core.TimeoutHint;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.conversation.chat.application.PromptManager;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import org.junit.jupiter.api.Test;
 
@@ -619,11 +619,3 @@ class TaskRouterAgentTest {
         assertTrue(context.containsKey("intentRouteLatencyMs"));
     }
 }
-
-
-
-
-
-
-
-

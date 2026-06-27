@@ -2,7 +2,7 @@ package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.conversation.chat.application.LlmJsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -258,8 +258,3 @@ public class EvaluationAgent {
     ) {
     }
 }
-
-
-
-
-

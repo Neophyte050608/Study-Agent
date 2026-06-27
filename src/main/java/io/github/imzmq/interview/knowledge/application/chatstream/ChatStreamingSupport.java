@@ -1,12 +1,12 @@
 package io.github.imzmq.interview.knowledge.application.chatstream;
 
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
+import io.github.imzmq.interview.conversation.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.interview.application.WebChatService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.stream.runtime.InterviewStreamEventType;
-import io.github.imzmq.interview.stream.runtime.InterviewStreamTaskManager;
-import io.github.imzmq.interview.stream.runtime.StreamEventEmitter;
+import io.github.imzmq.interview.conversation.stream.runtime.InterviewStreamEventType;
+import io.github.imzmq.interview.conversation.stream.runtime.InterviewStreamTaskManager;
+import io.github.imzmq.interview.conversation.stream.runtime.StreamEventEmitter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 

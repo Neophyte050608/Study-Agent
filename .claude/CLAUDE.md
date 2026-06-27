@@ -56,7 +56,7 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 | `knowledge/` | RAG 检索核心（含 indexing/localgraph/retrieval/context/evaluation/observability/catalog/chatstream 子包；知识摄入与图片检索实现收敛在 `knowledge/internal/ingestion`、`knowledge/internal/media`） |
 | `interview/` | 面试编排门面 |
 | `learning/` | 学习画像、学习事件（含 `domain` 子包） |
-| `chat/` | Prompt 模板、上下文压缩、对话记忆 |
+| `conversation/` | Prompt 模板、上下文压缩、对话记忆、流式响应协议 |
 | `model/` | 多模型候选、优先级、三态熔断、动态模型运行时选择、健康检查、VLM |
 | `platform/identity/` | 用户身份提取 |
 | `platform/observability/` | Trace 属性清洗、RAG 链路追踪 |

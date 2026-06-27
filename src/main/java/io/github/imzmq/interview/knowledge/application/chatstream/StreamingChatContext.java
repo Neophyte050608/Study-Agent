@@ -2,7 +2,7 @@ package io.github.imzmq.interview.knowledge.application.chatstream;
 
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-import io.github.imzmq.interview.stream.runtime.StreamEventEmitter;
+import io.github.imzmq.interview.conversation.stream.runtime.StreamEventEmitter;
 
 public class StreamingChatContext {
 
@@ -94,7 +94,3 @@ public class StreamingChatContext {
         this.routeSource = routeSource == null ? "" : routeSource;
     }
 }
-
-
-
-

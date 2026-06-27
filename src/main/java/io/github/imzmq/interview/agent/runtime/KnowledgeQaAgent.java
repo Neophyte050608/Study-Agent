@@ -6,7 +6,7 @@ import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.conversation.chat.application.PromptManager;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceService;
 import io.github.imzmq.interview.knowledge.application.context.ConversationTopicTracker;
