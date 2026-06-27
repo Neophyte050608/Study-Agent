@@ -172,7 +172,6 @@ class RAGServiceTest {
                 routingChatService,
                 vectorStore,
                 lexicalIndexService,
-                webSearchTool,
                 observabilityService,
                 agentSkillService,
                 promptTemplateService,
@@ -181,13 +180,11 @@ class RAGServiceTest {
                 techConceptRepository,
                 observabilitySwitchProperties,
                 retrievalTokenizerService,
-                ragRetrievalProperties,
                 parentChildRetrievalProperties,
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                skillMcpClient,
                 llmJsonParser
         );
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))

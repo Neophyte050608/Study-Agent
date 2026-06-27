@@ -153,7 +153,6 @@ class ParentChildRetrievalHydrationTest {
                 routingChatService,
                 vectorStore,
                 lexicalIndexService,
-                webSearchTool,
                 observabilityService,
                 agentSkillService,
                 promptTemplateService,
@@ -162,13 +161,11 @@ class ParentChildRetrievalHydrationTest {
                 techConceptRepository,
                 observabilitySwitchProperties,
                 retrievalTokenizerService,
-                ragRetrievalProperties,
                 parentChildRetrievalProperties,
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                skillMcpClient,
                 llmJsonParser
         );
     }
