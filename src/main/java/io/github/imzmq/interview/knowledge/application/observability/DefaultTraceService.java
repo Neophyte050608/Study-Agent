@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.observability;
 
-import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
+import io.github.imzmq.interview.platform.observability.application.TraceAttributeSanitizer;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -143,10 +143,3 @@ public class DefaultTraceService implements TraceService {
         return null;
     }
 }
-
-
-
-
-
-
-

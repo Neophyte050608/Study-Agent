@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.intent.domain;
 
-import io.github.imzmq.interview.observability.core.TraceNode;
+import io.github.imzmq.interview.platform.observability.core.TraceNode;
 
 import org.springframework.stereotype.Component;
 
@@ -332,5 +332,3 @@ public class IntentPreFilter {
         return rawTopic.trim().replaceAll("\\s+", " ").replaceFirst("\\s*的$", "").trim();
     }
 }
-
-

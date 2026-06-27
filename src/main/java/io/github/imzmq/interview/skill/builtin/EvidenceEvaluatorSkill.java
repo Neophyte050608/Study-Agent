@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.skill.builtin;
 
-import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.RagRetrievalProperties;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
 
@@ -106,5 +106,3 @@ public class EvidenceEvaluatorSkill implements ExecutableSkill {
         return conceptCount >= 2 || text.contains("；");
     }
 }
-
-

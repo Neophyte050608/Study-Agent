@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.ingestion.application.IngestConfigService;
 import io.github.imzmq.interview.knowledge.application.indexing.LocalKnowledgeIndexBuildService;
 import io.github.imzmq.interview.knowledge.application.indexing.LocalKnowledgeScopeService;
@@ -227,9 +227,3 @@ class LocalKnowledgeIndexBuildServiceTest {
         return false;
     }
 }
-
-
-
-
-
-

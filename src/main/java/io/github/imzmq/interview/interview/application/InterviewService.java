@@ -5,7 +5,7 @@ import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.TaskType;
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
@@ -383,15 +383,3 @@ public class InterviewService {
             int answeredCount
     ) {}
 }
-
-
-
-
-
-
-
-
-
-
-
-

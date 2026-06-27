@@ -2,7 +2,7 @@ package io.github.imzmq.interview.routing.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.github.imzmq.interview.common.StringUtils;
-import io.github.imzmq.interview.config.routing.IntentTreeProperties;
+import io.github.imzmq.interview.platform.config.routing.IntentTreeProperties;
 import io.github.imzmq.interview.routing.infrastructure.persistence.IntentSlotRefineCaseDO;
 import io.github.imzmq.interview.routing.infrastructure.persistence.IntentSlotRefineCaseMapper;
 import org.springframework.stereotype.Service;

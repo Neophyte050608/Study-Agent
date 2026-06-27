@@ -2,11 +2,11 @@ package io.github.imzmq.interview.knowledge.application;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
-import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.knowledge.ParentChildRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.interview.domain.Question;
-import io.github.imzmq.interview.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.model.core.TimeoutHint;

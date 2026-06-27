@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.menu.api;
 
-import io.github.imzmq.interview.config.menu.MenuConfig;
+import io.github.imzmq.interview.platform.config.menu.MenuConfig;
 import io.github.imzmq.interview.menu.application.MenuConfigService;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,8 +31,3 @@ public class MenuController {
         return response;
     }
 }
-
-
-
-
-

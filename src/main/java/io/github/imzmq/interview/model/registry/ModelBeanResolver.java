@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.model.registry;
 
-import io.github.imzmq.interview.config.agent.AgentConfig;
+import io.github.imzmq.interview.platform.config.agent.AgentConfig;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -36,7 +36,3 @@ public class ModelBeanResolver {
         return fallbackBeanName == null || fallbackBeanName.isBlank() ? DEFAULT_BEAN_NAME : fallbackBeanName;
     }
 }
-
-
-
-

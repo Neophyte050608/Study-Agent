@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.evaluation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalCaseDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalRunDO;
 import io.github.imzmq.interview.knowledge.application.RAGService;
@@ -9,7 +9,7 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQuality
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalRunMapper;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
-import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
+import io.github.imzmq.interview.platform.observability.application.TraceAttributeSanitizer;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.chat.application.JsonResult;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -922,11 +922,3 @@ public class RAGQualityEvaluationService {
     ) {
     }
 }
-
-
-
-
-
-
-
-

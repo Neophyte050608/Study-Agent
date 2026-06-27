@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.ingestion.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestConfigDO;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestConfigMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -142,9 +142,3 @@ public class IngestConfigService {
         return value.trim();
     }
 }
-
-
-
-
-
-

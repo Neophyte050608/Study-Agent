@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.agent.runtime;
 
-import io.github.imzmq.interview.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
@@ -431,14 +431,3 @@ public class KnowledgeQaAgent {
         return trimmed.length() > 20 ? trimmed.substring(0, 20) : trimmed;
     }
 }
-
-
-
-
-
-
-
-
-
-
-

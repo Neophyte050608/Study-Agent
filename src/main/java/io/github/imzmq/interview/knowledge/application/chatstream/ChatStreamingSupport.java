@@ -82,7 +82,7 @@ public class ChatStreamingSupport {
     public <T> T streamObservedAnswer(StreamEventEmitter emitter,
                                       String taskId,
                                       Function<java.util.function.Consumer<String>, T> producer) {
-        String traceId = io.github.imzmq.interview.observability.core.RAGTraceContext.getTraceId();
+        String traceId = io.github.imzmq.interview.platform.observability.core.RAGTraceContext.getTraceId();
         String parentNodeId = resolveDispatchParentNodeId(traceId);
         AtomicInteger chunkCounter = new AtomicInteger();
         AtomicLong dispatchNanos = new AtomicLong();
@@ -148,7 +148,7 @@ public class ChatStreamingSupport {
     private <T> T traceStreamDispatchResult(int chunkCount,
                                             int imageEventCount,
                                             Function<AtomicInteger, T> action) {
-        String traceId = io.github.imzmq.interview.observability.core.RAGTraceContext.getTraceId();
+        String traceId = io.github.imzmq.interview.platform.observability.core.RAGTraceContext.getTraceId();
         if (traceId == null || traceId.isBlank()) {
             return action.apply(null);
         }
@@ -230,7 +230,7 @@ public class ChatStreamingSupport {
     }
 
     private String resolveDispatchParentNodeId(String traceId) {
-        String parentNodeId = io.github.imzmq.interview.observability.core.RAGTraceContext.getCurrentNodeId();
+        String parentNodeId = io.github.imzmq.interview.platform.observability.core.RAGTraceContext.getCurrentNodeId();
         if (parentNodeId == null || parentNodeId.isBlank()) {
             parentNodeId = ragObservabilityService.getActiveRootNodeId(traceId);
         }
@@ -347,11 +347,3 @@ public class ChatStreamingSupport {
         emitter.complete();
     }
 }
-
-
-
-
-
-
-
-

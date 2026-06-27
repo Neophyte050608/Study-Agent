@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.application;
 
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
@@ -221,9 +221,3 @@ class ObservabilityApplicationServiceTest {
         );
     }
 }
-
-
-
-
-
-

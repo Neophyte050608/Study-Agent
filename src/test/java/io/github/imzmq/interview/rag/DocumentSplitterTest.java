@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class DocumentSplitterTest {
 
     private ChunkingProperties properties;
-    private io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties parentChildProperties;
+    private io.github.imzmq.interview.platform.config.knowledge.ParentChildRetrievalProperties parentChildProperties;
     private DocumentSplitter splitter;
 
     @BeforeEach
@@ -27,7 +27,7 @@ class DocumentSplitterTest {
         properties.setOverlap(20);
         properties.setHeadingLevels(3);
         properties.setMetadataPrefixEnabled(true);
-        parentChildProperties = new io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties();
+        parentChildProperties = new io.github.imzmq.interview.platform.config.knowledge.ParentChildRetrievalProperties();
         splitter = new DocumentSplitter(properties, parentChildProperties);
     }
 
@@ -88,5 +88,3 @@ class DocumentSplitterTest {
         assertFalse(chunks.get(0).getText().contains("[文档: test]"));
     }
 }
-
-

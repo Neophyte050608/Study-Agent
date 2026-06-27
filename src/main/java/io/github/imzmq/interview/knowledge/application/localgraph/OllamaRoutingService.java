@@ -3,7 +3,7 @@ import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
@@ -258,11 +258,3 @@ public class OllamaRoutingService {
         }
     }
 }
-
-
-
-
-
-
-
-

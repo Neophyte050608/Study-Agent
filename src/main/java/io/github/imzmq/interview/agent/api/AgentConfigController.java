@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.agent.api;
 
-import io.github.imzmq.interview.config.agent.AgentConfig;
+import io.github.imzmq.interview.platform.config.agent.AgentConfig;
 import io.github.imzmq.interview.agent.application.AgentConfigService;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,9 +33,3 @@ public class AgentConfigController {
         return response;
     }
 }
-
-
-
-
-
-

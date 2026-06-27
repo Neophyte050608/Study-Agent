@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.localgraph;
 
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 import io.github.imzmq.interview.knowledge.application.indexing.MarkdownSection;
 import io.github.imzmq.interview.knowledge.application.indexing.MarkdownSectionBuilder;
@@ -295,9 +295,3 @@ public class NoteGraphResolver {
         return results;
     }
 }
-
-
-
-
-
-

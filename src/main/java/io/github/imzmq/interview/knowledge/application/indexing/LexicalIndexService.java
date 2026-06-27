@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.indexing;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexMapper;
 import org.slf4j.Logger;
@@ -435,10 +435,3 @@ public class LexicalIndexService {
     private record ScoredRecord(LexicalIndexDO record, double score) {
     }
 }
-
-
-
-
-
-
-

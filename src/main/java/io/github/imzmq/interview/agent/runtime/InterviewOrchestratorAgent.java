@@ -4,7 +4,7 @@ import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.interview.domain.InterviewStage;
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.rag.core.ResumeLoader;
-import io.github.imzmq.interview.security.core.InputSanitizer;
+import io.github.imzmq.interview.platform.security.core.InputSanitizer;
 import io.github.imzmq.interview.learning.application.LearningEvent;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.learning.application.LearningSource;

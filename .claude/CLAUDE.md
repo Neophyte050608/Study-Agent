@@ -60,8 +60,8 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 | `chat/` | Prompt 模板、上下文压缩、对话记忆 |
 | `media/` | 图片 Embedding/索引/图文关联检索 |
 | `model/` | 多模型候选、优先级、三态熔断、动态模型运行时选择、健康检查、VLM |
-| `identity/` | 用户身份提取 |
-| `observability/` | Trace 属性清洗、RAG 链路追踪 |
+| `platform/identity/` | 用户身份提取 |
+| `platform/observability/` | Trace 属性清洗、RAG 链路追踪 |
 | `menu/` | 菜单/工作区配置 |
 | `integration/` | 外部适配器与客户端：IM 渠道集成、FastMCP、自动补全/搜索、供应商 API |
 | `skill/` | Skill 技能定义 |

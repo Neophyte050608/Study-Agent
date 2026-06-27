@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.agent.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import io.github.imzmq.interview.config.agent.AgentConfig;
+import io.github.imzmq.interview.platform.config.agent.AgentConfig;
 import io.github.imzmq.interview.agent.infrastructure.persistence.AgentConfigDO;
 import io.github.imzmq.interview.agent.infrastructure.persistence.AgentConfigMapper;
 import org.slf4j.Logger;
@@ -104,9 +104,3 @@ public class AgentConfigService {
         return map;
     }
 }
-
-
-
-
-
-

@@ -6,7 +6,7 @@ import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.TaskType;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -86,9 +86,3 @@ public class InterviewSessionApplicationService {
         );
     }
 }
-
-
-
-
-
-

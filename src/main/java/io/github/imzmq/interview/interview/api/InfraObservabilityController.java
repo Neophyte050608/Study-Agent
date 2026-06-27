@@ -4,7 +4,7 @@ import io.github.imzmq.interview.agent.a2a.A2ABus;
 import io.github.imzmq.interview.agent.a2a.A2AIdempotencyStore;
 import io.github.imzmq.interview.agent.a2a.RocketMqA2ABus;
 import io.github.imzmq.interview.agent.application.AgentEvaluationService;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.ingestion.application.IngestionService;
 import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
 import io.github.imzmq.interview.interview.application.InterviewService;

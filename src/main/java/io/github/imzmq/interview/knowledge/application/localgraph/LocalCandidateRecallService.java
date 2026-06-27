@@ -3,7 +3,7 @@ import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -106,9 +106,3 @@ public class LocalCandidateRecallService {
     private record ScoredNode(KnowledgeMapService.KnowledgeNode node, int score) {
     }
 }
-
-
-
-
-
-

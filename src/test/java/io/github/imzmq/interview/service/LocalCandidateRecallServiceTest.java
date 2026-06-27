@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 import io.github.imzmq.interview.knowledge.application.localgraph.LocalCandidateRecallService;
 import org.junit.jupiter.api.Test;
@@ -37,9 +37,3 @@ class LocalCandidateRecallServiceTest {
         assertEquals("n3", recalled.get(1).id());
     }
 }
-
-
-
-
-
-

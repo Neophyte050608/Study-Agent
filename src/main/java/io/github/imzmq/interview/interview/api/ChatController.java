@@ -4,7 +4,7 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 import io.github.imzmq.interview.interview.application.ChatStreamingService;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.interview.application.WebChatService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -102,12 +102,3 @@ public class ChatController {
         return ResponseEntity.ok(Map.of("streamTaskId", taskId, "stopped", stopped));
     }
 }
-
-
-
-
-
-
-
-
-

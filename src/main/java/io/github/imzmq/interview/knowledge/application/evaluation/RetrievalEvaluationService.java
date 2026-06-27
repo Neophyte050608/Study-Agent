@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.evaluation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalCaseDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalRunDO;
 import io.github.imzmq.interview.knowledge.application.RAGService;
@@ -1033,9 +1033,3 @@ public class RetrievalEvaluationService {
     ) {
     }
 }
-
-
-
-
-
-

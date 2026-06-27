@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.menu.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import io.github.imzmq.interview.config.menu.MenuConfig;
+import io.github.imzmq.interview.platform.config.menu.MenuConfig;
 import io.github.imzmq.interview.menu.infrastructure.persistence.MenuConfigDO;
 import io.github.imzmq.interview.menu.infrastructure.persistence.MenuConfigMapper;
 import org.slf4j.Logger;
@@ -129,9 +129,3 @@ public class MenuConfigService {
                 .collect(Collectors.toList());
     }
 }
-
-
-
-
-
-

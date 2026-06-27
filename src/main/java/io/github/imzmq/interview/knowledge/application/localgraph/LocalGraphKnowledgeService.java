@@ -2,8 +2,8 @@ package io.github.imzmq.interview.knowledge.application.localgraph;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
-import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
+import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 import io.github.imzmq.interview.common.api.BusinessException;
@@ -293,17 +293,3 @@ public class LocalGraphKnowledgeService {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

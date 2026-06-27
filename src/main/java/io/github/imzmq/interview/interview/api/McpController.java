@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.interview.api.support.RequestPayloadMapper;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import jakarta.servlet.http.HttpServletRequest;

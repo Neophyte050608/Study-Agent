@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.api;
 
 import io.github.imzmq.interview.interview.application.InterviewStreamingService;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,9 +56,3 @@ public class InterviewStreamController {
         ));
     }
 }
-
-
-
-
-
-

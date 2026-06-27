@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -237,8 +237,3 @@ class RetrievalEvaluationServiceTest {
         assertEquals(Boolean.TRUE, templates.get(2).parameterSnapshot().get("allowWebFallback"));
     }
 }
-
-
-
-
-

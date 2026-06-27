@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
-import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
-import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.knowledge.ParentChildRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.RagRetrievalProperties;
+import io.github.imzmq.interview.platform.config.skill.SkillExecutionProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;

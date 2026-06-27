@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexDO;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
@@ -82,9 +82,3 @@ class LexicalIndexServiceTest {
         verify(lexicalIndexMapper).selectList(ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<LexicalIndexDO>>any());
     }
 }
-
-
-
-
-
-

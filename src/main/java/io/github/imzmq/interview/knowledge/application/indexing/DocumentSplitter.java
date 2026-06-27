@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.indexing;
 
-import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
+import io.github.imzmq.interview.platform.config.knowledge.ParentChildRetrievalProperties;
 import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Component;
 
@@ -142,5 +142,3 @@ public class DocumentSplitter {
         return text.length() > max ? text.substring(0, max) : text;
     }
 }
-
-

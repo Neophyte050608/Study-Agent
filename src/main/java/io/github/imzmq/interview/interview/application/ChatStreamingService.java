@@ -4,8 +4,8 @@ import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.ExecutionMode;
-import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.security.core.InputSanitizer;
+import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.platform.security.core.InputSanitizer;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
@@ -264,16 +264,3 @@ public class ChatStreamingService {
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.skill.runtime;
 
-import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
+import io.github.imzmq.interview.platform.config.skill.SkillExecutionProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -284,5 +284,3 @@ public class SkillExecutor {
         }
     }
 }
-
-

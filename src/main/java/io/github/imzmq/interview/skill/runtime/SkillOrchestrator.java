@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.skill.runtime;
 
-import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
+import io.github.imzmq.interview.platform.config.skill.SkillExecutionProperties;
 import org.springframework.stereotype.Service;
 import io.github.imzmq.interview.skill.core.ExecutableSkill;
 import io.github.imzmq.interview.skill.core.SkillDefinition;
@@ -43,5 +43,3 @@ public class SkillOrchestrator {
                 .orElse(null);
     }
 }
-
-

@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.integration.search.api;
 
 import io.github.imzmq.interview.integration.search.application.dto.AutocompleteItem;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.integration.search.application.AutocompleteService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;

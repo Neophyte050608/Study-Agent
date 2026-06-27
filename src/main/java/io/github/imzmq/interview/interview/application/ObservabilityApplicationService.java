@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.application;
 
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotDO;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
@@ -520,9 +520,3 @@ public class ObservabilityApplicationService {
         return period;
     }
 }
-
-
-
-
-
-

@@ -2,8 +2,8 @@ package io.github.imzmq.interview.interview.api;
 
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.TaskType;
-import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.interview.api.support.RequestPayloadMapper;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import io.github.imzmq.interview.interview.domain.InterviewSession;

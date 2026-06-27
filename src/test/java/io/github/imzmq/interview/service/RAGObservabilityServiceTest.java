@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
+import io.github.imzmq.interview.platform.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceNodeDO;
 import io.github.imzmq.interview.knowledge.application.observability.DefaultTraceService;
@@ -8,7 +8,7 @@ import io.github.imzmq.interview.knowledge.application.observability.RAGObservab
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
+import io.github.imzmq.interview.platform.observability.application.TraceAttributeSanitizer;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceNodeMapper;
 import org.junit.jupiter.api.Test;
@@ -580,9 +580,3 @@ class RAGObservabilityServiceTest {
         return row;
     }
 }
-
-
-
-
-
-

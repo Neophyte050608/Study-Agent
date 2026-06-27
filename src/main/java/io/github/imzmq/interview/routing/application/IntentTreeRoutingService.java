@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.routing.application;
 
-import io.github.imzmq.interview.config.routing.IntentTreeProperties;
+import io.github.imzmq.interview.platform.config.routing.IntentTreeProperties;
 import io.github.imzmq.interview.intent.domain.IntentCandidate;
 import io.github.imzmq.interview.intent.domain.IntentRoutingDecision;
 import io.github.imzmq.interview.intent.domain.IntentTreeNode;
-import io.github.imzmq.interview.observability.core.TraceNode;
+import io.github.imzmq.interview.platform.observability.core.TraceNode;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.ModelRoutingProperties;
 import io.github.imzmq.interview.model.core.RoutingChatService;
@@ -621,11 +621,3 @@ public class IntentTreeRoutingService {
         return trimmed.substring(0, LOG_TEXT_LIMIT) + "...(truncated)";
     }
 }
-
-
-
-
-
-
-
-
