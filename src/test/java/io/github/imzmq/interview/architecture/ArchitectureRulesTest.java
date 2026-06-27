@@ -20,6 +20,9 @@ import io.github.imzmq.interview.architecture.fixture.infrastructure.persistence
 import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
+import java.util.TreeSet;
+
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,6 +31,42 @@ import static org.assertj.core.api.Assertions.assertThat;
         importOptions = {ImportOption.DoNotIncludeTests.class}
 )
 class ArchitectureRulesTest {
+
+    private static final String MAIN_PACKAGE = "io.github.imzmq.interview";
+
+    private static final Set<String> ALLOWED_TOP_LEVEL_PACKAGES = Set.of(
+            "agent",
+            "chat",
+            "common",
+            "config",
+            "conversation",
+            "feedback",
+            "graph",
+            "identity",
+            "im",
+            "ingestion",
+            "integration",
+            "interfaces",
+            "intent",
+            "interview",
+            "knowledge",
+            "learning",
+            "mcp",
+            "media",
+            "menu",
+            "model",
+            "modelrouting",
+            "observability",
+            "platform",
+            "rag",
+            "routing",
+            "search",
+            "security",
+            "shared",
+            "skill",
+            "stream",
+            "tools"
+    );
 
     @ArchTest
     static final ArchRule controller_should_not_access_mapper_directly =
@@ -87,6 +126,49 @@ class ArchitectureRulesTest {
                     .should(exist())
                     .allowEmptyShould(true);
 
+    @Test
+    void main_code_should_only_use_known_top_level_packages() {
+        JavaClasses productionClasses = importProductionClasses();
+
+        Set<String> unknownTopLevelPackages = new TreeSet<>();
+        for (JavaClass javaClass : productionClasses) {
+            String topLevelPackage = topLevelModule(javaClass.getPackageName());
+            if (!topLevelPackage.isBlank() && !ALLOWED_TOP_LEVEL_PACKAGES.contains(topLevelPackage)) {
+                unknownTopLevelPackages.add(topLevelPackage);
+            }
+        }
+
+        assertThat(unknownTopLevelPackages).isEmpty();
+    }
+
+    @Test
+    void modules_should_not_depend_on_other_modules_internal_packages() {
+        JavaClasses productionClasses = importProductionClasses();
+
+        Set<String> violations = new TreeSet<>();
+        for (JavaClass source : productionClasses) {
+            String sourceModule = topLevelModule(source.getPackageName());
+            for (var dependency : source.getDirectDependenciesFromSelf()) {
+                JavaClass target = dependency.getTargetClass();
+                String targetPackage = target.getPackageName();
+                if (!targetPackage.startsWith(MAIN_PACKAGE + ".")) {
+                    continue;
+                }
+
+                String targetModule = topLevelModule(targetPackage);
+                if (sourceModule.equals(targetModule)) {
+                    continue;
+                }
+
+                if (targetPackage.contains("." + targetModule + ".internal")) {
+                    violations.add(dependency.getDescription());
+                }
+            }
+        }
+
+        assertThat(violations).isEmpty();
+    }
+
     private static DescribedPredicate<JavaClass> areMyBatisMappers() {
         return DescribedPredicate.describe(
                 "MyBatis mapper interfaces",
@@ -109,6 +191,24 @@ class ArchitectureRulesTest {
                 SamplePersistenceMapper.class,
                 SamplePersistenceDO.class
         );
+    }
+
+    private static JavaClasses importProductionClasses() {
+        return new ClassFileImporter()
+                .withImportOption(new ImportOption.DoNotIncludeTests())
+                .importPackages(MAIN_PACKAGE);
+    }
+
+    private static String topLevelModule(String packageName) {
+        if (!packageName.startsWith(MAIN_PACKAGE + ".")) {
+            return "";
+        }
+        String relativePackage = packageName.substring((MAIN_PACKAGE + ".").length());
+        int nextSeparator = relativePackage.indexOf('.');
+        if (nextSeparator == -1) {
+            return relativePackage;
+        }
+        return relativePackage.substring(0, nextSeparator);
     }
 
     private static ArchCondition<JavaClass> exist() {
