@@ -252,9 +252,43 @@ RAG 检索不是单一路径，而是混合检索流水线：
 - Node.js 18+
 - Docker Desktop / Docker Compose
 
-### 4.2 推荐的第一版启动方式
+### 4.2 一键启动开发环境
 
-这是当前仓库最稳妥的本地启动路径。
+推荐本地开发直接使用脚本启动基础依赖、后端 `local-lite` 和前端 Vite：
+
+```bash
+bash scripts/dev-start.sh
+```
+
+启动后访问：
+
+- 后端：`http://localhost:9596`
+- 前端：`http://localhost:5173`
+
+脚本会启动 `mysql redis etcd minio milvus neo4j`，等待关键端口就绪，然后分别启动后端和前端。日志位于 `.dev/logs/`。
+
+停止后端和前端：
+
+```bash
+bash scripts/dev-stop.sh
+```
+
+停止后端、前端和基础依赖容器：
+
+```bash
+bash scripts/dev-stop.sh --with-docker
+```
+
+如果首次运行前端，请先安装依赖：
+
+```bash
+cd frontend
+npm install
+```
+
+### 4.3 手动启动方式
+
+这是脚本之外的手动启动路径。
 
 1. 启动基础依赖容器
 
@@ -282,7 +316,7 @@ CREATE DATABASE IF NOT EXISTS interview_review DEFAULT CHARACTER SET utf8mb4;
 4. 启动后端
 
 ```bash
-mvn spring-boot:run
+mvn spring-boot:run -Dspring-boot.run.profiles=local-lite
 ```
 
 默认端口：`http://localhost:9596`
