@@ -9,6 +9,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
@@ -121,6 +122,11 @@ class ParentChildRetrievalHydrationTest {
                 skillExecutionProperties
         );
         SkillMcpClient skillMcpClient = new SkillMcpClient(mcpGatewayService);
+        QueryRewriteService queryRewriteService = new QueryRewriteService(
+                routingChatService,
+                agentSkillService,
+                skillOrchestrator
+        );
         Executor executor = Runnable::run;
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
@@ -141,6 +147,7 @@ class ParentChildRetrievalHydrationTest {
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
+                queryRewriteService,
                 skillMcpClient,
                 llmJsonParser
         );

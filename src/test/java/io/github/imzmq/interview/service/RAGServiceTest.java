@@ -11,6 +11,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
@@ -141,6 +142,11 @@ class RAGServiceTest {
                 skillExecutionProperties
         );
         SkillMcpClient skillMcpClient = new SkillMcpClient(mcpGatewayService);
+        QueryRewriteService queryRewriteService = new QueryRewriteService(
+                routingChatService,
+                agentSkillService,
+                skillOrchestrator
+        );
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
@@ -160,6 +166,7 @@ class RAGServiceTest {
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
+                queryRewriteService,
                 skillMcpClient,
                 llmJsonParser
         );

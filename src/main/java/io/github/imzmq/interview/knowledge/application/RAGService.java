@@ -19,6 +19,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndex
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
+import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
@@ -46,9 +47,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.net.SocketTimeoutException;
 import java.time.Instant;
-import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -80,19 +79,11 @@ public class RAGService {
     private static final double FINAL_IMAGE_MIN_SCORE = 0.55d;
     private static final double SECOND_IMAGE_MIN_SCORE = 0.68d;
     private static final double ADDITIONAL_IMAGE_SCORE_GAP = 0.18d;
-    private static final Duration REWRITE_CACHE_TTL = Duration.ofMinutes(10);
-    private static final int REWRITE_CACHE_MAX_SIZE = 256;
     private static final Set<String> VISUAL_INTENT_KEYWORDS = Set.of(
             "图", "截图", "架构", "流程图", "拓扑", "示意图", "类图", "时序图",
             "部署图", "结构图", "原理图", "对比图", "配置图", "界面", "效果图",
             "看看", "展示", "图解", "diagram", "topology", "layout", "screenshot"
     );
-    private static final Set<String> REWRITE_TRIGGER_KEYWORDS = Set.of(
-            "为什么", "怎么", "如何", "原理", "区别", "对比", "场景", "实现",
-            "设计", "优化", "排查", "分析", "步骤", "问题", "异常", "报错",
-            "以及", "并且", "但是", "不过", "是否", "还是", "包括", "比如"
-    );
-
     private final RoutingChatService routingChatService;
     private final VectorStore vectorStore;
     private final LexicalIndexService lexicalIndexService;
@@ -115,10 +106,10 @@ public class RAGService {
     private final ParentChildIndexService parentChildIndexService;
     private final ImageService imageService;
     private final SkillOrchestrator skillOrchestrator;
+    private final QueryRewriteService queryRewriteService;
     private final SkillMcpClient skillMcpClient;
-    private final ConcurrentHashMap<String, CachedRewrite> rewriteCache = new ConcurrentHashMap<>();
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -136,6 +127,7 @@ public class RAGService {
         this.parentChildIndexService = parentChildIndexService;
         this.imageService = imageService;
         this.skillOrchestrator = skillOrchestrator;
+        this.queryRewriteService = queryRewriteService;
         this.skillMcpClient = skillMcpClient;
         this.llmJsonParser = llmJsonParser;
     }
@@ -181,7 +173,7 @@ public class RAGService {
             String parentNodeId = RAGTraceContext.getCurrentNodeId();
             SkillExecutionBudget skillBudget = skillOrchestrator.newBudget();
             TraceNodeHandle rewriteTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.QUERY_REWRITE, Map.of("status", "RUNNING"));
-            RewrittenQuery rewrittenQuery = buildRewrittenQuery(question, userAnswer, skillBudget);
+            RewrittenQuery rewrittenQuery = queryRewriteService.buildRewrittenQuery(question, userAnswer, skillBudget);
             completeTraceSuccess(rewriteTrace, Map.of("status", "COMPLETED"));
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
@@ -1230,59 +1222,6 @@ public class RAGService {
         throw last == null ? new IllegalStateException(stage + "失败") : last;
     }
 
-    private RewrittenQuery rewriteQuery(String question, String userAnswer) {
-        String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("query-optimizer"));
-        String prompt = skillBlock + "\n" +
-                "请从下面的面试问答中提取用于知识检索的关键词。\n" +
-                "严格按 CORE/EXPAND 两行格式输出。\n" +
-                "问题：" + question + "\n" +
-                "回答：" + userAnswer + "\n" +
-                "只返回 CORE 和 EXPAND 两行，不要返回其他解释。";
-        String raw = routingChatService.callWithFirstPacketProbeSupplier(
-            () -> question,
-            prompt, ModelRouteType.GENERAL, TimeoutHint.NORMAL, "关键词提取"
-        );
-        return parseRewrittenQuery(raw);
-    }
-
-    private RewrittenQuery buildRewrittenQuery(String question, String userAnswer, SkillExecutionBudget skillBudget) {
-        String fallbackRaw = normalizeRewriteSource(question, userAnswer);
-        if (!shouldRewriteQuery(question, userAnswer)) {
-            return RewrittenQuery.fallback(fallbackRaw);
-        }
-        String cacheKey = buildRewriteCacheKey(question, userAnswer);
-        CachedRewrite cachedRewrite = rewriteCache.get(cacheKey);
-        if (cachedRewrite != null && !cachedRewrite.isExpired()) {
-            return cachedRewrite.query();
-        }
-        try {
-            SkillExecutionResult result = skillOrchestrator.execute(
-                    "query-optimizer",
-                    new SkillExecutionContext(
-                            RAGTraceContext.getTraceId(),
-                            "rag-service",
-                            Map.of(
-                                    "question", question == null ? "" : question,
-                                    "userAnswer", userAnswer == null ? "" : userAnswer
-                            ),
-                            skillBudget
-                    )
-            );
-            RewrittenQuery rewrittenQuery = result.succeeded()
-                    ? new RewrittenQuery(
-                    result.textOutput("coreTerms"),
-                    result.textOutput("expandTerms"),
-                    result.textOutput("fullQuery").isBlank() ? fallbackRaw : result.textOutput("fullQuery")
-            )
-                    : callWithRetry(() -> rewriteQuery(question, userAnswer), 2, "关键词提取");
-            putRewriteCache(cacheKey, rewrittenQuery);
-            return rewrittenQuery;
-        } catch (RuntimeException e) {
-            logger.warn("关键词提取失败，使用原问答检索。原因: {}", summarizeError(e));
-            return RewrittenQuery.fallback(fallbackRaw);
-        }
-    }
-
     private SkillExecutionResult evaluateEvidenceSkill(RewrittenQuery rewrittenQuery,
                                                        List<Document> retrievedDocs,
                                                        String context,
@@ -1398,81 +1337,6 @@ public class RAGService {
             return snippetText;
         }
         return item == null ? "" : String.valueOf(item).trim();
-    }
-
-    private boolean shouldRewriteQuery(String question, String userAnswer) {
-        String normalizedQuestion = question == null ? "" : question.trim();
-        String normalizedAnswer = userAnswer == null ? "" : userAnswer.trim();
-        if (!normalizedAnswer.isBlank()) {
-            return true;
-        }
-        if (normalizedQuestion.length() >= 28) {
-            return true;
-        }
-        if (normalizedQuestion.contains("，")
-                || normalizedQuestion.contains(",")
-                || normalizedQuestion.contains("；")
-                || normalizedQuestion.contains(";")
-                || normalizedQuestion.contains("：")
-                || normalizedQuestion.contains(":")
-                || normalizedQuestion.contains("（")
-                || normalizedQuestion.contains("(")) {
-            return true;
-        }
-        for (String keyword : REWRITE_TRIGGER_KEYWORDS) {
-            if (normalizedQuestion.contains(keyword)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String buildRewriteCacheKey(String question, String userAnswer) {
-        return normalizeRewriteSource(question, userAnswer).toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizeRewriteSource(String question, String userAnswer) {
-        String combined = ((question == null ? "" : question.trim()) + " " + (userAnswer == null ? "" : userAnswer.trim())).trim();
-        return combined.replaceAll("\\s+", " ");
-    }
-
-    private void putRewriteCache(String cacheKey, RewrittenQuery query) {
-        if (rewriteCache.size() >= REWRITE_CACHE_MAX_SIZE) {
-            cleanupExpiredRewriteCache();
-            if (rewriteCache.size() >= REWRITE_CACHE_MAX_SIZE) {
-                String firstKey = rewriteCache.keys().hasMoreElements() ? rewriteCache.keys().nextElement() : null;
-                if (firstKey != null) {
-                    rewriteCache.remove(firstKey);
-                }
-            }
-        }
-        rewriteCache.put(cacheKey, new CachedRewrite(query, System.currentTimeMillis() + REWRITE_CACHE_TTL.toMillis()));
-    }
-
-    private void cleanupExpiredRewriteCache() {
-        long now = System.currentTimeMillis();
-        rewriteCache.entrySet().removeIf(entry -> entry.getValue().expireAtMs() <= now);
-    }
-
-    private RewrittenQuery parseRewrittenQuery(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return RewrittenQuery.fallback("");
-        }
-        String core = "";
-        String expand = "";
-        for (String line : raw.split("\\r?\\n")) {
-            String trimmed = line.trim();
-            if (trimmed.toUpperCase(Locale.ROOT).startsWith("CORE:")) {
-                core = trimmed.substring(5).trim();
-            } else if (trimmed.toUpperCase(Locale.ROOT).startsWith("EXPAND:")) {
-                expand = trimmed.substring(7).trim();
-            }
-        }
-        if (core.isEmpty()) {
-            return RewrittenQuery.fallback(raw.replaceAll("\\s+", " ").trim());
-        }
-        String full = expand.isEmpty() ? core : core + " " + expand;
-        return new RewrittenQuery(core, expand, full);
     }
 
     private <T> T callWithRetry(Supplier<T> action, int maxAttempts, String stage) {
@@ -2551,27 +2415,5 @@ public class RAGService {
     ) {
     }
 
-    private record CachedRewrite(RewrittenQuery query, long expireAtMs) {
-        private boolean isExpired() {
-            return expireAtMs <= System.currentTimeMillis();
-        }
-    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
