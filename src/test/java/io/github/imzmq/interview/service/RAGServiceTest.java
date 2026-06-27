@@ -10,6 +10,7 @@ import io.github.imzmq.interview.graph.domain.TechConceptSnippetView;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -158,6 +159,7 @@ class RAGServiceTest {
                 skillMcpClient,
                 webSearchTool
         );
+        KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder();
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
@@ -180,6 +182,7 @@ class RAGServiceTest {
                 queryRewriteService,
                 evidenceEvaluationService,
                 webFallbackService,
+                knowledgePacketBuilder,
                 skillMcpClient,
                 llmJsonParser
         );

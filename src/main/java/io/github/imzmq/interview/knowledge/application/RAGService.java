@@ -110,9 +110,10 @@ public class RAGService {
     private final QueryRewriteService queryRewriteService;
     private final EvidenceEvaluationService evidenceEvaluationService;
     private final WebFallbackService webFallbackService;
+    private final KnowledgePacketBuilder knowledgePacketBuilder;
     private final SkillMcpClient skillMcpClient;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, EvidenceEvaluationService evidenceEvaluationService, WebFallbackService webFallbackService, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, EvidenceEvaluationService evidenceEvaluationService, WebFallbackService webFallbackService, KnowledgePacketBuilder knowledgePacketBuilder, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -133,6 +134,7 @@ public class RAGService {
         this.queryRewriteService = queryRewriteService;
         this.evidenceEvaluationService = evidenceEvaluationService;
         this.webFallbackService = webFallbackService;
+        this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.skillMcpClient = skillMcpClient;
         this.llmJsonParser = llmJsonParser;
     }
@@ -172,6 +174,10 @@ public class RAGService {
      * 构建检索知识包，并允许调用方决定是否启用 Web fallback。
      */
     public KnowledgePacket buildKnowledgePacket(String question, String userAnswer, boolean allowWebFallback) {
+        return knowledgePacketBuilder.build(question, userAnswer, allowWebFallback, this::buildKnowledgePacketInternal);
+    }
+
+    private KnowledgePacket buildKnowledgePacketInternal(String question, String userAnswer, boolean allowWebFallback) {
         return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question, () -> {
             // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
             String traceId = RAGTraceContext.getTraceId();

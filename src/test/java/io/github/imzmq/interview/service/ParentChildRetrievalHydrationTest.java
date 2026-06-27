@@ -8,6 +8,7 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentD
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -138,6 +139,7 @@ class ParentChildRetrievalHydrationTest {
                 skillMcpClient,
                 webSearchTool
         );
+        KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder();
         Executor executor = Runnable::run;
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
@@ -161,6 +163,7 @@ class ParentChildRetrievalHydrationTest {
                 queryRewriteService,
                 evidenceEvaluationService,
                 webFallbackService,
+                knowledgePacketBuilder,
                 skillMcpClient,
                 llmJsonParser
         );
