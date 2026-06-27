@@ -1,12 +1,12 @@
-package io.github.imzmq.interview.skill.runtime;
+package io.github.imzmq.interview.tools.skill.runtime;
 
 import io.github.imzmq.interview.platform.config.skill.SkillExecutionProperties;
 import org.springframework.stereotype.Service;
-import io.github.imzmq.interview.skill.core.ExecutableSkill;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
-import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
-import io.github.imzmq.interview.skill.core.SkillExecutionContext;
-import io.github.imzmq.interview.skill.core.SkillExecutionResult;
+import io.github.imzmq.interview.tools.skill.core.ExecutableSkill;
+import io.github.imzmq.interview.tools.skill.core.SkillDefinition;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionBudget;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionContext;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionResult;
 
 @Service
 public class SkillOrchestrator {

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.core;
+package io.github.imzmq.interview.tools.skill.core;
 
 import java.util.List;
 import java.util.Map;
@@ -64,4 +64,3 @@ public record SkillExecutionContext(
         return value instanceof List<?> list ? (List<T>) list : List.of();
     }
 }
-

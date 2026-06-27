@@ -1,7 +1,7 @@
-package io.github.imzmq.interview.skill.core;
+package io.github.imzmq.interview.tools.skill.core;
 
 import java.util.List;
-import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailurePolicy;
 
 public record SkillDefinition(
         String id,
@@ -11,4 +11,3 @@ public record SkillDefinition(
         SkillFailurePolicy failurePolicy
 ) {
 }
-

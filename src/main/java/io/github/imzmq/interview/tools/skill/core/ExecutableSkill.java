@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.core;
+package io.github.imzmq.interview.tools.skill.core;
 
 public interface ExecutableSkill {
 
@@ -6,4 +6,3 @@ public interface ExecutableSkill {
 
     SkillExecutionResult execute(SkillExecutionContext context);
 }
-

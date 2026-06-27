@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.runtime;
+package io.github.imzmq.interview.tools.skill.runtime;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +11,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import io.github.imzmq.interview.skill.core.SkillExecutionStatus;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionStatus;
 
 @Service
 public class SkillTelemetryRecorder {
@@ -85,4 +85,3 @@ public class SkillTelemetryRecorder {
     ) {
     }
 }
-

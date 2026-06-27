@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.builtin;
+package io.github.imzmq.interview.tools.skill.builtin;
 
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import io.github.imzmq.interview.skill.core.ExecutableSkill;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
-import io.github.imzmq.interview.skill.core.SkillExecutionContext;
-import io.github.imzmq.interview.skill.core.SkillExecutionMode;
-import io.github.imzmq.interview.skill.core.SkillExecutionResult;
-import io.github.imzmq.interview.skill.policy.SkillFailureFallbackMode;
-import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
+import io.github.imzmq.interview.tools.skill.core.ExecutableSkill;
+import io.github.imzmq.interview.tools.skill.core.SkillDefinition;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionContext;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionMode;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionResult;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailureFallbackMode;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailurePolicy;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 
@@ -112,6 +112,3 @@ public class QueryOptimizerSkill implements ExecutableSkill {
     private record ParsedRewrite(String coreTerms, String expandTerms, String fullQuery) {
     }
 }
-
-
-

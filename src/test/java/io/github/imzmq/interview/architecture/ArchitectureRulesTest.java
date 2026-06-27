@@ -50,7 +50,6 @@ class ArchitectureRulesTest {
             "platform",
             "routing",
             "shared",
-            "skill",
             "tools"
     );
 

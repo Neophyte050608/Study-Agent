@@ -1,16 +1,16 @@
-package io.github.imzmq.interview.skill.builtin;
+package io.github.imzmq.interview.tools.skill.builtin;
 
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
-import io.github.imzmq.interview.skill.core.ExecutableSkill;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
-import io.github.imzmq.interview.skill.core.SkillExecutionContext;
-import io.github.imzmq.interview.skill.core.SkillExecutionMode;
-import io.github.imzmq.interview.skill.core.SkillExecutionResult;
-import io.github.imzmq.interview.skill.policy.SkillFailureFallbackMode;
-import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
+import io.github.imzmq.interview.tools.skill.core.ExecutableSkill;
+import io.github.imzmq.interview.tools.skill.core.SkillDefinition;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionContext;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionMode;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionResult;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailureFallbackMode;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailurePolicy;
 
 @Component
 public class PersonalizedLearningPlannerSkill implements ExecutableSkill {
@@ -61,4 +61,3 @@ public class PersonalizedLearningPlannerSkill implements ExecutableSkill {
         return "【Learning Plan Strategy】\n- 主题: " + normalizedTopic + "\n- 聚焦短板: " + focus + "\n- 节奏: " + intensity + "\n- 要求: 每天都包含学习目标、练习动作、复盘动作，负载控制在 1-2 小时。";
     }
 }
-

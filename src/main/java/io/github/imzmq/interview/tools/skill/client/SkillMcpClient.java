@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.client;
+package io.github.imzmq.interview.tools.skill.client;
 
 import io.github.imzmq.interview.integration.mcp.application.McpGatewayService;
 import org.springframework.stereotype.Service;
@@ -7,8 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
-import io.github.imzmq.interview.skill.core.SkillExecutionContext;
+import io.github.imzmq.interview.tools.skill.core.SkillDefinition;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionContext;
 
 @Service
 public class SkillMcpClient {

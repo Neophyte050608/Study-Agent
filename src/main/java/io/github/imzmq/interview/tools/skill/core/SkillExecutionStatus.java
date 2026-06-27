@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.core;
+package io.github.imzmq.interview.tools.skill.core;
 
 public enum SkillExecutionStatus {
     SUCCESS,
@@ -6,4 +6,3 @@ public enum SkillExecutionStatus {
     FAILED,
     SKIPPED
 }
-

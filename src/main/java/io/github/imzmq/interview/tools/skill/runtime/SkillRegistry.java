@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.runtime;
+package io.github.imzmq.interview.tools.skill.runtime;
 
 import org.springframework.stereotype.Service;
 
@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import io.github.imzmq.interview.skill.core.ExecutableSkill;
+import io.github.imzmq.interview.tools.skill.core.ExecutableSkill;
 
 @Service
 public class SkillRegistry {
@@ -35,4 +35,3 @@ public class SkillRegistry {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 }
-

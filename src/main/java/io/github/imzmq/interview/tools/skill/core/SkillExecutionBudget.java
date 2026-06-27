@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.core;
+package io.github.imzmq.interview.tools.skill.core;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,4 +46,3 @@ public class SkillExecutionBudget {
         }
     }
 }
-

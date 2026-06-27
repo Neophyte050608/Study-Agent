@@ -7,7 +7,7 @@ import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvalu
 import io.github.imzmq.interview.feedback.application.MetricsSnapshotScheduler;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotMapper;
-import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
+import io.github.imzmq.interview.tools.skill.runtime.SkillTelemetryRecorder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

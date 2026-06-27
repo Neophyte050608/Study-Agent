@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.core;
+package io.github.imzmq.interview.tools.skill.core;
 
 import java.util.List;
 import java.util.Map;
@@ -59,4 +59,3 @@ public record SkillExecutionResult(
         }
     }
 }
-

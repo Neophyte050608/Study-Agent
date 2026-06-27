@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.builtin;
+package io.github.imzmq.interview.tools.skill.builtin;
 
 import io.github.imzmq.interview.interview.domain.Question;
 import org.springframework.stereotype.Component;
@@ -7,13 +7,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import io.github.imzmq.interview.skill.core.ExecutableSkill;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
-import io.github.imzmq.interview.skill.core.SkillExecutionContext;
-import io.github.imzmq.interview.skill.core.SkillExecutionMode;
-import io.github.imzmq.interview.skill.core.SkillExecutionResult;
-import io.github.imzmq.interview.skill.policy.SkillFailureFallbackMode;
-import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
+import io.github.imzmq.interview.tools.skill.core.ExecutableSkill;
+import io.github.imzmq.interview.tools.skill.core.SkillDefinition;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionContext;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionMode;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionResult;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailureFallbackMode;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailurePolicy;
 
 @Component
 public class InterviewReportGeneratorSkill implements ExecutableSkill {
@@ -130,7 +130,3 @@ public class InterviewReportGeneratorSkill implements ExecutableSkill {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 }
-
-
-
-

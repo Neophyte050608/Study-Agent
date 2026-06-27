@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.runtime;
+package io.github.imzmq.interview.tools.skill.runtime;
 
 import io.github.imzmq.interview.platform.config.skill.SkillExecutionProperties;
 import org.slf4j.Logger;
@@ -19,14 +19,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import io.github.imzmq.interview.skill.core.ExecutableSkill;
-import io.github.imzmq.interview.skill.core.SkillDefinition;
-import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
-import io.github.imzmq.interview.skill.core.SkillExecutionContext;
-import io.github.imzmq.interview.skill.core.SkillExecutionResult;
-import io.github.imzmq.interview.skill.core.SkillExecutionStatus;
-import io.github.imzmq.interview.skill.policy.SkillFailureFallbackMode;
-import io.github.imzmq.interview.skill.policy.SkillFailurePolicy;
+import io.github.imzmq.interview.tools.skill.core.ExecutableSkill;
+import io.github.imzmq.interview.tools.skill.core.SkillDefinition;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionBudget;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionContext;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionResult;
+import io.github.imzmq.interview.tools.skill.core.SkillExecutionStatus;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailureFallbackMode;
+import io.github.imzmq.interview.tools.skill.policy.SkillFailurePolicy;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 

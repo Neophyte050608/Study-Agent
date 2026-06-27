@@ -11,7 +11,7 @@ import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
-import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
+import io.github.imzmq.interview.tools.skill.runtime.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;

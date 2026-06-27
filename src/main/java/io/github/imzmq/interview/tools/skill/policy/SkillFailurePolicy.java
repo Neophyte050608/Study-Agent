@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.skill.policy;
+package io.github.imzmq.interview.tools.skill.policy;
 
 public record SkillFailurePolicy(
         int maxAttempts,
@@ -9,4 +9,3 @@ public record SkillFailurePolicy(
         SkillFailureFallbackMode fallbackMode
 ) {
 }
-
