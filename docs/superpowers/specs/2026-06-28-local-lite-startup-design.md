@@ -80,3 +80,26 @@ git diff --check
 ## Rollback
 
 Rollback is straightforward: remove `application-local-lite.yml` and the two conditional annotations. Default full startup behavior remains unchanged throughout the change.
+
+## Addendum: One-Command Development Startup
+
+Add a shell-based development launcher for the lightweight local profile. The launcher starts the required Docker infrastructure, waits for the key ports, then starts both backend and frontend development servers.
+
+### Scripts
+
+- `scripts/dev-start.sh`
+  - Starts Docker dependencies: `mysql redis etcd minio milvus neo4j`.
+  - Waits for MySQL, Redis, Milvus, and Neo4j ports.
+  - Starts backend with `local-lite` profile.
+  - Starts frontend through `npm run dev` in `frontend/`.
+  - Writes logs and PID files under `.dev/`.
+  - Keeps running until interrupted, then stops backend/frontend child processes.
+
+- `scripts/dev-stop.sh`
+  - Stops backend/frontend processes recorded in `.dev/*.pid`.
+  - Leaves Docker dependency containers running by default to avoid slow restarts.
+  - Supports `--with-docker` to stop the dependency containers too.
+
+### Non-goals
+
+The script will not start RocketMQ, CLIP embedding, or optional evaluation services. It will not install frontend dependencies automatically; if `frontend/node_modules` is missing, it prints the exact `npm install` command.

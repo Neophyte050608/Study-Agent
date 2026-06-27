@@ -261,3 +261,54 @@ git add src/main/java/io/github/imzmq/interview/im/application/service/QqWsServi
 
 git commit -m "feat: 添加轻量本地启动模式"
 ```
+
+## Task 5: Add One-Command Development Startup Scripts
+
+**Files:**
+- Create: `scripts/dev-start.sh`
+- Create: `scripts/dev-stop.sh`
+- Modify: `README.md`
+
+- [ ] **Step 1: Create `scripts/dev-start.sh`**
+
+Create a POSIX shell script that starts Docker dependencies, waits for ports, starts backend and frontend, writes logs/PIDs to `.dev/`, and cleans child processes on Ctrl+C.
+
+- [ ] **Step 2: Create `scripts/dev-stop.sh`**
+
+Create a companion script that stops `.dev/backend.pid` and `.dev/frontend.pid`. If invoked with `--with-docker`, also run `docker compose stop mysql redis etcd minio milvus neo4j`.
+
+- [ ] **Step 3: Update README**
+
+Document:
+
+```bash
+bash scripts/dev-start.sh
+bash scripts/dev-stop.sh
+bash scripts/dev-stop.sh --with-docker
+```
+
+- [ ] **Step 4: Verify scripts**
+
+Run:
+
+```bash
+bash -n scripts/dev-start.sh
+bash -n scripts/dev-stop.sh
+git diff --check
+```
+
+Expected: all commands exit 0.
+
+- [ ] **Step 5: Commit scripts**
+
+Run:
+
+```bash
+git add docs/superpowers/specs/2026-06-28-local-lite-startup-design.md \
+        docs/superpowers/plans/2026-06-28-local-lite-startup-plan.md \
+        scripts/dev-start.sh \
+        scripts/dev-stop.sh \
+        README.md
+
+git commit -m "feat: 添加开发环境一键启动脚本"
+```
