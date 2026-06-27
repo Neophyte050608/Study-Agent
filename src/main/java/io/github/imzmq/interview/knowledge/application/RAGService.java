@@ -18,6 +18,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
@@ -107,9 +108,10 @@ public class RAGService {
     private final ImageService imageService;
     private final SkillOrchestrator skillOrchestrator;
     private final QueryRewriteService queryRewriteService;
+    private final EvidenceEvaluationService evidenceEvaluationService;
     private final SkillMcpClient skillMcpClient;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, EvidenceEvaluationService evidenceEvaluationService, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -128,6 +130,7 @@ public class RAGService {
         this.imageService = imageService;
         this.skillOrchestrator = skillOrchestrator;
         this.queryRewriteService = queryRewriteService;
+        this.evidenceEvaluationService = evidenceEvaluationService;
         this.skillMcpClient = skillMcpClient;
         this.llmJsonParser = llmJsonParser;
     }
@@ -252,7 +255,7 @@ public class RAGService {
             String imageContext = KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
             boolean webFallbackUsed = false;
-            SkillExecutionResult evidenceDecision = evaluateEvidenceSkill(
+            EvidenceEvaluationService.EvidenceDecision evidenceDecision = evidenceEvaluationService.decide(
                     rewrittenQuery,
                     retrievedDocs,
                     context,
@@ -261,12 +264,8 @@ public class RAGService {
                     traceId,
                     skillBudget
             );
-            boolean allowExternalLookup = evidenceDecision.succeeded()
-                    ? evidenceDecision.boolOutput("allowExternalLookup")
-                    : shouldUseWebFallback(allowWebFallback, rewrittenQuery.fullQuery(), retrievedDocs, context, bestRetrievalScore);
-            String externalLookupReason = evidenceDecision.succeeded()
-                    ? evidenceDecision.textOutput("reason")
-                    : "LEGACY_WEB_FALLBACK";
+            boolean allowExternalLookup = evidenceDecision.allowExternalLookup();
+            String externalLookupReason = evidenceDecision.reason();
             if (allowExternalLookup) {
                 TraceNodeHandle webFallbackTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
                 List<String> webContext = runControlledWebSearch(rewrittenQuery.fullQuery(), traceId, externalLookupReason, skillBudget);
@@ -628,66 +627,6 @@ public class RAGService {
         fused.addAll(graphDocs);
         List<Document> hydrated = maybeHydrateParentDocuments(fused, topK);
         return rerankByQueryOverlap(query, hydrated, topK);
-    }
-
-    /**
-     * 根据配置判断是否需要触发 Web fallback。
-     *
-     * @param allowWebFallback 当前调用方是否允许使用 Web fallback
-     * @param retrievalQuery 重写后的检索词
-     * @param retrievedDocs 本地检索结果
-     * @param context 本地拼接上下文
-     * @param bestRetrievalScore 本地结果最佳重排分数
-     * @return true 表示需要使用 Web fallback
-     */
-    private boolean shouldUseWebFallback(
-            boolean allowWebFallback,
-            String retrievalQuery,
-            List<Document> retrievedDocs,
-            String context,
-            double bestRetrievalScore
-    ) {
-        if (!allowWebFallback) {
-            return false;
-        }
-        boolean groundedEvidencePresent = hasGroundedLocalEvidence(retrievedDocs);
-        boolean graphOnlyContext = !groundedEvidencePresent && containsGraphHint(context);
-        boolean emptyContext = !groundedEvidencePresent && ((context == null || context.isBlank()) || graphOnlyContext);
-        RagRetrievalProperties.WebFallbackMode mode = ragRetrievalProperties.getWebFallbackMode();
-        return switch (mode) {
-            case NONE -> false;
-            case ON_EMPTY -> emptyContext;
-            case ON_LOW_QUALITY -> emptyContext || bestRetrievalScore < ragRetrievalProperties.getWebFallbackQualityThreshold();
-        };
-    }
-
-    private boolean hasGroundedLocalEvidence(List<Document> retrievedDocs) {
-        if (retrievedDocs == null || retrievedDocs.isEmpty()) {
-            return false;
-        }
-        return retrievedDocs.stream().anyMatch(doc -> {
-            if (doc == null) {
-                return false;
-            }
-            String sourceType = String.valueOf(doc.getMetadata().getOrDefault("source_type", "")).trim().toLowerCase(Locale.ROOT);
-            if ("graph_rag".equals(sourceType)) {
-                return isSubstantiveGraphEvidence(doc.getText());
-            }
-            String text = doc.getText();
-            return text != null && !text.isBlank();
-        });
-    }
-
-    private boolean containsGraphHint(String context) {
-        return context != null && context.contains("知识图谱关联提示");
-    }
-
-    private boolean isSubstantiveGraphEvidence(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        long conceptCount = text.chars().filter(ch -> ch == '（').count();
-        return conceptCount >= 2 || text.contains("；");
     }
 
     /**
@@ -1220,30 +1159,6 @@ public class RAGService {
             }
         }
         throw last == null ? new IllegalStateException(stage + "失败") : last;
-    }
-
-    private SkillExecutionResult evaluateEvidenceSkill(RewrittenQuery rewrittenQuery,
-                                                       List<Document> retrievedDocs,
-                                                       String context,
-                                                       double bestRetrievalScore,
-                                                       boolean allowWebFallback,
-                                                       String traceId,
-                                                       SkillExecutionBudget skillBudget) {
-        return skillOrchestrator.execute(
-                "evidence-evaluator",
-                new SkillExecutionContext(
-                        traceId,
-                        "rag-service",
-                        Map.of(
-                                "retrievalQuery", rewrittenQuery == null ? "" : rewrittenQuery.fullQuery(),
-                                "retrievedDocs", retrievedDocs == null ? List.of() : retrievedDocs,
-                                "context", context == null ? "" : context,
-                                "bestRetrievalScore", bestRetrievalScore,
-                                "allowWebFallback", allowWebFallback
-                        ),
-                        skillBudget
-                )
-        );
     }
 
     private List<String> runControlledWebSearch(String query,
