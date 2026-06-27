@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit;
  * 负责与 QQ 开放平台建立 WebSocket 连接，接收事件并转发处理
  */
 @Service
+@ConditionalOnProperty(prefix = "im.qq", name = "use-ws", havingValue = "true")
 public class QqWsService {
 
     private static final Logger log = LoggerFactory.getLogger(QqWsService.class);

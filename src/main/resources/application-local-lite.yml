@@ -1,0 +1,31 @@
+# Lightweight local development profile.
+# Use with: mvn spring-boot:run -Dspring-boot.run.profiles=local-lite
+
+spring:
+  datasource:
+    hikari:
+      minimum-idle: 0
+      maximum-pool-size: 5
+      connection-timeout: 5000
+  ai:
+    vectorstore:
+      milvus:
+        initialize-schema: false
+
+logging:
+  level:
+    org.springframework.ai: INFO
+
+app:
+  knowledge:
+    retrieval:
+      warmup-enabled: false
+  multimodal:
+    image-store:
+      enabled: false
+
+im:
+  qq:
+    use-ws: false
+  feishu:
+    use-ws: false
