@@ -2,11 +2,11 @@ package io.github.imzmq.interview.knowledge.application.observability;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
-import io.github.imzmq.interview.entity.knowledge.RagTraceDO;
-import io.github.imzmq.interview.entity.knowledge.RagTraceNodeDO;
-import io.github.imzmq.interview.mapper.knowledge.RagTraceMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagTraceNodeMapper;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceNodeDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceNodeMapper;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

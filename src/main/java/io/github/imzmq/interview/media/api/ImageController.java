@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.media.api;
 
-import io.github.imzmq.interview.entity.media.ImageMetadataDO;
+import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import io.github.imzmq.interview.ingestion.application.IngestConfigService;
 import io.github.imzmq.interview.media.application.ImageService;
 import org.springframework.core.io.ByteArrayResource;

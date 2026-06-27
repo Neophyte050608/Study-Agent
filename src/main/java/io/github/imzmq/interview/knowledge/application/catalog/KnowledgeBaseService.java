@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.knowledge.application.catalog;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.knowledge.KnowledgeBaseDO;
-import io.github.imzmq.interview.mapper.knowledge.KnowledgeBaseMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeBaseDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeBaseMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

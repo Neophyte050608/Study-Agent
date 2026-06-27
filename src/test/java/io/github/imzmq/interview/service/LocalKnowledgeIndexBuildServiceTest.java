@@ -53,7 +53,7 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.rag.core.NoteLoader(),
+                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
                 properties,
                 ingestConfigService,
                 new LocalKnowledgeScopeService(),
@@ -107,7 +107,7 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.rag.core.NoteLoader(),
+                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
                 properties,
                 ingestConfigService,
                 new LocalKnowledgeScopeService(),
@@ -182,7 +182,7 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.rag.core.NoteLoader(),
+                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
                 properties,
                 ingestConfigService,
                 new LocalKnowledgeScopeService(),

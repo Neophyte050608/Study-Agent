@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.observability.core;
 
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
 import io.github.imzmq.interview.knowledge.application.observability.TraceService;

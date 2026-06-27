@@ -31,7 +31,7 @@ import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
-import io.github.imzmq.interview.tool.search.WebSearchTool;
+import io.github.imzmq.interview.search.application.WebSearchTool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;

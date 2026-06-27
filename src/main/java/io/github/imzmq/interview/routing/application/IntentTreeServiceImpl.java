@@ -2,9 +2,9 @@ package io.github.imzmq.interview.routing.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import io.github.imzmq.interview.entity.intent.IntentNodeDO;
+import io.github.imzmq.interview.routing.infrastructure.persistence.IntentNodeDO;
 import io.github.imzmq.interview.intent.domain.IntentTreeNode;
-import io.github.imzmq.interview.mapper.intent.IntentNodeMapper;
+import io.github.imzmq.interview.routing.infrastructure.persistence.IntentNodeMapper;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;

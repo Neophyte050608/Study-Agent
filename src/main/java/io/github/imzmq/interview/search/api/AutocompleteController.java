@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.search.api;
 
-import io.github.imzmq.interview.dto.search.AutocompleteItem;
+import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
 import io.github.imzmq.interview.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.search.application.AutocompleteService;
 import jakarta.servlet.http.HttpServletRequest;

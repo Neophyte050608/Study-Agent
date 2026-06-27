@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.modelrouting.probe;
 
-import io.github.imzmq.interview.entity.modelrouting.ModelCandidateDO;
+import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;

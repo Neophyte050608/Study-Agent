@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.search.application;
 
-import io.github.imzmq.interview.dto.search.AutocompleteItem;
+import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
 
 import java.util.ArrayList;
 import java.util.HashMap;

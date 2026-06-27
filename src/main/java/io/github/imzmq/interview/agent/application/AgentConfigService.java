@@ -2,8 +2,8 @@ package io.github.imzmq.interview.agent.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.github.imzmq.interview.config.agent.AgentConfig;
-import io.github.imzmq.interview.entity.agent.AgentConfigDO;
-import io.github.imzmq.interview.mapper.agent.AgentConfigMapper;
+import io.github.imzmq.interview.agent.infrastructure.persistence.AgentConfigDO;
+import io.github.imzmq.interview.agent.infrastructure.persistence.AgentConfigMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;

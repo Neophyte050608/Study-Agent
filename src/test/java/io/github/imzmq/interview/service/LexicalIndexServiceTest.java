@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.service;
 
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
-import io.github.imzmq.interview.entity.knowledge.LexicalIndexDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexDO;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
-import io.github.imzmq.interview.mapper.knowledge.LexicalIndexMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

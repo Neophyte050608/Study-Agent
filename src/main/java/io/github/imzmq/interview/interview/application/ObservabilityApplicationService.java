@@ -1,14 +1,14 @@
 package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.entity.knowledge.RagFeedbackDO;
-import io.github.imzmq.interview.entity.knowledge.RagMetricsSnapshotDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotDO;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
 import io.github.imzmq.interview.feedback.application.MetricsSnapshotScheduler;
-import io.github.imzmq.interview.mapper.knowledge.RagFeedbackMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagMetricsSnapshotMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotMapper;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 

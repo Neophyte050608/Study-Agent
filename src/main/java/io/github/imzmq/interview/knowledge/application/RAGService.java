@@ -6,7 +6,7 @@ import io.github.imzmq.interview.config.observability.ObservabilitySwitchPropert
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.interview.domain.Question;
-import io.github.imzmq.interview.core.trace.RAGTraceContext;
+import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
@@ -28,7 +28,7 @@ import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
-import io.github.imzmq.interview.tool.search.WebSearchTool;
+import io.github.imzmq.interview.search.application.WebSearchTool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -763,7 +763,7 @@ public class RAGService {
         if (parentIds.isEmpty()) {
             return docs;
         }
-        Map<String, io.github.imzmq.interview.entity.knowledge.RagParentDO> parentMap = parentChildIndexService.queryParentsByIds(parentIds);
+        Map<String, io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO> parentMap = parentChildIndexService.queryParentsByIds(parentIds);
         if (parentMap.isEmpty()) {
             return docs;
         }
@@ -775,7 +775,7 @@ public class RAGService {
                 continue;
             }
             String parentId = String.valueOf(doc.getMetadata().getOrDefault("parent_id", ""));
-            io.github.imzmq.interview.entity.knowledge.RagParentDO parent = parentMap.get(parentId);
+            io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO parent = parentMap.get(parentId);
             if (parent == null || parent.getParentText() == null || parent.getParentText().isBlank()) {
                 result.add(doc);
                 continue;
@@ -805,7 +805,7 @@ public class RAGService {
      * @param parent parent 文档信息
      * @return 结构化回填结果
      */
-    private ParentChildHydrationPayload buildParentChildHydrationPayload(Document doc, io.github.imzmq.interview.entity.knowledge.RagParentDO parent) {
+    private ParentChildHydrationPayload buildParentChildHydrationPayload(Document doc, io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO parent) {
         String childMatchExcerpt = extractChildMatchExcerpt(doc == null ? "" : doc.getText());
         String parentContextExcerpt = extractParentContextExcerpt(parent == null ? "" : parent.getParentText(), childMatchExcerpt);
         String hydratedText = composeHydratedText(parent, parentContextExcerpt, childMatchExcerpt);
@@ -920,7 +920,7 @@ public class RAGService {
      * @param childMatchExcerpt child 摘要
      * @return 拼接后的文本
      */
-    private String composeHydratedText(io.github.imzmq.interview.entity.knowledge.RagParentDO parent, String parentContextExcerpt, String childMatchExcerpt) {
+    private String composeHydratedText(io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO parent, String parentContextExcerpt, String childMatchExcerpt) {
         StringBuilder builder = new StringBuilder();
         if (parent != null && parent.getSectionPath() != null && !parent.getSectionPath().isBlank()) {
             builder.append("\u3010\u7AE0\u8282\u8DEF\u5F84\u3011").append(parent.getSectionPath().trim()).append("\n");

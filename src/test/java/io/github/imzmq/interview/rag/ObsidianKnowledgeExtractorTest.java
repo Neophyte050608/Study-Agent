@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.rag;
 
-import io.github.imzmq.interview.rag.core.ObsidianKnowledgeExtractor;
+import io.github.imzmq.interview.ingestion.application.ObsidianKnowledgeExtractor;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 

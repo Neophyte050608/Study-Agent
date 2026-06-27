@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.search.application;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.github.imzmq.interview.entity.search.AutocompleteDictDO;
-import io.github.imzmq.interview.mapper.search.AutocompleteDictMapper;
+import io.github.imzmq.interview.search.infrastructure.persistence.AutocompleteDictDO;
+import io.github.imzmq.interview.search.infrastructure.persistence.AutocompleteDictMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;

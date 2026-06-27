@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.media.application;
 
-import io.github.imzmq.interview.entity.media.ImageMetadataDO;
-import io.github.imzmq.interview.mapper.media.ImageMetadataMapper;
+import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
+import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.milvus.client.MilvusServiceClient;

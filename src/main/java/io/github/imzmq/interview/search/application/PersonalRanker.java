@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.search.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.dto.search.AutocompleteItem;
-import io.github.imzmq.interview.entity.learning.UserKnowledgeStateDO;
-import io.github.imzmq.interview.mapper.learning.UserKnowledgeStateMapper;
+import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
+import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateDO;
+import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

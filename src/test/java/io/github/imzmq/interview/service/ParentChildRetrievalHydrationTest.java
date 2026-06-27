@@ -4,7 +4,7 @@ import io.github.imzmq.interview.config.observability.ObservabilitySwitchPropert
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
-import io.github.imzmq.interview.entity.knowledge.RagParentDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
@@ -28,7 +28,7 @@ import io.github.imzmq.interview.skill.runtime.SkillExecutor;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
-import io.github.imzmq.interview.tool.search.WebSearchTool;
+import io.github.imzmq.interview.search.application.WebSearchTool;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

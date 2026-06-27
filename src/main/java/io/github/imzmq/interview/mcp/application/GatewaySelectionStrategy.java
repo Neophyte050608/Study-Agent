@@ -1,14 +1,13 @@
 package io.github.imzmq.interview.mcp.application;
 
-import io.github.imzmq.interview.tool.gateway.FastMcpCapabilityGateway;
-import io.github.imzmq.interview.tool.adapter.DatabaseMcpAdapterRouter;
-import io.github.imzmq.interview.tool.gateway.McpBridgeCapabilityGateway;
-import io.github.imzmq.interview.tool.gateway.McpCapabilityGateway;
+import io.github.imzmq.interview.mcp.infrastructure.FastMcpCapabilityGateway;
+import io.github.imzmq.interview.mcp.infrastructure.DatabaseMcpAdapterRouter;
+import io.github.imzmq.interview.mcp.infrastructure.McpBridgeCapabilityGateway;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
-import io.github.imzmq.interview.tool.gateway.McpSseCapabilityGateway;
-import io.github.imzmq.interview.tool.gateway.McpStdioCapabilityGateway;
-import io.github.imzmq.interview.tool.gateway.StubMcpCapabilityGateway;
+import io.github.imzmq.interview.mcp.infrastructure.McpSseCapabilityGateway;
+import io.github.imzmq.interview.mcp.infrastructure.McpStdioCapabilityGateway;
+import io.github.imzmq.interview.mcp.infrastructure.StubMcpCapabilityGateway;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 

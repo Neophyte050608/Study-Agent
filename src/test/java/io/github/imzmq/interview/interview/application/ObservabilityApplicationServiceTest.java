@@ -5,8 +5,8 @@ import io.github.imzmq.interview.knowledge.application.observability.RAGObservab
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
 import io.github.imzmq.interview.feedback.application.MetricsSnapshotScheduler;
-import io.github.imzmq.interview.mapper.knowledge.RagFeedbackMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagMetricsSnapshotMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotMapper;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
 import org.junit.jupiter.api.Test;
 

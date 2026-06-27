@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.api;
 
-import io.github.imzmq.interview.entity.knowledge.KnowledgeBaseDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeBaseDO;
 import io.github.imzmq.interview.knowledge.application.catalog.KnowledgeBaseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
