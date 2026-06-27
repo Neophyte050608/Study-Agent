@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.entity.intent;
+package io.github.imzmq.interview.routing.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;

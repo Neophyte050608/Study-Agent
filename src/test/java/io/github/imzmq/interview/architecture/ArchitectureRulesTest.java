@@ -30,7 +30,8 @@ class ArchitectureRulesTest {
     @ArchTest
     static final ArchRule entity_should_not_depend_on_service_or_controller =
             noClasses().that().resideInAnyPackage("..entity..")
-                    .should().dependOnClassesThat().resideInAnyPackage("..service..", "..controller..", "..api..");
+                    .should().dependOnClassesThat().resideInAnyPackage("..service..", "..controller..", "..api..")
+                    .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule main_code_should_not_use_retired_top_level_entity_mapper_or_dto_packages =
@@ -39,7 +40,8 @@ class ArchitectureRulesTest {
                             "io.github.imzmq.interview.mapper..",
                             "io.github.imzmq.interview.dto.."
                     )
-                    .should(exist());
+                    .should(exist())
+                    .allowEmptyShould(true);
 
     private static ArchCondition<JavaClass> exist() {
         return new ArchCondition<>("exist") {

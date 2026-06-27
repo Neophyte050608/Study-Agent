@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.mapper.intent;
+package io.github.imzmq.interview.routing.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.intent.IntentNodeDO;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
