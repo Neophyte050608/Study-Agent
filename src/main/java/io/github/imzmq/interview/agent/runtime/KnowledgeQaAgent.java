@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;

@@ -9,8 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

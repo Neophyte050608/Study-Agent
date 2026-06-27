@@ -7,9 +7,9 @@ import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.TimeoutHint;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.chat.application.PromptManager;

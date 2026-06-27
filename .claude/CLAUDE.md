@@ -59,8 +59,7 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 | `ingestion/` | 知识摄入配置与同步 |
 | `chat/` | Prompt 模板、上下文压缩、对话记忆 |
 | `media/` | 图片 Embedding/索引/图文关联检索 |
-| `modelrouting/` | 多模型候选、优先级、三态熔断器 |
-| `modelruntime/` | 动态模型运行时选择、健康检查、VLM |
+| `model/` | 多模型候选、优先级、三态熔断、动态模型运行时选择、健康检查、VLM |
 | `identity/` | 用户身份提取 |
 | `observability/` | Trace 属性清洗、RAG 链路追踪 |
 | `mcp/` | FastMCP Java 实现，暴露 Neo4j/Milvus 工具 |
@@ -91,9 +90,11 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 - 低置信/分差过小时触发澄清（`ClarificationResolver`），不硬判
 - 意图树关闭或分类失败 → 回退 ReAct 路由
 
-### 模型路由（`modelrouting/`）
+### 模型能力（`model/`）
 - 多提供商候选 + 优先级，支持落库 `t_model_candidate`
 - 三态熔断（CLOSED/OPEN/HALF_OPEN），首包超时自动降级
+- 动态模型运行时选择与健康检查统一收敛在 `model` 模块
+- VLM 能力由 `model.application.VisionModelService` 提供，供图片/媒体链路调用
 - LLM 默认走 DeepSeek（OpenAI 兼容接口），Embedding 走智谱 embedding-3
 
 ### 附属服务（Python sidecar）

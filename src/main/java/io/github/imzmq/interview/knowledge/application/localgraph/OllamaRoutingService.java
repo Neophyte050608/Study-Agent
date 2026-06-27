@@ -4,8 +4,8 @@ import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.chat.application.JsonResult;
 import io.github.imzmq.interview.chat.application.PromptManager;

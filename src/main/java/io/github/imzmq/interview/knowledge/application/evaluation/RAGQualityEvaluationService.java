@@ -7,8 +7,8 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQuality
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalCaseMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalRunMapper;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.chat.application.JsonResult;

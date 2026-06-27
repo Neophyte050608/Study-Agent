@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
 import io.github.imzmq.interview.media.application.ImageReferenceExtractor;
-import io.github.imzmq.interview.modelrouting.application.VisionModelService;
+import io.github.imzmq.interview.model.application.VisionModelService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;

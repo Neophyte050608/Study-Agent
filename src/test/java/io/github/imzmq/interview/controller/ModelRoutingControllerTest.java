@@ -1,15 +1,15 @@
 package io.github.imzmq.interview.controller;
 
-import io.github.imzmq.interview.modelrouting.api.ModelCandidateDTO;
-import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
-import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
-import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
-import io.github.imzmq.interview.modelrouting.api.ModelRoutingController;
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
-import io.github.imzmq.interview.modelrouting.application.OllamaHealthService;
-import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
+import io.github.imzmq.interview.model.api.ModelCandidateDTO;
+import io.github.imzmq.interview.model.infrastructure.persistence.ModelCandidateDO;
+import io.github.imzmq.interview.model.probe.ModelProbeAwaiter;
+import io.github.imzmq.interview.model.state.ModelHealthStore;
+import io.github.imzmq.interview.model.api.ModelRoutingController;
+import io.github.imzmq.interview.model.core.ModelRoutingProperties;
+import io.github.imzmq.interview.model.core.RoutingChatService;
+import io.github.imzmq.interview.model.application.DynamicModelFactory;
+import io.github.imzmq.interview.model.application.OllamaHealthService;
+import io.github.imzmq.interview.model.catalog.ModelCandidateService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 

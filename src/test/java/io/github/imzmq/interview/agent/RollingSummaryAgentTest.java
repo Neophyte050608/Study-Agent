@@ -7,7 +7,7 @@ import io.github.imzmq.interview.agent.a2a.A2AStatus;
 import io.github.imzmq.interview.agent.a2a.A2ABus;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.interview.infrastructure.persistence.InterviewSessionMapper;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.interview.infrastructure.persistence.SessionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

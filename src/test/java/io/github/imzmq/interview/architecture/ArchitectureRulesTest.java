@@ -55,7 +55,6 @@ class ArchitectureRulesTest {
             "media",
             "menu",
             "model",
-            "modelrouting",
             "observability",
             "platform",
             "rag",

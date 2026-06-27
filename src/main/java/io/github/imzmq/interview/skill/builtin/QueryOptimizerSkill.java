@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.skill.builtin;
 
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.TimeoutHint;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import org.springframework.stereotype.Component;
 

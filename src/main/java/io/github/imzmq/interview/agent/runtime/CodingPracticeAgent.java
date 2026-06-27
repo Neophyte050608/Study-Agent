@@ -1,13 +1,13 @@
 package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.agent.core.Agent;
-import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
+import io.github.imzmq.interview.model.application.DynamicModelFactory;
 import io.github.imzmq.interview.learning.application.LearningEvent;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.learning.application.LearningSource;
 import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

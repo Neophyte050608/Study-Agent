@@ -14,8 +14,8 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryD
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
 import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryMapper;
-import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
-import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.model.core.ModelRouteType;
+import io.github.imzmq.interview.model.core.RoutingChatService;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

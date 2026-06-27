@@ -69,7 +69,7 @@ DTO placement:
 Migration reference only; do not use these as preferred placement for new code:
 - Existing chat/prompt/context code migrates toward `conversation`.
 - Existing identity and observability infrastructure migrates toward `platform`.
-- Existing model routing/runtime health code migrates toward `model`.
+- Retired `modelrouting` package code has migrated to `model`; keep new model providers, routing, runtime health, and execution policy under `model`.
 - Existing IM, MCP, search, and vendor adapter code migrates toward `integration`.
 - Existing knowledge RAG/index/retrieval/catalog/media extraction code migrates toward `knowledge`.
 
