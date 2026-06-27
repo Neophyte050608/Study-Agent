@@ -20,11 +20,20 @@ docker compose up -d mysql redis etcd minio milvus neo4j
 ```bash
 ./mvnw -q compile                                # 快速编译检查
 ./mvnw spring-boot:run                            # 启动后端（端口 9596）
-./mvnw test                                       # 运行全部测试
+./mvnw test                                       # 运行全部测试（需 JVM 支持 Mockito inline attach）
 ./mvnw test -Dtest=RAGServiceTest                 # 运行单个测试类
 ./mvnw test -Dtest=RAGServiceTest#testMethod      # 运行单个测试方法
 ./mvnw -q verify -DskipTests                      # 运行 Checkstyle + ArchUnit 检查
 ```
+
+模块化迁移本地必跑验证门禁：
+```bash
+mvn -q compile
+mvn -q -Dtest=ArchitectureRulesTest test
+mvn -q verify -DskipTests
+```
+
+完整 `mvn test` 需要在支持 Mockito inline attachment 的 JVM/环境中重跑；当前本地环境会因 Mockito inline Byte Buddy self-attach 失败（`Could not initialize MockMaker` / `Could not self-attach to current VM`），不要据此声称完整测试套件已在本地全绿。
 
 ### 前端
 ```bash
@@ -67,10 +76,10 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 > `routing/`、`learning/`、`menu/` 属于当前清理库存：仅承载尚未归并的既有代码。除非架构设计明确指定所有权，否则不要把新能力放入这些包。
 
 ### 分层约束（ArchUnit 强制）
-- `api → application → domain`，`application → infrastructure`（通过注入接口）
 - `domain` 禁止依赖 `api`
-- Controller 禁止直接调用 Mapper
-- 跨领域禁止直接访问 Mapper/Repository
+- Controller/API 禁止直接依赖 MyBatis Mapper 或 Repository
+- application/use-case 服务在当前过渡实现中可使用本模块/本领域的持久化适配器（包括已迁移的 Mapper 注入）
+- 跨模块禁止直接访问其他模块的 Mapper/Repository
 
 ### RAG 管线（`knowledge/` 包）
 - **混合检索**：Milvus 向量 + MySQL 全文 + Neo4j 图谱，RRF 融合排序
@@ -161,4 +170,5 @@ Gemini 不可用 → Codex 接管前端任务
 ## Git 规范
 - 提交信息：`<类型>: <描述>`（中文），类型：`feat`/`fix`/`docs`/`refactor`/`chore`
 - **禁止**：force push、修改已 push 历史、`--no-verify`
-- 合并前必须通过：`mvn -q compile`、`mvn test`、`mvn -q verify -DskipTests`
+- 本次模块化迁移本地必过：`mvn -q compile`、`mvn -q -Dtest=ArchitectureRulesTest test`、`mvn -q verify -DskipTests`
+- 完整 `mvn test` 需在支持 Mockito inline attachment 的 JVM/环境中重跑；当前本地环境会因 Byte Buddy self-attach 失败，不能声称完整套件本地全绿。

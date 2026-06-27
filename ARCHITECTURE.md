@@ -55,7 +55,8 @@ Dependency direction:
 ## Enforcement
 - ArchUnit tests enforce key boundaries.
 - Checkstyle enforces naming/package/import conventions.
-- Required validation before merge:
+- Required local gate for this migration:
   - `mvn -q compile`
-  - `mvn test`
+  - `mvn -q -Dtest=ArchitectureRulesTest test`
   - `mvn -q verify -DskipTests`
+- Full `mvn test` should be rerun in a JVM/environment that supports Mockito inline attachment; in this local environment it fails with Mockito inline Byte Buddy self-attach (`Could not initialize MockMaker` / `Could not self-attach to current VM`). Do not claim the full suite is green locally.

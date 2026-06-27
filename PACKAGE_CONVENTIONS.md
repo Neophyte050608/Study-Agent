@@ -43,7 +43,7 @@ Current remaining top-level packages under `io.github.imzmq.interview`:
 
 Allowed-but-transitional packages: `common`, `feedback`, `intent`, `learning`, `menu`, and `routing`. They remain in `ArchitectureRulesTest` because code still exists there after the first migration pass. Treat them as remaining cleanup inventory for later package ownership decisions, not preferred destinations for new code unless a later design explicitly assigns ownership.
 
-Final Task 10 verification gate: `mvn -q compile`, `mvn -q -Dtest=ArchitectureRulesTest test`, and `mvn -q verify -DskipTests` pass. Known local full-test limitation: `mvn test` currently fails in this environment with Mockito inline Byte Buddy self-attach (`Could not initialize MockMaker` / `Could not self-attach to current VM`). Rerun full tests in a JVM/environment that supports Mockito inline attachment before treating the full suite as green.
+Required local gate for this migration: `mvn -q compile`, `mvn -q -Dtest=ArchitectureRulesTest test`, and `mvn -q verify -DskipTests`. Full `mvn test` should be rerun in a JVM/environment that supports Mockito inline attachment; in this local environment it fails with Mockito inline Byte Buddy self-attach (`Could not initialize MockMaker` / `Could not self-attach to current VM`). Do not claim the full suite is green locally.
 
 ## 7. Migration rule
 - First-phase migration may keep existing code in legacy domain-owned packages until each area is moved into its target macro-module.
