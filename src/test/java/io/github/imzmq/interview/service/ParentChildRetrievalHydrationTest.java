@@ -139,7 +139,14 @@ class ParentChildRetrievalHydrationTest {
                 skillMcpClient,
                 webSearchTool
         );
-        KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder();
+        KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder(
+                queryRewriteService,
+                evidenceEvaluationService,
+                webFallbackService,
+                skillOrchestrator,
+                observabilitySwitchProperties,
+                imageService
+        );
         Executor executor = Runnable::run;
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
@@ -160,9 +167,6 @@ class ParentChildRetrievalHydrationTest {
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
-                queryRewriteService,
-                evidenceEvaluationService,
-                webFallbackService,
                 knowledgePacketBuilder,
                 skillMcpClient,
                 llmJsonParser

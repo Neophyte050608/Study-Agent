@@ -159,7 +159,14 @@ class RAGServiceTest {
                 skillMcpClient,
                 webSearchTool
         );
-        KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder();
+        KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder(
+                queryRewriteService,
+                evidenceEvaluationService,
+                webFallbackService,
+                skillOrchestrator,
+                observabilitySwitchProperties,
+                imageService
+        );
         LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
@@ -179,9 +186,6 @@ class RAGServiceTest {
                 parentChildIndexService,
                 imageService,
                 skillOrchestrator,
-                queryRewriteService,
-                evidenceEvaluationService,
-                webFallbackService,
                 knowledgePacketBuilder,
                 skillMcpClient,
                 llmJsonParser

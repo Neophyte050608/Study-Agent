@@ -1,6 +1,4 @@
 package io.github.imzmq.interview.knowledge.application;
-import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
@@ -18,11 +16,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
-import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
-import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
-import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
-import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
@@ -68,7 +62,7 @@ import java.util.stream.Stream;
  * </ul>
  */
 @Service
-public class RAGService {
+public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
 
     private static final Logger logger = LoggerFactory.getLogger(RAGService.class);
     private static final Pattern EVIDENCE_LINE_PATTERN = Pattern.compile("^(\\d+)\\.\\s+(.*)$");
@@ -107,13 +101,10 @@ public class RAGService {
     private final ParentChildIndexService parentChildIndexService;
     private final ImageService imageService;
     private final SkillOrchestrator skillOrchestrator;
-    private final QueryRewriteService queryRewriteService;
-    private final EvidenceEvaluationService evidenceEvaluationService;
-    private final WebFallbackService webFallbackService;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
     private final SkillMcpClient skillMcpClient;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, QueryRewriteService queryRewriteService, EvidenceEvaluationService evidenceEvaluationService, WebFallbackService webFallbackService, KnowledgePacketBuilder knowledgePacketBuilder, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -131,9 +122,6 @@ public class RAGService {
         this.parentChildIndexService = parentChildIndexService;
         this.imageService = imageService;
         this.skillOrchestrator = skillOrchestrator;
-        this.queryRewriteService = queryRewriteService;
-        this.evidenceEvaluationService = evidenceEvaluationService;
-        this.webFallbackService = webFallbackService;
         this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.skillMcpClient = skillMcpClient;
         this.llmJsonParser = llmJsonParser;
@@ -174,140 +162,8 @@ public class RAGService {
      * 构建检索知识包，并允许调用方决定是否启用 Web fallback。
      */
     public KnowledgePacket buildKnowledgePacket(String question, String userAnswer, boolean allowWebFallback) {
-        return knowledgePacketBuilder.build(question, userAnswer, allowWebFallback, this::buildKnowledgePacketInternal);
-    }
-
-    private KnowledgePacket buildKnowledgePacketInternal(String question, String userAnswer, boolean allowWebFallback) {
-        return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question, () -> {
-            // 先做关键词改写，再走向量+词法混合检索，必要时回退网络搜索。
-            String traceId = RAGTraceContext.getTraceId();
-            String parentNodeId = RAGTraceContext.getCurrentNodeId();
-            SkillExecutionBudget skillBudget = skillOrchestrator.newBudget();
-            TraceNodeHandle rewriteTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.QUERY_REWRITE, Map.of("status", "RUNNING"));
-            RewrittenQuery rewrittenQuery = queryRewriteService.buildRewrittenQuery(question, userAnswer, skillBudget);
-            completeTraceSuccess(rewriteTrace, Map.of("status", "COMPLETED"));
-            if (observabilitySwitchProperties.isRagTraceEnabled()) {
-                logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
-            }
-
-            TraceNodeHandle docRetrieveTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.DOC_RETRIEVE, Map.of("status", "RUNNING"));
-            List<Document> retrievedDocs = retrieveHybridDocuments(rewrittenQuery, 5);
-            String context = retrievedDocs.stream()
-                    .map(Document::getText)
-                    .collect(Collectors.joining("\n\n"));
-            double bestRetrievalScore = bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
-            completeTraceSuccess(
-                    docRetrieveTrace,
-                    Map.of(
-                            "docCount", retrievedDocs.size(),
-                            "docRefs", summarizeRetrievedDocuments(retrievedDocs),
-                            "status", "COMPLETED"
-                    ),
-                    new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), false),
-                    new RAGObservabilityService.NodeDetails(
-                            1,
-                            KnowledgeRetrievalMode.RAG_ONLY.name(),
-                            null,
-                            false,
-                            retrievedDocs.size(),
-                            summarizeRetrievedDocuments(retrievedDocs),
-                            null,
-                            null,
-                            null,
-                            null,
-                            null,
-                            null
-                    )
-            );
-
-            TraceNodeHandle associatedImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_ASSOC_RETRIEVE, Map.of("status", "RUNNING"));
-            List<ImageService.ImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
-            completeTraceSuccess(associatedImageTrace, Map.of(
-                    "imageCount", associatedImages.size(),
-                    "status", "COMPLETED"
-            ), null, new RAGObservabilityService.NodeDetails(
-                    1,
-                    KnowledgeRetrievalMode.RAG_ONLY.name(),
-                    null,
-                    false,
-                    null,
-                    List.of(),
-                    null,
-                    associatedImages.size(),
-                    null,
-                    null,
-                    null,
-                    null
-            ));
-
-            TraceNodeHandle semanticImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_SEMANTIC_RETRIEVE, Map.of("status", "RUNNING"));
-            List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), containsVisualIntent(rewrittenQuery.fullQuery()));
-            completeTraceSuccess(semanticImageTrace, Map.of(
-                    "imageCount", semanticImages.size(),
-                    "status", "COMPLETED"
-            ), null, new RAGObservabilityService.NodeDetails(
-                    1,
-                    KnowledgeRetrievalMode.RAG_ONLY.name(),
-                    null,
-                    false,
-                    null,
-                    List.of(),
-                    null,
-                    semanticImages.size(),
-                    null,
-                    null,
-                    null,
-                    null
-            ));
-            List<ImageService.ImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
-            String imageContext = KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages);
-            String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
-            boolean webFallbackUsed = false;
-            EvidenceEvaluationService.EvidenceDecision evidenceDecision = evidenceEvaluationService.decide(
-                    rewrittenQuery,
-                    retrievedDocs,
-                    context,
-                    bestRetrievalScore,
-                    allowWebFallback,
-                    traceId,
-                    skillBudget
-            );
-            boolean allowExternalLookup = evidenceDecision.allowExternalLookup();
-            String externalLookupReason = evidenceDecision.reason();
-            if (allowExternalLookup) {
-                TraceNodeHandle webFallbackTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
-                List<String> webContext = webFallbackService.search(rewrittenQuery.fullQuery(), traceId, externalLookupReason, skillBudget);
-                context = webContext.stream().collect(Collectors.joining("\n\n"));
-                retrievalEvidence = buildWebEvidence(webContext);
-                webFallbackUsed = true;
-                completeTraceSuccess(
-                        webFallbackTrace,
-                        Map.of(
-                                "fallback", true,
-                                "fallbackReason", "LOW_RETRIEVAL_QUALITY",
-                                "docCount", webContext.size(),
-                                "status", "COMPLETED"
-                        ),
-                        new RAGObservabilityService.NodeMetrics(0, true),
-                        new RAGObservabilityService.NodeDetails(
-                                1,
-                                KnowledgeRetrievalMode.RAG_ONLY.name(),
-                                null,
-                                false,
-                                webContext.size(),
-                                List.of(),
-                                webContext.size(),
-                                null,
-                                externalLookupReason,
-                                null,
-                                null,
-                                null
-                        )
-                );
-            }
-
-            return new KnowledgePacket(rewrittenQuery.fullQuery(), retrievedDocs, retrievedImages, context, imageContext, retrievalEvidence, webFallbackUsed);
-        });
+        return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question,
+                () -> knowledgePacketBuilder.build(question, userAnswer, allowWebFallback, this));
     }
 
     /**
@@ -464,7 +320,8 @@ public class RAGService {
         }
     }
 
-    private TraceNodeHandle startTraceChild(String traceId,
+    @Override
+    public TraceNodeHandle startTraceChild(String traceId,
                                             String parentNodeId,
                                             TraceNodeDefinition definition,
                                             Map<String, Object> attributes) {
@@ -474,7 +331,8 @@ public class RAGService {
         return new TraceNodeHandle(traceId, nodeId, safeParentNodeId, definition);
     }
 
-    private void completeTraceSuccess(TraceNodeHandle handle, Map<String, Object> result) {
+    @Override
+    public void completeTraceSuccess(TraceNodeHandle handle, Map<String, Object> result) {
         completeTraceSuccess(handle, result, null, null);
     }
 
@@ -484,10 +342,11 @@ public class RAGService {
         completeTraceSuccess(handle, result, metrics, null);
     }
 
-    private void completeTraceSuccess(TraceNodeHandle handle,
-                                      Map<String, Object> result,
-                                      RAGObservabilityService.NodeMetrics metrics,
-                                      RAGObservabilityService.NodeDetails details) {
+    @Override
+    public void completeTraceSuccess(TraceNodeHandle handle,
+                                     Map<String, Object> result,
+                                     RAGObservabilityService.NodeMetrics metrics,
+                                     RAGObservabilityService.NodeDetails details) {
         observabilityService.endNode(
                 handle.traceId(),
                 handle.nodeId(),
@@ -557,7 +416,8 @@ public class RAGService {
      * 
      * 实现：意图定向检索 + 全局向量检索 + 图谱关联检索 并行执行。
      */
-    private List<Document> retrieveHybridDocuments(RewrittenQuery query, int topK) {
+    @Override
+    public List<Document> retrieveHybridDocuments(RewrittenQuery query, int topK) {
         List<String> intentFocusTerms = buildIntentFocusTerms(query.coreTerms());
         // 通道 A：意图定向检索（利用词法索引服务进行高精度标签/路径匹配）
         java.util.concurrent.CompletableFuture<List<Document>> intentDirectedFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
@@ -644,7 +504,8 @@ public class RAGService {
      * @param docs 本地检索结果
      * @return 最高分；若没有结果则返回 0
      */
-    private double bestRetrievalScore(String query, List<Document> docs) {
+    @Override
+    public double bestRetrievalScore(String query, List<Document> docs) {
         if (docs == null || docs.isEmpty()) {
             return 0.0D;
         }
@@ -1051,7 +912,8 @@ public class RAGService {
                 .collect(Collectors.toList());
     }
 
-    private boolean containsVisualIntent(String query) {
+    @Override
+    public boolean containsVisualIntent(String query) {
         if (query == null || query.isBlank()) {
             return false;
         }
@@ -1202,7 +1064,8 @@ public class RAGService {
                 "\"nextQuestion\":\"" + jsonEscape(question) + "\"}";
     }
 
-    private String buildRetrievalEvidence(List<Document> docs) {
+    @Override
+    public String buildRetrievalEvidence(List<Document> docs) {
         if (docs == null || docs.isEmpty()) {
             return "[]";
         }
@@ -1230,7 +1093,8 @@ public class RAGService {
         return String.join("\n", lines);
     }
 
-    private String buildWebEvidence(List<String> webContext) {
+    @Override
+    public String buildWebEvidence(List<String> webContext) {
         if (webContext == null || webContext.isEmpty()) {
             return "[]";
         }
@@ -2173,7 +2037,8 @@ public class RAGService {
         }
     }
 
-    private List<String> summarizeRetrievedDocuments(List<Document> retrievedDocs) {
+    @Override
+    public List<String> summarizeRetrievedDocuments(List<Document> retrievedDocs) {
         if (retrievedDocs == null || retrievedDocs.isEmpty()) {
             return List.of();
         }
@@ -2194,7 +2059,8 @@ public class RAGService {
                 .toList();
     }
 
-    private List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,
+    @Override
+    public List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,
                                                              List<ImageService.ImageResult> semanticImages) {
         Map<String, ImageService.ImageResult> merged = new LinkedHashMap<>();
         if (semanticImages != null) {
