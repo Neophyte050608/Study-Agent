@@ -5,80 +5,76 @@
 - Class names use `UpperCamelCase`.
 - Method/field names use `lowerCamelCase`.
 
-## 2. Domain-first placement
-- New code must be placed by business domain first, not by technical type first.
+## 2. Macro-module ownership
+- New code should belong to one of the target macro-modules: `interfaces`, `interview`, `conversation`, `agent`, `tools`, `knowledge`, `model`, `integration`, `platform`, or `shared`.
+- Prefer a module's public facade or `<module>.api` for cross-module calls.
+- Do not import another module's `<module>.internal..` package.
+- Do not add new top-level business packages without updating `ARCHITECTURE.md` and ArchUnit rules in the same change.
+
+## 3. Domain-first placement
+- New code must be placed by business capability first, not by technical type first.
 - Example:
-  - Good: `io.github.imzmq.interview.knowledge.application.KnowledgeQueryService`
+  - Good: `io.github.imzmq.interview.knowledge.KnowledgeFacade` or `io.github.imzmq.interview.knowledge.api.KnowledgeQueryPort`
   - Avoid: `io.github.imzmq.interview.service.KnowledgeQueryService`
 - Retired type-first/aggregate roots: do not add new business code under `io.github.imzmq.interview.service`, `io.github.imzmq.interview.entity`, `io.github.imzmq.interview.mapper`, or `io.github.imzmq.interview.dto`.
 
-## 3. Recommended subpackages
-- `api`: controllers and controller-facing request/response DTOs.
-- `application`: use-case orchestration and application-internal DTOs.
-- `domain`: entities, value objects, core policy.
-- `infrastructure`: persistence and external system adapters.
+## 4. Recommended module surfaces
+- `<module>.api`: public contracts intended for controllers or other macro-modules.
+- `<Module>Facade`: small public entry point for cross-module use cases.
+- `<module>.internal`: implementation details hidden from other macro-modules once migrated.
+- `interfaces`: transport-facing controllers, handlers, and request/response DTOs.
+- `shared`: minimal business-neutral primitives only; do not use it as a dumping ground.
 
-## 4. Dependency boundaries
+## 5. Dependency boundaries
+- Transport entry points in `interfaces` call module facades or `<module>.api`; they must not own business rules or access persistence directly.
+- Cross-module calls should target a module facade or `<module>.api` package.
+- Cross-module imports from another module's `<module>.internal..` package are forbidden.
+- `agent` may orchestrate `knowledge`, `tools`, and `model`, but must not own vendor protocol details.
+- `knowledge` must not depend on `agent`; RAG is a capability, not the system center.
+- `integration` adapts external protocols and must not own core business workflows.
+- `platform` provides technical infrastructure and must not own use cases.
 - Controllers must not directly call MyBatis Mapper interfaces.
-- Domain objects must not depend on controller/service packages.
-- Agent layer must not depend on controller layer.
-- Application code should not expose persistence-specific DTOs upward.
+- Application/use-case code should not expose persistence-specific DTOs upward.
 
-## 5. Migration rule
-- Existing migration to domain packages is complete for main business services and MyBatis persistence code.
+## 6. Migration rule
+- First-phase migration may keep existing code in legacy domain-owned packages until each area is moved into its target macro-module.
+- Old package names are documentation-only migration references, not preferred placement for new code.
 - Top-level `entity`, `mapper`, and `dto` are retired for new business code; do not reintroduce them as acceptable placement.
 - Any new module or major refactor must follow this document.
 - Any package move should be done in small batches with compile + test pass per batch.
 
-## 6. Persistence Placement
+## 7. Persistence Placement
 
-MyBatis persistence classes are domain-owned. DO classes and Mapper interfaces live under:
-
-`io.github.imzmq.interview.<domain>.infrastructure.persistence`
+MyBatis persistence classes are domain-owned during migration. New or moved persistence code should live behind the owning module's internal persistence adapter when that module migrates.
 
 Do not add new business persistence code under top-level `entity`, `mapper`, or `dto` packages.
 
 DTO placement:
-- Controller-facing DTOs belong in `<domain>.api`.
-- Application-internal DTOs belong in `<domain>.application.dto`.
-- Persistence-specific DTOs/records belong in `<domain>.infrastructure.persistence` with their owning domain adapter.
+- Transport-facing DTOs belong in `interfaces`.
+- Module public contracts belong in a module facade or `<module>.api`.
+- Persistence-specific DTOs/records belong with the owning persistence adapter and must not be exposed as public API DTOs.
 
-## 7. Placement Cheatsheet (Current)
-- Agent configuration/evaluation/skills: `agent.application`
-- Prompt/template/chat context memory: `chat.application`
-- User identity extraction: `identity.application`
-- Knowledge ingestion config & sync: `ingestion.application`
-- Interview orchestration facade: `interview.application`
-- Retrieval/rag/local graph: `knowledge.application` + `knowledge.domain`
-- Learning profile and events: `learning.application` + `learning.domain`
-- MCP gateway and audit: `mcp.application`
-- Image embedding/index/retrieval: `media.application`
-- Menu/workspace config: `menu.application`
-- Model routing candidates/executor/runtime health: `modelrouting`
-- Trace attribute sanitization and related helpers: `observability.application`
-- Intent tree/routing: `routing.application`
-- Autocomplete and ranking: `search.application`; internal autocomplete DTOs: `search.application.dto`
+## 8. Placement Cheatsheet
+- HTTP, IM, webhook controllers and transport DTOs: `interfaces`.
+- Interview sessions, feedback, and learning-loop entry points: `interview`.
+- Chat, prompt, context, memory, and streaming response protocol: `conversation`.
+- Agent task lifecycle, planning/execution orchestration, and runtime abstraction: `agent`.
+- Executable action contracts, permissions, safety policy, and execution results: `tools`.
+- RAG, catalog, indexing, retrieval, graph, knowledge ingestion, and knowledge-specific media extraction: `knowledge`.
+- Model providers, model routing, health probes, and model execution policy: `model`.
+- External adapters/clients such as IM, MCP, search, and vendor APIs: `integration`.
+- Identity, security, configuration, observability, async, and HTTP infrastructure: `platform`.
+- Minimal business-neutral types only: `shared`.
 
-Knowledge package breakdown (mandatory for new code):
-- RAG core entry only: `knowledge.application` (currently only `RAGService`).
-- Indexing and chunk/lexical tokenizer/index structures: `knowledge.application.indexing`.
-- Local graph chain (candidate recall, llm route, note resolve, wiki/backlink expansion): `knowledge.application.localgraph`.
-- Retrieval orchestration/fusion and RAG adapter: `knowledge.application.retrieval`.
-- Multi-turn topic state and dynamic context policy: `knowledge.application.context`.
-- Streaming chat handlers and stream utilities: `knowledge.application.chatstream`.
-- Retrieval/generation offline eval: `knowledge.application.evaluation`.
-- RAG trace/event/trace-service: `knowledge.application.observability`.
-- Knowledge base/document catalog operations: `knowledge.application.catalog`.
+Migration reference only; do not use these as preferred placement for new code:
+- Existing chat/prompt/context code migrates toward `conversation`.
+- Existing identity and observability infrastructure migrates toward `platform`.
+- Existing model routing/runtime health code migrates toward `model`.
+- Existing IM, MCP, search, and vendor adapter code migrates toward `integration`.
+- Existing knowledge RAG/index/retrieval/catalog/media extraction code migrates toward `knowledge`.
 
-Forbidden placement:
-- Do not add new non-core classes into `knowledge.application` root.
-- Do not place new knowledge features under legacy `...service`.
-- Do not place new business persistence classes under top-level `entity`, `mapper`, or `dto`.
-
-## 8. Hard Guardrails
+## 9. Hard Guardrails
 - Controllers cannot use MyBatis Mapper interfaces directly.
-- `domain` packages cannot depend on controller packages.
-- `application` should not expose persistence-specific DTOs upward.
-- MyBatis DO classes and Mapper interfaces must stay in `<domain>.infrastructure.persistence`.
-- Controller-facing DTOs must stay in `<domain>.api`; application-internal DTOs must stay in `<domain>.application.dto`.
+- Cross-module imports from `<module>.internal..` are forbidden.
+- Persistence-specific DTOs must not be exposed upward as transport or public API DTOs.
 - New code that violates package placement should be moved before merge.
