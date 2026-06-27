@@ -58,4 +58,46 @@ class AiObservationEventTest {
         assertThat(event.status()).isEqualTo("success");
         assertThat(event.attributes()).isEmpty();
     }
+
+    @Test
+    void filtersNullAttributeEntriesAndKeepsOrder() {
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        attrs.put("first", "1");
+        attrs.put(null, "ignored-key");
+        attrs.put("ignoredValue", null);
+        attrs.put("second", "2");
+
+        AiObservationEvent event = AiObservationEvent.ragNode("trace", "node", "cat", "name", "success", attrs);
+
+        assertThat(event.attributes())
+                .containsEntry("first", "1")
+                .containsEntry("second", "2")
+                .doesNotContainKeys("ignoredValue");
+        assertThat(event.attributes().keySet()).containsExactly("first", "second");
+        assertThatThrownBy(() -> event.attributes().put("third", "3"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void canonicalConstructorNormalizesNullEventTypeAndEventTime() {
+        AiObservationEvent event = new AiObservationEvent(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertThat(event.eventType()).isEmpty();
+        assertThat(event.traceId()).isEmpty();
+        assertThat(event.nodeId()).isEmpty();
+        assertThat(event.category()).isEmpty();
+        assertThat(event.name()).isEmpty();
+        assertThat(event.status()).isEmpty();
+        assertThat(event.eventTime()).isNotNull();
+        assertThat(event.attributes()).isEmpty();
+    }
 }

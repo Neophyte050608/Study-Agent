@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.observability.application;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -23,7 +24,7 @@ public record AiObservationEvent(
         name = normalize(name);
         status = normalize(status);
         eventTime = eventTime == null ? Instant.now() : eventTime;
-        attributes = attributes == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(attributes));
+        attributes = copyAttributes(attributes);
     }
 
     public static AiObservationEvent ragNode(String traceId,
@@ -49,5 +50,24 @@ public record AiObservationEvent(
             return "";
         }
         return value.trim();
+    }
+
+    private static Map<String, Object> copyAttributes(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Object> copied = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
+                continue;
+            }
+            copied.put(entry.getKey(), entry.getValue());
+        }
+
+        if (copied.isEmpty()) {
+            return Map.of();
+        }
+        return Collections.unmodifiableMap(copied);
     }
 }
