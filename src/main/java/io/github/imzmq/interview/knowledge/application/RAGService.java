@@ -16,6 +16,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndex
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
+import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
@@ -94,11 +95,10 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final RetrievalTokenizerService retrievalTokenizerService;
     private final ParentChildRetrievalProperties parentChildRetrievalProperties;
     private final ParentChildIndexService parentChildIndexService;
-    private final ImageService imageService;
     private final SkillOrchestrator skillOrchestrator;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -112,7 +112,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         this.retrievalTokenizerService = retrievalTokenizerService;
         this.parentChildRetrievalProperties = parentChildRetrievalProperties;
         this.parentChildIndexService = parentChildIndexService;
-        this.imageService = imageService;
         this.skillOrchestrator = skillOrchestrator;
         this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.llmJsonParser = llmJsonParser;

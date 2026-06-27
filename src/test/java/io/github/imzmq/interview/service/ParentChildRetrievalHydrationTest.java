@@ -163,7 +163,6 @@ class ParentChildRetrievalHydrationTest {
                 retrievalTokenizerService,
                 parentChildRetrievalProperties,
                 parentChildIndexService,
-                imageService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
                 llmJsonParser

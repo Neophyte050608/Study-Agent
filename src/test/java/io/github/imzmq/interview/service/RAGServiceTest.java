@@ -182,7 +182,6 @@ class RAGServiceTest {
                 retrievalTokenizerService,
                 parentChildRetrievalProperties,
                 parentChildIndexService,
-                imageService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
                 llmJsonParser

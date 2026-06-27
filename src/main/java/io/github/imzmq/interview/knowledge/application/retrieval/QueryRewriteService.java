@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.retrieval;
 
 import io.github.imzmq.interview.agent.application.AgentSkillService;
+import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
@@ -197,12 +198,13 @@ public class QueryRewriteService {
         throw last == null ? new IllegalStateException(stage + "失败") : last;
     }
 
-    private String summarizeError(Throwable throwable) {
+    String summarizeError(Throwable throwable) {
         if (throwable == null) {
             return "unknown";
         }
         String message = throwable.getMessage();
-        return throwable.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
+        return throwable.getClass().getSimpleName()
+                + (message == null || message.isBlank() ? "" : ": " + UpstreamErrorSanitizer.sanitize(message));
     }
 
     private String safeSkillText(String content) {
