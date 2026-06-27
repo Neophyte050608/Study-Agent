@@ -1,10 +1,12 @@
 package io.github.imzmq.interview.knowledge.application.localgraph;
+
+import io.github.imzmq.interview.knowledge.domain.KnowledgeImageResult;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.knowledge.internal.media.application.ImageService;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
@@ -97,7 +99,7 @@ public class LocalGraphKnowledgeService {
                 "Local note context is too thin"
             );
         }
-        List<ImageService.ImageResult> retrievedImages = findAssociatedImages(question, graphContext, snapshot.vaultRoot());
+        List<KnowledgeImageResult> retrievedImages = findAssociatedImages(question, graphContext, snapshot.vaultRoot());
 
         return new KnowledgeContextPacket(
                 requestedMode,
@@ -262,7 +264,7 @@ public class LocalGraphKnowledgeService {
         }
     }
 
-    private List<ImageService.ImageResult> findAssociatedImages(String question,
+    private List<KnowledgeImageResult> findAssociatedImages(String question,
                                                                 NoteGraphResolver.NoteGraphContext graphContext,
                                                                 String vaultRoot) {
         if (imageService == null || graphContext == null) {

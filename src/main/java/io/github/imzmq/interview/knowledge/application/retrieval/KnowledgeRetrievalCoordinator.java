@@ -1,11 +1,12 @@
 package io.github.imzmq.interview.knowledge.application.retrieval;
+
+import io.github.imzmq.interview.knowledge.domain.KnowledgeImageResult;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.platform.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.knowledge.application.localgraph.LocalGraphKnowledgeService;
-import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
@@ -176,7 +177,7 @@ public class KnowledgeRetrievalCoordinator {
     private KnowledgeContextPacket mergeHybridPackets(String question,
                                                       KnowledgeContextPacket localPacket,
                                                       KnowledgeContextPacket ragPacket) {
-        List<ImageService.ImageResult> mergedImages = mergeImages(localPacket == null ? List.of() : localPacket.retrievedImages(),
+        List<KnowledgeImageResult> mergedImages = mergeImages(localPacket == null ? List.of() : localPacket.retrievedImages(),
                 ragPacket == null ? List.of() : ragPacket.retrievedImages());
         String mergedContext = buildHybridContext(localPacket, ragPacket);
         String mergedEvidence = mergeEvidence(localPacket == null ? "" : localPacket.retrievalEvidence(),
@@ -383,9 +384,9 @@ public class KnowledgeRetrievalCoordinator {
         return Math.max(0, merged);
     }
 
-    private List<ImageService.ImageResult> mergeImages(List<ImageService.ImageResult> localImages,
-                                                       List<ImageService.ImageResult> ragImages) {
-        Map<String, ImageService.ImageResult> merged = new LinkedHashMap<>();
+    private List<KnowledgeImageResult> mergeImages(List<KnowledgeImageResult> localImages,
+                                                       List<KnowledgeImageResult> ragImages) {
+        Map<String, KnowledgeImageResult> merged = new LinkedHashMap<>();
         mergeImageList(merged, localImages);
         mergeImageList(merged, ragImages);
         return merged.values().stream()
@@ -394,12 +395,12 @@ public class KnowledgeRetrievalCoordinator {
                 .toList();
     }
 
-    private void mergeImageList(Map<String, ImageService.ImageResult> target,
-                                List<ImageService.ImageResult> images) {
+    private void mergeImageList(Map<String, KnowledgeImageResult> target,
+                                List<KnowledgeImageResult> images) {
         if (images == null || images.isEmpty()) {
             return;
         }
-        for (ImageService.ImageResult image : images) {
+        for (KnowledgeImageResult image : images) {
             if (image == null || image.imageId() == null || image.imageId().isBlank()) {
                 continue;
             }
@@ -409,13 +410,13 @@ public class KnowledgeRetrievalCoordinator {
         }
     }
 
-    public static String buildImageContext(List<ImageService.ImageResult> images) {
+    public static String buildImageContext(List<KnowledgeImageResult> images) {
         if (images == null || images.isEmpty()) {
             return "";
         }
         StringBuilder builder = new StringBuilder();
         int index = 1;
-        for (ImageService.ImageResult image : images) {
+        for (KnowledgeImageResult image : images) {
             builder.append("[图").append(index++).append("] ")
                     .append(image.summaryText() == null ? image.imageName() : image.summaryText())
                     .append(" - 来源: ").append(image.imageName())

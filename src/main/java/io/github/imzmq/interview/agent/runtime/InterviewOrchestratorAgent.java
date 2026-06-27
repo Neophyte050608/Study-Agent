@@ -3,7 +3,7 @@ package io.github.imzmq.interview.agent.runtime;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.interview.domain.InterviewStage;
 import io.github.imzmq.interview.interview.domain.Question;
-import io.github.imzmq.interview.rag.core.ResumeLoader;
+import io.github.imzmq.interview.knowledge.application.resume.ResumeLoader;
 import io.github.imzmq.interview.platform.security.core.InputSanitizer;
 import io.github.imzmq.interview.learning.application.LearningEvent;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;

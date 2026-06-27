@@ -53,12 +53,10 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 |---|---|
 | `agent/` | Agent 编排、TaskRouter、A2A 事件总线 |
 | `routing/` | 意图树分类、意图预过滤、澄清解析 |
-| `knowledge/` | RAG 检索核心（含 indexing/localgraph/retrieval/context/evaluation/observability/catalog/chatstream 子包） |
+| `knowledge/` | RAG 检索核心（含 indexing/localgraph/retrieval/context/evaluation/observability/catalog/chatstream 子包；知识摄入与图片检索实现收敛在 `knowledge/internal/ingestion`、`knowledge/internal/media`） |
 | `interview/` | 面试编排门面 |
 | `learning/` | 学习画像、学习事件（含 `domain` 子包） |
-| `ingestion/` | 知识摄入配置与同步 |
 | `chat/` | Prompt 模板、上下文压缩、对话记忆 |
-| `media/` | 图片 Embedding/索引/图文关联检索 |
 | `model/` | 多模型候选、优先级、三态熔断、动态模型运行时选择、健康检查、VLM |
 | `platform/identity/` | 用户身份提取 |
 | `platform/observability/` | Trace 属性清洗、RAG 链路追踪 |
@@ -76,7 +74,7 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 - **混合检索**：Milvus 向量 + MySQL 全文 + Neo4j 图谱，RRF 融合排序
 - **父子索引**：文档分层切块（parent-child），检索子块后回溯父块补全上下文
 - **知识摄入**：本地目录/浏览器上传 → Markdown 解析 → 结构化切块 → 多通道索引
-- **图文联合召回**：`media.application` 提供视觉 Embedding + 图文关联召回
+- **图文联合召回**：`knowledge/internal/media/application` 承载视觉 Embedding + 图文关联召回实现
 - **可观测性**：RAG Trace（`t_rag_trace` / `t_rag_trace_node`），Retrieval Evaluation（Recall@K、MRR）
 - **评测**：检索评测（`RetrievalEvaluationService`）+ 生成质量评测（支持 java/ragas 双引擎）
 

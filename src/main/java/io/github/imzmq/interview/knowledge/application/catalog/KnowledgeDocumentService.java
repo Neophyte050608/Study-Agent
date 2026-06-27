@@ -5,12 +5,12 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeC
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeDocumentDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
+import io.github.imzmq.interview.knowledge.internal.ingestion.application.IngestionTaskService;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeChunkCtrlMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeDocumentMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentMapper;
-import io.github.imzmq.interview.ingestion.application.IngestionService;
+import io.github.imzmq.interview.knowledge.internal.ingestion.application.IngestionService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -453,11 +453,3 @@ public class KnowledgeDocumentService {
         return true;
     }
 }
-
-
-
-
-
-
-
-

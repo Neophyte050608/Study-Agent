@@ -14,7 +14,7 @@ import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.knowledge.internal.media.application.ImageService;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.model.core.TimeoutHint;
@@ -80,7 +80,7 @@ class ParentChildRetrievalHydrationTest {
     private PromptManager promptManager;
 
     @Mock
-    private io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository;
+    private io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptRepository techConceptRepository;
 
     @Mock
     private ObservabilitySwitchProperties observabilitySwitchProperties;

@@ -3,7 +3,7 @@ import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 
 import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.knowledge.internal.ingestion.application.IngestConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;

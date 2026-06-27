@@ -5,8 +5,8 @@ import io.github.imzmq.interview.platform.config.knowledge.ParentChildRetrievalP
 import io.github.imzmq.interview.platform.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.platform.config.skill.SkillExecutionProperties;
 import io.github.imzmq.interview.interview.domain.Question;
-import io.github.imzmq.interview.graph.domain.TechConceptRepository;
-import io.github.imzmq.interview.graph.domain.TechConceptSnippetView;
+import io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptRepository;
+import io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
@@ -15,7 +15,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokeniz
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.knowledge.internal.media.application.ImageService;
 import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.model.core.TimeoutHint;
@@ -582,8 +582,8 @@ class RAGServiceTest {
         };
     }
 
-    private io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView batchGraphConcept(String anchor, String name, String description, String type) {
-        return new io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView() {
+    private io.github.imzmq.interview.knowledge.internal.graph.domain.BatchedConceptSnippetView batchGraphConcept(String anchor, String name, String description, String type) {
+        return new io.github.imzmq.interview.knowledge.internal.graph.domain.BatchedConceptSnippetView() {
             @Override
             public String getAnchor() {
                 return anchor;

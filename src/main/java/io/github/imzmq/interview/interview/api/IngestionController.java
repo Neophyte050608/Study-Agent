@@ -1,9 +1,6 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
-import io.github.imzmq.interview.ingestion.application.IngestionService;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskExecutionResult;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
+import io.github.imzmq.interview.knowledge.application.ingestion.KnowledgeIngestionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,18 +16,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/api")
 public class IngestionController {
 
-    private final IngestionService ingestionService;
-    private final IngestionTaskService ingestionTaskService;
-    private final IngestConfigService ingestConfigService;
+    private final KnowledgeIngestionService knowledgeIngestionService;
 
-    public IngestionController(
-            IngestionService ingestionService,
-            IngestionTaskService ingestionTaskService,
-            IngestConfigService ingestConfigService
-    ) {
-        this.ingestionService = ingestionService;
-        this.ingestionTaskService = ingestionTaskService;
-        this.ingestConfigService = ingestConfigService;
+    public IngestionController(KnowledgeIngestionService knowledgeIngestionService) {
+        this.knowledgeIngestionService = knowledgeIngestionService;
     }
 
     /**
@@ -45,22 +34,22 @@ public class IngestionController {
         String path = payload.get("path");
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        IngestionTaskExecutionResult executionResult = ingestionTaskService.executeLocal(path, ignoredList);
-        IngestionService.SyncSummary summary = executionResult.summary();
+        KnowledgeIngestionService.IngestionExecutionResult executionResult = knowledgeIngestionService.executeLocal(path, ignoredList);
+        KnowledgeIngestionService.IngestionSummary summary = executionResult.summary();
         String message = String.format(
                 "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
-                summary.totalScanned,
-                summary.newFiles,
-                summary.modifiedFiles,
-                summary.unchangedFiles,
-                summary.deletedFiles,
-                summary.failedFiles,
-                summary.skippedEmptyFiles
+                summary.totalScanned(),
+                summary.newFiles(),
+                summary.modifiedFiles(),
+                summary.unchangedFiles(),
+                summary.deletedFiles(),
+                summary.failedFiles(),
+                summary.skippedEmptyFiles()
         );
         return Map.of(
                 "message", message,
                 "taskId", executionResult.taskId(),
-                "taskStatus", executionResult.status().name()
+                "taskStatus", executionResult.status()
         );
     }
 
@@ -69,16 +58,16 @@ public class IngestionController {
         String path = payload.get("path");
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        IngestionService.SyncSummary summary = ingestionService.forceReindexParentChild(path, ignoredList);
-        Map<String, Object> report = ingestionService.getParentChildReport();
+        KnowledgeIngestionService.IngestionSummary summary = knowledgeIngestionService.forceReindexParentChild(path, ignoredList);
+        Map<String, Object> report = knowledgeIngestionService.getParentChildReport();
         String message = String.format(
                 "Parent-Child 重建完成：共扫描 %d 个文件，新增 %d，重建 %d，删除 %d，失败 %d，空内容跳过 %d",
-                summary.totalScanned,
-                summary.newFiles,
-                summary.modifiedFiles,
-                summary.deletedFiles,
-                summary.failedFiles,
-                summary.skippedEmptyFiles
+                summary.totalScanned(),
+                summary.newFiles(),
+                summary.modifiedFiles(),
+                summary.deletedFiles(),
+                summary.failedFiles(),
+                summary.skippedEmptyFiles()
         );
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("message", message);
@@ -88,7 +77,7 @@ public class IngestionController {
 
     @GetMapping("/ingestion/reindex/parent-child/report")
     public ResponseEntity<Map<String, Object>> getParentChildReindexReport() {
-        return ResponseEntity.ok(ingestionService.getParentChildReport());
+        return ResponseEntity.ok(knowledgeIngestionService.getParentChildReport());
     }
 
     /**
@@ -109,22 +98,22 @@ public class IngestionController {
             @RequestParam(value = "ignoreDirs", required = false) String ignoreDirs) {
         // 上传笔记文件后同步：支持保留相对路径（relativePaths）以恢复目录结构。
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        IngestionTaskExecutionResult executionResult = ingestionTaskService.executeUpload(files, relativePaths, folderName, ignoredList);
-        IngestionService.SyncSummary summary = executionResult.summary();
+        KnowledgeIngestionService.IngestionExecutionResult executionResult = knowledgeIngestionService.executeUpload(files, relativePaths, folderName, ignoredList);
+        KnowledgeIngestionService.IngestionSummary summary = executionResult.summary();
         String message = String.format(
                 "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
-                summary.totalScanned,
-                summary.newFiles,
-                summary.modifiedFiles,
-                summary.unchangedFiles,
-                summary.deletedFiles,
-                summary.failedFiles,
-                summary.skippedEmptyFiles
+                summary.totalScanned(),
+                summary.newFiles(),
+                summary.modifiedFiles(),
+                summary.unchangedFiles(),
+                summary.deletedFiles(),
+                summary.failedFiles(),
+                summary.skippedEmptyFiles()
         );
         return Map.of(
                 "message", message,
                 "taskId", executionResult.taskId(),
-                "taskStatus", executionResult.status().name()
+                "taskStatus", executionResult.status()
         );
     }
 
@@ -150,12 +139,12 @@ public class IngestionController {
             @RequestParam(value = "includeNodeLogs", required = false, defaultValue = "false") boolean includeNodeLogs
     ) {
         int safeLimit = limit == null ? 20 : limit;
-        return ResponseEntity.ok(ingestionTaskService.listTaskViews(safeLimit, sourceType, status, includeNodeLogs));
+        return ResponseEntity.ok(knowledgeIngestionService.listTaskViews(safeLimit, sourceType, status, includeNodeLogs));
     }
 
     @GetMapping("/ingestion/pipelines")
     public ResponseEntity<?> listIngestionPipelines() {
-        return ResponseEntity.ok(ingestionTaskService.listPipelines());
+        return ResponseEntity.ok(knowledgeIngestionService.listPipelines());
     }
 
     @GetMapping("/ingestion/tasks/{taskId}")
@@ -163,7 +152,7 @@ public class IngestionController {
             @PathVariable("taskId") String taskId,
             @RequestParam(value = "includeNodeLogs", required = false, defaultValue = "true") boolean includeNodeLogs
     ) {
-        return ingestionTaskService.findTaskViewById(taskId, includeNodeLogs)
+        return knowledgeIngestionService.findTaskViewById(taskId, includeNodeLogs)
                 .<ResponseEntity<?>>map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "任务不存在")));
     }
@@ -173,7 +162,7 @@ public class IngestionController {
      */
     @GetMapping("/ingest/config")
     public ResponseEntity<?> getIngestConfig() {
-        return ResponseEntity.ok(ingestConfigService.getConfig());
+        return ResponseEntity.ok(knowledgeIngestionService.getConfig());
     }
 
     /**
@@ -181,7 +170,7 @@ public class IngestionController {
      */
     @PostMapping("/ingest/config")
     public ResponseEntity<?> saveIngestConfig(@RequestBody Map<String, String> payload) {
-        Map<String, String> saved = ingestConfigService.saveConfig(payload);
+        Map<String, String> saved = knowledgeIngestionService.saveConfig(payload);
         return ResponseEntity.ok(Map.of(
                 "message", "success",
                 "paths", saved.get("paths"),

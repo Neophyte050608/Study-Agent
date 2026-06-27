@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.platform.config.knowledge;
 
-import io.github.imzmq.interview.graph.domain.TechConceptRepository;
+import io.github.imzmq.interview.knowledge.application.graph.GraphKnowledgeWarmupService;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,14 +25,14 @@ public class RetrievalWarmupRunner implements ApplicationRunner {
 
     private final ObjectProvider<VectorStore> vectorStoreProvider;
     private final ObjectProvider<LexicalIndexService> lexicalIndexServiceProvider;
-    private final ObjectProvider<TechConceptRepository> techConceptRepositoryProvider;
+    private final ObjectProvider<GraphKnowledgeWarmupService> graphKnowledgeWarmupServiceProvider;
 
     public RetrievalWarmupRunner(ObjectProvider<VectorStore> vectorStoreProvider,
                                  ObjectProvider<LexicalIndexService> lexicalIndexServiceProvider,
-                                 ObjectProvider<TechConceptRepository> techConceptRepositoryProvider) {
+                                 ObjectProvider<GraphKnowledgeWarmupService> graphKnowledgeWarmupServiceProvider) {
         this.vectorStoreProvider = vectorStoreProvider;
         this.lexicalIndexServiceProvider = lexicalIndexServiceProvider;
-        this.techConceptRepositoryProvider = techConceptRepositoryProvider;
+        this.graphKnowledgeWarmupServiceProvider = graphKnowledgeWarmupServiceProvider;
     }
 
     @Override
@@ -41,8 +41,7 @@ public class RetrievalWarmupRunner implements ApplicationRunner {
         long start = System.currentTimeMillis();
         VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
         LexicalIndexService lexicalIndexService = lexicalIndexServiceProvider.getIfAvailable();
-        TechConceptRepository techConceptRepository = techConceptRepositoryProvider.getIfAvailable();
-
+        GraphKnowledgeWarmupService graphKnowledgeWarmupService = graphKnowledgeWarmupServiceProvider.getIfAvailable();
         if (vectorStore == null) {
             log.info("跳过 Milvus 预热：VectorStore Bean 不存在");
         } else {
@@ -65,11 +64,11 @@ public class RetrievalWarmupRunner implements ApplicationRunner {
             }
         }
 
-        if (techConceptRepository == null) {
+        if (graphKnowledgeWarmupService == null) {
             log.info("跳过 Neo4j 图谱预热：TechConceptRepository Bean 不存在");
         } else {
             try {
-                techConceptRepository.findRelatedConceptSnippetsWithinTwoHops("warmup");
+                graphKnowledgeWarmupService.warmup();
                 log.info("Neo4j 图谱预热完成");
             } catch (Exception e) {
                 log.warn("Neo4j 图谱预热失败（不影响正常使用）: {}", e.getMessage());

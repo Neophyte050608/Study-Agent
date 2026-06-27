@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.knowledge.application.indexing;
 
 import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.ingestion.application.NoteLoader;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.knowledge.internal.ingestion.application.NoteLoader;
+import io.github.imzmq.interview.knowledge.internal.ingestion.application.IngestConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;

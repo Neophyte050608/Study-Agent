@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.media.application.ImageMetadataCollector;
+import io.github.imzmq.interview.knowledge.internal.media.application.ImageMetadataCollector;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -29,6 +29,3 @@ class ImageMetadataCollectorTest {
         assertTrue(metadata.relativePath().endsWith("demo.png"));
     }
 }
-
-
-

@@ -1,4 +1,6 @@
 package io.github.imzmq.interview.knowledge.application;
+
+import io.github.imzmq.interview.knowledge.domain.KnowledgeImageResult;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
@@ -11,7 +13,7 @@ import io.github.imzmq.interview.model.core.ModelRouteType;
 import io.github.imzmq.interview.model.core.RoutingChatService;
 import io.github.imzmq.interview.model.core.TimeoutHint;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.knowledge.internal.media.application.ImageService;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
@@ -116,7 +118,7 @@ public class RAGService {
     // 注入自定义检索线程池
     private final java.util.concurrent.Executor ragRetrieveExecutor;
     // 注入图谱持久化组件
-    private final io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository;
+    private final io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptRepository techConceptRepository;
     // 可观测开关配置
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final RetrievalTokenizerService retrievalTokenizerService;
@@ -128,7 +130,7 @@ public class RAGService {
     private final SkillMcpClient skillMcpClient;
     private final ConcurrentHashMap<String, CachedRewrite> rewriteCache = new ConcurrentHashMap<>();
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, WebSearchTool webSearchTool, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, RagRetrievalProperties ragRetrievalProperties, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, @org.springframework.lang.Nullable ImageService imageService, SkillOrchestrator skillOrchestrator, SkillMcpClient skillMcpClient, LlmJsonParser llmJsonParser) {
         this.agentSkillService = agentSkillService;
         this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
@@ -228,7 +230,7 @@ public class RAGService {
             );
 
             TraceNodeHandle associatedImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_ASSOC_RETRIEVE, Map.of("status", "RUNNING"));
-            List<ImageService.ImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
+            List<KnowledgeImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
             completeTraceSuccess(associatedImageTrace, Map.of(
                     "imageCount", associatedImages.size(),
                     "status", "COMPLETED"
@@ -248,7 +250,7 @@ public class RAGService {
             ));
 
             TraceNodeHandle semanticImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_SEMANTIC_RETRIEVE, Map.of("status", "RUNNING"));
-            List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), containsVisualIntent(rewrittenQuery.fullQuery()));
+            List<KnowledgeImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), containsVisualIntent(rewrittenQuery.fullQuery()));
             completeTraceSuccess(semanticImageTrace, Map.of(
                     "imageCount", semanticImages.size(),
                     "status", "COMPLETED"
@@ -266,7 +268,7 @@ public class RAGService {
                     null,
                     null
             ));
-            List<ImageService.ImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
+            List<KnowledgeImageResult> retrievedImages = mergeImageResults(associatedImages, semanticImages);
             String imageContext = KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages);
             String retrievalEvidence = buildRetrievalEvidence(retrievedDocs);
             boolean webFallbackUsed = false;
@@ -603,22 +605,22 @@ public class RAGService {
                     return graphDocs;
                 }
 
-                List<io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView> batchResults =
+                List<io.github.imzmq.interview.knowledge.internal.graph.domain.BatchedConceptSnippetView> batchResults =
                         techConceptRepository.findRelatedConceptSnippetsBatch(queryTokens);
                 if (batchResults == null || batchResults.isEmpty()) {
                     return graphDocs;
                 }
 
-                Map<String, List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView>> grouped = batchResults.stream()
+                Map<String, List<io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView>> grouped = batchResults.stream()
                         .collect(Collectors.groupingBy(
-                                io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView::getAnchor,
+                                io.github.imzmq.interview.knowledge.internal.graph.domain.BatchedConceptSnippetView::getAnchor,
                                 LinkedHashMap::new,
-                                Collectors.mapping(item -> (io.github.imzmq.interview.graph.domain.TechConceptSnippetView) item, Collectors.toList())
+                                Collectors.mapping(item -> (io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView) item, Collectors.toList())
                         ));
 
-                for (Map.Entry<String, List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView>> entry : grouped.entrySet()) {
+                for (Map.Entry<String, List<io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView>> entry : grouped.entrySet()) {
                     String token = entry.getKey();
-                    List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView> relatedConcepts = entry.getValue();
+                    List<io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView> relatedConcepts = entry.getValue();
                     String graphContext = buildGraphConceptContext(token, relatedConcepts);
                     if (graphContext.isBlank()) {
                         continue;
@@ -976,7 +978,7 @@ public class RAGService {
      * @param relatedConcepts 图谱返回的关联概念摘要
      * @return 描述性图谱上下文；若无有效内容则返回空字符串
      */
-    private String buildGraphConceptContext(String anchorConcept, List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView> relatedConcepts) {
+    private String buildGraphConceptContext(String anchorConcept, List<io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView> relatedConcepts) {
         if (relatedConcepts == null || relatedConcepts.isEmpty()) {
             return "";
         }
@@ -998,7 +1000,7 @@ public class RAGService {
      * @param concept 图谱概念摘要
      * @return 单个概念的可读文本
      */
-    private String formatGraphConceptSnippet(io.github.imzmq.interview.graph.domain.TechConceptSnippetView concept) {
+    private String formatGraphConceptSnippet(io.github.imzmq.interview.knowledge.internal.graph.domain.TechConceptSnippetView concept) {
         if (concept == null) {
             return "";
         }
@@ -2474,7 +2476,7 @@ public class RAGService {
     public record KnowledgePacket(
             String retrievalQuery,
             List<Document> retrievedDocs,
-            List<ImageService.ImageResult> retrievedImages,
+            List<KnowledgeImageResult> retrievedImages,
             String context,
             String imageContext,
             String retrievalEvidence,
@@ -2510,21 +2512,21 @@ public class RAGService {
                 .toList();
     }
 
-    private List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,
-                                                             List<ImageService.ImageResult> semanticImages) {
-        Map<String, ImageService.ImageResult> merged = new LinkedHashMap<>();
+    private List<KnowledgeImageResult> mergeImageResults(List<KnowledgeImageResult> associatedImages,
+                                                             List<KnowledgeImageResult> semanticImages) {
+        Map<String, KnowledgeImageResult> merged = new LinkedHashMap<>();
         if (semanticImages != null) {
-            for (ImageService.ImageResult image : semanticImages) {
+            for (KnowledgeImageResult image : semanticImages) {
                 merged.put(image.imageId(), image);
             }
         }
         if (associatedImages != null) {
-            for (ImageService.ImageResult image : associatedImages) {
+            for (KnowledgeImageResult image : associatedImages) {
                 merged.compute(image.imageId(), (key, existing) ->
                         existing == null || image.relevanceScore() > existing.relevanceScore() ? image : existing);
             }
         }
-        List<ImageService.ImageResult> ranked = merged.values().stream()
+        List<KnowledgeImageResult> ranked = merged.values().stream()
                 .sorted((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()))
                 .limit(3)
                 .toList();
@@ -2535,9 +2537,9 @@ public class RAGService {
         if (topScore < FINAL_IMAGE_MIN_SCORE) {
             return List.of();
         }
-        List<ImageService.ImageResult> filtered = new ArrayList<>();
+        List<KnowledgeImageResult> filtered = new ArrayList<>();
         for (int i = 0; i < ranked.size(); i++) {
-            ImageService.ImageResult image = ranked.get(i);
+            KnowledgeImageResult image = ranked.get(i);
             if (i == 0) {
                 filtered.add(image);
                 continue;

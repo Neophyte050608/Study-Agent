@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.service;
 
 import io.github.imzmq.interview.platform.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.knowledge.internal.ingestion.application.IngestConfigService;
 import io.github.imzmq.interview.knowledge.application.indexing.LocalKnowledgeIndexBuildService;
 import io.github.imzmq.interview.knowledge.application.indexing.LocalKnowledgeScopeService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -53,7 +53,7 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
+                new io.github.imzmq.interview.knowledge.internal.ingestion.application.NoteLoader(),
                 properties,
                 ingestConfigService,
                 new LocalKnowledgeScopeService(),
@@ -107,7 +107,7 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
+                new io.github.imzmq.interview.knowledge.internal.ingestion.application.NoteLoader(),
                 properties,
                 ingestConfigService,
                 new LocalKnowledgeScopeService(),
@@ -182,7 +182,7 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
+                new io.github.imzmq.interview.knowledge.internal.ingestion.application.NoteLoader(),
                 properties,
                 ingestConfigService,
                 new LocalKnowledgeScopeService(),

@@ -5,8 +5,7 @@ import io.github.imzmq.interview.agent.a2a.A2AIdempotencyStore;
 import io.github.imzmq.interview.agent.a2a.RocketMqA2ABus;
 import io.github.imzmq.interview.agent.application.AgentEvaluationService;
 import io.github.imzmq.interview.platform.identity.application.UserIdentityResolver;
-import io.github.imzmq.interview.ingestion.application.IngestionService;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
+import io.github.imzmq.interview.knowledge.application.ingestion.KnowledgeIngestionService;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import io.github.imzmq.interview.integration.mcp.application.OpsAuditService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,8 +28,7 @@ public class InfraObservabilityController {
     private final AgentEvaluationService agentEvaluationService;
     private final A2ABus a2aBus;
     private final A2AIdempotencyStore a2AIdempotencyStore;
-    private final IngestionService ingestionService;
-    private final IngestionTaskService ingestionTaskService;
+    private final KnowledgeIngestionService knowledgeIngestionService;
 
     public InfraObservabilityController(
             InterviewService interviewService,
@@ -39,8 +37,7 @@ public class InfraObservabilityController {
             AgentEvaluationService agentEvaluationService,
             A2ABus a2aBus,
             A2AIdempotencyStore a2AIdempotencyStore,
-            IngestionService ingestionService,
-            IngestionTaskService ingestionTaskService
+            KnowledgeIngestionService knowledgeIngestionService
     ) {
         this.interviewService = interviewService;
         this.userIdentityResolver = userIdentityResolver;
@@ -48,8 +45,7 @@ public class InfraObservabilityController {
         this.agentEvaluationService = agentEvaluationService;
         this.a2aBus = a2aBus;
         this.a2AIdempotencyStore = a2AIdempotencyStore;
-        this.ingestionService = ingestionService;
-        this.ingestionTaskService = ingestionTaskService;
+        this.knowledgeIngestionService = knowledgeIngestionService;
     }
 
     /**
@@ -306,8 +302,8 @@ public class InfraObservabilityController {
             @RequestParam(value = "sourceType", required = false) String sourceType,
             @RequestParam(value = "groupBySourceType", required = false, defaultValue = "true") boolean groupBySourceType
     ) {
-        Map<String, Object> base = new LinkedHashMap<>(ingestionService.getStats());
-        Map<String, Object> overview = ingestionTaskService.buildOverview(10, windowMinutes, sourceType, groupBySourceType);
+        Map<String, Object> base = new LinkedHashMap<>(knowledgeIngestionService.getStats());
+        Map<String, Object> overview = knowledgeIngestionService.buildOverview(10, windowMinutes, sourceType, groupBySourceType);
         base.putAll(overview);
         Object recentTasksObj = overview.get("recentTasks");
         if (recentTasksObj instanceof List<?> recentTasks) {
