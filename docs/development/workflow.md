@@ -14,7 +14,7 @@ git status --short --branch
 3. 阅读根目录 `AGENTS.md`。
 4. 修改后端前阅读 `ARCHITECTURE.md`、`PACKAGE_CONVENTIONS.md` 和 `docs/development/backend-guidelines.md`。
 5. 修改前端前阅读 `docs/development/frontend-guidelines.md`。
-6. 修改启动、环境或依赖服务前阅读 `README.md` 和相关本地启动文档。
+6. 修改启动、环境或依赖服务前阅读 `README.md` 和 `docs/development/local-startup.md`。
 
 ## 变更粒度
 
@@ -56,6 +56,23 @@ git status --short --branch
 4. 可复用状态逻辑放 `frontend/src/composables`。
 5. 新页面同步更新 `frontend/src/router` 和相关菜单入口。
 6. 运行 `cd frontend && npm run build`。
+
+## 本地启动脚本
+
+本地开发优先使用一键脚本：
+
+```bash
+bash scripts/dev-start.sh
+bash scripts/dev-stop.sh
+```
+
+需要同时停止依赖容器时运行：
+
+```bash
+bash scripts/dev-stop.sh --with-docker
+```
+
+脚本细节、日志位置和常见问题见 `docs/development/local-startup.md`。修改脚本、`local-lite` profile 或 Docker 依赖后，必须同步更新该文档。
 
 ## 数据库与外部依赖变更
 

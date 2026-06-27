@@ -23,6 +23,27 @@
 
 当前前端未配置统一测试脚本，不要声称前端测试通过；可用 `npm run build` 作为最低构建验证。
 
+## 本地启动脚本检查
+
+修改 `scripts/dev-start.sh`、`scripts/dev-stop.sh` 或本地启动文档时，至少运行：
+
+```bash
+bash -n scripts/dev-start.sh
+bash -n scripts/dev-stop.sh
+```
+
+如修改 Docker 编排，再运行：
+
+```bash
+docker compose config
+```
+
+如修改 `local-lite` profile 或 Spring 条件装配，补跑相关配置测试，例如：
+
+```bash
+mvn -q -Dtest=LocalLiteConditionalConfigTest test
+```
+
 ## 按变更类型选择检查
 
 ### 只改文档
@@ -70,14 +91,12 @@ cd frontend && npm run build
 
 ```bash
 mvn -q compile
+bash -n scripts/dev-start.sh
+bash -n scripts/dev-stop.sh
 docker compose config
 ```
 
-如修改 shell 脚本，运行：
-
-```bash
-bash -n path/to/script.sh
-```
+如果只改了某一个 shell 脚本，可只对该脚本运行 `bash -n`。
 
 ## 报告规则
 
