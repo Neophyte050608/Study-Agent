@@ -254,7 +254,7 @@ RAG 检索不是单一路径，而是混合检索流水线：
 
 ### 4.2 一键启动开发环境
 
-推荐本地开发直接使用脚本启动基础依赖、后端 `local-lite` 和前端 Vite：
+推荐本地开发直接使用脚本启动基础依赖、后端 `local-lite` 和前端 Vite。详细说明见 [`docs/development/local-startup.md`](docs/development/local-startup.md)。
 
 ```bash
 bash scripts/dev-start.sh
