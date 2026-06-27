@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.feedback.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.knowledge.RagFeedbackDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackDO;
 import io.github.imzmq.interview.feedback.domain.FeedbackEvent;
-import io.github.imzmq.interview.mapper.knowledge.RagFeedbackMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

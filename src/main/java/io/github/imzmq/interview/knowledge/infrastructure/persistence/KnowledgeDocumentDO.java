@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.entity.knowledge;
+package io.github.imzmq.interview.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -8,18 +8,19 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("t_rag_child")
-public class RagChildDO {
+@TableName("t_knowledge_document")
+public class KnowledgeDocumentDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String childId;
-    private String parentId;
-    private Integer childIndex;
-    private String childText;
-    private String chunkStrategy;
-    private String vectorDocId;
+    private Long kbId;
+    private String docName;
+    private String status;
+    private Boolean enabled;
+    private String sourceType;
+    private String sourceLocation;
+    private Integer chunkCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

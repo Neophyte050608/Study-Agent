@@ -2,11 +2,11 @@ package io.github.imzmq.interview.knowledge.application.evaluation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.entity.knowledge.RagQualityEvalCaseDO;
-import io.github.imzmq.interview.entity.knowledge.RagQualityEvalRunDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalCaseDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalRunDO;
 import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.mapper.knowledge.RagQualityEvalCaseMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagQualityEvalRunMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalCaseMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalRunMapper;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;

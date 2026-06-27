@@ -2,11 +2,11 @@ package io.github.imzmq.interview.knowledge.application.evaluation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.entity.knowledge.RetrievalEvalCaseDO;
-import io.github.imzmq.interview.entity.knowledge.RetrievalEvalRunDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalCaseDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalRunDO;
 import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.mapper.knowledge.RetrievalEvalCaseMapper;
-import io.github.imzmq.interview.mapper.knowledge.RetrievalEvalRunMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalCaseMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalRunMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.document.Document;

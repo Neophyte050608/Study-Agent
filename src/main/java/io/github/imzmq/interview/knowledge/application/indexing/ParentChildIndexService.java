@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.knowledge.application.indexing;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.knowledge.RagChildDO;
-import io.github.imzmq.interview.entity.knowledge.RagParentDO;
-import io.github.imzmq.interview.mapper.knowledge.RagChildMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagParentMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;

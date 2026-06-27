@@ -1,15 +1,15 @@
 package io.github.imzmq.interview.knowledge.application.catalog;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.knowledge.KnowledgeChunkCtrlDO;
-import io.github.imzmq.interview.entity.knowledge.KnowledgeDocumentDO;
-import io.github.imzmq.interview.entity.knowledge.RagChildDO;
-import io.github.imzmq.interview.entity.knowledge.RagParentDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeChunkCtrlDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeDocumentDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
 import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
-import io.github.imzmq.interview.mapper.knowledge.KnowledgeChunkCtrlMapper;
-import io.github.imzmq.interview.mapper.knowledge.KnowledgeDocumentMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagChildMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagParentMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeChunkCtrlMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeDocumentMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentMapper;
 import io.github.imzmq.interview.ingestion.application.IngestionService;
 import org.springframework.stereotype.Service;
 

@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.feedback.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.entity.knowledge.RagMetricsSnapshotDO;
-import io.github.imzmq.interview.entity.knowledge.RagTraceDO;
-import io.github.imzmq.interview.mapper.knowledge.RagMetricsSnapshotMapper;
-import io.github.imzmq.interview.mapper.knowledge.RagTraceMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagMetricsSnapshotMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagTraceMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;

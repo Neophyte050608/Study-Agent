@@ -1,7 +1,7 @@
-package io.github.imzmq.interview.mapper.knowledge;
+package io.github.imzmq.interview.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.github.imzmq.interview.entity.knowledge.RagParentDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper

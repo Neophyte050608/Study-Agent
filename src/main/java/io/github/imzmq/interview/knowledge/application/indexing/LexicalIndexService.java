@@ -2,8 +2,8 @@ package io.github.imzmq.interview.knowledge.application.indexing;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
-import io.github.imzmq.interview.entity.knowledge.LexicalIndexDO;
-import io.github.imzmq.interview.mapper.knowledge.LexicalIndexMapper;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexDO;
+import io.github.imzmq.interview.knowledge.infrastructure.persistence.LexicalIndexMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.entity.knowledge;
+package io.github.imzmq.interview.knowledge.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -8,16 +8,17 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("t_knowledge_chunk_ctrl")
-public class KnowledgeChunkCtrlDO {
+@TableName("t_knowledge_base")
+public class KnowledgeBaseDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String docId;
-    private String chunkId;
-    private Boolean enabled;
+    private String name;
+    private String status;
+    private String sourceType;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }
 
 
