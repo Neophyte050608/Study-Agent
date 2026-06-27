@@ -27,5 +27,3 @@ public class McpApplicationService {
         return mcpGatewayService.invoke(userId, capability, params, context);
     }
 }
-
-

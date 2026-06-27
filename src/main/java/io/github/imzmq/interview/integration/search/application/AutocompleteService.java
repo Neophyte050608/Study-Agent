@@ -173,9 +173,3 @@ public class AutocompleteService {
         return leaf.name();
     }
 }
-
-
-
-
-
-

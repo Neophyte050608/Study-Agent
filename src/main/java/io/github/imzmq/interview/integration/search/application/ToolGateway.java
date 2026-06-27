@@ -8,4 +8,3 @@ package io.github.imzmq.interview.integration.search.application;
 public interface ToolGateway<I, O> {
     O run(I input);
 }
-

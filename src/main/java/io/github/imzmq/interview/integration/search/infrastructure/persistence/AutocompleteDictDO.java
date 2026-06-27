@@ -34,5 +34,3 @@ public class AutocompleteDictDO {
     @TableLogic
     private Boolean deleted;
 }
-
-

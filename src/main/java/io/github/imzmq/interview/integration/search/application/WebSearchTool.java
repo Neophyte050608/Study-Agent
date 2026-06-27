@@ -93,4 +93,3 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
     public record Query(String query, Integer topK) {
     }
 }
-

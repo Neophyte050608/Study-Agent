@@ -88,5 +88,3 @@ public class QqProperties {
         this.useWs = useWs;
     }
 }
-
-

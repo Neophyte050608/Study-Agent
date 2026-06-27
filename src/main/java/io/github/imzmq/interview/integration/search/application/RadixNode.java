@@ -15,6 +15,3 @@ public class RadixNode {
     AutocompleteItem entry;
     RadixNode parent;
 }
-
-
-

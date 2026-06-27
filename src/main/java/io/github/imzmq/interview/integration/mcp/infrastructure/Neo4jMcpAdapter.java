@@ -33,4 +33,3 @@ public class Neo4jMcpAdapter implements DatabaseMcpAdapter {
         return response;
     }
 }
-

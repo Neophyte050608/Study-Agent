@@ -33,4 +33,3 @@ public class MilvusMcpAdapter implements DatabaseMcpAdapter {
         return response;
     }
 }
-

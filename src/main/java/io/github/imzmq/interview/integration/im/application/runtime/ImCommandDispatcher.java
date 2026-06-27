@@ -26,5 +26,3 @@ public class ImCommandDispatcher {
         return "/clear".equals(content);
     }
 }
-
-

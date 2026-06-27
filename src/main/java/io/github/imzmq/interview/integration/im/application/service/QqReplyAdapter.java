@@ -106,6 +106,3 @@ public class QqReplyAdapter {
     private record ParsedSession(String chatId, String senderId, String chatType) {
     }
 }
-
-
-

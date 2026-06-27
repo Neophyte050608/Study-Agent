@@ -132,6 +132,3 @@ public class NoteMakingAgent implements Agent<Map<String, Object>, Map<String, O
         return "true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value);
     }
 }
-
-
-

@@ -23,6 +23,3 @@ public class QqPlatformAdapter implements ImPlatformAdapter {
         qqReplyAdapter.sendReply(reply);
     }
 }
-
-
-

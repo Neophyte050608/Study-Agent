@@ -90,6 +90,3 @@ public class FeishuWebhookController {
         return ResponseEntity.ok(Map.of("code", 0, "msg", "success"));
     }
 }
-
-
-

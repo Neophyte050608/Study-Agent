@@ -38,4 +38,3 @@ public class VectorSearchTool implements ToolGateway<VectorSearchTool.Query, Lis
     public record Query(String query, Integer topK) {
     }
 }
-

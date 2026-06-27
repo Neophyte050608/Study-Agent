@@ -52,4 +52,3 @@ public class StubMcpCapabilityGateway implements McpCapabilityGateway {
         return value == null ? "" : value.toString().trim();
     }
 }
-

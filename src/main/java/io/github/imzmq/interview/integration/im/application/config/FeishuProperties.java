@@ -63,5 +63,3 @@ public class FeishuProperties {
         this.useWs = useWs;
     }
 }
-
-

@@ -306,4 +306,3 @@ public class McpStdioCapabilityGateway implements McpCapabilityGateway {
         Process start(List<String> commandParts) throws IOException;
     }
 }
-

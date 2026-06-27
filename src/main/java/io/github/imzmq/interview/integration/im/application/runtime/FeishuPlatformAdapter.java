@@ -23,6 +23,3 @@ public class FeishuPlatformAdapter implements ImPlatformAdapter {
         feishuReplyAdapter.sendReply(reply);
     }
 }
-
-
-

@@ -57,4 +57,3 @@ public class DatabaseMcpAdapterRouter implements McpCapabilityGateway {
         return null;
     }
 }
-

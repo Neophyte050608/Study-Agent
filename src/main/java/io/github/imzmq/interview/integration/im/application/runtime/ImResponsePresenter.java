@@ -17,6 +17,3 @@ public class ImResponsePresenter {
         return taskResponsePresentationService.format(response, TaskResponsePresentationService.PresentationChannel.IM);
     }
 }
-
-
-

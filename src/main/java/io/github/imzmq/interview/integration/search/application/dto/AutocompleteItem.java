@@ -9,4 +9,3 @@ public class AutocompleteItem {
     private String category;
     private double score;
 }
-

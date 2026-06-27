@@ -257,4 +257,3 @@ public class McpSseCapabilityGateway implements McpCapabilityGateway {
         return new BusinessException(ErrorCode.MCP_UNREACHABLE, message, ex);
     }
 }
-

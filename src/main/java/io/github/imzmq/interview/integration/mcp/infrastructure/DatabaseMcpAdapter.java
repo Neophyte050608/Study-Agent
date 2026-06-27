@@ -22,4 +22,3 @@ public interface DatabaseMcpAdapter {
 
     Object invoke(String capability, Map<String, Object> params, Map<String, Object> context);
 }
-

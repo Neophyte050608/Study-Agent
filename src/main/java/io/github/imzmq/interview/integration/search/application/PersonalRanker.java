@@ -116,7 +116,3 @@ public class PersonalRanker {
                 .orElse(0.0);
     }
 }
-
-
-
-

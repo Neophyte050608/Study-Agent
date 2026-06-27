@@ -65,10 +65,3 @@ public class AutocompleteController {
         return ResponseEntity.ok().build();
     }
 }
-
-
-
-
-
-
-

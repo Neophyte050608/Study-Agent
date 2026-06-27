@@ -79,5 +79,3 @@ public class ImConversationStore {
         redisTemplate.delete(CLARIFICATION_PREFIX + sessionId);
     }
 }
-
-

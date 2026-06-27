@@ -606,12 +606,3 @@ class RAGServiceTest {
         };
     }
 }
-
-
-
-
-
-
-
-
-

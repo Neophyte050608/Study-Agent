@@ -40,4 +40,3 @@ public class AgentFunctionConfig {
         return vectorSearchTool::run;
     }
 }
-

@@ -21,4 +21,3 @@ public interface McpCapabilityGateway {
         return invokeCapability(name, params);
     }
 }
-

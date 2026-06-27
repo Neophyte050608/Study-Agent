@@ -8,6 +8,3 @@ public interface ImPlatformAdapter {
 
     void sendReply(UnifiedReply reply);
 }
-
-
-
