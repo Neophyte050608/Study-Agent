@@ -11,6 +11,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
+import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -174,7 +175,6 @@ class RAGServiceTest {
                 lexicalIndexService,
                 observabilityService,
                 agentSkillService,
-                promptTemplateService,
                 promptManager,
                 ragRetrieveExecutor,
                 techConceptRepository,
@@ -184,7 +184,17 @@ class RAGServiceTest {
                 parentChildIndexService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                llmJsonParser
+                llmJsonParser,
+                new InterviewAnswerEvaluationService(
+                        routingChatService,
+                        observabilityService,
+                        agentSkillService,
+                        promptTemplateService,
+                        promptManager,
+                        observabilitySwitchProperties,
+                        skillOrchestrator,
+                        llmJsonParser
+                )
         );
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
                 .thenReturn(new PromptManager.PromptPair("system", "user"));

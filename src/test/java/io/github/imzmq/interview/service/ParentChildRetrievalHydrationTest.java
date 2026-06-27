@@ -9,6 +9,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
+import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -155,7 +156,6 @@ class ParentChildRetrievalHydrationTest {
                 lexicalIndexService,
                 observabilityService,
                 agentSkillService,
-                promptTemplateService,
                 promptManager,
                 executor,
                 techConceptRepository,
@@ -165,7 +165,17 @@ class ParentChildRetrievalHydrationTest {
                 parentChildIndexService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                llmJsonParser
+                llmJsonParser,
+                new InterviewAnswerEvaluationService(
+                        routingChatService,
+                        observabilityService,
+                        agentSkillService,
+                        promptTemplateService,
+                        promptManager,
+                        observabilitySwitchProperties,
+                        skillOrchestrator,
+                        llmJsonParser
+                )
         );
     }
 

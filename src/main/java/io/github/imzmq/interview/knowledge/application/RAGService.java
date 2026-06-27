@@ -10,24 +10,20 @@ import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
+import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
 import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.imzmq.interview.chat.application.JsonResult;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import org.slf4j.Logger;
@@ -38,12 +34,10 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -63,8 +57,6 @@ import java.util.stream.Stream;
 public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
 
     private static final Logger logger = LoggerFactory.getLogger(RAGService.class);
-    private static final Pattern EVIDENCE_LINE_PATTERN = Pattern.compile("^(\\d+)\\.\\s+(.*)$");
-    private static final Pattern INDEX_PATTERN = Pattern.compile("(\\d+)");
     // 用于日志脱敏：尽量在调试时保留“字段存在”信息，但不暴露实际密钥/令牌。
     private static final Pattern RAW_API_KEY_PATTERN = Pattern.compile("(?i)(\"?api[-_ ]?key\"?\\s*[:=]\\s*\"?)([^\",\\s]+)");
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*bearer\\s+)([A-Za-z0-9._-]{8,})");
@@ -82,9 +74,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final LexicalIndexService lexicalIndexService;
     private final RAGObservabilityService observabilityService;
     private final AgentSkillService agentSkillService;
-    private final PromptTemplateService promptTemplateService;
     private final PromptManager promptManager;
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final LlmJsonParser llmJsonParser;
     // 注入自定义检索线程池
     private final java.util.concurrent.Executor ragRetrieveExecutor;
@@ -97,10 +87,10 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final ParentChildIndexService parentChildIndexService;
     private final SkillOrchestrator skillOrchestrator;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
+    private final InterviewAnswerEvaluationService interviewAnswerEvaluationService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptTemplateService promptTemplateService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService) {
         this.agentSkillService = agentSkillService;
-        this.promptTemplateService = promptTemplateService;
         this.promptManager = promptManager;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.techConceptRepository = techConceptRepository;
@@ -115,6 +105,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         this.skillOrchestrator = skillOrchestrator;
         this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.llmJsonParser = llmJsonParser;
+        this.interviewAnswerEvaluationService = interviewAnswerEvaluationService;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -125,13 +116,17 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     public String processAnswer(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot) {
         return executeWithinTraceRoot("PROCESS", "RAG Answer Evaluation", "Q: " + question, () -> {
             KnowledgePacket packet = buildKnowledgePacket(question, userAnswer);
-            try {
-                EvaluationResult result = evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, "", packet);
-                return validateEvidenceReferences(result.json(), packet.retrievalEvidence());
-            } catch (RuntimeException e) {
-                logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-                return buildFallbackEvaluation(question, e);
-            }
+            return interviewAnswerEvaluationService.evaluateAndValidate(
+                    topic,
+                    question,
+                    userAnswer,
+                    difficultyLevel,
+                    followUpState,
+                    topicMastery,
+                    profileSnapshot,
+                    "",
+                    packet
+            );
         });
     }
 
@@ -159,80 +154,20 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     /**
      * 基于检索上下文执行回答评估（LLM 生成）。
      *
-     * <p>该方法会将 {@link KnowledgePacket} 中的 context/evidence 注入提示词模板，并执行模型调用生成结构化评估 JSON。
-     * 为了控制 token 成本，会对 context/evidence/profileSnapshot 做截断（truncate），同时保留 evidence 编号约束。</p>
-     *
-     * <p>异常/超时降级：</p>
-     * <ul>
-     *     <li>模型调用失败：返回 fallback 评估 JSON，并将 token 计数置 0</li>
-     *     <li>上层入口 {@link #processAnswer} 还会额外做 citations/conflicts 的证据编号校验与修补</li>
-     * </ul>
-     *
-     * @param topic           当前题目主题
-     * @param question        当前问题
-     * @param userAnswer      用户回答
-     * @param difficultyLevel 难度等级
-     * @param followUpState   追问状态
-     * @param topicMastery    主题掌握度（画像侧传入）
-     * @param profileSnapshot 画像快照（可能较长，会被截断）
-     * @param strategyHint    策略提示（可选）
-     * @param packet          知识包（包含 context 与证据目录）
-     * @return 评估结果（content 为 JSON 字符串，含 citations/conflicts 等字段）
+     * <p>兼容入口：评估主链路已迁移到 {@link InterviewAnswerEvaluationService}。</p>
      */
     public EvaluationResult evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
-        return executeWithinTraceRoot("KNOWLEDGE_EVAL", "Knowledge Evaluation", "Q: " + question, () -> {
-            String originalContext = packet == null ? "" : packet.context();
-            String originalImageContext = packet == null ? "" : packet.imageContext();
-            String originalEvidence = packet == null ? "[]" : packet.retrievalEvidence();
-            String finalContext = truncate(originalContext, 1400);
-            String finalImageContext = truncate(originalImageContext, 600);
-            String finalEvidence = truncate(originalEvidence, 900);
-            String safeProfileSnapshot = truncate(profileSnapshot, 480);
-            String normalizedStrategy = strategyHint == null ? "" : strategyHint.trim();
-            if (normalizedStrategy.isBlank()) {
-                normalizedStrategy = resolveQuestionStrategySummary(
-                        "evaluation",
-                        topic,
-                        question,
-                        difficultyLevel,
-                        followUpState,
-                        safeProfileSnapshot,
-                        "",
-                        false
-                );
-            }
-            if (observabilitySwitchProperties.isRagTraceEnabled()) {
-                logger.info(
-                        "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, imageContextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
-                        safeLogText(topic, 40),
-                        safeLogText(difficultyLevel, 24),
-                        safeLogText(followUpState, 24),
-                        String.format("%.1f", topicMastery),
-                        safeLength(question),
-                        safeLength(userAnswer),
-                        safeLength(normalizedStrategy),
-                        safeLength(safeProfileSnapshot),
-                        safeLength(profileSnapshot),
-                        safeLength(finalContext),
-                        safeLength(originalContext),
-                        safeLength(finalImageContext),
-                        safeLength(originalImageContext),
-                        safeLength(finalEvidence),
-                        safeLength(originalEvidence),
-                        parseEvidenceCatalog(originalEvidence).size(),
-                        packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
-                        packet != null && packet.webFallbackUsed()
-                );
-            }
-            try {
-                final String effectiveStrategyHint = normalizedStrategy;
-                RoutingChatService.RoutingResult routingResult = callWithRetryResult(() -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalImageContext, finalEvidence, effectiveStrategyHint), 2, "回答评估");
-                return new EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
-            } catch (RuntimeException e) {
-                logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-                return new EvaluationResult(buildFallbackEvaluation(question, e), 0, 0);
-            }
-        });
+        return interviewAnswerEvaluationService.evaluateWithKnowledge(
+                topic,
+                question,
+                userAnswer,
+                difficultyLevel,
+                followUpState,
+                topicMastery,
+                profileSnapshot,
+                strategyHint,
+                packet
+        );
     }
 
     /**
@@ -262,50 +197,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             return result;
         } catch (RuntimeException e) {
             observabilityService.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
-            throw e;
-        }
-    }
-
-    private RoutingChatService.RoutingResult generateEvaluationResult(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String context, String imageContext, String retrievalEvidence, String strategyHint) {
-        String traceId = RAGTraceContext.getTraceId();
-        String nodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(
-                traceId,
-                nodeId,
-                RAGTraceContext.getCurrentNodeId(),
-                TraceNodeDefinitions.LLM_EVALUATION.nodeType(),
-                TraceNodeDefinitions.LLM_EVALUATION.nodeName()
-        );
-        
-        try {
-            String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
-            String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
-            List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
-            
-            Map<String, Object> contextMap = new HashMap<>();
-            contextMap.put("skillBlock", skillBlock);
-            contextMap.put("topic", topic);
-            contextMap.put("difficultyGuide", difficultyGuide);
-            contextMap.put("followUpState", followUpState);
-            contextMap.put("topicMastery", String.format("%.1f", topicMastery));
-            contextMap.put("strategyHint", strategyHint);
-            contextMap.put("profileSnapshot", profileSnapshot);
-            contextMap.put("context", context);
-            contextMap.put("imageContext", imageContext);
-            contextMap.put("retrievalEvidence", retrievalEvidence);
-            contextMap.put("cases", cases);
-            contextMap.put("question", question);
-            contextMap.put("userAnswer", userAnswer);
-
-            PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "evaluation", contextMap);
-            RoutingChatService.RoutingResult result = callWithRetryResult(() ->
-                routingChatService.callWithMetadata(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "回答评估"),
-                1, "回答评估");
-            
-            observabilityService.endNode(traceId, nodeId, "Q: " + question, "Score: " + result.content().substring(0, Math.min(20, result.content().length())), null);
-            return result;
-        } catch (Exception e) {
-            observabilityService.endNode(traceId, nodeId, "Q: " + question, null, e.getMessage());
             throw e;
         }
     }
@@ -346,54 +237,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 metrics,
                 details
         );
-    }
-
-    private String validateEvidenceReferences(String rawJson, String retrievalEvidence) {
-        Map<Integer, String> allowedEvidence = parseEvidenceCatalog(retrievalEvidence);
-        if (allowedEvidence.isEmpty()) {
-            return rawJson;
-        }
-        
-        JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(rawJson, null, null);
-        if (!parseResult.success()) {
-            return rawJson;
-        }
-        JsonNode node = parseResult.data();
-        if (!(node instanceof ObjectNode objectNode)) {
-            return rawJson;
-        }
-        try {
-            List<String> citations = readArrayText(objectNode.path("citations"));
-            List<String> conflicts = readArrayText(objectNode.path("conflicts"));
-            List<String> deductions = readArrayText(objectNode.path("deductions"));
-            List<String> validCitations = citations.stream()
-                    .filter(item -> containsAllowedEvidence(item, allowedEvidence.keySet()))
-                    .collect(Collectors.toList());
-            List<String> validConflicts = conflicts.stream()
-                    .filter(item -> containsAllowedEvidence(item, allowedEvidence.keySet()))
-                    .collect(Collectors.toList());
-            boolean filtered = validCitations.size() != citations.size() || validConflicts.size() != conflicts.size();
-            if (validCitations.isEmpty()) {
-                Map.Entry<Integer, String> first = allowedEvidence.entrySet().iterator().next();
-                validCitations = List.of(first.getKey() + ". " + first.getValue());
-            }
-            if (filtered) {
-                deductions.add("存在未命中证据索引的引用或冲突项，已自动过滤。");
-            }
-            objectNode.set("citations", toArrayNode(validCitations));
-            objectNode.set("conflicts", toArrayNode(validConflicts));
-            objectNode.set("deductions", toArrayNode(deductions));
-
-            // 修复大模型偶尔遗漏 nextQuestion 字段的问题，提供兜底保护
-            if (!objectNode.has("nextQuestion") || objectNode.get("nextQuestion").asText().isBlank()) {
-                objectNode.put("nextQuestion", "能否进一步结合实际项目场景，谈谈你在使用这项技术时遇到的最大挑战及解决方案？");
-            }
-
-            return objectMapper.writeValueAsString(objectNode);
-        } catch (Exception e) {
-            logger.warn("引用校验失败，返回原始评估结果。原因: {}", summarizeError(e));
-            return rawJson;
-        }
     }
 
     /**
@@ -928,68 +771,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 .collect(Collectors.toList());
     }
 
-    private Map<Integer, String> parseEvidenceCatalog(String retrievalEvidence) {
-        Map<Integer, String> catalog = new LinkedHashMap<>();
-        if (retrievalEvidence == null || retrievalEvidence.isBlank() || "[]".equals(retrievalEvidence.trim())) {
-            return catalog;
-        }
-        String[] lines = retrievalEvidence.split("\\R");
-        for (String line : lines) {
-            Matcher matcher = EVIDENCE_LINE_PATTERN.matcher(line.trim());
-            if (matcher.find()) {
-                int index = Integer.parseInt(matcher.group(1));
-                String text = matcher.group(2).trim();
-                if (!text.isBlank()) {
-                    catalog.put(index, text.length() > 120 ? text.substring(0, 120) : text);
-                }
-            }
-        }
-        return catalog;
-    }
-
-    private List<String> readArrayText(JsonNode node) {
-        if (node == null || !node.isArray()) {
-            return new ArrayList<>();
-        }
-        List<String> result = new ArrayList<>();
-        node.forEach(item -> {
-            String text = item == null ? "" : item.asText("");
-            if (!text.isBlank()) {
-                result.add(text.trim());
-            }
-        });
-        return result;
-    }
-
-    private boolean containsAllowedEvidence(String text, Set<Integer> allowedIndexes) {
-        if (text == null || text.isBlank() || allowedIndexes == null || allowedIndexes.isEmpty()) {
-            return false;
-        }
-        Matcher matcher = INDEX_PATTERN.matcher(text);
-        Set<Integer> indexes = new TreeSet<>();
-        while (matcher.find()) {
-            try {
-                indexes.add(Integer.parseInt(matcher.group(1)));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        if (indexes.isEmpty()) {
-            return false;
-        }
-        return indexes.stream().anyMatch(allowedIndexes::contains);
-    }
-
-    private ArrayNode toArrayNode(List<String> values) {
-        ArrayNode node = objectMapper.createArrayNode();
-        if (values == null || values.isEmpty()) {
-            return node;
-        }
-        values.stream()
-                .filter(item -> item != null && !item.isBlank())
-                .forEach(item -> node.add(item.trim()));
-        return node;
-    }
-
     private String candidateKey(Document doc) {
         if (doc == null) {
             return "null";
@@ -998,27 +779,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         String text = doc.getText() == null ? "" : doc.getText().trim();
         String head = text.length() > 80 ? text.substring(0, 80) : text;
         return path + "::" + head;
-    }
-
-    private RoutingChatService.RoutingResult callWithRetryResult(Supplier<RoutingChatService.RoutingResult> action, int maxAttempts, String stage) {
-        RuntimeException last = null;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                return action.get();
-            } catch (RuntimeException e) {
-                last = e;
-                logger.warn("{}第{}次调用失败: {}", stage, attempt, summarizeError(e));
-                if (attempt < maxAttempts) {
-                    try {
-                        Thread.sleep(400L * attempt);
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        throw new IllegalStateException("线程中断", interruptedException);
-                    }
-                }
-            }
-        }
-        throw last == null ? new IllegalStateException(stage + "失败") : last;
     }
 
     private <T> T callWithRetry(Supplier<T> action, int maxAttempts, String stage) {
@@ -1040,18 +800,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             }
         }
         throw last == null ? new IllegalStateException(stage + "失败") : last;
-    }
-
-    private String buildFallbackEvaluation(String question, Throwable throwable) {
-        String feedback = isTimeout(throwable)
-                ? "本次回答分析超时，请重试一次或缩短回答后再提交。"
-                : "本次回答分析服务暂时不可用，请稍后重试。";
-        return "{\"score\":0,\"accuracy\":0,\"logic\":0,\"depth\":0,\"boundary\":0," +
-                "\"deductions\":[\"服务降级，未产出扣分点\"]," +
-                "\"citations\":[]," +
-                "\"conflicts\":[]," +
-                "\"feedback\":\"" + jsonEscape(feedback) + "\"," +
-                "\"nextQuestion\":\"" + jsonEscape(question) + "\"}";
     }
 
     @Override
@@ -1104,17 +852,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         return lines.isEmpty() ? "[]" : String.join("\n", lines);
     }
 
-    private String jsonEscape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
-    }
-
     private static class FusedCandidate {
         private final Document document;
         private double score;
@@ -1147,21 +884,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             String childMatchExcerpt,
             String evidenceSnippet
     ) {
-    }
-
-    private boolean isTimeout(Throwable throwable) {
-        Throwable current = throwable;
-        while (current != null) {
-            if (current instanceof SocketTimeoutException) {
-                return true;
-            }
-            String message = current.getMessage();
-            if (message != null && message.toLowerCase().contains("timeout")) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 
     private String compactMessage(Throwable throwable) {
@@ -1831,20 +1553,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             return truncate(text, 140);
         }
         return text.substring(0, end + 1).trim();
-    }
-
-    private String normalizeDifficultyGuide(String difficultyLevel) {
-        if (difficultyLevel == null) {
-            return "基础巩固";
-        }
-        String normalized = difficultyLevel.toUpperCase(Locale.ROOT);
-        if ("ADVANCED".equals(normalized)) {
-            return "高级深挖（场景、原理、手写思路）";
-        }
-        if ("INTERMEDIATE".equals(normalized)) {
-            return "中级进阶（原理+实战）";
-        }
-        return "基础巩固";
     }
 
     private String resolveCodingSkillBlock(String questionType) {
