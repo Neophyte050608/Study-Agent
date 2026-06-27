@@ -14,6 +14,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexServ
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
+import io.github.imzmq.interview.knowledge.application.coding.CodingPracticeService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
@@ -88,8 +89,9 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final SkillOrchestrator skillOrchestrator;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
     private final InterviewAnswerEvaluationService interviewAnswerEvaluationService;
+    private final CodingPracticeService codingPracticeService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService, CodingPracticeService codingPracticeService) {
         this.agentSkillService = agentSkillService;
         this.promptManager = promptManager;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
@@ -106,6 +108,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.llmJsonParser = llmJsonParser;
         this.interviewAnswerEvaluationService = interviewAnswerEvaluationService;
+        this.codingPracticeService = codingPracticeService;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
@@ -1046,45 +1049,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     }
 
     public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot, List<String> excludedTopics) {
-        String normalizedTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic.trim();
-        String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
-        String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
-        String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
-        String codingCoachSummary = resolveCodingCoachSummary(
-                "generate_question",
-                normalizedTopic,
-                normalizedDifficulty,
-                normalizedQuestionType,
-                "",
-                "",
-                0
-        );
-        
-        Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
-        params.put("topic", buildTopicWithExclusion(normalizedTopic, excludedTopics));
-        params.put("difficulty", normalizedDifficulty);
-        params.put("questionType", normalizedQuestionType);
-        params.put("profileSnapshot", truncate(profileSnapshot, 240));
-        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-question", params);
-
-        try {
-            logger.debug("====== [RAGService - generateCodingQuestion] Prompt Template ======");
-            logger.debug("{}", pair.userPrompt());
-            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
-                () -> "",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, TimeoutHint.NORMAL, "刷题题目生成"
-            ), 1, "刷题题目生成");
-            logger.debug("====== [RAGService - generateCodingQuestion] Response ======");
-            logger.debug("{}", raw);
-            if (raw == null || raw.isBlank()) {
-                return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
-            }
-            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 1200);
-        } catch (RuntimeException e) {
-            logger.warn("刷题题目生成失败，返回降级题目。原因: {}", summarizeError(e));
-            return buildFallbackCodingQuestion(normalizedTopic, normalizedDifficulty, normalizedQuestionType);
-        }
+        return codingPracticeService.generateCodingQuestion(topic, difficulty, profileSnapshot, excludedTopics);
     }
 
     /**
@@ -1093,228 +1058,15 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
      */
     public List<CodingPracticeAgent.QuizQuestion> generateBatchQuiz(
             String topic, String difficulty, int count, String profileSnapshot, List<String> excludedTopics) {
-        String normalizedTopic = topic == null || topic.isBlank() ? "Java基础" : topic.trim();
-        String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
-        String skillBlock = resolveCodingSkillBlock("选择题");
-        String codingCoachSummary = resolveCodingCoachSummary(
-                "generate_question",
-                normalizedTopic,
-                normalizedDifficulty,
-                "CHOICE",
-                "",
-                "",
-                0
-        );
-
-        Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
-        params.put("topic", buildTopicWithExclusion(normalizedTopic, excludedTopics));
-        params.put("difficulty", normalizedDifficulty);
-        params.put("count", String.valueOf(Math.min(count, 10)));
-        params.put("questionType", "选择题");
-        params.put("profileSnapshot", truncate(profileSnapshot, 240));
-
-        // 使用 batch-quiz-question 模板；如果不存在则用内联 prompt
-        String sp;
-        String up;
-        try {
-            PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "batch-quiz-question", params);
-            sp = pair.systemPrompt();
-            up = pair.userPrompt();
-        } catch (Exception e) {
-            // 模板不存在时使用内联 prompt
-            sp = "你是一位专业的技术面试出题官。";
-            up = buildInlineBatchQuizPrompt(buildTopicWithExclusion(normalizedTopic, excludedTopics), normalizedDifficulty, count);
-        }
-
-        final String finalSystemPrompt = sp;
-        final String finalUserPrompt = up;
-
-        try {
-            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
-                () -> "[]",
-                finalSystemPrompt, finalUserPrompt, ModelRouteType.GENERAL, TimeoutHint.NORMAL, "批量选择题生成"
-            ), 1, "批量选择题生成");
-
-            if (raw == null || raw.isBlank()) {
-                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
-            }
-
-            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
-            if (!parseResult.success() || !parseResult.data().isArray() || parseResult.data().isEmpty()) {
-                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
-            }
-            JsonNode rootNode = parseResult.data();
-
-            List<CodingPracticeAgent.QuizQuestion> questions = new java.util.ArrayList<>();
-            for (JsonNode element : rootNode) {
-                List<String> options = new java.util.ArrayList<>();
-                JsonNode optsNode = element.path("options");
-                if (optsNode.isArray()) {
-                    for (JsonNode opt : optsNode) {
-                        options.add(opt.asText());
-                    }
-                }
-                questions.add(new CodingPracticeAgent.QuizQuestion(
-                    element.path("index").asInt(0),
-                    element.path("stem").asText(""),
-                    options,
-                    element.path("correctAnswer").asText(""),
-                    element.path("explanation").asText("")
-                ));
-            }
-
-            if (questions.isEmpty()) {
-                return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
-            }
-
-            // 确保 index 正确
-            List<CodingPracticeAgent.QuizQuestion> result = new java.util.ArrayList<>();
-            for (int i = 0; i < questions.size(); i++) {
-                CodingPracticeAgent.QuizQuestion q = questions.get(i);
-                result.add(new CodingPracticeAgent.QuizQuestion(
-                    i + 1, q.stem(), q.options(), q.correctAnswer(), q.explanation()));
-            }
-            return result;
-        } catch (Exception e) {
-            logger.warn("批量选择题生成失败，降级逐题生成。原因: {}", summarizeError(e));
-            return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
-        }
-    }
-
-    /**
-     * 降级方案：逐题调用 generateCodingQuestion 生成（无正确答案和解析）。
-     */
-    private List<CodingPracticeAgent.QuizQuestion> fallbackBatchQuiz(
-            String topic, String difficulty, int count, String profileSnapshot, List<String> excludedTopics) {
-        List<CodingPracticeAgent.QuizQuestion> result = new java.util.ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            String questionText = generateCodingQuestion(topic + "（选择题）", difficulty, profileSnapshot, excludedTopics);
-            result.add(new CodingPracticeAgent.QuizQuestion(
-                i + 1, questionText, List.of("A. 请参考题目", "B. 请参考题目", "C. 请参考题目", "D. 请参考题目"),
-                "A", "该题目由降级方案生成，暂无解析。请根据题干自行判断。"));
-        }
-        return result;
-    }
-
-    /**
-     * 内联 prompt（当 batch-quiz-question 模板不存在时使用）。
-     */
-    private String buildInlineBatchQuizPrompt(String topic, String difficulty, int count) {
-        return "请生成 " + count + " 道关于「" + topic + "」的" + difficulty + "难度选择题。\n\n"
-            + "严格按以下 JSON 格式输出（不要输出其他内容）：\n"
-            + "```json\n"
-            + "[\n"
-            + "  {\n"
-            + "    \"index\": 1,\n"
-            + "    \"stem\": \"题目描述\",\n"
-            + "    \"options\": [\"A. 选项1\", \"B. 选项2\", \"C. 选项3\", \"D. 选项4\"],\n"
-            + "    \"correctAnswer\": \"B\",\n"
-            + "    \"explanation\": \"详细解析\"\n"
-            + "  }\n"
-            + "]\n"
-            + "```\n"
-            + "要求：\n"
-            + "1. 每题必须有4个选项（A/B/C/D）\n"
-            + "2. correctAnswer 只能是 A/B/C/D 中的一个字母\n"
-            + "3. explanation 要详细解释为什么选择该答案\n"
-            + "4. 题目要有区分度，难度符合 " + difficulty + " 级别\n"
-            + "5. 只输出 JSON 数组，不要有多余文字";
+        return codingPracticeService.generateBatchQuiz(topic, difficulty, count, profileSnapshot, excludedTopics);
     }
 
     public CodingAssessment evaluateCodingAnswer(String topic, String difficulty, String question, String answer) {
-        String normalizedTopic = topic == null || topic.isBlank() ? "算法" : topic.trim();
-        String normalizedDifficulty = difficulty == null || difficulty.isBlank() ? "medium" : difficulty.trim().toLowerCase(Locale.ROOT);
-        String safeQuestion = question == null ? "" : question.trim();
-        String safeAnswer = answer == null ? "" : answer.trim();
-        if (safeAnswer.isBlank()) {
-            return new CodingAssessment(20, "未提供有效答案。", "先补充完整思路，再给出复杂度分析。", fallbackNextCodingQuestion(normalizedTopic, 20, normalizeCodingQuestionType(normalizedTopic)));
-        }
-        String normalizedQuestionType = normalizeCodingQuestionType(normalizedTopic);
-        String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
-        String codingCoachSummary = resolveCodingCoachSummary(
-                "evaluate_code",
-                normalizedTopic,
-                normalizedDifficulty,
-                normalizedQuestionType,
-                safeQuestion,
-                safeAnswer,
-                0
-        );
-        
-        Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
-        params.put("topic", normalizedTopic);
-        params.put("difficulty", normalizedDifficulty);
-        params.put("questionType", normalizedQuestionType);
-        params.put("question", truncate(safeQuestion, 1200));
-        params.put("answer", truncate(safeAnswer, 800));
-        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-evaluation", params);
-
-        try {
-            logger.debug("====== [RAGService - evaluateCodingAnswer] Prompt Template ======");
-            logger.debug("{}", pair.userPrompt());
-            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
-                () -> "{\"score\":0,\"feedback\":\"评估超时\"}",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, TimeoutHint.SLOW, "刷题答案评估"
-            ), 1, "刷题答案评估");
-            logger.debug("====== [RAGService - evaluateCodingAnswer] Response ======");
-            logger.debug("{}", raw);
-            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
-            if (!parseResult.success()) {
-                throw new RuntimeException("Coding evaluation JSON parse failed: " + parseResult.failureReason());
-            }
-            JsonNode node = parseResult.data();
-            int score = node.path("score").asInt(0);
-            String feedback = node.path("feedback").asText("建议补充完整思路并说明复杂度。");
-            String nextHint = node.path("nextHint").asText("请优先补充边界条件与复杂度分析。");
-            String nextQuestion = node.path("nextQuestion").asText("");
-            if (nextQuestion == null || nextQuestion.isBlank()) {
-                nextQuestion = generateNextCodingQuestion(normalizedTopic, normalizedDifficulty, safeQuestion, safeAnswer, score);
-            }
-            return new CodingAssessment(Math.max(0, Math.min(score, 100)), feedback, nextHint, nextQuestion == null ? "" : nextQuestion);
-        } catch (Exception e) {
-            logger.warn("刷题答案评估失败，返回降级评分。原因: {}", summarizeError(e));
-            return fallbackCodingAssessment(safeAnswer, normalizedQuestionType, normalizedTopic);
-        }
+        return codingPracticeService.evaluateCodingAnswer(topic, difficulty, question, answer);
     }
 
     public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
-        String normalizedQuestionType = normalizeCodingQuestionType(topic);
-        String skillBlock = resolveCodingSkillBlock(normalizedQuestionType);
-        String codingCoachSummary = resolveCodingCoachSummary(
-                "generate_follow_up",
-                topic == null ? "算法" : topic,
-                difficulty == null ? "medium" : difficulty,
-                normalizedQuestionType,
-                question,
-                answer,
-                score
-        );
-        
-        Map<String, Object> params = new HashMap<>();
-        params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
-        params.put("topic", topic == null ? "算法" : topic);
-        params.put("difficulty", difficulty == null ? "medium" : difficulty);
-        params.put("questionType", normalizedQuestionType);
-        params.put("question", truncate(question, 240));
-        params.put("answer", truncate(answer, 500));
-        params.put("score", String.valueOf(score));
-        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-next-question", params);
-
-        try {
-            String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
-                () -> "",
-                pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, TimeoutHint.NORMAL, "刷题下一题生成"
-            ), 1, "刷题下一题生成");
-            if (raw == null || raw.isBlank()) {
-                return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
-            }
-            return truncate(raw.replace("\r\n", " ").replaceAll("\\s+", " ").trim(), 1200);
-        } catch (RuntimeException e) {
-            logger.warn("刷题下一题生成失败，返回降级问题。原因: {}", summarizeError(e));
-            return fallbackNextCodingQuestion(topic, score, normalizedQuestionType);
-        }
+        return codingPracticeService.generateNextCodingQuestion(topic, difficulty, question, answer, score);
     }
 
     public String generateLearningPlan(String topic, String weakPoint, String recentPerformance) {
@@ -1372,39 +1124,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         return "你好！欢迎参加今天的「" + safeTopic + "」模拟面试。在正式开始技术交流之前，能请你先花 1-2 分钟做一个简单的自我介绍吗？";
     }
 
-    private String buildFallbackCodingQuestion(String topic, String difficulty, String questionType) {
-        if ("CHOICE".equals(questionType)) {
-            return "请生成一道" + difficulty + "难度的「" + topic + "」选择题，包含 4 个选项，不要输出答案。";
-        }
-        if ("FILL".equals(questionType)) {
-            return "请生成一道" + difficulty + "难度的「" + topic + "」填空题，给出题干与必要约束，不要输出答案。";
-        }
-        if ("SCENARIO".equals(questionType)) {
-            return "请生成一道" + difficulty + "难度的「" + topic + "」场景题，要求贴近真实工程情境，不要输出答案。";
-        }
-        return "请完成一道" + difficulty + "难度的「" + topic + "」算法题：给定整数数组与目标值，返回两数之和等于目标值的下标，并说明时间复杂度与空间复杂度。";
-    }
-
-    private String fallbackNextCodingQuestion(String topic, int score, String questionType) {
-        String safeTopic = topic == null || topic.isBlank() ? "数组与字符串" : topic;
-        if ("CHOICE".equals(questionType)) {
-            return "请继续生成一道「" + safeTopic + "」选择题，难度参考当前得分，包含 4 个选项且不要输出答案。";
-        }
-        if ("FILL".equals(questionType)) {
-            return "请继续生成一道「" + safeTopic + "」填空题，难度参考当前得分，给出题干与必要约束。";
-        }
-        if ("SCENARIO".equals(questionType)) {
-            return "请继续生成一道「" + safeTopic + "」场景题，难度参考当前得分，聚焦真实工程情境。";
-        }
-        if (score < 60) {
-            return "请给出一道「" + safeTopic + "」基础题的完整暴力解，并说明如何优化到更低时间复杂度。";
-        }
-        if (score < 80) {
-            return "请继续完成一道「" + safeTopic + "」中等题，并重点说明边界条件和复杂度推导。";
-        }
-        return "请完成一道「" + safeTopic + "」进阶题，并比较两种不同解法的 trade-off。";
-    }
-
     private String fallbackLearningPlan(String topic, String weakPoint) {
         String weak = weakPoint == null || weakPoint.isBlank() ? "复杂度分析与边界处理" : weakPoint;
         return "Day1: 梳理 " + topic + " 核心概念，完成 2 道基础题，记录错误清单。\n" +
@@ -1414,38 +1133,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 "Day5: 进行模拟讲解，口述解题过程，补齐表达短板。\n" +
                 "Day6: 完成 1 道进阶题，对比两种解法并总结取舍。\n" +
                 "Day7: 做一次 30 分钟小测，整理错题并形成下周目标。";
-    }
-
-    private CodingAssessment fallbackCodingAssessment(String answer, String questionType, String topic) {
-        String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
-        if (!"ALGORITHM".equals(questionType)) {
-            int score = lower.length() > 40 ? 68 : 48;
-            return new CodingAssessment(
-                    score,
-                    "答案已提交，但评估服务暂不可用。建议补充关键判断条件、约束与边界情况。",
-                    "请补充你对题干条件的理解，并说明最核心的判断依据。",
-                    fallbackNextCodingQuestion(topic, score, questionType)
-            );
-        }
-        int score = 35;
-        if (lower.contains("o(")) {
-            score += 20;
-        }
-        if (lower.contains("for") || lower.contains("while")) {
-            score += 15;
-        }
-        if (lower.contains("hashmap") || lower.contains("map")) {
-            score += 15;
-        }
-        if (lower.contains("边界") || lower.contains("null") || lower.contains("空")) {
-            score += 10;
-        }
-        score = Math.min(score, 90);
-        String feedback = score < 60 ? "题解描述不完整，建议补充步骤与边界场景。"
-                : "题解基本可用，建议进一步优化复杂度论证。";
-        String nextHint = score < 60 ? "先给出可运行解法，再补充复杂度。"
-                : "尝试提供另一种实现并比较 trade-off。";
-        return new CodingAssessment(score, feedback, nextHint, fallbackNextCodingQuestion("算法", score, "ALGORITHM"));
     }
 
     private String normalizeFirstQuestion(String raw, String topic) {
@@ -1555,27 +1242,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         return text.substring(0, end + 1).trim();
     }
 
-    private String resolveCodingSkillBlock(String questionType) {
-        if ("ALGORITHM".equals(questionType)) {
-            return safeSkillText(agentSkillService.resolveSkillBlock("coding-interview-coach"));
-        }
-        return "";
-    }
-
-    private String normalizeCodingQuestionType(String text) {
-        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
-        if (normalized.contains("选择") || normalized.contains("choice") || normalized.contains("单选") || normalized.contains("多选")) {
-            return "CHOICE";
-        }
-        if (normalized.contains("填空") || normalized.contains("fill") || normalized.contains("补全")) {
-            return "FILL";
-        }
-        if (normalized.contains("场景") || normalized.contains("scenario")) {
-            return "SCENARIO";
-        }
-        return "ALGORITHM";
-    }
-
     private String safeSkillText(String content) {
         if (content == null || content.isBlank()) {
             return "";
@@ -1622,33 +1288,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             return normalizedSkillBlock;
         }
         return normalizedSkillBlock + "\n\n" + normalizedStrategySummary;
-    }
-
-    private String resolveCodingCoachSummary(String taskType,
-                                             String topic,
-                                             String difficulty,
-                                             String questionType,
-                                             String question,
-                                             String answer,
-                                             int score) {
-        SkillExecutionResult result = skillOrchestrator.execute(
-                "coding-interview-coach",
-                new SkillExecutionContext(
-                        RAGTraceContext.getTraceId(),
-                        "rag-service",
-                        Map.of(
-                                "taskType", taskType == null ? "" : taskType,
-                                "topic", topic == null ? "" : topic,
-                                "difficulty", difficulty == null ? "" : difficulty,
-                                "questionType", questionType == null ? "" : questionType,
-                                "question", question == null ? "" : question,
-                                "answer", answer == null ? "" : answer,
-                                "score", score
-                        ),
-                        skillOrchestrator.newBudget()
-                )
-        );
-        return result.succeeded() ? result.textOutput("coachingSummary") : "";
     }
 
     private String resolveLearningPlanSummary(String topic,

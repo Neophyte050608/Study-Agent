@@ -12,6 +12,7 @@ import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndex
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
 import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
+import io.github.imzmq.interview.knowledge.application.coding.CodingPracticeService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -192,6 +193,13 @@ class RAGServiceTest {
                         promptTemplateService,
                         promptManager,
                         observabilitySwitchProperties,
+                        skillOrchestrator,
+                        llmJsonParser
+                ),
+                new CodingPracticeService(
+                        routingChatService,
+                        agentSkillService,
+                        promptManager,
                         skillOrchestrator,
                         llmJsonParser
                 )

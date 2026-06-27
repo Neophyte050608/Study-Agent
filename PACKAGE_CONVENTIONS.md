@@ -66,12 +66,13 @@ Knowledge package breakdown (mandatory for new code):
 - Retrieval orchestration/fusion, query rewrite, evidence evaluation, Web fallback, and RAG adapters: `knowledge.application.retrieval`.
 - Multi-turn topic state and dynamic context policy: `knowledge.application.context`.
 - Streaming chat handlers and stream utilities: `knowledge.application.chatstream`.
+- Coding practice question generation/evaluation/quiz fallback: `knowledge.application.coding`.
 - Retrieval/generation offline eval and interview answer evaluation/scoring: `knowledge.application.evaluation`.
 - RAG trace/event/trace-service: `knowledge.application.observability`.
 - Knowledge base/document catalog operations: `knowledge.application.catalog`.
 
 Forbidden placement:
-- Do not add new non-core classes into `knowledge.application` root; do not add new responsibilities directly to `RAGService`. New answer-scoring or evidence-validation logic belongs in `knowledge.application.evaluation`.
+- Do not add new non-core classes into `knowledge.application` root; do not add new responsibilities directly to `RAGService`. New answer-scoring or evidence-validation logic belongs in `knowledge.application.evaluation`; new coding-practice logic belongs in `knowledge.application.coding`.
 - Do not place new knowledge features under legacy `...service`.
 - Do not place new business persistence classes under top-level `entity`, `mapper`, or `dto`.
 
