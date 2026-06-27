@@ -36,14 +36,23 @@
 - Controllers must not directly call MyBatis Mapper interfaces.
 - Application/use-case code should not expose persistence-specific DTOs upward.
 
-## 6. Migration rule
+## 6. Transitional package inventory
+
+Current remaining top-level packages under `io.github.imzmq.interview`:
+`agent`, `common`, `conversation`, `feedback`, `integration`, `intent`, `interview`, `knowledge`, `learning`, `menu`, `model`, `platform`, `routing`, `tools`.
+
+Allowed-but-transitional packages: `common`, `feedback`, `intent`, `learning`, `menu`, and `routing`. They remain in `ArchitectureRulesTest` because code still exists there after the first migration pass. Treat them as remaining cleanup inventory for later package ownership decisions, not preferred destinations for new code unless a later design explicitly assigns ownership.
+
+Final Task 10 verification gate: `mvn -q compile`, `mvn -q -Dtest=ArchitectureRulesTest test`, and `mvn -q verify -DskipTests` pass. Known local full-test limitation: `mvn test` currently fails in this environment with Mockito inline Byte Buddy self-attach (`Could not initialize MockMaker` / `Could not self-attach to current VM`). Rerun full tests in a JVM/environment that supports Mockito inline attachment before treating the full suite as green.
+
+## 7. Migration rule
 - First-phase migration may keep existing code in legacy domain-owned packages until each area is moved into its target macro-module.
 - Old package names are documentation-only migration references, not preferred placement for new code.
 - Top-level `entity`, `mapper`, and `dto` are retired for new business code; do not reintroduce them as acceptable placement.
 - Any new module or major refactor must follow this document.
 - Any package move should be done in small batches with compile + test pass per batch.
 
-## 7. Persistence Placement
+## 8. Persistence Placement
 
 MyBatis persistence classes are domain-owned during migration. New or moved persistence code should live behind the owning module's internal persistence adapter when that module migrates.
 
@@ -54,7 +63,7 @@ DTO placement:
 - Module public contracts belong in a module facade or `<module>.api`.
 - Persistence-specific DTOs/records belong with the owning persistence adapter and must not be exposed as public API DTOs.
 
-## 8. Placement Cheatsheet
+## 9. Placement Cheatsheet
 - HTTP, IM, webhook controllers and transport DTOs: `interfaces`.
 - Interview sessions, feedback, and learning-loop entry points: `interview`.
 - Chat, prompt, context, memory, and streaming response protocol: `conversation`.
@@ -70,10 +79,10 @@ Migration reference only; do not use these as preferred placement for new code:
 - Chat/prompt/context and streaming response protocol code lives under `conversation`.
 - Identity and observability infrastructure lives under `platform/identity` and `platform/observability`.
 - Retired `modelrouting` package code has migrated to `model`; keep new model providers, routing, runtime health, and execution policy under `model`.
-- Existing IM, MCP, search, and vendor adapter code migrates toward `integration`.
-- Existing knowledge RAG/index/retrieval/catalog/media extraction code migrates toward `knowledge`.
+- Retired top-level IM, MCP, and search package code has migrated to `integration`; keep external adapters/clients and vendor APIs under `integration`.
+- Retired top-level RAG, graph, ingestion, and media package code has migrated to `knowledge`; keep retrieval, indexing, catalog, graph, ingestion, and knowledge-specific media extraction under `knowledge`.
 
-## 9. Hard Guardrails
+## 10. Hard Guardrails
 - Controllers cannot use MyBatis Mapper interfaces directly.
 - Cross-module imports from `<module>.internal..` are forbidden.
 - Persistence-specific DTOs must not be exposed upward as transport or public API DTOs.

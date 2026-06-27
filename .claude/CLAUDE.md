@@ -52,17 +52,19 @@ npm run build:spring     # 构建并输出到 src/main/resources/static/spa/
 | 领域包 | 职责 |
 |---|---|
 | `agent/` | Agent 编排、TaskRouter、A2A 事件总线 |
-| `routing/` | 意图树分类、意图预过滤、澄清解析 |
+| `routing/` | 过渡保留：意图树分类、意图预过滤、澄清解析；新代码需先确认未来归属，不作为默认新增目的地 |
 | `knowledge/` | RAG 检索核心（含 indexing/localgraph/retrieval/context/evaluation/observability/catalog/chatstream 子包；知识摄入与图片检索实现收敛在 `knowledge/internal/ingestion`、`knowledge/internal/media`） |
 | `interview/` | 面试编排门面 |
-| `learning/` | 学习画像、学习事件（含 `domain` 子包） |
+| `learning/` | 过渡保留：学习画像、学习事件；后续应明确归入目标宏模块，不作为默认新增目的地 |
 | `conversation/` | Prompt 模板、上下文压缩、对话记忆、流式响应协议 |
 | `model/` | 多模型候选、优先级、三态熔断、动态模型运行时选择、健康检查、VLM |
 | `platform/identity/` | 用户身份提取 |
 | `platform/observability/` | Trace 属性清洗、RAG 链路追踪 |
-| `menu/` | 菜单/工作区配置 |
+| `menu/` | 过渡保留：菜单/工作区配置；后续应明确归入目标宏模块，不作为默认新增目的地 |
 | `integration/` | 外部适配器与客户端：IM 渠道集成、FastMCP、自动补全/搜索、供应商 API |
-| `skill/` | Skill 技能定义 |
+| `tools/` | Skill/工具定义、可执行动作契约、权限与安全策略 |
+
+> `routing/`、`learning/`、`menu/` 属于当前清理库存：仅承载尚未归并的既有代码。除非架构设计明确指定所有权，否则不要把新能力放入这些包。
 
 ### 分层约束（ArchUnit 强制）
 - `api → application → domain`，`application → infrastructure`（通过注入接口）

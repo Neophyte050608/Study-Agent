@@ -34,6 +34,10 @@ class ArchitectureRulesTest {
 
     private static final String MAIN_PACKAGE = "io.github.imzmq.interview";
 
+    // Target macro-modules plus explicitly documented transitional packages.
+    // Transitional packages (common, feedback, intent, learning, menu, routing) remain allowed
+    // only because code still exists there after the first migration pass; they are not
+    // preferred new-code destinations unless later design assigns explicit ownership.
     private static final Set<String> ALLOWED_TOP_LEVEL_PACKAGES = Set.of(
             "agent",
             "common",
