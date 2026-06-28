@@ -17,6 +17,7 @@
 - Create `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationMapper.java` — maps sanitized internal events to stable OTel attributes.
 - Create `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelAiObservationPublisher.java` — creates best-effort spans from `AiObservationEvent`.
 - Create `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfig.java` — Spring config creating OTel SDK/exporter-backed publisher when enabled and complete, otherwise Noop fallback.
+- Modify `src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` — register `OtelObservationConfig` before `AiObservationPublisherConfig` so the OTel publisher has the first chance to satisfy `AiObservationPublisher`.
 - Create tests under `src/test/java/io/github/imzmq/interview/observability/infrastructure/otel/`.
 - Modify `src/test/java/io/github/imzmq/interview/config/observability/AiObservationPublisherConfigTest.java` — verify Noop fallback and OTel override behavior.
 - Modify `docs/development/observability-guidelines.md` — document Langfuse via OTEL config and safety rules.
@@ -646,6 +647,7 @@ git commit -m "feat: publish ai observations as otel spans"
 
 **Files:**
 - Create: `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfig.java`
+- Modify: `src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
 - Test: `src/test/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfigTest.java`
 - Modify: `src/test/java/io/github/imzmq/interview/config/observability/AiObservationPublisherConfigTest.java`
 
@@ -706,6 +708,16 @@ class OtelObservationConfigTest {
                     assertThat(context).hasSingleBean(AiObservationPublisher.class);
                     assertThat(context).getBean(AiObservationPublisher.class).isInstanceOf(OtelAiObservationPublisher.class);
                 });
+    }
+
+    @Test
+    void registersOtelAutoConfigurationBeforeNoopFallbackAutoConfiguration() {
+        List<String> imports = autoConfigurationImports();
+
+        assertThat(imports).contains(OtelObservationConfig.class.getName());
+        assertThat(imports).contains(AiObservationPublisherConfig.class.getName());
+        assertThat(imports.indexOf(OtelObservationConfig.class.getName()))
+                .isLessThan(imports.indexOf(AiObservationPublisherConfig.class.getName()));
     }
 }
 ```
@@ -785,7 +797,18 @@ public class OtelObservationConfig {
 }
 ```
 
-- [ ] **Step 4: Add integration expectation to existing config test**
+- [ ] **Step 4: Register auto-configuration import**
+
+Modify `src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` so `OtelObservationConfig` is registered before the existing Noop fallback auto-configuration:
+
+```text
+io.github.imzmq.interview.observability.infrastructure.otel.OtelObservationConfig
+io.github.imzmq.interview.config.observability.AiObservationPublisherConfig
+```
+
+The order matters because `OtelObservationConfig` and `AiObservationPublisherConfig` both provide an `AiObservationPublisher` with `@ConditionalOnMissingBean`; if the Noop fallback is imported first, the real OTel publisher cannot be created during normal Spring Boot startup.
+
+- [ ] **Step 5: Add integration expectation to existing config test**
 
 Modify `src/test/java/io/github/imzmq/interview/config/observability/AiObservationPublisherConfigTest.java` only if needed to include `OtelObservationConfig` in a new test. Add imports and this test:
 
@@ -809,7 +832,7 @@ Modify `src/test/java/io/github/imzmq/interview/config/observability/AiObservati
     }
 ```
 
-- [ ] **Step 5: Run config tests**
+- [ ] **Step 6: Run config tests**
 
 Run:
 
@@ -819,10 +842,10 @@ mvn -q -Dtest=OtelObservationConfigTest,AiObservationPublisherConfigTest test
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfig.java src/test/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfigTest.java src/test/java/io/github/imzmq/interview/config/observability/AiObservationPublisherConfigTest.java
+git add src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfig.java src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports src/test/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationConfigTest.java src/test/java/io/github/imzmq/interview/config/observability/AiObservationPublisherConfigTest.java
 git commit -m "feat: configure langfuse otel observation publisher"
 ```
 

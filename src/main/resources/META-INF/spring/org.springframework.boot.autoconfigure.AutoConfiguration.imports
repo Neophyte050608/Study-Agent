@@ -1,1 +1,2 @@
+io.github.imzmq.interview.observability.infrastructure.otel.OtelObservationConfig
 io.github.imzmq.interview.config.observability.AiObservationPublisherConfig
