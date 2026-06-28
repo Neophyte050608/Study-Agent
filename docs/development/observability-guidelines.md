@@ -92,6 +92,36 @@ observability.infrastructure.langfuse.LangfuseAiObservationPublisher
 
 Langfuse 主要用于 LLM/RAG 细节追踪，例如 prompt、模型、token、cost、retrieval、generation、evaluation 的可比较记录。是否记录 prompt 原文必须另行设计开关、脱敏和权限，不得默认外传。
 
+## Langfuse via OpenTelemetry 配置
+
+第一版 Langfuse 接入通过 OpenTelemetry OTLP/HTTP exporter 完成，不直接使用 Langfuse Java Client。默认关闭：
+
+```yaml
+app:
+  observability:
+    external:
+      enabled: false
+      provider: langfuse-otel
+      endpoint: ${LANGFUSE_OTEL_ENDPOINT:}
+      public-key: ${LANGFUSE_PUBLIC_KEY:}
+      secret-key: ${LANGFUSE_SECRET_KEY:}
+      service-name: study-agent
+      export-prompts: false
+      export-completions: false
+```
+
+常用 endpoint：
+
+```text
+EU Cloud:    https://cloud.langfuse.com/api/public/otel
+US Cloud:    https://us.cloud.langfuse.com/api/public/otel
+Self-hosted: https://<your-langfuse-host>/api/public/otel
+```
+
+认证使用 `Authorization: Basic base64(public-key:secret-key)`，由配置类生成，不要把 secret 写入日志、trace attributes 或文档示例。
+
+当前只导出 `AiObservationEvent` 的安全 attributes。`export-prompts` 和 `export-completions` 预留但不生效，不得默认外传 prompt/completion 原文。
+
 ## OpenTelemetry 定位
 
 OpenTelemetry 是系统级 trace/metrics/logs 能力，适合观测：
