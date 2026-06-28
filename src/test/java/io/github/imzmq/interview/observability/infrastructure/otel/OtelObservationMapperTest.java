@@ -36,7 +36,7 @@ class OtelObservationMapperTest {
                 sourceAttributes
         );
 
-        Map<String, String> attributes = OtelObservationMapper.toAttributes(event);
+        Map<String, String> attributes = new OtelObservationMapper().toAttributes(event);
 
         assertThat(attributes).containsExactlyEntriesOf(Map.ofEntries(
                 Map.entry("ai.event_type", "rag.node"),
@@ -49,10 +49,10 @@ class OtelObservationMapperTest {
                 Map.entry("ai.completion_tokens", "20"),
                 Map.entry("ai.total_tokens", "30"),
                 Map.entry("ai.estimated_cost", "0.003"),
-                Map.entry("ai.rag.doc_count", "4"),
-                Map.entry("ai.rag.retrieval_mode", "hybrid"),
-                Map.entry("ai.agent.task_type", "answer_review"),
-                Map.entry("ai.agent.route_source", "agent_router")
+                Map.entry("rag.doc_count", "4"),
+                Map.entry("rag.retrieval_mode", "hybrid"),
+                Map.entry("agent.task_type", "answer_review"),
+                Map.entry("agent.route_source", "agent_router")
         ));
         assertThatThrownBy(() -> attributes.put("ai.extra", "value"))
                 .isInstanceOf(UnsupportedOperationException.class);
@@ -81,7 +81,7 @@ class OtelObservationMapperTest {
                 sourceAttributes
         );
 
-        Map<String, String> attributes = OtelObservationMapper.toAttributes(event);
+        Map<String, String> attributes = new OtelObservationMapper().toAttributes(event);
 
         assertThat(attributes)
                 .containsEntry("ai.event_type", "agent.task")
@@ -126,18 +126,51 @@ class OtelObservationMapperTest {
                 Map.of()
         );
 
-        assertThat(OtelObservationMapper.spanName(event)).isEqualTo("ai.rag_node.retrieval");
+        assertThat(new OtelObservationMapper().spanName(event)).isEqualTo("ai.rag_node.retrieval");
+    }
+
+    @Test
+    void spanNameSanitizesSpecialCharactersAndLimitsPartLength() {
+        String longEventType = "rag.node with spaces\n/slash:colon\u0007" + "x".repeat(100);
+        String longCategory = "retrieval mode/with:bad\nchars\u001F" + "y".repeat(100);
+        AiObservationEvent event = new AiObservationEvent(
+                longEventType,
+                "trace-1",
+                "node-1",
+                longCategory,
+                "raw event name with spaces / colon: secret",
+                "success",
+                null,
+                Map.of()
+        );
+
+        String spanName = new OtelObservationMapper().spanName(event);
+
+        assertThat(spanName).startsWith("ai.");
+        assertThat(spanName).doesNotContain(" ", "\n", "/", ":", "\u0007", "\u001F", "raw event name", "secret");
+        assertThat(spanName).doesNotContain("__");
+        String[] parts = spanName.substring("ai.".length()).split("\\.");
+        assertThat(parts).hasSize(2);
+        assertThat(parts[0]).hasSizeLessThanOrEqualTo(64);
+        assertThat(parts[1]).hasSizeLessThanOrEqualTo(64);
+        assertThat(parts[0]).matches("[a-zA-Z0-9_-]+");
+        assertThat(parts[1]).matches("[a-zA-Z0-9_-]+");
     }
 
     @Test
     void fallsBackWhenEventIsNullOrControlledNameIsBlank() {
-        assertThat(OtelObservationMapper.toAttributes(null)).isEmpty();
-        assertThat(OtelObservationMapper.spanName(null)).isEqualTo("ai.event");
+        OtelObservationMapper mapper = new OtelObservationMapper();
+
+        assertThat(mapper.toAttributes(null)).isEmpty();
+        assertThat(mapper.spanName(null)).isEqualTo("ai.event");
 
         AiObservationEvent blankEvent = new AiObservationEvent(" ", "trace", "node", " ", "raw name", " ", null, Map.of());
 
-        assertThat(OtelObservationMapper.toAttributes(blankEvent)).isEmpty();
-        assertThat(OtelObservationMapper.spanName(blankEvent)).isEqualTo("ai.event");
+        assertThat(mapper.toAttributes(blankEvent)).isEmpty();
+        assertThat(mapper.spanName(blankEvent)).isEqualTo("ai.event");
+
+        AiObservationEvent unsafeOnlyEvent = new AiObservationEvent(" : /\n\u0007", "trace", "node", " : /\n\u0007", "raw name", " ", null, Map.of());
+        assertThat(mapper.spanName(unsafeOnlyEvent)).isEqualTo("ai.event");
     }
 
     @Test
@@ -157,10 +190,10 @@ class OtelObservationMapperTest {
                 sourceAttributes
         );
 
-        assertThat(OtelObservationMapper.toAttributes(event))
+        assertThat(new OtelObservationMapper().toAttributes(event))
                 .containsEntry("ai.latency_ms", "345")
                 .containsEntry("ai.provider", "openai")
                 .doesNotContainKey("ai.model")
-                .doesNotContainKey("ai.agent.route_source");
+                .doesNotContainKey("agent.route_source");
     }
 }

@@ -315,7 +315,7 @@ class OtelObservationMapperTest {
         OtelObservationMapper mapper = new OtelObservationMapper();
         AiObservationEvent event = AiObservationEvent.ragNode("trace", "node", "retrieval", "user text", "success", Map.of());
 
-        assertThat(mapper.spanName(event)).isEqualTo("ai.rag.node.retrieval");
+        assertThat(mapper.spanName(event)).isEqualTo("ai.rag_node.retrieval");
     }
 }
 ```
@@ -344,6 +344,9 @@ import java.util.Map;
 
 public class OtelObservationMapper {
 
+    private static final String DEFAULT_SPAN_NAME = "ai.event";
+    private static final int MAX_SPAN_NAME_PART_LENGTH = 64;
+
     private static final Map<String, String> ATTRIBUTE_MAPPING = Map.ofEntries(
             Map.entry("model", "ai.model"),
             Map.entry("provider", "ai.provider"),
@@ -360,12 +363,16 @@ public class OtelObservationMapper {
     );
 
     public String spanName(AiObservationEvent event) {
-        String eventType = safe(event == null ? "" : event.eventType()).replace('.', '_');
-        String category = safe(event == null ? "" : event.category()).replace('.', '_');
-        if (eventType.isBlank()) {
-            eventType = "event";
+        if (event == null) {
+            return DEFAULT_SPAN_NAME;
         }
-        return category.isBlank() ? "ai." + eventType : "ai." + eventType + "." + category;
+
+        String eventType = sanitizeNamePart(event.eventType());
+        String category = sanitizeNamePart(event.category());
+        if (eventType.isEmpty() || category.isEmpty()) {
+            return DEFAULT_SPAN_NAME;
+        }
+        return "ai." + eventType + "." + category;
     }
 
     public Map<String, String> toAttributes(AiObservationEvent event) {
@@ -394,6 +401,60 @@ public class OtelObservationMapper {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String sanitizeNamePart(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        StringBuilder sanitized = new StringBuilder(value.length());
+        boolean previousUnderscore = false;
+        for (int i = 0; i < value.length(); i++) {
+            char current = value.charAt(i);
+            char replacement = safeSpanNameChar(current);
+            if (replacement == '_') {
+                if (!previousUnderscore) {
+                    sanitized.append(replacement);
+                    previousUnderscore = true;
+                }
+                continue;
+            }
+            sanitized.append(replacement);
+            previousUnderscore = false;
+        }
+        String part = stripBoundaryUnderscores(sanitized.toString());
+        if (part.length() > MAX_SPAN_NAME_PART_LENGTH) {
+            part = stripBoundaryUnderscores(part.substring(0, MAX_SPAN_NAME_PART_LENGTH));
+        }
+        return part;
+    }
+
+    private char safeSpanNameChar(char value) {
+        if (value == '.') {
+            return '_';
+        }
+        if (value == '_' || value == '-' || isAsciiLetterOrDigit(value)) {
+            return value;
+        }
+        return '_';
+    }
+
+    private boolean isAsciiLetterOrDigit(char value) {
+        return value >= 'a' && value <= 'z'
+                || value >= 'A' && value <= 'Z'
+                || value >= '0' && value <= '9';
+    }
+
+    private String stripBoundaryUnderscores(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == '_') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == '_') {
+            end--;
+        }
+        return value.substring(start, end);
     }
 }
 ```
