@@ -31,10 +31,16 @@ public class OtelAiObservationPublisher implements AiObservationPublisher {
         try {
             Span span = tracer.spanBuilder(mapper.spanName(event)).startSpan();
             try {
-                for (Map.Entry<String, String> entry : mapper.toAttributes(event).entrySet()) {
-                    span.setAttribute(entry.getKey(), entry.getValue());
+                Map<String, String> attributes = mapper.toAttributes(event);
+                if (attributes != null) {
+                    for (Map.Entry<String, String> entry : attributes.entrySet()) {
+                        span.setAttribute(entry.getKey(), entry.getValue());
+                    }
                 }
-                span.setStatus(statusCode(event));
+                StatusCode statusCode = statusCode(event);
+                if (statusCode != null) {
+                    span.setStatus(statusCode);
+                }
             } finally {
                 span.end();
             }
@@ -45,9 +51,15 @@ public class OtelAiObservationPublisher implements AiObservationPublisher {
 
     private static StatusCode statusCode(AiObservationEvent event) {
         String status = event.status();
-        if ("failed".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status)) {
+        if ("success".equalsIgnoreCase(status)) {
+            return StatusCode.OK;
+        }
+        if ("failed".equalsIgnoreCase(status)
+                || "error".equalsIgnoreCase(status)
+                || "timeout".equalsIgnoreCase(status)
+                || "cancelled".equalsIgnoreCase(status)) {
             return StatusCode.ERROR;
         }
-        return StatusCode.OK;
+        return null;
     }
 }
