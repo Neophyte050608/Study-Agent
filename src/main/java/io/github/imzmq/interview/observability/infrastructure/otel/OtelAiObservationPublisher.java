@@ -5,21 +5,28 @@ import io.github.imzmq.interview.observability.application.AiObservationPublishe
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class OtelAiObservationPublisher implements AiObservationPublisher {
+public class OtelAiObservationPublisher implements AiObservationPublisher, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(OtelAiObservationPublisher.class);
 
     private final Tracer tracer;
     private final OtelObservationMapper mapper;
+    private final SdkTracerProvider tracerProvider;
 
     public OtelAiObservationPublisher(Tracer tracer, OtelObservationMapper mapper) {
+        this(tracer, mapper, null);
+    }
+
+    public OtelAiObservationPublisher(Tracer tracer, OtelObservationMapper mapper, SdkTracerProvider tracerProvider) {
         this.tracer = tracer;
         this.mapper = mapper;
+        this.tracerProvider = tracerProvider;
     }
 
     @Override
@@ -46,6 +53,21 @@ public class OtelAiObservationPublisher implements AiObservationPublisher {
             }
         } catch (RuntimeException ex) {
             log.debug("Failed to publish AI observation to OpenTelemetry");
+        }
+    }
+
+    @Override
+    public void close() {
+        if (tracerProvider == null) {
+            return;
+        }
+
+        try {
+            tracerProvider.forceFlush();
+            tracerProvider.shutdown();
+        } catch (RuntimeException ex) {
+            log.warn("Failed to close OpenTelemetry AI observation publisher: {}",
+                    ex.getClass().getSimpleName());
         }
     }
 

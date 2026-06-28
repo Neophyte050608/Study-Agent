@@ -808,6 +808,8 @@ io.github.imzmq.interview.config.observability.AiObservationPublisherConfig
 
 The order matters because `OtelObservationConfig` and `AiObservationPublisherConfig` both provide an `AiObservationPublisher` with `@ConditionalOnMissingBean`; if the Noop fallback is imported first, the real OTel publisher cannot be created during normal Spring Boot startup.
 
+Lifecycle note from code review: the configured publisher must own the `SdkTracerProvider` it creates. `OtelAiObservationPublisher` implements `AutoCloseable`; on Spring context shutdown, Spring's inferred destroy method calls `close()`, which force-flushes pending spans and then shuts down the provider/exporter chain. Disabled or incomplete configuration still returns `NoopAiObservationPublisher`, which has no inferred destroy method and must not fail context shutdown.
+
 - [ ] **Step 5: Add integration expectation to existing config test**
 
 Modify `src/test/java/io/github/imzmq/interview/config/observability/AiObservationPublisherConfigTest.java` only if needed to include `OtelObservationConfig` in a new test. Add imports and this test:

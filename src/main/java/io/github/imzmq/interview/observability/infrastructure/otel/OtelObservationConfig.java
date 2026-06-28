@@ -5,6 +5,7 @@ import io.github.imzmq.interview.observability.application.AiObservationPublishe
 import io.github.imzmq.interview.observability.application.NoopAiObservationPublisher;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.resources.Resource;
@@ -45,13 +46,21 @@ public class OtelObservationConfig {
             OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
                     .setTracerProvider(tracerProvider)
                     .build();
-            return new OtelAiObservationPublisher(
+            return createPublisher(
                     openTelemetry.getTracer("study-agent-ai-observability"),
-                    new OtelObservationMapper());
+                    new OtelObservationMapper(),
+                    tracerProvider);
         } catch (RuntimeException ex) {
             log.warn("Falling back to noop AI observation publisher because OpenTelemetry setup failed: {}",
                     ex.getClass().getSimpleName());
             return new NoopAiObservationPublisher();
         }
+    }
+
+    protected OtelAiObservationPublisher createPublisher(
+            Tracer tracer,
+            OtelObservationMapper mapper,
+            SdkTracerProvider tracerProvider) {
+        return new OtelAiObservationPublisher(tracer, mapper, tracerProvider);
     }
 }
