@@ -66,4 +66,41 @@ class TraceAttributeSanitizerTest {
         assertThat(sanitized).doesNotContainKey("error");
         assertThat(sanitized.toString()).doesNotContain("secret-token");
     }
+
+    @Test
+    void filtersSensitiveIdentifiersForExternalObservation() {
+        TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
+
+        Map<String, Object> sanitized = sanitizer.sanitizeForExternalObservation(Map.ofEntries(
+                Map.entry("sessionId", "session-1"),
+                Map.entry("userId", "user-1"),
+                Map.entry("taskId", "task-1"),
+                Map.entry("candidateId", "candidate-1"),
+                Map.entry("nodeName", "knowledge retrieval"),
+                Map.entry("fallbackReason", "remote error apiKey=secret-token"),
+                Map.entry("error", "raw error apiKey=secret-token"),
+                Map.entry("errorType", "caller-provided"),
+                Map.entry("model", "glm-4"),
+                Map.entry("docCount", 4),
+                Map.entry("nodeType", "retrieval"),
+                Map.entry("latencyMs", 123)
+        ));
+
+        assertThat(sanitized)
+                .containsEntry("model", "glm-4")
+                .containsEntry("docCount", "4")
+                .containsEntry("nodeType", "retrieval")
+                .containsEntry("latencyMs", "123")
+                .doesNotContainKeys(
+                        "sessionId",
+                        "userId",
+                        "taskId",
+                        "candidateId",
+                        "nodeName",
+                        "fallbackReason",
+                        "error",
+                        "errorType"
+                );
+        assertThat(sanitized.toString()).doesNotContain("secret-token");
+    }
 }

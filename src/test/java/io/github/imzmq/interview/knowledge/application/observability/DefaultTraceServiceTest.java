@@ -28,11 +28,18 @@ class DefaultTraceServiceTest {
                 Map.of("ignored", "start attributes are not published")
         );
 
-        traceService.success(handle, Map.of(
-                "model", "glm-4",
-                "docCount", 3,
-                "errorType", "apiKey=secret-token",
-                "secret", "must-not-leak"
+        traceService.success(handle, Map.ofEntries(
+                Map.entry("model", "glm-4"),
+                Map.entry("docCount", 3),
+                Map.entry("sessionId", "session-1"),
+                Map.entry("userId", "user-1"),
+                Map.entry("taskId", "task-1"),
+                Map.entry("candidateId", "candidate-1"),
+                Map.entry("nodeName", "knowledge retrieval"),
+                Map.entry("fallbackReason", "remote error apiKey=secret-token"),
+                Map.entry("error", "raw error apiKey=secret-token"),
+                Map.entry("errorType", "apiKey=secret-token"),
+                Map.entry("secret", "must-not-leak")
         ));
 
         assertThat(publisher.events()).hasSize(1);
@@ -46,6 +53,15 @@ class DefaultTraceServiceTest {
         assertThat(event.attributes())
                 .containsEntry("model", "glm-4")
                 .containsEntry("docCount", "3")
+                .doesNotContainKeys(
+                        "sessionId",
+                        "userId",
+                        "taskId",
+                        "candidateId",
+                        "nodeName",
+                        "fallbackReason",
+                        "error"
+                )
                 .doesNotContainKey("errorType")
                 .doesNotContainKey("secret");
         assertThat(event.attributes().toString()).doesNotContain("secret-token");
@@ -79,8 +95,8 @@ class DefaultTraceServiceTest {
         assertThat(event.name()).isEqualTo(TraceNodeDefinitions.DOC_RETRIEVE.nodeName());
         assertThat(event.status()).isEqualTo("failed");
         assertThat(event.attributes())
-                .containsEntry("fallbackReason", "web fallback")
                 .containsEntry("errorType", "ERROR")
+                .doesNotContainKey("fallbackReason")
                 .doesNotContainKey("error")
                 .doesNotContainKey("secret");
         assertThat(event.attributes().toString()).doesNotContain("secret-token");
@@ -109,7 +125,7 @@ class DefaultTraceServiceTest {
         AiObservationEvent event = publisher.events().get(0);
         assertThat(event.status()).isEqualTo("failed");
         assertThat(event.attributes())
-                .containsEntry("fallbackReason", "blank failure")
+                .doesNotContainKey("fallbackReason")
                 .doesNotContainKey("errorType");
         assertThat(event.attributes().toString()).doesNotContain("secret-token");
     }

@@ -84,7 +84,7 @@ public class DefaultTraceService implements TraceService {
             if (payload != null) {
                 attributes.putAll(payload);
             }
-            Map<String, Object> sanitized = new LinkedHashMap<>(traceAttributeSanitizer.sanitize(attributes));
+            Map<String, Object> sanitized = new LinkedHashMap<>(traceAttributeSanitizer.sanitizeForExternalObservation(attributes));
             if (errorMessage != null && !errorMessage.isBlank()) {
                 sanitized.put("errorType", "ERROR");
             }
