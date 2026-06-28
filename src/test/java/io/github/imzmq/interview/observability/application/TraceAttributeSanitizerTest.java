@@ -12,17 +12,23 @@ class TraceAttributeSanitizerTest {
     void keepsOnlySafeAiObservationKeys() {
         TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
 
-        Map<String, Object> sanitized = sanitizer.sanitize(Map.of(
-                "provider", "zhipu",
-                "model", "glm-4",
-                "latencyMs", 123,
-                "promptTokens", 10,
-                "completionTokens", 20,
-                "totalTokens", 30,
-                "estimatedCost", "0.001",
-                "retrievalMode", "hybrid",
-                "docCount", 4,
-                "secret", "must-not-leak"
+        Map<String, Object> sanitized = sanitizer.sanitize(Map.ofEntries(
+                Map.entry("provider", "zhipu"),
+                Map.entry("model", "glm-4"),
+                Map.entry("latencyMs", 123),
+                Map.entry("promptTokens", 10),
+                Map.entry("completionTokens", 20),
+                Map.entry("totalTokens", 30),
+                Map.entry("estimatedCost", "0.001"),
+                Map.entry("retrievalMode", "hybrid"),
+                Map.entry("docCount", 4),
+                Map.entry("routeType", "intent"),
+                Map.entry("candidateId", "candidate-1"),
+                Map.entry("candidatePriority", 5),
+                Map.entry("circuitState", "CLOSED"),
+                Map.entry("nodeType", "retrieval"),
+                Map.entry("nodeName", "knowledge retrieval"),
+                Map.entry("secret", "must-not-leak")
         ));
 
         assertThat(sanitized).containsEntry("provider", "zhipu");
@@ -34,6 +40,12 @@ class TraceAttributeSanitizerTest {
         assertThat(sanitized).containsEntry("estimatedCost", "0.001");
         assertThat(sanitized).containsEntry("retrievalMode", "hybrid");
         assertThat(sanitized).containsEntry("docCount", "4");
+        assertThat(sanitized).containsEntry("routeType", "intent");
+        assertThat(sanitized).containsEntry("candidateId", "candidate-1");
+        assertThat(sanitized).containsEntry("candidatePriority", "5");
+        assertThat(sanitized).containsEntry("circuitState", "CLOSED");
+        assertThat(sanitized).containsEntry("nodeType", "retrieval");
+        assertThat(sanitized).containsEntry("nodeName", "knowledge retrieval");
         assertThat(sanitized).doesNotContainKey("secret");
     }
 }
