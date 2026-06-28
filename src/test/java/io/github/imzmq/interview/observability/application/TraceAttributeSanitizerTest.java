@@ -28,6 +28,8 @@ class TraceAttributeSanitizerTest {
                 Map.entry("circuitState", "CLOSED"),
                 Map.entry("nodeType", "retrieval"),
                 Map.entry("nodeName", "knowledge retrieval"),
+                Map.entry("errorType", "ERROR"),
+                Map.entry("error", "apiKey=secret-token"),
                 Map.entry("secret", "must-not-leak")
         ));
 
@@ -46,17 +48,22 @@ class TraceAttributeSanitizerTest {
         assertThat(sanitized).containsEntry("circuitState", "CLOSED");
         assertThat(sanitized).containsEntry("nodeType", "retrieval");
         assertThat(sanitized).containsEntry("nodeName", "knowledge retrieval");
+        assertThat(sanitized).containsEntry("errorType", "ERROR");
+        assertThat(sanitized).doesNotContainKey("error");
         assertThat(sanitized).doesNotContainKey("secret");
+        assertThat(sanitized.toString()).doesNotContain("secret-token");
     }
 
     @Test
-    void keepsErrorAndTruncatesLongTextToSafeLength() {
+    void keepsErrorTypeAndFiltersRawError() {
         TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
-        String longError = "x".repeat(121);
+        Map<String, Object> sanitized = sanitizer.sanitize(Map.of(
+                "errorType", "ERROR",
+                "error", "apiKey=secret-token"
+        ));
 
-        Map<String, Object> sanitized = sanitizer.sanitize(Map.of("error", longError));
-
-        assertThat(sanitized).containsKey("error");
-        assertThat(sanitized.get("error")).isEqualTo("x".repeat(120));
+        assertThat(sanitized).containsEntry("errorType", "ERROR");
+        assertThat(sanitized).doesNotContainKey("error");
+        assertThat(sanitized.toString()).doesNotContain("secret-token");
     }
 }

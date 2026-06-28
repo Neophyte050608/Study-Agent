@@ -49,7 +49,7 @@ class DefaultTraceServiceTest {
     }
 
     @Test
-    void failPublishesSanitizedFailedRagNodeEventWithFallbackReasonAndError() {
+    void failPublishesSanitizedFailedRagNodeEventWithFallbackReasonAndErrorType() {
         RecordingAiObservationPublisher publisher = new RecordingAiObservationPublisher();
         DefaultTraceService traceService = new DefaultTraceService(
                 new RAGObservabilityService(new ObservabilitySwitchProperties()),
@@ -62,7 +62,7 @@ class DefaultTraceServiceTest {
                 Map.of()
         );
 
-        traceService.fail(handle, "remote vector store timeout", Map.of(
+        traceService.fail(handle, "remote vector store timeout apiKey=secret-token", Map.of(
                 "fallbackReason", "web fallback",
                 "secret", "must-not-leak"
         ));
@@ -77,8 +77,10 @@ class DefaultTraceServiceTest {
         assertThat(event.status()).isEqualTo("failed");
         assertThat(event.attributes())
                 .containsEntry("fallbackReason", "web fallback")
-                .containsEntry("error", "remote vector store timeout")
+                .containsEntry("errorType", "ERROR")
+                .doesNotContainKey("error")
                 .doesNotContainKey("secret");
+        assertThat(event.attributes().toString()).doesNotContain("secret-token");
     }
 
     @Test

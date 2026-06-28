@@ -84,8 +84,8 @@ public class DefaultTraceService implements TraceService {
             if (payload != null) {
                 attributes.putAll(payload);
             }
-            if (errorMessage != null) {
-                attributes.put("error", errorMessage);
+            if (errorMessage != null && !errorMessage.isBlank()) {
+                attributes.put("errorType", "ERROR");
             }
             Map<String, Object> sanitized = traceAttributeSanitizer.sanitize(attributes);
             AiObservationEvent event = AiObservationEvent.ragNode(
