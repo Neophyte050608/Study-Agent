@@ -29,7 +29,18 @@ public class TraceAttributeSanitizer {
             "fallback",
             "fallbackReason",
             "status",
-            "retrievalMode"
+            "retrievalMode",
+            "latencyMs",
+            "promptTokens",
+            "completionTokens",
+            "totalTokens",
+            "estimatedCost",
+            "routeType",
+            "candidateId",
+            "candidatePriority",
+            "circuitState",
+            "nodeType",
+            "nodeName"
     );
 
     public Map<String, Object> sanitize(Map<String, Object> source) {
