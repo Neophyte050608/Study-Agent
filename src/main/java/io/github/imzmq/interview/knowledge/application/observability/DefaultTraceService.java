@@ -6,6 +6,7 @@ import io.github.imzmq.interview.observability.application.NoopAiObservationPubl
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -16,7 +17,6 @@ import java.util.UUID;
 public class DefaultTraceService implements TraceService {
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultTraceService.class);
-    private static final int MAX_ERROR_LENGTH = 120;
 
     private final RAGObservabilityService ragObservabilityService;
     private final TraceAttributeSanitizer traceAttributeSanitizer;
@@ -27,6 +27,7 @@ public class DefaultTraceService implements TraceService {
         this(ragObservabilityService, traceAttributeSanitizer, new NoopAiObservationPublisher());
     }
 
+    @Autowired
     public DefaultTraceService(RAGObservabilityService ragObservabilityService,
                                TraceAttributeSanitizer traceAttributeSanitizer,
                                AiObservationPublisher aiObservationPublisher) {
@@ -78,35 +79,27 @@ public class DefaultTraceService implements TraceService {
     }
 
     private void publishObservation(TraceNodeHandle handle, String status, Map<String, Object> payload, String errorMessage) {
-        Map<String, Object> sanitized = new LinkedHashMap<>(traceAttributeSanitizer.sanitize(payload));
-        String sanitizedError = truncateError(errorMessage);
-        if (sanitizedError != null) {
-            sanitized.put("error", sanitizedError);
-        }
-        AiObservationEvent event = AiObservationEvent.ragNode(
-                handle.traceId(),
-                handle.nodeId(),
-                handle.definition().nodeType(),
-                handle.definition().nodeName(),
-                status,
-                sanitized
-        );
         try {
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            if (payload != null) {
+                attributes.putAll(payload);
+            }
+            if (errorMessage != null) {
+                attributes.put("error", errorMessage);
+            }
+            Map<String, Object> sanitized = traceAttributeSanitizer.sanitize(attributes);
+            AiObservationEvent event = AiObservationEvent.ragNode(
+                    handle.traceId(),
+                    handle.nodeId(),
+                    handle.definition().nodeType(),
+                    handle.definition().nodeName(),
+                    status,
+                    sanitized
+            );
             aiObservationPublisher.publish(event);
         } catch (Exception ex) {
             logger.warn("Failed to publish AI observation event for traceId={} nodeId={}", handle.traceId(), handle.nodeId(), ex);
         }
-    }
-
-    private String truncateError(String errorMessage) {
-        if (errorMessage == null) {
-            return null;
-        }
-        String text = errorMessage.trim();
-        if (text.isBlank()) {
-            return null;
-        }
-        return text.length() > MAX_ERROR_LENGTH ? text.substring(0, MAX_ERROR_LENGTH) : text;
     }
 
     private String summarize(Map<String, Object> payload) {

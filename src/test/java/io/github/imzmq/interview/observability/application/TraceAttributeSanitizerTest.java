@@ -48,4 +48,15 @@ class TraceAttributeSanitizerTest {
         assertThat(sanitized).containsEntry("nodeName", "knowledge retrieval");
         assertThat(sanitized).doesNotContainKey("secret");
     }
+
+    @Test
+    void keepsErrorAndTruncatesLongTextToSafeLength() {
+        TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
+        String longError = "x".repeat(121);
+
+        Map<String, Object> sanitized = sanitizer.sanitize(Map.of("error", longError));
+
+        assertThat(sanitized).containsKey("error");
+        assertThat(sanitized.get("error")).isEqualTo("x".repeat(120));
+    }
 }

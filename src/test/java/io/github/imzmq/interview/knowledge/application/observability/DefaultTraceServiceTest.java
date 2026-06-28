@@ -2,6 +2,7 @@ package io.github.imzmq.interview.knowledge.application.observability;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.observability.application.AiObservationEvent;
+import io.github.imzmq.interview.observability.application.AiObservationPublisher;
 import io.github.imzmq.interview.observability.application.RecordingAiObservationPublisher;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 class DefaultTraceServiceTest {
 
@@ -77,5 +79,29 @@ class DefaultTraceServiceTest {
                 .containsEntry("fallbackReason", "web fallback")
                 .containsEntry("error", "remote vector store timeout")
                 .doesNotContainKey("secret");
+    }
+
+    @Test
+    void successDoesNotThrowWhenObservationPublisherFails() {
+        DefaultTraceService traceService = new DefaultTraceService(
+                new RAGObservabilityService(new ObservabilitySwitchProperties()),
+                new TraceAttributeSanitizer(),
+                new ThrowingAiObservationPublisher()
+        );
+        TraceNodeHandle handle = traceService.startRoot(
+                "trace-publisher-fails",
+                TraceNodeDefinitions.DOC_RETRIEVE,
+                Map.of()
+        );
+
+        assertThatNoException()
+                .isThrownBy(() -> traceService.success(handle, Map.of("model", "glm-4")));
+    }
+
+    private static final class ThrowingAiObservationPublisher implements AiObservationPublisher {
+        @Override
+        public void publish(AiObservationEvent event) {
+            throw new IllegalStateException("publisher unavailable");
+        }
     }
 }
