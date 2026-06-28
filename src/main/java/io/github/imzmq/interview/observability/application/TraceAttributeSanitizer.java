@@ -29,16 +29,62 @@ public class TraceAttributeSanitizer {
             "fallback",
             "fallbackReason",
             "status",
-            "retrievalMode"
+            "retrievalMode",
+            "latencyMs",
+            "promptTokens",
+            "completionTokens",
+            "totalTokens",
+            "estimatedCost",
+            "routeType",
+            "candidateId",
+            "candidatePriority",
+            "circuitState",
+            "nodeType",
+            "nodeName"
+    );
+
+    private static final Set<String> EXTERNAL_OBSERVATION_KEYS = Set.of(
+            "scene",
+            "routeSource",
+            "taskType",
+            "domain",
+            "model",
+            "provider",
+            "docCount",
+            "imageCount",
+            "firstTokenMs",
+            "completionMs",
+            "chunkCount",
+            "imageEventCount",
+            "fallback",
+            "status",
+            "retrievalMode",
+            "latencyMs",
+            "promptTokens",
+            "completionTokens",
+            "totalTokens",
+            "estimatedCost",
+            "routeType",
+            "candidatePriority",
+            "circuitState",
+            "nodeType"
     );
 
     public Map<String, Object> sanitize(Map<String, Object> source) {
+        return sanitizeWithAllowedKeys(source, ALLOWED_KEYS);
+    }
+
+    public Map<String, Object> sanitizeForExternalObservation(Map<String, Object> source) {
+        return sanitizeWithAllowedKeys(source, EXTERNAL_OBSERVATION_KEYS);
+    }
+
+    private Map<String, Object> sanitizeWithAllowedKeys(Map<String, Object> source, Set<String> allowedKeys) {
         if (source == null || source.isEmpty()) {
             return Map.of();
         }
         Map<String, Object> result = new LinkedHashMap<>();
         source.forEach((key, value) -> {
-            if (!ALLOWED_KEYS.contains(key) || value == null) {
+            if (!allowedKeys.contains(key) || value == null) {
                 return;
             }
             String text = String.valueOf(value).trim();
@@ -50,7 +96,4 @@ public class TraceAttributeSanitizer {
         return result;
     }
 }
-
-
-
 

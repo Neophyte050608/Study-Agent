@@ -88,6 +88,8 @@ MyBatis 相关类放在：
 
 ## Agent Runtime 预留边界
 
+成熟框架引入顺序和边界见 `docs/architecture/framework-adoption-roadmap.md`。
+
 当前项目仍以内置 Spring Boot agent 编排为主，未来可能引入 Mastra 或独立 Agent Runtime。为降低迁移成本：
 
 - Agent 能力通过明确 application service 或 adapter 暴露。
