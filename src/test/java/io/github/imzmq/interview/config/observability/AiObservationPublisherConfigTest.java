@@ -3,6 +3,8 @@ package io.github.imzmq.interview.config.observability;
 import io.github.imzmq.interview.observability.application.AiObservationEvent;
 import io.github.imzmq.interview.observability.application.AiObservationPublisher;
 import io.github.imzmq.interview.observability.application.NoopAiObservationPublisher;
+import io.github.imzmq.interview.observability.infrastructure.otel.OtelAiObservationPublisher;
+import io.github.imzmq.interview.observability.infrastructure.otel.OtelObservationConfig;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,27 @@ class AiObservationPublisherConfigTest {
                     assertThat(context).hasSingleBean(AiObservationPublisher.class);
                     assertThat(context).doesNotHaveBean(NoopAiObservationPublisher.class);
                     assertThat(context).getBean(AiObservationPublisher.class).isInstanceOf(CustomAiObservationPublisher.class);
+                });
+    }
+
+    @Test
+    void usesOtelPublisherWhenOtelAndNoopAutoConfigurationsLoadWithCompleteExternalObservationConfig() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        OtelObservationConfig.class,
+                        AiObservationPublisherConfig.class))
+                .withPropertyValues(
+                        "app.observability.external.enabled=true",
+                        "app.observability.external.endpoint=http://localhost:4318/v1/traces",
+                        "app.observability.external.public-key=public-key",
+                        "app.observability.external.secret-key=secret-key",
+                        "app.observability.external.service-name=study-agent-test")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(AiObservationPublisher.class);
+                    assertThat(context).doesNotHaveBean(NoopAiObservationPublisher.class);
+                    assertThat(context).getBean(AiObservationPublisher.class)
+                            .isInstanceOf(OtelAiObservationPublisher.class);
                 });
     }
 
