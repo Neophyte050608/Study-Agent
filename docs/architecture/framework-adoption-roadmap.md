@@ -53,6 +53,7 @@ Langfuse -> OpenTelemetry -> Spring AI 边界整理
 落地原则：
 
 - 先在 `observability` 增加 adapter，不让业务代码直接依赖 Langfuse SDK。
+- 第一步实施切片已落地 `AiObservationPublisher`、`sanitizeForExternalObservation(...)` 和 `docs/development/observability-guidelines.md`，后续 Langfuse/OpenTelemetry 作为 adapter 接入。
 - RAG 和模型路由只发事件，不关心事件最终写到哪里。
 - 保留当前前端观测页面，必要时从 Langfuse/OpenTelemetry 聚合数据。
 

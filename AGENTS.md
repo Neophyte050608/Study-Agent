@@ -122,6 +122,7 @@ mvn -q -Dtest=ArchitectureRulesTest test
 - 前端页面结构、路由、API contract 变化。
 - AI agent 开发规则或验证命令变化。
 - 成熟框架、Agent Runtime、观测系统或长任务框架引入路线变化，见 `docs/architecture/framework-adoption-roadmap.md`。
+- AI/RAG/Agent 可观测性事件、trace 字段或外部观测 adapter 变化，需同步 `docs/development/observability-guidelines.md`。
 
 ## Commit 约定
 
