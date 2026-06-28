@@ -12,7 +12,7 @@
 
 ## File Structure
 
-- Modify `pom.xml` — add OpenTelemetry version property, BOM, API/SDK/OTLP dependencies.
+- Modify `pom.xml` — add OpenTelemetry version property and API/SDK/OTLP dependencies with explicit `${opentelemetry.version}` versions.
 - Create `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationProperties.java` — configuration and Basic Auth helper.
 - Create `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelObservationMapper.java` — maps sanitized internal events to stable OTel attributes.
 - Create `src/main/java/io/github/imzmq/interview/observability/infrastructure/otel/OtelAiObservationPublisher.java` — creates best-effort spans from `AiObservationEvent`.
@@ -124,28 +124,21 @@ Add dependencies:
 <dependency>
     <groupId>io.opentelemetry</groupId>
     <artifactId>opentelemetry-api</artifactId>
+    <version>${opentelemetry.version}</version>
 </dependency>
 <dependency>
     <groupId>io.opentelemetry</groupId>
     <artifactId>opentelemetry-sdk</artifactId>
+    <version>${opentelemetry.version}</version>
 </dependency>
 <dependency>
     <groupId>io.opentelemetry</groupId>
     <artifactId>opentelemetry-exporter-otlp</artifactId>
-</dependency>
-```
-
-Add to `<dependencyManagement><dependencies>` after the Spring AI BOM:
-
-```xml
-<dependency>
-    <groupId>io.opentelemetry</groupId>
-    <artifactId>opentelemetry-bom</artifactId>
     <version>${opentelemetry.version}</version>
-    <type>pom</type>
-    <scope>import</scope>
 </dependency>
 ```
+
+Do not add the OpenTelemetry BOM. Keep OTel version management scoped to these direct dependencies so transitive users such as RocketMQ keep their existing resolved dependency ranges.
 
 - [ ] **Step 4: Implement properties**
 
