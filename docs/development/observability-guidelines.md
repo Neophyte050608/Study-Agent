@@ -53,6 +53,8 @@ TraceAttributeSanitizer.sanitizeForExternalObservation(...)
 
 外部事件中如需表达失败，只允许由发布链路写入低信息量状态字段或统一错误类型，例如当前 `DefaultTraceService` 在失败时写入 `errorType=ERROR`。业务代码不能把原始异常文本、调用方传入的错误类型或可识别用户/会话/任务的 ID 直接塞进外部观测 attributes。
 
+`sanitizeForExternalObservation(...)` 仅清洗 `AiObservationEvent.attributes`。`AiObservationEvent.traceId`、`nodeId`、`category`、`name`、`status` 属于内部事件元数据，不等于可直接外传字段；其中 `name` 可能是内部节点名称。外部 adapter 必须显式映射这些顶层字段，不得默认原样外传内部 ID、节点名称，或未来可能承载用户输入的字段。如需向外部系统传递 `traceId` / `nodeId`，必须使用内部生成 ID、hash/alias 或受控映射策略，并先在本文档补充对应规则。
+
 ## 外部观测端口
 
 `observability.application.AiObservationPublisher` 是 framework-neutral 端口。RAG、模型路由、Agent 等业务链路只依赖该端口或更上层的 trace service，不直接关心事件最终写入哪里。
@@ -82,7 +84,8 @@ observability.infrastructure.langfuse.LangfuseAiObservationPublisher
 
 该 adapter 通过配置启用，默认不开启；未配置或初始化失败时回退 `NoopAiObservationPublisher`。实现要求：
 
-- 只接收已经过 `sanitizeForExternalObservation(...)` 处理的 attributes。
+- 只能将经过 `sanitizeForExternalObservation(...)` 清洗的 `AiObservationEvent.attributes` 作为外部 attributes；`traceId`、`nodeId`、`category`、`name`、`status` 等顶层字段需单独显式映射。
+- 不得默认原样外传内部 ID、节点名称，或未来可能承载用户输入的顶层字段；如需传递 `traceId` / `nodeId`，必须使用内部生成 ID、hash/alias 或受控映射策略，并先在本文档补充对应规则。
 - 不在 adapter 内补充用户 ID、会话 ID、任务 ID、候选模型 ID、节点名称、原始错误文本等敏感/可关联字段。
 - 发送失败只记录受控日志，不向上抛出影响主流程的异常。
 - 与 Langfuse 的 trace/span/generation/evaluation 映射关系需在本文件补充说明后再落地。
