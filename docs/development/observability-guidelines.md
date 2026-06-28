@@ -15,21 +15,26 @@
 
 ## 字段脱敏规则
 
-所有 trace 字段进入 summary、detail 或外部观测事件前必须经过 `observability.application.TraceAttributeSanitizer`。
+当前 trace 写入存在两条路径，脱敏边界不同，不能把已迁移链路的约束描述成全量现状。
 
-### 本地 trace summary/detail
+### `TraceService` / `DefaultTraceService` 路径
 
-本地 trace 的 summary/detail 使用：
+新增或改造代码必须优先走 `TraceService` / `DefaultTraceService`。这条路径负责在写入本地 trace 和发布外部观测事件前统一调用 `observability.application.TraceAttributeSanitizer`：
 
-```java
-TraceAttributeSanitizer.sanitize(...)
-```
+- 本地 trace summary/detail 使用 `TraceAttributeSanitizer.sanitize(...)`。
+- external observation attributes 使用 `TraceAttributeSanitizer.sanitizeForExternalObservation(...)`。
 
-该方法只保留本地允许展示的字段，并截断过长值。它可以保留部分本地排障需要的关联字段，例如 `sessionId`、`userId`、`taskId`、`candidateId`、`nodeName`、`fallbackReason` 等，但仍不得写入密钥、token、Authorization header、cookie、完整 prompt 原文或用户隐私原文。
+`sanitize(...)` 只保留本地允许展示的字段，并截断过长值。它可以保留部分本地排障需要的关联字段，例如 `sessionId`、`userId`、`taskId`、`candidateId`、`nodeName`、`fallbackReason` 等，但新增或改造代码不得写入密钥、token、Authorization header、cookie、raw prompt、raw completion 或用户隐私原文。
+
+### 旧有/直接 `RAGObservabilityService` 路径
+
+当前仍存在旧有代码直接调用 `knowledge.application.observability.RAGObservabilityService.endNode(...)` 并传入摘要字符串的路径。这些调用方尚未全量统一经过 `TraceAttributeSanitizer`，因此不能声称当前本地 trace 已经完全不会写入 prompt 或用户原文。
+
+迁移目标是逐步将这类调用收敛到 `TraceService` / `DefaultTraceService`。如果短期内不得不直接调用 `RAGObservabilityService`，调用方必须只传安全摘要，不能传 raw prompt、raw completion、用户原文、token、Authorization header、cookie、API key 或其他敏感/可识别内容。
 
 ### 外部观测导出
 
-导出到外部观测系统前必须使用：
+导出到外部观测系统前，`DefaultTraceService` 路径必须使用：
 
 ```java
 TraceAttributeSanitizer.sanitizeForExternalObservation(...)
