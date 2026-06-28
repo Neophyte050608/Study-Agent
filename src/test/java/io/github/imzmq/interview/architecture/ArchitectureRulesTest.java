@@ -72,6 +72,11 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat().resideInAnyPackage("..controller..", "..api..");
 
     @ArchTest
+    static final ArchRule controller_should_not_depend_on_tool_runtime_implementations =
+            noClasses().that().resideInAnyPackage("..controller..", "..api..")
+                    .should().dependOnClassesThat().resideInAnyPackage("..tool.runtime..");
+
+    @ArchTest
     static final ArchRule entity_should_not_depend_on_service_or_controller =
             noClasses().that().resideInAnyPackage("..entity..")
                     .should().dependOnClassesThat().resideInAnyPackage("..service..", "..controller..", "..api..")
