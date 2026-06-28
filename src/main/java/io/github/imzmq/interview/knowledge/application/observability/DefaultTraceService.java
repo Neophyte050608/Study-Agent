@@ -1,21 +1,38 @@
 package io.github.imzmq.interview.knowledge.application.observability;
 
+import io.github.imzmq.interview.observability.application.AiObservationEvent;
+import io.github.imzmq.interview.observability.application.AiObservationPublisher;
+import io.github.imzmq.interview.observability.application.NoopAiObservationPublisher;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class DefaultTraceService implements TraceService {
 
+    private static final Logger logger = LoggerFactory.getLogger(DefaultTraceService.class);
+    private static final int MAX_ERROR_LENGTH = 120;
+
     private final RAGObservabilityService ragObservabilityService;
     private final TraceAttributeSanitizer traceAttributeSanitizer;
+    private final AiObservationPublisher aiObservationPublisher;
 
     public DefaultTraceService(RAGObservabilityService ragObservabilityService,
                                TraceAttributeSanitizer traceAttributeSanitizer) {
+        this(ragObservabilityService, traceAttributeSanitizer, new NoopAiObservationPublisher());
+    }
+
+    public DefaultTraceService(RAGObservabilityService ragObservabilityService,
+                               TraceAttributeSanitizer traceAttributeSanitizer,
+                               AiObservationPublisher aiObservationPublisher) {
         this.ragObservabilityService = ragObservabilityService;
         this.traceAttributeSanitizer = traceAttributeSanitizer;
+        this.aiObservationPublisher = aiObservationPublisher == null ? new NoopAiObservationPublisher() : aiObservationPublisher;
     }
 
     @Override
@@ -43,6 +60,7 @@ public class DefaultTraceService implements TraceService {
                 null,
                 toNodeDetails(result)
         );
+        publishObservation(handle, "success", result, null);
     }
 
     @Override
@@ -56,6 +74,39 @@ public class DefaultTraceService implements TraceService {
                 null,
                 toNodeDetails(result)
         );
+        publishObservation(handle, "failed", result, errorMessage);
+    }
+
+    private void publishObservation(TraceNodeHandle handle, String status, Map<String, Object> payload, String errorMessage) {
+        Map<String, Object> sanitized = new LinkedHashMap<>(traceAttributeSanitizer.sanitize(payload));
+        String sanitizedError = truncateError(errorMessage);
+        if (sanitizedError != null) {
+            sanitized.put("error", sanitizedError);
+        }
+        AiObservationEvent event = AiObservationEvent.ragNode(
+                handle.traceId(),
+                handle.nodeId(),
+                handle.definition().nodeType(),
+                handle.definition().nodeName(),
+                status,
+                sanitized
+        );
+        try {
+            aiObservationPublisher.publish(event);
+        } catch (Exception ex) {
+            logger.warn("Failed to publish AI observation event for traceId={} nodeId={}", handle.traceId(), handle.nodeId(), ex);
+        }
+    }
+
+    private String truncateError(String errorMessage) {
+        if (errorMessage == null) {
+            return null;
+        }
+        String text = errorMessage.trim();
+        if (text.isBlank()) {
+            return null;
+        }
+        return text.length() > MAX_ERROR_LENGTH ? text.substring(0, MAX_ERROR_LENGTH) : text;
     }
 
     private String summarize(Map<String, Object> payload) {
@@ -143,10 +194,3 @@ public class DefaultTraceService implements TraceService {
         return null;
     }
 }
-
-
-
-
-
-
-
