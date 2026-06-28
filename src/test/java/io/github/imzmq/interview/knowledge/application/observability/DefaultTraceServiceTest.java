@@ -31,6 +31,7 @@ class DefaultTraceServiceTest {
         traceService.success(handle, Map.of(
                 "model", "glm-4",
                 "docCount", 3,
+                "errorType", "apiKey=secret-token",
                 "secret", "must-not-leak"
         ));
 
@@ -45,7 +46,9 @@ class DefaultTraceServiceTest {
         assertThat(event.attributes())
                 .containsEntry("model", "glm-4")
                 .containsEntry("docCount", "3")
+                .doesNotContainKey("errorType")
                 .doesNotContainKey("secret");
+        assertThat(event.attributes().toString()).doesNotContain("secret-token");
     }
 
     @Test
@@ -80,6 +83,34 @@ class DefaultTraceServiceTest {
                 .containsEntry("errorType", "ERROR")
                 .doesNotContainKey("error")
                 .doesNotContainKey("secret");
+        assertThat(event.attributes().toString()).doesNotContain("secret-token");
+    }
+
+    @Test
+    void failWithBlankErrorMessageDoesNotPublishCallerProvidedErrorType() {
+        RecordingAiObservationPublisher publisher = new RecordingAiObservationPublisher();
+        DefaultTraceService traceService = new DefaultTraceService(
+                new RAGObservabilityService(new ObservabilitySwitchProperties()),
+                new TraceAttributeSanitizer(),
+                publisher
+        );
+        TraceNodeHandle handle = traceService.startRoot(
+                "trace-blank-failed",
+                TraceNodeDefinitions.DOC_RETRIEVE,
+                Map.of()
+        );
+
+        traceService.fail(handle, "   ", Map.of(
+                "fallbackReason", "blank failure",
+                "errorType", "apiKey=secret-token"
+        ));
+
+        assertThat(publisher.events()).hasSize(1);
+        AiObservationEvent event = publisher.events().get(0);
+        assertThat(event.status()).isEqualTo("failed");
+        assertThat(event.attributes())
+                .containsEntry("fallbackReason", "blank failure")
+                .doesNotContainKey("errorType");
         assertThat(event.attributes().toString()).doesNotContain("secret-token");
     }
 

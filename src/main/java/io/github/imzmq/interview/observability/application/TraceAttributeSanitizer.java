@@ -40,8 +40,7 @@ public class TraceAttributeSanitizer {
             "candidatePriority",
             "circuitState",
             "nodeType",
-            "nodeName",
-            "errorType"
+            "nodeName"
     );
 
     public Map<String, Object> sanitize(Map<String, Object> source) {
@@ -62,6 +61,5 @@ public class TraceAttributeSanitizer {
         return result;
     }
 }
-
 
 

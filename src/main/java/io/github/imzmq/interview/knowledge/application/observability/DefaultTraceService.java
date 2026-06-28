@@ -84,10 +84,10 @@ public class DefaultTraceService implements TraceService {
             if (payload != null) {
                 attributes.putAll(payload);
             }
+            Map<String, Object> sanitized = new LinkedHashMap<>(traceAttributeSanitizer.sanitize(attributes));
             if (errorMessage != null && !errorMessage.isBlank()) {
-                attributes.put("errorType", "ERROR");
+                sanitized.put("errorType", "ERROR");
             }
-            Map<String, Object> sanitized = traceAttributeSanitizer.sanitize(attributes);
             AiObservationEvent event = AiObservationEvent.ragNode(
                     handle.traceId(),
                     handle.nodeId(),
