@@ -29,7 +29,7 @@ class SkillBackedToolExecutionAdapterTest {
     @Test
     void execute_maps_successful_skill_result_to_tool_result() {
         CapturingSkill skill = new CapturingSkill("query-optimizer",
-                SkillExecutionResult.success("query-optimizer", Map.of("query", "java 并发"), 2, List.of("search")));
+                SkillExecutionResult.success("query-optimizer", Map.of("query", "java 并发"), 1, List.of("search")));
         SkillBackedToolExecutionAdapter adapter = adapterWith(skill);
 
         ToolExecutionResult result = adapter.execute(new ToolExecutionRequest(
@@ -58,6 +58,39 @@ class SkillBackedToolExecutionAdapterTest {
         assertThat(captured.text("riskLevel")).isEqualTo("MEDIUM");
         assertThat(captured.bool("dryRun")).isTrue();
         assertThat(captured.text("requestId")).isEqualTo("req-1");
+    }
+
+    @Test
+    void execute_preserves_structured_context_fields_when_input_and_metadata_conflict() {
+        CapturingSkill skill = new CapturingSkill("context-tool",
+                SkillExecutionResult.success("context-tool", Map.of(), 1, List.of()));
+        SkillBackedToolExecutionAdapter adapter = adapterWith(skill);
+
+        adapter.execute(new ToolExecutionRequest(
+                "trace-context",
+                "alice",
+                "context-tool",
+                Map.of(
+                        "source", "input-source",
+                        "riskLevel", "input-risk",
+                        "dryRun", false
+                ),
+                "request-source",
+                ToolRiskLevel.HIGH,
+                true,
+                Map.of(
+                        "source", "metadata-source",
+                        "riskLevel", "metadata-risk",
+                        "dryRun", false,
+                        "requestId", "req-keep"
+                )
+        ));
+
+        SkillExecutionContext captured = skill.capturedContext.get();
+        assertThat(captured.text("source")).isEqualTo("request-source");
+        assertThat(captured.text("riskLevel")).isEqualTo("HIGH");
+        assertThat(captured.bool("dryRun")).isTrue();
+        assertThat(captured.text("requestId")).isEqualTo("req-keep");
     }
 
     @Test

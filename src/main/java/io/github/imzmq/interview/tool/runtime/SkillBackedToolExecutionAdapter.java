@@ -67,10 +67,10 @@ public class SkillBackedToolExecutionAdapter implements ToolExecutionPort {
     private Map<String, Object> toSkillInput(ToolExecutionRequest request) {
         LinkedHashMap<String, Object> input = new LinkedHashMap<>();
         input.putAll(request.input());
+        input.putAll(request.metadata());
         input.put("source", request.source());
         input.put("riskLevel", request.riskLevel().name());
         input.put("dryRun", request.dryRun());
-        input.putAll(request.metadata());
         return Map.copyOf(input);
     }
 
