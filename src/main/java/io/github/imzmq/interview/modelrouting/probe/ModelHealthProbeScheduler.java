@@ -11,12 +11,14 @@ import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(name = "app.model-routing.probe.enabled", havingValue = "true")
 public class ModelHealthProbeScheduler {
 
     private static final Logger logger = LoggerFactory.getLogger(ModelHealthProbeScheduler.class);

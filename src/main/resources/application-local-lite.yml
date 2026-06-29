@@ -17,6 +17,13 @@ logging:
     org.springframework.ai: INFO
 
 app:
+  startup:
+    model-preheat-enabled: false
+  model-routing:
+    probe:
+      enabled: false
+  dream:
+    enabled: false
   knowledge:
     retrieval:
       warmup-enabled: false

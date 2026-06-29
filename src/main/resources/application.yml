@@ -104,6 +104,8 @@ rocketmq:
     group: ${ROCKETMQ_PRODUCER_GROUP:interview-review-a2a-producer}
 
 app:
+  startup:
+    model-preheat-enabled: ${APP_STARTUP_MODEL_PREHEAT_ENABLED:false}
   observability:
     rag-trace-enabled: ${APP_OBSERVABILITY_RAG_TRACE_ENABLED:true}
     retrieval-eval-enabled: ${APP_OBSERVABILITY_RETRIEVAL_EVAL_ENABLED:true}
@@ -168,6 +170,8 @@ app:
 
   model-routing:
     enabled: ${APP_MODEL_ROUTING_ENABLED:true}
+    probe:
+      enabled: ${APP_MODEL_ROUTING_PROBE_ENABLED:false}
     default-model: ${APP_MODEL_ROUTING_DEFAULT_MODEL:deepseek-chat}
     deep-thinking-model: ${APP_MODEL_ROUTING_DEEP_THINKING_MODEL:deepseek-reasoner}
     intent-model: ${APP_MODEL_ROUTING_INTENT_MODEL:ollama-intent}
@@ -308,13 +312,14 @@ app:
     encryption-key: zmqlovelqfdjxmcndhfbvngjbhvytdge
 
   dream:
+    enabled: ${APP_DREAM_ENABLED:false}
     interval-hours: ${APP_DREAM_INTERVAL_HOURS:24}
     recent-sessions-count: ${APP_DREAM_RECENT_SESSIONS_COUNT:10}
 
 im:
   qq:
     # QQ 接入配置
-    use-ws: true
+    use-ws: ${IM_QQ_USE_WS:false}
   feishu:
     # 飞书接入配置
-    use-ws: true
+    use-ws: ${IM_FEISHU_USE_WS:false}

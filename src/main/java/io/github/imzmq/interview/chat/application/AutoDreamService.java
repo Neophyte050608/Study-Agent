@@ -11,6 +11,7 @@ import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@ConditionalOnProperty(name = "app.dream.enabled", havingValue = "true")
 public class AutoDreamService {
     private static final Logger log = LoggerFactory.getLogger(AutoDreamService.class);
 
