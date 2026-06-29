@@ -4,8 +4,8 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.interview.application.WebChatService;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
-import io.github.imzmq.interview.common.stream.InterviewStreamTaskManager;
+import io.github.imzmq.interview.common.stream.StreamEventType;
+import io.github.imzmq.interview.common.stream.StreamTaskManager;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -23,12 +23,12 @@ public class ChatStreamingSupport {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final WebChatService webChatService;
-    private final InterviewStreamTaskManager taskManager;
+    private final StreamTaskManager taskManager;
     private final ChunkedTextStreamer chunkedTextStreamer;
     private final RAGObservabilityService ragObservabilityService;
 
     public ChatStreamingSupport(WebChatService webChatService,
-                                InterviewStreamTaskManager taskManager,
+                                StreamTaskManager taskManager,
                                 RAGObservabilityService ragObservabilityService) {
         this.webChatService = webChatService;
         this.taskManager = taskManager;
@@ -105,7 +105,7 @@ public class ChatStreamingSupport {
                     );
                 }
                 long emitStart = System.nanoTime();
-                emitter.emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
+                emitter.emit(StreamEventType.MESSAGE.value(), Map.of(
                         "channel", "answer",
                         "delta", token
                 ));
@@ -132,7 +132,7 @@ public class ChatStreamingSupport {
                         if (taskManager.isCancelled(taskId)) {
                             return;
                         }
-                        emitter.emit(InterviewStreamEventType.IMAGE.value(), image);
+                        emitter.emit(StreamEventType.IMAGE.value(), image);
                     }
                 }
         );
@@ -343,8 +343,9 @@ public class ChatStreamingSupport {
     }
 
     public void completeTask(String taskId, StreamEventEmitter emitter) {
-        taskManager.unregister(taskId);
-        emitter.complete();
+        if (taskManager.tryComplete(taskId)) {
+            emitter.complete();
+        }
     }
 }
 

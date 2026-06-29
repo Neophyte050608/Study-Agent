@@ -5,21 +5,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class InterviewSseEmitterSender implements StreamEventEmitter {
+public class SseStreamEventEmitter implements StreamEventEmitter {
     private final SseEmitter emitter;
     private final Object lock = new Object();
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    public InterviewSseEmitterSender(SseEmitter emitter) {
+    public SseStreamEventEmitter(SseEmitter emitter) {
         this.emitter = emitter;
     }
 
     @Override
     public void emit(String eventName, Object data) {
-        sendEvent(eventName, data);
-    }
-
-    public void sendEvent(String eventName, Object data) {
         if (closed.get()) {
             return;
         }

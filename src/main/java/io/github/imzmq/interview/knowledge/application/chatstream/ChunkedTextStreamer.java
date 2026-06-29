@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.chatstream;
 
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
+import io.github.imzmq.interview.common.stream.StreamEventType;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 
 import java.util.Map;
@@ -30,7 +30,7 @@ public class ChunkedTextStreamer {
                 return;
             }
             int end = Math.min(text.length(), index + chunkSize);
-            emitter.emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
+            emitter.emit(StreamEventType.MESSAGE.value(), Map.of(
                     "channel", "answer",
                     "delta", text.substring(index, end)));
             index = end;

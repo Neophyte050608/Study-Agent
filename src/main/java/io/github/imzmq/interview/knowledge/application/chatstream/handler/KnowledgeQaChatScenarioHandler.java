@@ -6,7 +6,7 @@ import io.github.imzmq.interview.interview.application.WebChatService;
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
 import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
+import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -40,9 +40,9 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
 
-        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "RETRIEVING", "label", "正在检索知识", "status", "running", "percent", 50));
-        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成回答", "status", "running", "percent", 70));
 
         Map<String, Object> precomputedTurnAnalysis = extractPrecomputedTurnAnalysis(response);
@@ -115,7 +115,7 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
         }
 
         webChatService.autoTitleIfNeeded(context.sessionId(), context.content());
-        context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+        context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", finishResult));
         context.emitter().done();

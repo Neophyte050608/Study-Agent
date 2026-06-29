@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
-public class InterviewStreamTaskManager {
+public class StreamTaskManager {
     private final ConcurrentHashMap<String, StreamTask> tasks = new ConcurrentHashMap<>();
 
     public String newTaskId() {
@@ -32,20 +32,29 @@ public class InterviewStreamTaskManager {
     }
 
     public boolean cancel(String taskId, String message) {
-        StreamTask task = tasks.remove(taskId);
-        if (task == null) {
+        StreamTask task = tasks.get(taskId);
+        if (task == null || !task.cancelled.compareAndSet(false, true)) {
             return false;
         }
-        task.cancelled.set(true);
+        tasks.remove(taskId, task);
         StreamEventEmitter emitter = task.emitter;
         if (emitter != null) {
-            emitter.emit(InterviewStreamEventType.CANCEL.value(), Map.of(
+            emitter.emit(StreamEventType.CANCEL.value(), Map.of(
                     "streamTaskId", taskId,
                     "message", message == null || message.isBlank() ? "已停止生成" : message
             ));
             emitter.done();
             emitter.complete();
         }
+        return true;
+    }
+
+    public boolean tryComplete(String taskId) {
+        StreamTask task = tasks.get(taskId);
+        if (task == null || !task.cancelled.compareAndSet(false, true)) {
+            return false;
+        }
+        tasks.remove(taskId, task);
         return true;
     }
 
@@ -62,12 +71,13 @@ public class InterviewStreamTaskManager {
     }
 
     public void unregister(String taskId) {
-        tasks.remove(taskId);
+        tryComplete(taskId);
     }
 
     public void detach(String taskId) {
-        StreamTask task = tasks.get(taskId);
+        StreamTask task = tasks.remove(taskId);
         if (task != null) {
+            task.cancelled.set(true);
             task.emitter = null;
         }
     }
@@ -82,4 +92,3 @@ public class InterviewStreamTaskManager {
         }
     }
 }
-

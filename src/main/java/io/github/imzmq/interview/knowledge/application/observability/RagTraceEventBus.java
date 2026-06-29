@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.observability;
 
-import io.github.imzmq.interview.common.stream.InterviewSseEmitterSender;
+import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -23,7 +23,7 @@ public class RagTraceEventBus {
     /**
      * 订阅列表：traceId -> 订阅者（SSE 发送器）
      */
-    private final ConcurrentHashMap<String, CopyOnWriteArrayList<InterviewSseEmitterSender>> subscribers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CopyOnWriteArrayList<SseStreamEventEmitter>> subscribers = new ConcurrentHashMap<>();
 
     /**
      * 订阅指定 traceId 的事件流。
@@ -31,11 +31,17 @@ public class RagTraceEventBus {
      * @param traceId trace ID
      * @param sender  SSE 发送器
      */
-    public void subscribe(String traceId, InterviewSseEmitterSender sender) {
+    public void subscribe(String traceId, SseStreamEventEmitter sender) {
         if (traceId == null || traceId.isBlank() || sender == null) {
             return;
         }
-        subscribers.computeIfAbsent(traceId.trim(), k -> new CopyOnWriteArrayList<>()).add(sender);
+        subscribers.compute(traceId.trim(), (ignored, list) -> {
+            CopyOnWriteArrayList<SseStreamEventEmitter> subscribersForTrace = list == null
+                    ? new CopyOnWriteArrayList<>()
+                    : list;
+            subscribersForTrace.add(sender);
+            return subscribersForTrace;
+        });
     }
 
     /**
@@ -44,17 +50,14 @@ public class RagTraceEventBus {
      * @param traceId trace ID
      * @param sender  SSE 发送器
      */
-    public void unsubscribe(String traceId, InterviewSseEmitterSender sender) {
+    public void unsubscribe(String traceId, SseStreamEventEmitter sender) {
         if (traceId == null || traceId.isBlank() || sender == null) {
             return;
         }
-        List<InterviewSseEmitterSender> list = subscribers.get(traceId.trim());
-        if (list != null) {
+        subscribers.computeIfPresent(traceId.trim(), (ignored, list) -> {
             list.removeIf(s -> Objects.equals(s, sender));
-            if (list.isEmpty()) {
-                subscribers.remove(traceId.trim());
-            }
-        }
+            return list.isEmpty() ? null : list;
+        });
     }
 
     /**
@@ -67,13 +70,13 @@ public class RagTraceEventBus {
         if (traceId == null || traceId.isBlank() || event == null) {
             return;
         }
-        List<InterviewSseEmitterSender> list = subscribers.get(traceId.trim());
+        List<SseStreamEventEmitter> list = subscribers.get(traceId.trim());
         if (list == null || list.isEmpty()) {
             return;
         }
-        for (InterviewSseEmitterSender sender : list) {
+        for (SseStreamEventEmitter sender : list) {
             try {
-                sender.sendEvent(event.eventType(), event);
+                sender.emit(event.eventType(), event);
             } catch (Exception ex) {
                 // 单个订阅者失败不影响整体发布；失败时主动取消订阅
                 unsubscribe(traceId, sender);

@@ -1,4 +1,5 @@
 package io.github.imzmq.interview.interview.application;
+
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.agent.task.TaskRequest;
@@ -13,12 +14,10 @@ import io.github.imzmq.interview.knowledge.application.observability.TraceServic
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandlerRegistry;
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
 import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
-import io.github.imzmq.interview.interview.application.WebChatService;
-import io.github.imzmq.interview.common.stream.ObservableStreamEmitter;
-import io.github.imzmq.interview.common.stream.InterviewSseEmitterSender;
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
-import io.github.imzmq.interview.common.stream.InterviewStreamTaskManager;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
+import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
+import io.github.imzmq.interview.common.stream.StreamEventType;
+import io.github.imzmq.interview.common.stream.StreamTaskManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -36,7 +35,7 @@ public class ChatStreamingService {
     private static final Logger log = LoggerFactory.getLogger(ChatStreamingService.class);
 
     private final WebChatService webChatService;
-    private final InterviewStreamTaskManager taskManager;
+    private final StreamTaskManager taskManager;
     private final InputSanitizer inputSanitizer;
     private final Executor streamingExecutor;
     private final ChatStreamingSupport chatStreamingSupport;
@@ -46,7 +45,7 @@ public class ChatStreamingService {
 
     public ChatStreamingService(
             WebChatService webChatService,
-            InterviewStreamTaskManager taskManager,
+            StreamTaskManager taskManager,
             InputSanitizer inputSanitizer,
             ChatStreamingSupport chatStreamingSupport,
             ChatScenarioHandlerRegistry chatScenarioHandlerRegistry,
@@ -79,12 +78,12 @@ public class ChatStreamingService {
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         // 为本次流创建 taskId，支持中断、状态查询、消息绑定。
         String taskId = taskManager.newTaskId();
-        StreamEventEmitter streamEmitter = new ObservableStreamEmitter(new InterviewSseEmitterSender(emitter));
+        StreamEventEmitter streamEmitter = new SseStreamEventEmitter(emitter);
         taskManager.register(taskId, streamEmitter);
         taskManager.bindLifecycle(taskId, emitter);
 
         // 首帧 meta：前端拿到 streamTaskId 后可执行“停止生成”。
-        streamEmitter.emit(InterviewStreamEventType.META.value(), Map.of(
+        streamEmitter.emit(StreamEventType.META.value(), Map.of(
                 "streamTaskId", taskId,
                 "action", "chat",
                 "traceId", traceId,
@@ -146,7 +145,7 @@ public class ChatStreamingService {
             assistantMessageId = chatStreamingSupport.createRunningAssistantPlaceholder(sessionId, traceId, taskId).getMessageId();
             taskManager.attachMessage(taskId, assistantMessageId);
             // 3) 通知前端进入思考阶段。
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+            emitter.emit(StreamEventType.PROGRESS.value(), Map.of(
                     "stage", "THINKING", "label", "正在思考", "status", "running", "percent", 20));
 
             if (taskManager.isCancelled(taskId)) {
@@ -209,7 +208,7 @@ public class ChatStreamingService {
             log.warn("chat stream failed, taskId={}", taskId, ex);
             terminalState = "FAILED";
             terminalError = ex.getMessage() != null ? ex.getMessage() : "处理失败";
-            if (!taskManager.isCancelled(taskId)) {
+            if (taskManager.tryComplete(taskId)) {
                 // 失败时将错误结果落库并通知前端 error 事件。
                 chatStreamingSupport.updateAssistantPlaceholder(
                         assistantMessageId,
@@ -218,13 +217,12 @@ public class ChatStreamingService {
                         "text",
                         "FAILED"
                 );
-                emitter.emit(InterviewStreamEventType.ERROR.value(), Map.of(
+                emitter.emit(StreamEventType.ERROR.value(), Map.of(
                         "code", "CHAT_STREAM_FAILED",
                         "message", terminalError));
                 emitter.done();
+                emitter.complete();
             }
-            // 收尾：注销任务、关闭 emitter。
-            chatStreamingSupport.completeTask(taskId, emitter);
         } finally {
             completeChatTrace(rootTrace, terminalState, terminalError, sessionId, taskId, userId, retrievalMode);
             RAGTraceContext.clear();

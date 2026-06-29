@@ -10,7 +10,7 @@ import io.github.imzmq.interview.knowledge.application.chatstream.ChatIntentHeur
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
 import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
+import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -64,7 +64,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         }
 
         String replyText = webChatService.extractReplyText(answerResponse);
-        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成评价", "status", "running", "percent", 70));
         chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
 
@@ -84,7 +84,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         }
         chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
 
-        context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+        context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", Map.of(
                         "content", replyText,

@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.common.stream;
 
-public enum InterviewStreamEventType {
+public enum StreamEventType {
     META("meta"),
     PROGRESS("progress"),
     MESSAGE("message"),
@@ -13,7 +13,7 @@ public enum InterviewStreamEventType {
 
     private final String value;
 
-    InterviewStreamEventType(String value) {
+    StreamEventType(String value) {
         this.value = value;
     }
 

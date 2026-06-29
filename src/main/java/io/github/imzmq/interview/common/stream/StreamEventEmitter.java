@@ -13,7 +13,7 @@ public interface StreamEventEmitter {
     }
 
     default void done() {
-        emit(InterviewStreamEventType.DONE.value(), "[DONE]");
+        emit(StreamEventType.DONE.value(), "[DONE]");
     }
 }
 

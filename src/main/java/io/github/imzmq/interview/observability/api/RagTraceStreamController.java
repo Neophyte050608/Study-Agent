@@ -4,7 +4,7 @@ import io.github.imzmq.interview.knowledge.application.observability.RAGObservab
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus;
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus.RagTraceStreamEvent;
 import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus.TraceSummary;
-import io.github.imzmq.interview.common.stream.InterviewSseEmitterSender;
+import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +35,7 @@ public class RagTraceStreamController {
     @GetMapping(value = "/{traceId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@PathVariable("traceId") String traceId) {
         SseEmitter emitter = new SseEmitter(0L);
-        InterviewSseEmitterSender sender = new InterviewSseEmitterSender(emitter);
+        SseStreamEventEmitter sender = new SseStreamEventEmitter(emitter);
         eventBus.subscribe(traceId, sender);
 
         // 连接回调：关闭时自动取消订阅
@@ -49,7 +49,7 @@ public class RagTraceStreamController {
                 ? new TraceSummary("RUNNING", 0L, 0, 0)
                 : new TraceSummary("RUNNING", snapshot.getDurationMs(), snapshot.nodes().size(),
                 (int) snapshot.nodes().stream().filter(n -> "RETRIEVAL".equals(n.getNodeType())).count());
-        sender.sendEvent("trace_started", new RagTraceStreamEvent(
+        sender.emit("trace_started", new RagTraceStreamEvent(
                 traceId,
                 "trace_started",
                 LocalDateTime.now(),

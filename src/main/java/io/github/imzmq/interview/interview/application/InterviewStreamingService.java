@@ -2,11 +2,10 @@ package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.common.stream.ObservableStreamEmitter;
-import io.github.imzmq.interview.common.stream.InterviewSseEmitterSender;
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
-import io.github.imzmq.interview.common.stream.InterviewStreamTaskManager;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
+import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
+import io.github.imzmq.interview.common.stream.StreamEventType;
+import io.github.imzmq.interview.common.stream.StreamTaskManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -24,14 +23,14 @@ public class InterviewStreamingService {
     private static final Logger logger = LoggerFactory.getLogger(InterviewStreamingService.class);
 
     private final InterviewService interviewService;
-    private final InterviewStreamTaskManager taskManager;
+    private final StreamTaskManager taskManager;
     private final Executor interviewStreamingExecutor;
     private final long timeoutMillis;
     private final int messageChunkSize;
 
     public InterviewStreamingService(
             InterviewService interviewService,
-            InterviewStreamTaskManager taskManager,
+            StreamTaskManager taskManager,
             @Qualifier("interviewStreamingExecutor") Executor interviewStreamingExecutor,
             @Value("${app.interview.streaming.timeout-millis:180000}") long timeoutMillis,
             @Value("${app.interview.streaming.message-chunk-size:48}") int messageChunkSize
@@ -47,10 +46,10 @@ public class InterviewStreamingService {
         String traceId = resolveTraceId(payload);
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         String taskId = taskManager.newTaskId();
-        StreamEventEmitter streamEmitter = new ObservableStreamEmitter(new InterviewSseEmitterSender(emitter));
+        StreamEventEmitter streamEmitter = new SseStreamEventEmitter(emitter);
         taskManager.register(taskId, streamEmitter);
         taskManager.bindLifecycle(taskId, emitter);
-        streamEmitter.emit(InterviewStreamEventType.META.value(), Map.of(
+        streamEmitter.emit(StreamEventType.META.value(), Map.of(
                 "streamTaskId", taskId,
                 "action", "start",
                 "traceId", traceId
@@ -63,10 +62,10 @@ public class InterviewStreamingService {
         String traceId = resolveTraceId(payload);
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         String taskId = taskManager.newTaskId();
-        StreamEventEmitter streamEmitter = new ObservableStreamEmitter(new InterviewSseEmitterSender(emitter));
+        StreamEventEmitter streamEmitter = new SseStreamEventEmitter(emitter);
         taskManager.register(taskId, streamEmitter);
         taskManager.bindLifecycle(taskId, emitter);
-        streamEmitter.emit(InterviewStreamEventType.META.value(), Map.of(
+        streamEmitter.emit(StreamEventType.META.value(), Map.of(
                 "streamTaskId", taskId,
                 "action", "answer",
                 "traceId", traceId
@@ -79,10 +78,10 @@ public class InterviewStreamingService {
         String traceId = resolveTraceId(payload);
         SseEmitter emitter = new SseEmitter(timeoutMillis);
         String taskId = taskManager.newTaskId();
-        StreamEventEmitter streamEmitter = new ObservableStreamEmitter(new InterviewSseEmitterSender(emitter));
+        StreamEventEmitter streamEmitter = new SseStreamEventEmitter(emitter);
         taskManager.register(taskId, streamEmitter);
         taskManager.bindLifecycle(taskId, emitter);
-        streamEmitter.emit(InterviewStreamEventType.META.value(), Map.of(
+        streamEmitter.emit(StreamEventType.META.value(), Map.of(
                 "streamTaskId", taskId,
                 "action", "report",
                 "traceId", traceId
@@ -102,7 +101,7 @@ public class InterviewStreamingService {
             if (isStopped(taskId)) {
                 return;
             }
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("PREPARING", "正在准备会话", 15));
+            emitter.emit(StreamEventType.PROGRESS.value(), progress("PREPARING", "正在准备会话", 15));
             String topic = asString(payload, "topic", "高级后端开发工程师");
             String resumePath = asString(payload, "resumePath", "");
             Integer totalQuestions = asInt(payload, "totalQuestions");
@@ -110,8 +109,8 @@ public class InterviewStreamingService {
             if (isStopped(taskId)) {
                 return;
             }
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("GENERATING_QUESTION", "正在生成首题", 70));
-            sendChunked(emitter, "question", session.getCurrentQuestion());
+            emitter.emit(StreamEventType.PROGRESS.value(), progress("GENERATING_QUESTION", "正在生成首题", 70));
+            sendChunked(taskId, emitter, "question", session.getCurrentQuestion());
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("id", session.getId());
             result.put("topic", session.getTopic());
@@ -134,18 +133,18 @@ public class InterviewStreamingService {
             if (isStopped(taskId)) {
                 return;
             }
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("EVALUATING", "正在评估回答", 20));
+            emitter.emit(StreamEventType.PROGRESS.value(), progress("EVALUATING", "正在评估回答", 20));
             String sessionId = asString(payload, "sessionId", "");
             String answer = asString(payload, "answer", "");
             InterviewService.AnswerResult result = interviewService.submitAnswer(sessionId, answer);
             if (isStopped(taskId)) {
                 return;
             }
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("GENERATING_FEEDBACK", "正在生成反馈", 65));
-            sendChunked(emitter, "feedback", result.feedback());
+            emitter.emit(StreamEventType.PROGRESS.value(), progress("GENERATING_FEEDBACK", "正在生成反馈", 65));
+            sendChunked(taskId, emitter, "feedback", result.feedback());
             if (!result.finished()) {
-                emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("PREPARING_NEXT_QUESTION", "正在准备下一题", 82));
-                sendChunked(emitter, "question", result.nextQuestion());
+                emitter.emit(StreamEventType.PROGRESS.value(), progress("PREPARING_NEXT_QUESTION", "正在准备下一题", 82));
+                sendChunked(taskId, emitter, "question", result.nextQuestion());
             }
             Map<String, Object> finishPayload = new LinkedHashMap<>();
             finishPayload.put("score", result.score());
@@ -171,14 +170,14 @@ public class InterviewStreamingService {
             if (isStopped(taskId)) {
                 return;
             }
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("ANALYZING", "正在分析面试表现", 30));
+            emitter.emit(StreamEventType.PROGRESS.value(), progress("ANALYZING", "正在分析面试表现", 30));
             String sessionId = asString(payload, "sessionId", "");
             InterviewService.FinalReport report = interviewService.generateFinalReport(sessionId, userId);
             if (isStopped(taskId)) {
                 return;
             }
-            emitter.emit(InterviewStreamEventType.PROGRESS.value(), progress("GENERATING_REPORT", "正在生成复盘报告", 75));
-            sendChunked(emitter, "report", buildReportText(report));
+            emitter.emit(StreamEventType.PROGRESS.value(), progress("GENERATING_REPORT", "正在生成复盘报告", 75));
+            sendChunked(taskId, emitter, "report", buildReportText(report));
             Map<String, Object> finishPayload = new LinkedHashMap<>();
             finishPayload.put("summary", report.summary());
             finishPayload.put("incomplete", report.incomplete());
@@ -201,29 +200,27 @@ public class InterviewStreamingService {
     }
 
     private void finish(String taskId, StreamEventEmitter emitter, String action, Map<String, Object> result) {
-        if (isStopped(taskId)) {
+        if (!taskManager.tryComplete(taskId)) {
             return;
         }
-        emitter.emit(InterviewStreamEventType.FINISH.value(), Map.of(
+        emitter.emit(StreamEventType.FINISH.value(), Map.of(
                 "action", action,
                 "result", result
         ));
         emitter.done();
-        taskManager.unregister(taskId);
         emitter.complete();
     }
 
     private void fail(String taskId, StreamEventEmitter emitter, String code, Exception ex) {
         logger.warn("interview stream failed, taskId={}, code={}", taskId, code, ex);
-        if (!isStopped(taskId)) {
-            emitter.emit(InterviewStreamEventType.ERROR.value(), Map.of(
+        if (taskManager.tryComplete(taskId)) {
+            emitter.emit(StreamEventType.ERROR.value(), Map.of(
                     "code", code,
                     "message", ex.getMessage() == null ? "流式处理失败，请稍后重试" : ex.getMessage()
             ));
             emitter.done();
+            emitter.complete();
         }
-        taskManager.unregister(taskId);
-        emitter.complete();
     }
 
     private Map<String, Object> progress(String stage, String label, int percent) {
@@ -235,15 +232,18 @@ public class InterviewStreamingService {
         );
     }
 
-    private void sendChunked(StreamEventEmitter emitter, String channel, String content) {
+    private void sendChunked(String taskId, StreamEventEmitter emitter, String channel, String content) {
         if (content == null || content.isBlank()) {
             return;
         }
         int length = content.length();
         int index = 0;
         while (index < length) {
+            if (isStopped(taskId)) {
+                return;
+            }
             int end = Math.min(length, index + messageChunkSize);
-            emitter.emit(InterviewStreamEventType.MESSAGE.value(), Map.of(
+            emitter.emit(StreamEventType.MESSAGE.value(), Map.of(
                     "channel", channel,
                     "delta", content.substring(index, end)
             ));

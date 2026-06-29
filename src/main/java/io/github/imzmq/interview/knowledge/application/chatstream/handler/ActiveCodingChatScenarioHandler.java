@@ -8,7 +8,7 @@ import io.github.imzmq.interview.knowledge.application.chatstream.ChatIntentHeur
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
 import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
 import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
-import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
+import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -59,7 +59,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
         if (codingResponse.data() instanceof Map<?, ?> dataMap
                 && "scenario_question_generated".equals(dataMap.get("status"))
                 && dataMap.containsKey("scenarioPayload")) {
-            context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+            context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                     "stage", "GENERATING", "label", "正在生成场景题", "status", "running", "percent", 100));
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("traceId", context.traceId());
@@ -75,7 +75,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                     "已为您生成场景题答题卡，请在卡片中作答。"
             );
             chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
-            context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+            context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
                     "result", Map.of(
                             "content", "",
@@ -93,7 +93,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
         if (codingResponse.data() instanceof Map<?, ?> dataMap
                 && "fill_question_generated".equals(dataMap.get("status"))
                 && dataMap.containsKey("fillPayload")) {
-            context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+            context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                     "stage", "GENERATING", "label", "正在生成填空题", "status", "running", "percent", 100));
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("traceId", context.traceId());
@@ -109,7 +109,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                     "已为您生成填空题答题卡，请在卡片中作答。"
             );
             chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
-            context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+            context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
                     "result", Map.of(
                             "content", "",
@@ -157,7 +157,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             }
         }
 
-        context.emitter().emit(InterviewStreamEventType.PROGRESS.value(), Map.of(
+        context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在评估答案", "status", "running", "percent", 70));
         chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
 
@@ -181,7 +181,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
         finishResult.put("routeSource", "active-session");
 
         if (nextQuizGenerated) {
-            context.emitter().emit(InterviewStreamEventType.QUIZ.value(), nextQuizPayload);
+            context.emitter().emit(StreamEventType.QUIZ.value(), nextQuizPayload);
             String quizJson = chatStreamingSupport.toJson(
                     nextQuizPayload,
                     "已为您生成批量选择题，请在答题卡中作答。"
@@ -193,7 +193,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
         }
 
-        context.emitter().emit(InterviewStreamEventType.FINISH.value(), Map.of(
+        context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", finishResult));
         context.emitter().done();
