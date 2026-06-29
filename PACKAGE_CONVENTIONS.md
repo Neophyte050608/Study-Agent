@@ -58,6 +58,7 @@ DTO placement:
 - Trace attribute sanitization and related helpers: `observability.application`
 - Intent tree/routing: `routing.application`
 - Autocomplete and ranking: `search.application`; internal autocomplete DTOs: `search.application.dto`
+- Cross-domain SSE/stream transport support: `common.stream`; business-specific stream orchestration stays in its owning domain.
 
 Knowledge package breakdown (mandatory for new code):
 - RAG compatibility entry and packet builder: `knowledge.application` (`RAGService` remains a facade; new code should prefer focused services where possible).

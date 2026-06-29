@@ -87,7 +87,7 @@ io.github.imzmq.interview.<domain>.infrastructure   # 持久化、外部系统 a
 - `security`：认证授权、安全策略、限流等横切安全能力。
 - `bootstrap`：启动诊断、启动模式、启动期只读装配信息；不要放业务流程。
 - `config`：Spring Bean 装配与配置属性；不要放 use case 逻辑。
-- `common`：通用 API 响应、异常、极少量无业务归属的基础设施；不要变成杂物区。
+- `common`：通用 API 响应、异常、跨模块 stream 支撑、极少量无业务归属的基础设施；不要变成杂物区。
 
 ### Knowledge / RAG 细分
 
