@@ -96,6 +96,16 @@ src/main/resources/application-local-lite.yml
 mvn spring-boot:run -Dspring-boot.run.profiles=local-lite
 ```
 
+## 轻量启动开关
+
+默认本地启动不会自动连接 QQ/飞书 WebSocket，也不会执行模型预热、模型健康探测或自动记忆整理。需要开启时使用环境变量：
+
+```bash
+IM_FEISHU_USE_WS=true IM_QQ_USE_WS=true APP_STARTUP_MODEL_PREHEAT_ENABLED=true APP_MODEL_ROUTING_PROBE_ENABLED=true APP_DREAM_ENABLED=true bash scripts/dev-start.sh
+```
+
+启动完成后，后端日志会输出 `Study-Agent startup`，用于确认当前 profile 和关键模块启停状态。
+
 ## 手动启动方式
 
 如果不使用脚本，可以手动执行：
