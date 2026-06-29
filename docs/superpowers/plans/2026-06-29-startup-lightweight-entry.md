@@ -284,7 +284,10 @@ class StartupDiagnosticsTest {
                         "im.qq.use-ws=false",
                         "im.feishu.use-ws=true",
                         "app.observability.external.enabled=true",
-                        "app.observability.external.provider=langfuse-otel")
+                        "app.observability.external.provider=langfuse-otel",
+                        "app.observability.external.endpoint=https://cloud.langfuse.com/api/public/otel",
+                        "app.observability.external.public-key=pk-lf-test",
+                        "app.observability.external.secret-key=sk-lf-test")
                 .run(context -> {
                     StartupDiagnostics diagnostics = context.getBean(StartupDiagnostics.class);
                     StartupDiagnostics.StartupSnapshot snapshot = diagnostics.snapshot();
@@ -296,6 +299,8 @@ class StartupDiagnosticsTest {
                     assertThat(snapshot.dreamEnabled()).isFalse();
                     assertThat(snapshot.qqWsEnabled()).isFalse();
                     assertThat(snapshot.feishuWsEnabled()).isTrue();
+                    assertThat(snapshot.externalObservabilityEnabled()).isTrue();
+                    assertThat(snapshot.externalObservabilityProvider()).isEqualTo("langfuse-otel");
                     assertThat(snapshot.externalObservability()).isEqualTo("langfuse-otel(enabled)");
                 });
     }
@@ -344,8 +349,13 @@ public class StartupDiagnosticsProperties {
     private final boolean dreamEnabled;
     private final boolean qqWsEnabled;
     private final boolean feishuWsEnabled;
+    private static final String EXTERNAL_OBSERVABILITY_PROVIDER = "langfuse-otel";
+
     private final boolean externalObservabilityEnabled;
     private final String externalObservabilityProvider;
+    private final String externalObservabilityEndpoint;
+    private final String externalObservabilityPublicKey;
+    private final String externalObservabilitySecretKey;
 
     public StartupDiagnosticsProperties(
             @Value("${app.knowledge.retrieval.warmup-enabled:true}") boolean ragWarmupEnabled,
@@ -355,7 +365,10 @@ public class StartupDiagnosticsProperties {
             @Value("${im.qq.use-ws:false}") boolean qqWsEnabled,
             @Value("${im.feishu.use-ws:false}") boolean feishuWsEnabled,
             @Value("${app.observability.external.enabled:false}") boolean externalObservabilityEnabled,
-            @Value("${app.observability.external.provider:noop}") String externalObservabilityProvider) {
+            @Value("${app.observability.external.provider:langfuse-otel}") String externalObservabilityProvider,
+            @Value("${app.observability.external.endpoint:}") String externalObservabilityEndpoint,
+            @Value("${app.observability.external.public-key:}") String externalObservabilityPublicKey,
+            @Value("${app.observability.external.secret-key:}") String externalObservabilitySecretKey) {
         this.ragWarmupEnabled = ragWarmupEnabled;
         this.modelPreheatEnabled = modelPreheatEnabled;
         this.modelProbeEnabled = modelProbeEnabled;
@@ -363,8 +376,10 @@ public class StartupDiagnosticsProperties {
         this.qqWsEnabled = qqWsEnabled;
         this.feishuWsEnabled = feishuWsEnabled;
         this.externalObservabilityEnabled = externalObservabilityEnabled;
-        this.externalObservabilityProvider = externalObservabilityProvider == null || externalObservabilityProvider.isBlank()
-                ? "noop" : externalObservabilityProvider.trim();
+        this.externalObservabilityProvider = trimOrDefault(externalObservabilityProvider, EXTERNAL_OBSERVABILITY_PROVIDER);
+        this.externalObservabilityEndpoint = trimOrDefault(externalObservabilityEndpoint, "");
+        this.externalObservabilityPublicKey = trimOrDefault(externalObservabilityPublicKey, "");
+        this.externalObservabilitySecretKey = trimOrDefault(externalObservabilitySecretKey, "");
     }
 
     public boolean isRagWarmupEnabled() { return ragWarmupEnabled; }
@@ -373,8 +388,28 @@ public class StartupDiagnosticsProperties {
     public boolean isDreamEnabled() { return dreamEnabled; }
     public boolean isQqWsEnabled() { return qqWsEnabled; }
     public boolean isFeishuWsEnabled() { return feishuWsEnabled; }
-    public boolean isExternalObservabilityEnabled() { return externalObservabilityEnabled; }
+    public boolean isExternalObservabilityEnabled() { return isExternalObservabilityConfigured(); }
     public String getExternalObservabilityProvider() { return externalObservabilityProvider; }
+
+    public boolean isExternalObservabilityConfigured() {
+        return externalObservabilityEnabled
+                && EXTERNAL_OBSERVABILITY_PROVIDER.equalsIgnoreCase(externalObservabilityProvider)
+                && hasText(externalObservabilityEndpoint)
+                && hasText(externalObservabilityPublicKey)
+                && hasText(externalObservabilitySecretKey);
+    }
+
+    private static String trimOrDefault(String value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? defaultValue : trimmed;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
 }
 ```
 
@@ -431,13 +466,10 @@ public class StartupDiagnostics {
                 properties.isDreamEnabled(),
                 properties.isQqWsEnabled(),
                 properties.isFeishuWsEnabled(),
-                externalObservability());
+                properties.isExternalObservabilityEnabled(),
+                properties.getExternalObservabilityProvider());
     }
 
-    private String externalObservability() {
-        String provider = properties.getExternalObservabilityProvider();
-        return provider + (properties.isExternalObservabilityEnabled() ? "(enabled)" : "(disabled)");
-    }
 
     private String enabled(boolean value) {
         return value ? "enabled" : "disabled";
@@ -451,7 +483,12 @@ public class StartupDiagnostics {
             boolean dreamEnabled,
             boolean qqWsEnabled,
             boolean feishuWsEnabled,
-            String externalObservability) {
+            boolean externalObservabilityEnabled,
+            String externalObservabilityProvider) {
+
+        public String externalObservability() {
+            return externalObservabilityProvider + (externalObservabilityEnabled ? "(enabled)" : "(disabled)");
+        }
     }
 }
 ```
