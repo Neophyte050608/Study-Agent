@@ -1,4 +1,4 @@
-package io.github.imzmq.interview;
+package io.github.imzmq.interview.config.model;
 
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
