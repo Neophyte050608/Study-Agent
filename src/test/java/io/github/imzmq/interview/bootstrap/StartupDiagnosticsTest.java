@@ -24,7 +24,10 @@ class StartupDiagnosticsTest {
                         "im.qq.use-ws=true",
                         "im.feishu.use-ws=true",
                         "app.observability.external.enabled=true",
-                        "app.observability.external.provider=langfuse-otel")
+                        "app.observability.external.provider=langfuse-otel",
+                        "app.observability.external.endpoint=https://cloud.langfuse.com/api/public/otel",
+                        "app.observability.external.public-key=pk-lf-test",
+                        "app.observability.external.secret-key=sk-lf-test")
                 .run(context -> {
                     StartupDiagnostics diagnostics = context.getBean(StartupDiagnostics.class);
                     StartupDiagnostics.StartupSnapshot snapshot = diagnostics.snapshot();
@@ -43,14 +46,30 @@ class StartupDiagnosticsTest {
     }
 
     @Test
+    void externalObservabilityIsDisabledWhenRequiredOtelCredentialsAreMissing() {
+        contextRunner
+                .withPropertyValues(
+                        "app.observability.external.enabled=true",
+                        "app.observability.external.provider=langfuse-otel")
+                .run(context -> {
+                    StartupDiagnostics diagnostics = context.getBean(StartupDiagnostics.class);
+                    StartupDiagnostics.StartupSnapshot snapshot = diagnostics.snapshot();
+
+                    assertThat(snapshot.externalObservabilityEnabled()).isFalse();
+                    assertThat(snapshot.externalObservabilityProvider()).isEqualTo("langfuse-otel");
+                    assertThat(snapshot.externalObservability()).isEqualTo("langfuse-otel(disabled)");
+                });
+    }
+
+    @Test
     void usesExternalObservabilityDefaults() {
         contextRunner.run(context -> {
             StartupDiagnostics diagnostics = context.getBean(StartupDiagnostics.class);
             StartupDiagnostics.StartupSnapshot snapshot = diagnostics.snapshot();
 
             assertThat(snapshot.externalObservabilityEnabled()).isFalse();
-            assertThat(snapshot.externalObservabilityProvider()).isEqualTo("noop");
-            assertThat(snapshot.externalObservability()).isEqualTo("noop(disabled)");
+            assertThat(snapshot.externalObservabilityProvider()).isEqualTo("langfuse-otel");
+            assertThat(snapshot.externalObservability()).isEqualTo("langfuse-otel(disabled)");
         });
     }
 

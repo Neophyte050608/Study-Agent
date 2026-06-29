@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class StartupDiagnosticsProperties {
 
+    private static final String EXTERNAL_OBSERVABILITY_PROVIDER = "langfuse-otel";
+
     private final boolean ragWarmupEnabled;
     private final boolean modelPreheatEnabled;
     private final boolean modelProbeEnabled;
@@ -14,6 +16,9 @@ public class StartupDiagnosticsProperties {
     private final boolean feishuWsEnabled;
     private final boolean externalObservabilityEnabled;
     private final String externalObservabilityProvider;
+    private final String externalObservabilityEndpoint;
+    private final String externalObservabilityPublicKey;
+    private final String externalObservabilitySecretKey;
 
     public StartupDiagnosticsProperties(
             @Value("${app.knowledge.retrieval.warmup-enabled:true}") boolean ragWarmupEnabled,
@@ -23,7 +28,10 @@ public class StartupDiagnosticsProperties {
             @Value("${im.qq.use-ws:false}") boolean qqWsEnabled,
             @Value("${im.feishu.use-ws:false}") boolean feishuWsEnabled,
             @Value("${app.observability.external.enabled:false}") boolean externalObservabilityEnabled,
-            @Value("${app.observability.external.provider:noop}") String externalObservabilityProvider) {
+            @Value("${app.observability.external.provider:langfuse-otel}") String externalObservabilityProvider,
+            @Value("${app.observability.external.endpoint:}") String externalObservabilityEndpoint,
+            @Value("${app.observability.external.public-key:}") String externalObservabilityPublicKey,
+            @Value("${app.observability.external.secret-key:}") String externalObservabilitySecretKey) {
         this.ragWarmupEnabled = ragWarmupEnabled;
         this.modelPreheatEnabled = modelPreheatEnabled;
         this.modelProbeEnabled = modelProbeEnabled;
@@ -31,8 +39,12 @@ public class StartupDiagnosticsProperties {
         this.qqWsEnabled = qqWsEnabled;
         this.feishuWsEnabled = feishuWsEnabled;
         this.externalObservabilityEnabled = externalObservabilityEnabled;
-        this.externalObservabilityProvider = externalObservabilityProvider == null || externalObservabilityProvider.isBlank()
-                ? "noop" : externalObservabilityProvider.trim();
+        this.externalObservabilityProvider = trimOrDefault(
+                externalObservabilityProvider,
+                EXTERNAL_OBSERVABILITY_PROVIDER);
+        this.externalObservabilityEndpoint = trimOrDefault(externalObservabilityEndpoint, "");
+        this.externalObservabilityPublicKey = trimOrDefault(externalObservabilityPublicKey, "");
+        this.externalObservabilitySecretKey = trimOrDefault(externalObservabilitySecretKey, "");
     }
 
     public boolean isRagWarmupEnabled() {
@@ -60,10 +72,33 @@ public class StartupDiagnosticsProperties {
     }
 
     public boolean isExternalObservabilityEnabled() {
-        return externalObservabilityEnabled;
+        return isExternalObservabilityConfigured();
     }
 
     public String getExternalObservabilityProvider() {
         return externalObservabilityProvider;
+    }
+
+    public boolean isExternalObservabilityConfigured() {
+        return externalObservabilityEnabled
+                && EXTERNAL_OBSERVABILITY_PROVIDER.equalsIgnoreCase(externalObservabilityProvider)
+                && hasText(externalObservabilityEndpoint)
+                && hasText(externalObservabilityPublicKey)
+                && hasText(externalObservabilitySecretKey);
+    }
+
+    private static String trimOrDefault(String value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return defaultValue;
+        }
+        return trimmed;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }
