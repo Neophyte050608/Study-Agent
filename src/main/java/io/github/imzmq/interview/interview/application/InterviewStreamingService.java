@@ -2,11 +2,11 @@ package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.stream.runtime.ObservableStreamEmitter;
-import io.github.imzmq.interview.stream.runtime.InterviewSseEmitterSender;
-import io.github.imzmq.interview.stream.runtime.InterviewStreamEventType;
-import io.github.imzmq.interview.stream.runtime.InterviewStreamTaskManager;
-import io.github.imzmq.interview.stream.runtime.StreamEventEmitter;
+import io.github.imzmq.interview.common.stream.ObservableStreamEmitter;
+import io.github.imzmq.interview.common.stream.InterviewSseEmitterSender;
+import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
+import io.github.imzmq.interview.common.stream.InterviewStreamTaskManager;
+import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;

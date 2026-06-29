@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.stream.runtime;
+package io.github.imzmq.interview.common.stream;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

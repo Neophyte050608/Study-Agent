@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.chatstream;
 
-import io.github.imzmq.interview.stream.runtime.InterviewStreamEventType;
-import io.github.imzmq.interview.stream.runtime.StreamEventEmitter;
+import io.github.imzmq.interview.common.stream.InterviewStreamEventType;
+import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 
 import java.util.Map;
 import java.util.function.BooleanSupplier;

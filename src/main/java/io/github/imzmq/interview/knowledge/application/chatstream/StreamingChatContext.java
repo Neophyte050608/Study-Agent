@@ -2,7 +2,7 @@ package io.github.imzmq.interview.knowledge.application.chatstream;
 
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-import io.github.imzmq.interview.stream.runtime.StreamEventEmitter;
+import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 
 public class StreamingChatContext {
 

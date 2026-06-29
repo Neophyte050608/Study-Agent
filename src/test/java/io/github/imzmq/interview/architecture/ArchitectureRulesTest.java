@@ -92,6 +92,12 @@ class ArchitectureRulesTest {
                     .should(exist())
                     .allowEmptyShould(true);
 
+    @ArchTest
+    static final ArchRule main_code_should_not_use_retired_top_level_stream_package =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.stream..")
+                    .should(exist())
+                    .allowEmptyShould(true);
+
     private static DescribedPredicate<JavaClass> areMyBatisMappers() {
         return DescribedPredicate.describe(
                 "MyBatis mapper interfaces",

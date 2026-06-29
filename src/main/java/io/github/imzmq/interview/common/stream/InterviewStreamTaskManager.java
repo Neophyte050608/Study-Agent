@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.stream.runtime;
+package io.github.imzmq.interview.common.stream;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;

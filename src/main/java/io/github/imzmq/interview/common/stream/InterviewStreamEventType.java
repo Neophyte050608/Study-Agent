@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.stream.runtime;
+package io.github.imzmq.interview.common.stream;
 
 public enum InterviewStreamEventType {
     META("meta"),
