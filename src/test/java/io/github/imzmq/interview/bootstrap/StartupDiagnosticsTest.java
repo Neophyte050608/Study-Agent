@@ -18,10 +18,10 @@ class StartupDiagnosticsTest {
                 .withPropertyValues(
                         "spring.profiles.active=local-lite",
                         "app.knowledge.retrieval.warmup-enabled=false",
-                        "app.startup.model-preheat-enabled=false",
-                        "app.model-routing.probe.enabled=false",
-                        "app.dream.enabled=false",
-                        "im.qq.use-ws=false",
+                        "app.startup.model-preheat-enabled=true",
+                        "app.model-routing.probe.enabled=true",
+                        "app.dream.enabled=true",
+                        "im.qq.use-ws=true",
                         "im.feishu.use-ws=true",
                         "app.observability.external.enabled=true",
                         "app.observability.external.provider=langfuse-otel")
@@ -31,13 +31,27 @@ class StartupDiagnosticsTest {
 
                     assertThat(snapshot.activeProfiles()).containsExactly("local-lite");
                     assertThat(snapshot.ragWarmupEnabled()).isFalse();
-                    assertThat(snapshot.modelPreheatEnabled()).isFalse();
-                    assertThat(snapshot.modelProbeEnabled()).isFalse();
-                    assertThat(snapshot.dreamEnabled()).isFalse();
-                    assertThat(snapshot.qqWsEnabled()).isFalse();
+                    assertThat(snapshot.modelPreheatEnabled()).isTrue();
+                    assertThat(snapshot.modelProbeEnabled()).isTrue();
+                    assertThat(snapshot.dreamEnabled()).isTrue();
+                    assertThat(snapshot.qqWsEnabled()).isTrue();
                     assertThat(snapshot.feishuWsEnabled()).isTrue();
+                    assertThat(snapshot.externalObservabilityEnabled()).isTrue();
+                    assertThat(snapshot.externalObservabilityProvider()).isEqualTo("langfuse-otel");
                     assertThat(snapshot.externalObservability()).isEqualTo("langfuse-otel(enabled)");
                 });
+    }
+
+    @Test
+    void usesExternalObservabilityDefaults() {
+        contextRunner.run(context -> {
+            StartupDiagnostics diagnostics = context.getBean(StartupDiagnostics.class);
+            StartupDiagnostics.StartupSnapshot snapshot = diagnostics.snapshot();
+
+            assertThat(snapshot.externalObservabilityEnabled()).isFalse();
+            assertThat(snapshot.externalObservabilityProvider()).isEqualTo("noop");
+            assertThat(snapshot.externalObservability()).isEqualTo("noop(disabled)");
+        });
     }
 
     @Test

@@ -46,12 +46,8 @@ public class StartupDiagnostics {
                 properties.isDreamEnabled(),
                 properties.isQqWsEnabled(),
                 properties.isFeishuWsEnabled(),
-                externalObservability());
-    }
-
-    private String externalObservability() {
-        String provider = properties.getExternalObservabilityProvider();
-        return provider + (properties.isExternalObservabilityEnabled() ? "(enabled)" : "(disabled)");
+                properties.isExternalObservabilityEnabled(),
+                properties.getExternalObservabilityProvider());
     }
 
     private String enabled(boolean value) {
@@ -66,6 +62,11 @@ public class StartupDiagnostics {
             boolean dreamEnabled,
             boolean qqWsEnabled,
             boolean feishuWsEnabled,
-            String externalObservability) {
+            boolean externalObservabilityEnabled,
+            String externalObservabilityProvider) {
+
+        public String externalObservability() {
+            return externalObservabilityProvider + (externalObservabilityEnabled ? "(enabled)" : "(disabled)");
+        }
     }
 }
