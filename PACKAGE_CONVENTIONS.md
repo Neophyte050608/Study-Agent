@@ -44,7 +44,7 @@ DTO placement:
 - Persistence-specific DTOs/records belong in `<domain>.infrastructure.persistence` with their owning domain adapter.
 
 ## 7. Placement Cheatsheet (Current)
-- Agent configuration/evaluation/skills: `agent.application`
+- Agent configuration/evaluation/skills and runtime context assembly: `agent.application`; context assembly implementation lives in `agent.application.context`.
 - Prompt/template/chat context memory: `chat.application`
 - User identity extraction: `identity.application`
 - Knowledge ingestion config & sync: `ingestion.application`
@@ -59,6 +59,7 @@ DTO placement:
 - Intent tree/routing: `routing.application`
 - Autocomplete and ranking: `search.application`; internal autocomplete DTOs: `search.application.dto`
 - Cross-domain SSE/stream transport support: `common.stream`; business-specific stream orchestration stays in its owning domain.
+- Agent prompt/runtime context assembly belongs in `agent.application.context`; knowledge-specific retrieval and topic policy remain in `knowledge.application.*` and may be wrapped by context sources.
 
 Knowledge package breakdown (mandatory for new code):
 - RAG compatibility entry and packet builder: `knowledge.application` (`RAGService` remains a facade; new code should prefer focused services where possible).
