@@ -23,6 +23,9 @@ Modify existing files:
 
 - `src/main/java/io/github/imzmq/interview/agent/application/context/AgentContextSchema.java` — add `INTERVIEW` schema to defaults.
 - `src/main/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationService.java` — inject `AgentContextAssembler`, assemble interview context, pass rendered context into prompt variables.
+- `src/test/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationServiceTest.java` — update direct service construction with a test assembler.
+- `src/test/java/io/github/imzmq/interview/service/RAGServiceTest.java` — update direct `InterviewAnswerEvaluationService` construction.
+- `src/test/java/io/github/imzmq/interview/service/ParentChildRetrievalHydrationTest.java` — update direct `InterviewAnswerEvaluationService` construction.
 
 Create tests:
 
@@ -644,6 +647,9 @@ git commit -m "feat(agent): 添加面试上下文装配 schema"
 
 **Files:**
 - Modify: `src/main/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationService.java`
+- Modify: `src/test/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationServiceTest.java`
+- Modify: `src/test/java/io/github/imzmq/interview/service/RAGServiceTest.java`
+- Modify: `src/test/java/io/github/imzmq/interview/service/ParentChildRetrievalHydrationTest.java`
 
 - [ ] **Step 1: Add imports and constructor dependency**
 
@@ -686,7 +692,74 @@ Assign field:
         this.contextAssembler = contextAssembler;
 ```
 
-- [ ] **Step 2: Add private helper to assemble context**
+- [ ] **Step 2: Update direct test constructors**
+
+`InterviewAnswerEvaluationService` is directly instantiated in several tests. Add a local test assembler helper in each affected test class, then pass it as the final constructor argument.
+
+Use this helper where the test class can import context classes:
+
+```java
+private AgentContextAssembler testContextAssembler() {
+    return new AgentContextAssembler(new AgentContextSourceRegistry(List.of(
+            new BasicConstraintsContextSource(),
+            new InterviewProfileContextSource(),
+            new InterviewStrategyContextSource(),
+            new InterviewKnowledgeContextSource()
+    )));
+}
+```
+
+Add imports when missing:
+
+```java
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
+import io.github.imzmq.interview.agent.application.context.BasicConstraintsContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewKnowledgeContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewProfileContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewStrategyContextSource;
+```
+
+Then update each constructor call from:
+
+```java
+new InterviewAnswerEvaluationService(
+        routingChatService,
+        observabilityService,
+        agentSkillService,
+        promptTemplateService,
+        promptManager,
+        observabilitySwitchProperties,
+        skillOrchestrator,
+        llmJsonParser
+)
+```
+
+to:
+
+```java
+new InterviewAnswerEvaluationService(
+        routingChatService,
+        observabilityService,
+        agentSkillService,
+        promptTemplateService,
+        promptManager,
+        observabilitySwitchProperties,
+        skillOrchestrator,
+        llmJsonParser,
+        testContextAssembler()
+)
+```
+
+Apply this in:
+
+```text
+src/test/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationServiceTest.java
+src/test/java/io/github/imzmq/interview/service/RAGServiceTest.java
+src/test/java/io/github/imzmq/interview/service/ParentChildRetrievalHydrationTest.java
+```
+
+- [ ] **Step 3: Add private helper to assemble context**
 
 Add this private method near `generateEvaluationResult`:
 
@@ -723,7 +796,7 @@ Add this private method near `generateEvaluationResult`:
     }
 ```
 
-- [ ] **Step 3: Use assembled context before LLM call**
+- [ ] **Step 4: Use assembled context before LLM call**
 
 In `evaluateWithKnowledge`, after `normalizedStrategy` is resolved and before logging/call, add:
 
@@ -748,7 +821,7 @@ Then replace the `generateEvaluationResult` call argument from `finalContext` to
 () -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, assembledContext, finalImageContext, finalEvidence, effectiveStrategyHint)
 ```
 
-- [ ] **Step 4: Add safe log fields for assembled context length**
+- [ ] **Step 5: Add safe log fields for assembled context length**
 
 In the existing RAG trace log format, add fields at the end:
 
@@ -764,21 +837,80 @@ safeLength(assembledContext)
 
 Do not log the full assembled context.
 
-- [ ] **Step 5: Run focused tests and compile**
+- [ ] **Step 6: Add regression test for assembled context injection**
+
+In `InterviewAnswerEvaluationServiceTest`, add this test after `shouldFilterInvalidEvidenceReferencesAndFillNextQuestion`:
+
+```java
+@Test
+void shouldPassAssembledInterviewContextToPrompt() {
+    routingChatService.nextResult = new RoutingChatService.RoutingResult("""
+            {"score":80,"accuracy":80,"logic":80,"depth":80,"boundary":80,
+            "deductions":[],"citations":[],"conflicts":[],
+            "feedback":"ok","nextQuestion":"继续说说事务传播。"}
+            """, 10, 5, 0L);
+    RAGService.KnowledgePacket packet = new RAGService.KnowledgePacket(
+            "事务",
+            List.of(),
+            "RAG上下文",
+            "1. [ok] 事务证据",
+            false
+    );
+
+    service.evaluateWithKnowledge(
+            "Spring",
+            "什么是事务隔离级别",
+            "回答",
+            "ADVANCED",
+            "PROBE",
+            62.0,
+            "弱项：事务",
+            "保持中等强度评估",
+            packet
+    );
+
+    assertTrue(promptManager.lastVariables.get("context").toString().contains("【用户画像】"));
+    assertTrue(promptManager.lastVariables.get("context").toString().contains("弱项：事务"));
+    assertTrue(promptManager.lastVariables.get("context").toString().contains("【任务规划】"));
+    assertTrue(promptManager.lastVariables.get("context").toString().contains("当前难度：ADVANCED"));
+    assertTrue(promptManager.lastVariables.get("context").toString().contains("【知识上下文】"));
+    assertTrue(promptManager.lastVariables.get("context").toString().contains("RAG上下文"));
+    assertEquals("弱项：事务", promptManager.lastVariables.get("profileSnapshot"));
+    assertEquals("保持中等强度评估", promptManager.lastVariables.get("strategyHint"));
+    assertEquals("1. [ok] 事务证据", promptManager.lastVariables.get("retrievalEvidence"));
+}
+```
+
+If `StaticPromptManager` does not currently store the last variables map, extend it inside the same test file:
+
+```java
+Map<String, Object> lastVariables = Map.of();
+
+@Override
+public PromptPair renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
+    lastVariables = Map.copyOf(variables);
+    return new PromptPair("system", "user");
+}
+```
+
+- [ ] **Step 7: Run focused tests and compile**
 
 Run:
 
 ```bash
-mvn -q -Dtest=AgentRuntimeContextTest,AgentContextAssemblerTest,InterviewProfileContextSourceTest,InterviewStrategyContextSourceTest,InterviewKnowledgeContextSourceTest test
+mvn -q -Dtest=AgentRuntimeContextTest,AgentContextAssemblerTest,InterviewProfileContextSourceTest,InterviewStrategyContextSourceTest,InterviewKnowledgeContextSourceTest,InterviewAnswerEvaluationServiceTest test
 mvn -q -DskipTests compile
 ```
 
 Expected: both pass.
 
-- [ ] **Step 6: Commit task 5**
+- [ ] **Step 8: Commit task 5**
 
 ```bash
-git add src/main/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationService.java
+git add src/main/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationService.java \
+  src/test/java/io/github/imzmq/interview/knowledge/application/evaluation/InterviewAnswerEvaluationServiceTest.java \
+  src/test/java/io/github/imzmq/interview/service/RAGServiceTest.java \
+  src/test/java/io/github/imzmq/interview/service/ParentChildRetrievalHydrationTest.java
 git commit -m "refactor(interview): 接入评估上下文装配"
 ```
 
@@ -805,7 +937,7 @@ Expected: no `claude-mem-context` output and no AGENTS.md diff. If present, remo
 Run:
 
 ```bash
-mvn -q -Dtest=AgentRuntimeContextTest,AgentContextAssemblerTest,InterviewProfileContextSourceTest,InterviewStrategyContextSourceTest,InterviewKnowledgeContextSourceTest test
+mvn -q -Dtest=AgentRuntimeContextTest,AgentContextAssemblerTest,InterviewProfileContextSourceTest,InterviewStrategyContextSourceTest,InterviewKnowledgeContextSourceTest,InterviewAnswerEvaluationServiceTest test
 ```
 
 Expected: pass.
