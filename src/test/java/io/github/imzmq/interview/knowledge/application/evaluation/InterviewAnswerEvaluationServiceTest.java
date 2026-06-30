@@ -1,5 +1,11 @@
 package io.github.imzmq.interview.knowledge.application.evaluation;
 
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
+import io.github.imzmq.interview.agent.application.context.BasicConstraintsContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewKnowledgeContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewProfileContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewStrategyContextSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
@@ -41,7 +47,7 @@ class InterviewAnswerEvaluationServiceTest {
     private RAGObservabilityService observabilityService;
     private AgentSkillService agentSkillService;
     private PromptTemplateService promptTemplateService;
-    private PromptManager promptManager;
+    private StaticPromptManager promptManager;
     private ObservabilitySwitchProperties observabilitySwitchProperties;
     private SkillOrchestrator skillOrchestrator;
 
@@ -73,7 +79,8 @@ class InterviewAnswerEvaluationServiceTest {
                 promptManager,
                 observabilitySwitchProperties,
                 skillOrchestrator,
-                llmJsonParser
+                llmJsonParser,
+                testContextAssembler()
         );
     }
 
@@ -106,6 +113,44 @@ class InterviewAnswerEvaluationServiceTest {
         assertTrue(node.path("deductions").toString().contains("自动过滤"));
         assertTrue(node.hasNonNull("nextQuestion"));
     }
+    @Test
+    void shouldPassAssembledInterviewContextToPrompt() {
+        routingChatService.nextResult = new RoutingChatService.RoutingResult("""
+                {"score":80,"accuracy":80,"logic":80,"depth":80,"boundary":80,
+                "deductions":[],"citations":[],"conflicts":[],
+                "feedback":"ok","nextQuestion":"继续说说事务传播。"}
+                """, 10, 5, 0L);
+        RAGService.KnowledgePacket packet = new RAGService.KnowledgePacket(
+                "事务",
+                List.of(),
+                "RAG上下文",
+                "1. [ok] 事务证据",
+                false
+        );
+
+        service.evaluateWithKnowledge(
+                "Spring",
+                "什么是事务隔离级别",
+                "回答",
+                "ADVANCED",
+                "PROBE",
+                62.0,
+                "弱项：事务",
+                "保持中等强度评估",
+                packet
+        );
+
+        assertTrue(((String) promptManager.lastVariables.get("context")).contains("【用户画像】"));
+        assertTrue(((String) promptManager.lastVariables.get("context")).contains("弱项：事务"));
+        assertTrue(((String) promptManager.lastVariables.get("context")).contains("【任务规划】"));
+        assertTrue(((String) promptManager.lastVariables.get("context")).contains("当前难度：ADVANCED"));
+        assertTrue(((String) promptManager.lastVariables.get("context")).contains("【知识上下文】"));
+        assertTrue(((String) promptManager.lastVariables.get("context")).contains("RAG上下文"));
+        assertEquals("弱项：事务", promptManager.lastVariables.get("profileSnapshot"));
+        assertEquals("保持中等强度评估", promptManager.lastVariables.get("strategyHint"));
+        assertEquals("1. [ok] 事务证据", promptManager.lastVariables.get("retrievalEvidence"));
+    }
+
 
     @Test
     void shouldReturnFallbackEvaluationWhenModelFails() throws Exception {
@@ -131,6 +176,16 @@ class InterviewAnswerEvaluationServiceTest {
     }
 
 
+    private AgentContextAssembler testContextAssembler() {
+        return new AgentContextAssembler(new AgentContextSourceRegistry(List.of(
+                new BasicConstraintsContextSource(),
+                new InterviewProfileContextSource(),
+                new InterviewStrategyContextSource(),
+                new InterviewKnowledgeContextSource()
+        )));
+    }
+
+
     private static class StubRoutingChatService extends RoutingChatService {
         private RoutingResult nextResult;
         private RuntimeException nextFailure;
@@ -149,12 +204,15 @@ class InterviewAnswerEvaluationServiceTest {
     }
 
     private static class StaticPromptManager extends PromptManager {
+        private Map<String, Object> lastVariables = Map.of();
+
         private StaticPromptManager() {
             super(null);
         }
 
         @Override
         public PromptPair renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
+            lastVariables = Map.copyOf(variables);
             return new PromptPair("system", "user");
         }
     }

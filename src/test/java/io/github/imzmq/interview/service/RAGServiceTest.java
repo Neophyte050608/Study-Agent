@@ -1,5 +1,11 @@
 package io.github.imzmq.interview.service;
 
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
+import io.github.imzmq.interview.agent.application.context.BasicConstraintsContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewKnowledgeContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewProfileContextSource;
+import io.github.imzmq.interview.agent.application.context.InterviewStrategyContextSource;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
@@ -194,7 +200,8 @@ class RAGServiceTest {
                         promptManager,
                         observabilitySwitchProperties,
                         skillOrchestrator,
-                        llmJsonParser
+                        llmJsonParser,
+                        testContextAssembler()
                 ),
                 new CodingPracticeService(
                         routingChatService,
@@ -685,13 +692,15 @@ class RAGServiceTest {
             }
         };
     }
+
+
+    private AgentContextAssembler testContextAssembler() {
+        return new AgentContextAssembler(new AgentContextSourceRegistry(List.of(
+                new BasicConstraintsContextSource(),
+                new InterviewProfileContextSource(),
+                new InterviewStrategyContextSource(),
+                new InterviewKnowledgeContextSource()
+        )));
+    }
+
 }
-
-
-
-
-
-
-
-
-

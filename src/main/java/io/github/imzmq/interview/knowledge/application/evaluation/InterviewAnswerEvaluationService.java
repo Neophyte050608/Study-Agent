@@ -1,5 +1,10 @@
 package io.github.imzmq.interview.knowledge.application.evaluation;
 
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.context.AgentContextQuery;
+import io.github.imzmq.interview.agent.application.context.AgentRuntimeContext;
+import io.github.imzmq.interview.agent.application.context.InterviewContextAttributes;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -63,6 +68,7 @@ public class InterviewAnswerEvaluationService {
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final SkillOrchestrator skillOrchestrator;
     private final LlmJsonParser llmJsonParser;
+    private final AgentContextAssembler contextAssembler;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public InterviewAnswerEvaluationService(RoutingChatService routingChatService,
@@ -72,7 +78,8 @@ public class InterviewAnswerEvaluationService {
                                             PromptManager promptManager,
                                             ObservabilitySwitchProperties observabilitySwitchProperties,
                                             SkillOrchestrator skillOrchestrator,
-                                            LlmJsonParser llmJsonParser) {
+                                            LlmJsonParser llmJsonParser,
+                                            AgentContextAssembler contextAssembler) {
         this.routingChatService = routingChatService;
         this.observabilityService = observabilityService;
         this.agentSkillService = agentSkillService;
@@ -81,6 +88,7 @@ public class InterviewAnswerEvaluationService {
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.skillOrchestrator = skillOrchestrator;
         this.llmJsonParser = llmJsonParser;
+        this.contextAssembler = contextAssembler;
     }
 
     /**
@@ -148,9 +156,21 @@ public class InterviewAnswerEvaluationService {
                         false
                 );
             }
+            String assembledContext = assembleInterviewContext(
+                    topic,
+                    question,
+                    userAnswer,
+                    difficultyLevel,
+                    followUpState,
+                    topicMastery,
+                    safeProfileSnapshot,
+                    normalizedStrategy,
+                    packet,
+                    finalContext
+            );
             if (observabilitySwitchProperties.isRagTraceEnabled()) {
                 logger.info(
-                        "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, imageContextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}",
+                        "评估调用参数: topic={}, difficulty={}, followUp={}, mastery={}, questionLen={}, answerLen={}, strategyLen={}, profileLen={}/{}, contextLen={}/{}, imageContextLen={}/{}, evidenceLen={}/{}, evidenceCount={}, retrievedDocs={}, webFallbackUsed={}, assembledContextLen={}",
                         safeLogText(topic, 40),
                         safeLogText(difficultyLevel, 24),
                         safeLogText(followUpState, 24),
@@ -168,13 +188,14 @@ public class InterviewAnswerEvaluationService {
                         safeLength(originalEvidence),
                         parseEvidenceCatalog(originalEvidence).size(),
                         packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
-                        packet != null && packet.webFallbackUsed()
+                        packet != null && packet.webFallbackUsed(),
+                        safeLength(assembledContext)
                 );
             }
             try {
                 final String effectiveStrategyHint = normalizedStrategy;
                 RoutingChatService.RoutingResult routingResult = callWithRetryResult(
-                        () -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, finalContext, finalImageContext, finalEvidence, effectiveStrategyHint),
+                        () -> generateEvaluationResult(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, safeProfileSnapshot, assembledContext, finalImageContext, finalEvidence, effectiveStrategyHint),
                         2,
                         "回答评估"
                 );
@@ -184,6 +205,37 @@ public class InterviewAnswerEvaluationService {
                 return new RAGService.EvaluationResult(buildFallbackEvaluation(question, e), 0, 0);
             }
         });
+    }
+
+    private String assembleInterviewContext(String topic,
+                                            String question,
+                                            String userAnswer,
+                                            String difficultyLevel,
+                                            String followUpState,
+                                            double topicMastery,
+                                            String profileSnapshot,
+                                            String strategyHint,
+                                            RAGService.KnowledgePacket packet,
+                                            String fallbackContext) {
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put(InterviewContextAttributes.TOPIC, topic == null ? "" : topic);
+        attributes.put(InterviewContextAttributes.QUESTION, question == null ? "" : question);
+        attributes.put(InterviewContextAttributes.USER_ANSWER, userAnswer == null ? "" : userAnswer);
+        attributes.put(InterviewContextAttributes.DIFFICULTY_LEVEL, difficultyLevel == null ? "" : difficultyLevel);
+        attributes.put(InterviewContextAttributes.FOLLOW_UP_STATE, followUpState == null ? "" : followUpState);
+        attributes.put(InterviewContextAttributes.TOPIC_MASTERY, topicMastery);
+        attributes.put(InterviewContextAttributes.PROFILE_SNAPSHOT, profileSnapshot == null ? "" : profileSnapshot);
+        attributes.put(InterviewContextAttributes.STRATEGY_HINT, strategyHint == null ? "" : strategyHint);
+        if (packet != null) {
+            attributes.put(InterviewContextAttributes.KNOWLEDGE_PACKET, packet);
+        }
+        AgentRuntimeContext runtimeContext = contextAssembler.assemble(AgentContextQuery.create(
+                AgentContextMode.INTERVIEW,
+                question,
+                attributes
+        ));
+        String rendered = runtimeContext.render();
+        return rendered.isBlank() ? fallbackContext : rendered;
     }
 
     private RoutingChatService.RoutingResult generateEvaluationResult(String topic,
