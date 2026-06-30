@@ -83,6 +83,28 @@ class AgentContextAssemblerTest {
         assertFalse(context.render().contains("很长的历史内容"));
     }
 
+    @Test
+    void assembleUsesInterviewSchemaOrder() {
+        AgentContextSourceRegistry registry = new AgentContextSourceRegistry(List.of(
+                fixedSource("profile", AgentContextSlotKind.PROFILE, "画像"),
+                fixedSource("strategy", AgentContextSlotKind.TASK_PLAN, "策略"),
+                fixedSource("knowledge", AgentContextSlotKind.KNOWLEDGE, "知识"),
+                fixedSource("constraints", AgentContextSlotKind.CONSTRAINTS, "约束")
+        ));
+        AgentContextAssembler assembler = new AgentContextAssembler(registry);
+
+        AgentRuntimeContext context = assembler.assemble(AgentContextQuery.create(
+                AgentContextMode.INTERVIEW,
+                "query",
+                Map.of()
+        ));
+
+        String rendered = context.render();
+        assertTrue(rendered.indexOf("【硬性约束】") < rendered.indexOf("【用户画像】"));
+        assertTrue(rendered.indexOf("【用户画像】") < rendered.indexOf("【任务规划】"));
+        assertTrue(rendered.indexOf("【任务规划】") < rendered.indexOf("【知识上下文】"));
+    }
+
     private AgentContextSource fixedSource(String id, AgentContextSlotKind kind, String text) {
         return sourceWithItems(id, kind, List.of(text));
     }

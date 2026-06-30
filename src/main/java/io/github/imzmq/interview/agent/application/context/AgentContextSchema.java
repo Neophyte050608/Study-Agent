@@ -25,7 +25,22 @@ public record AgentContextSchema(
         );
     }
 
+    public static AgentContextSchema interview() {
+        return new AgentContextSchema(
+                AgentContextMode.INTERVIEW,
+                List.of(
+                        new AgentContextSlot(AgentContextSlotKind.CONSTRAINTS, false, new AgentContextSlotFilter(240, 4)),
+                        new AgentContextSlot(AgentContextSlotKind.PROFILE, false, new AgentContextSlotFilter(480, 2)),
+                        new AgentContextSlot(AgentContextSlotKind.TASK_PLAN, false, new AgentContextSlotFilter(700, 3)),
+                        new AgentContextSlot(AgentContextSlotKind.KNOWLEDGE, true, new AgentContextSlotFilter(2200, 3))
+                )
+        );
+    }
+
     public static Map<AgentContextMode, AgentContextSchema> defaults() {
-        return Map.of(AgentContextMode.KNOWLEDGE_QA, knowledgeQa());
+        return Map.of(
+                AgentContextMode.KNOWLEDGE_QA, knowledgeQa(),
+                AgentContextMode.INTERVIEW, interview()
+        );
     }
 }
