@@ -1,5 +1,10 @@
 package io.github.imzmq.interview.agent.runtime;
 
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.context.AgentContextQuery;
+import io.github.imzmq.interview.agent.application.context.AgentRuntimeContext;
+import io.github.imzmq.interview.agent.application.context.KnowledgeQaContextAttributes;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
@@ -37,6 +42,7 @@ public class KnowledgeQaAgent {
     private final TraceService traceService;
     private final ConversationTopicTracker topicTracker;
     private final DynamicKnowledgeContextBuilder dynamicContextBuilder;
+    private final AgentContextAssembler contextAssembler;
     private final Executor ragRetrieveExecutor;
 
     public KnowledgeQaAgent(KnowledgeRetrievalCoordinator knowledgeRetrievalCoordinator,
@@ -46,6 +52,7 @@ public class KnowledgeQaAgent {
                             TraceService traceService,
                             ConversationTopicTracker topicTracker,
                             DynamicKnowledgeContextBuilder dynamicContextBuilder,
+                            AgentContextAssembler contextAssembler,
                             @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor) {
         this.knowledgeRetrievalCoordinator = knowledgeRetrievalCoordinator;
         this.routingChatService = routingChatService;
@@ -54,6 +61,7 @@ public class KnowledgeQaAgent {
         this.traceService = traceService;
         this.topicTracker = topicTracker;
         this.dynamicContextBuilder = dynamicContextBuilder;
+        this.contextAssembler = contextAssembler;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
     }
 
@@ -104,22 +112,15 @@ public class KnowledgeQaAgent {
             TurnAnalysis analysis = analysisFuture.join();
             KnowledgeContextPacket packet = packetFuture.join();
             String contextPolicy = resolveContextPolicy(precomputedTurnAnalysis, analysis);
-            String combinedContext;
-            String dialogSignal = "";
-            if (sessionId != null && !sessionId.isBlank()) {
-                combinedContext = dynamicContextBuilder.buildDynamicContext(contextPolicy, analysis, packet, sessionId);
-                dialogSignal = dynamicContextBuilder.buildDialogSignal(contextPolicy, analysis);
-            } else {
-                combinedContext = buildCombinedContext(packet);
-            }
-
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("question", question);
-            vars.put("context", combinedContext);
-            vars.put("imageContext", packet.imageContext());
-            vars.put("evidence", packet.retrievalEvidence());
-            vars.put("history", history != null ? history : "");
-            vars.put("dialogSignal", dialogSignal);
+            Map<String, Object> vars = buildPromptVars(
+                    question,
+                    history,
+                    sessionId,
+                    contextPolicy,
+                    analysis,
+                    packet,
+                    precomputedTurnAnalysis
+            );
             PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
             String answer = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "知识问答");
 
@@ -207,22 +208,15 @@ public class KnowledgeQaAgent {
             TurnAnalysis analysis = analysisFuture.join();
             KnowledgeContextPacket packet = packetFuture.join();
             String contextPolicy = resolveContextPolicy(precomputedTurnAnalysis, analysis);
-            String combinedContext;
-            String dialogSignal = "";
-            if (sessionId != null && !sessionId.isBlank()) {
-                combinedContext = dynamicContextBuilder.buildDynamicContext(contextPolicy, analysis, packet, sessionId);
-                dialogSignal = dynamicContextBuilder.buildDialogSignal(contextPolicy, analysis);
-            } else {
-                combinedContext = buildCombinedContext(packet);
-            }
-
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("question", question);
-            vars.put("context", combinedContext);
-            vars.put("imageContext", packet.imageContext());
-            vars.put("evidence", packet.retrievalEvidence());
-            vars.put("history", history != null ? history : "");
-            vars.put("dialogSignal", dialogSignal);
+            Map<String, Object> vars = buildPromptVars(
+                    question,
+                    history,
+                    sessionId,
+                    contextPolicy,
+                    analysis,
+                    packet,
+                    precomputedTurnAnalysis
+            );
             PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
             String answer = routingChatService.callStreamWithTrace(
                     pair.systemPrompt(),
@@ -263,13 +257,40 @@ public class KnowledgeQaAgent {
         }
     }
 
-    private String buildCombinedContext(KnowledgeContextPacket packet) {
-        StringBuilder contextBuilder = new StringBuilder(packet.context() == null ? "" : packet.context());
-        if (packet.imageContext() != null && !packet.imageContext().isBlank()) {
-            contextBuilder.append("\n\n相关图片说明:\n").append(packet.imageContext());
-            contextBuilder.append("\n注意：你的回答可以引用上述图片，使用 [图N] 标记。系统会自动将对应图片内联展示给用户。");
+    private Map<String, Object> buildPromptVars(String question,
+                                                String history,
+                                                String sessionId,
+                                                String contextPolicy,
+                                                TurnAnalysis analysis,
+                                                KnowledgeContextPacket packet,
+                                                Map<String, Object> precomputedTurnAnalysis) {
+        String currentTopic = analysis == null ? extractFallbackTopic(question) : analysis.currentTopic();
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put(KnowledgeQaContextAttributes.PACKET, packet);
+        if (analysis != null) {
+            attributes.put(KnowledgeQaContextAttributes.ANALYSIS, analysis);
         }
-        return contextBuilder.toString();
+        attributes.put(KnowledgeQaContextAttributes.CONTEXT_POLICY, contextPolicy == null ? "" : contextPolicy);
+        attributes.put(KnowledgeQaContextAttributes.SESSION_ID, sessionId == null ? "" : sessionId);
+        attributes.put(KnowledgeQaContextAttributes.CURRENT_TOPIC, currentTopic);
+        String userId = textOf(precomputedTurnAnalysis == null ? null : precomputedTurnAnalysis.get("userId"));
+        if (!userId.isBlank()) {
+            attributes.put(KnowledgeQaContextAttributes.USER_ID, userId);
+        }
+
+        AgentRuntimeContext runtimeContext = contextAssembler.assemble(AgentContextQuery.create(
+                AgentContextMode.KNOWLEDGE_QA,
+                question,
+                attributes
+        ));
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("question", question);
+        vars.put("context", runtimeContext.render());
+        vars.put("imageContext", packet.imageContext());
+        vars.put("evidence", packet.retrievalEvidence());
+        vars.put("history", history != null ? history : "");
+        vars.put("dialogSignal", "");
+        return vars;
     }
 
     private <T> java.util.function.Supplier<T> wrapWithTraceContext(String traceId,
