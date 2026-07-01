@@ -105,6 +105,39 @@ class AgentContextAssemblerTest {
         assertTrue(rendered.indexOf("【任务规划】") < rendered.indexOf("【知识上下文】"));
     }
 
+
+    @Test
+    void defaultsIncludeCodingPracticeSchema() {
+        AgentContextSchema schema = AgentContextSchema.defaults().get(AgentContextMode.CODING_PRACTICE);
+
+        assertEquals(AgentContextMode.CODING_PRACTICE, schema.mode());
+        assertEquals(List.of(
+                AgentContextSlotKind.CONSTRAINTS,
+                AgentContextSlotKind.PROFILE,
+                AgentContextSlotKind.TASK_PLAN
+        ), schema.slots().stream().map(AgentContextSlot::kind).toList());
+    }
+
+    @Test
+    void assembleUsesCodingPracticeSchemaOrder() {
+        AgentContextSourceRegistry registry = new AgentContextSourceRegistry(List.of(
+                fixedSource("profile", AgentContextSlotKind.PROFILE, "画像"),
+                fixedSource("plan", AgentContextSlotKind.TASK_PLAN, "计划"),
+                fixedSource("constraints", AgentContextSlotKind.CONSTRAINTS, "约束")
+        ));
+        AgentContextAssembler assembler = new AgentContextAssembler(registry);
+
+        AgentRuntimeContext context = assembler.assemble(AgentContextQuery.create(
+                AgentContextMode.CODING_PRACTICE,
+                "数组",
+                Map.of()
+        ));
+
+        String rendered = context.render();
+        assertTrue(rendered.indexOf("【硬性约束】") < rendered.indexOf("【用户画像】"));
+        assertTrue(rendered.indexOf("【用户画像】") < rendered.indexOf("【任务规划】"));
+    }
+
     private AgentContextSource fixedSource(String id, AgentContextSlotKind kind, String text) {
         return sourceWithItems(id, kind, List.of(text));
     }

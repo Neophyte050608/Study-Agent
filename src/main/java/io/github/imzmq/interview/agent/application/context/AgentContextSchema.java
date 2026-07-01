@@ -37,10 +37,23 @@ public record AgentContextSchema(
         );
     }
 
+
+    public static AgentContextSchema codingPractice() {
+        return new AgentContextSchema(
+                AgentContextMode.CODING_PRACTICE,
+                List.of(
+                        new AgentContextSlot(AgentContextSlotKind.CONSTRAINTS, false, new AgentContextSlotFilter(360, 3)),
+                        new AgentContextSlot(AgentContextSlotKind.PROFILE, false, new AgentContextSlotFilter(360, 2)),
+                        new AgentContextSlot(AgentContextSlotKind.TASK_PLAN, false, new AgentContextSlotFilter(480, 2))
+                )
+        );
+    }
+
     public static Map<AgentContextMode, AgentContextSchema> defaults() {
         return Map.of(
                 AgentContextMode.KNOWLEDGE_QA, knowledgeQa(),
-                AgentContextMode.INTERVIEW, interview()
+                AgentContextMode.INTERVIEW, interview(),
+                AgentContextMode.CODING_PRACTICE, codingPractice()
         );
     }
 }
