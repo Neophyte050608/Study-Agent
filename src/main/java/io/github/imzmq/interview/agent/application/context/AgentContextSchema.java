@@ -49,11 +49,25 @@ public record AgentContextSchema(
         );
     }
 
+
+    public static AgentContextSchema toolTask() {
+        return new AgentContextSchema(
+                AgentContextMode.TOOL_TASK,
+                List.of(
+                        new AgentContextSlot(AgentContextSlotKind.CONSTRAINTS, false, new AgentContextSlotFilter(600, 3)),
+                        new AgentContextSlot(AgentContextSlotKind.TASK_PLAN, false, new AgentContextSlotFilter(900, 3)),
+                        new AgentContextSlot(AgentContextSlotKind.TOOL_STATE, false, new AgentContextSlotFilter(700, 3)),
+                        new AgentContextSlot(AgentContextSlotKind.TASK_MEMORY, false, new AgentContextSlotFilter(1200, 4))
+                )
+        );
+    }
+
     public static Map<AgentContextMode, AgentContextSchema> defaults() {
         return Map.of(
                 AgentContextMode.KNOWLEDGE_QA, knowledgeQa(),
                 AgentContextMode.INTERVIEW, interview(),
-                AgentContextMode.CODING_PRACTICE, codingPractice()
+                AgentContextMode.CODING_PRACTICE, codingPractice(),
+                AgentContextMode.TOOL_TASK, toolTask()
         );
     }
 }

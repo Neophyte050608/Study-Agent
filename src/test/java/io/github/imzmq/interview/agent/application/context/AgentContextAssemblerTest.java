@@ -138,6 +138,42 @@ class AgentContextAssemblerTest {
         assertTrue(rendered.indexOf("【用户画像】") < rendered.indexOf("【任务规划】"));
     }
 
+
+    @Test
+    void defaultsIncludeToolTaskSchema() {
+        AgentContextSchema schema = AgentContextSchema.defaults().get(AgentContextMode.TOOL_TASK);
+
+        assertEquals(AgentContextMode.TOOL_TASK, schema.mode());
+        assertEquals(List.of(
+                AgentContextSlotKind.CONSTRAINTS,
+                AgentContextSlotKind.TASK_PLAN,
+                AgentContextSlotKind.TOOL_STATE,
+                AgentContextSlotKind.TASK_MEMORY
+        ), schema.slots().stream().map(AgentContextSlot::kind).toList());
+    }
+
+    @Test
+    void assembleUsesToolTaskSchemaOrder() {
+        AgentContextSourceRegistry registry = new AgentContextSourceRegistry(List.of(
+                fixedSource("memory", AgentContextSlotKind.TASK_MEMORY, "记忆"),
+                fixedSource("state", AgentContextSlotKind.TOOL_STATE, "工具"),
+                fixedSource("plan", AgentContextSlotKind.TASK_PLAN, "计划"),
+                fixedSource("constraints", AgentContextSlotKind.CONSTRAINTS, "约束")
+        ));
+        AgentContextAssembler assembler = new AgentContextAssembler(registry);
+
+        AgentRuntimeContext context = assembler.assemble(AgentContextQuery.create(
+                AgentContextMode.TOOL_TASK,
+                "整理项目",
+                Map.of()
+        ));
+
+        String rendered = context.render();
+        assertTrue(rendered.indexOf("【硬性约束】") < rendered.indexOf("【任务规划】"));
+        assertTrue(rendered.indexOf("【任务规划】") < rendered.indexOf("【工具状态】"));
+        assertTrue(rendered.indexOf("【工具状态】") < rendered.indexOf("【任务记忆】"));
+    }
+
     private AgentContextSource fixedSource(String id, AgentContextSlotKind kind, String text) {
         return sourceWithItems(id, kind, List.of(text));
     }
