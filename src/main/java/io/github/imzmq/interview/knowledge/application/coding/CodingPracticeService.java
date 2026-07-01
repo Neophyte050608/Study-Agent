@@ -2,6 +2,10 @@ package io.github.imzmq.interview.knowledge.application.coding;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.context.AgentContextQuery;
+import io.github.imzmq.interview.agent.application.context.CodingPracticeContextAttributes;
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
 import io.github.imzmq.interview.chat.application.JsonResult;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
@@ -45,17 +49,20 @@ public class CodingPracticeService {
     private final PromptManager promptManager;
     private final SkillOrchestrator skillOrchestrator;
     private final LlmJsonParser llmJsonParser;
+    private final AgentContextAssembler contextAssembler;
 
     public CodingPracticeService(RoutingChatService routingChatService,
                                  AgentSkillService agentSkillService,
                                  PromptManager promptManager,
                                  SkillOrchestrator skillOrchestrator,
-                                 LlmJsonParser llmJsonParser) {
+                                 LlmJsonParser llmJsonParser,
+                                 AgentContextAssembler contextAssembler) {
         this.routingChatService = routingChatService;
         this.agentSkillService = agentSkillService;
         this.promptManager = promptManager;
         this.skillOrchestrator = skillOrchestrator;
         this.llmJsonParser = llmJsonParser;
+        this.contextAssembler = contextAssembler;
     }
 
     public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot, List<String> excludedTopics) {
@@ -73,12 +80,22 @@ public class CodingPracticeService {
                 0
         );
 
+        String agentContext = assembleCodingContext(
+                normalizedTopic,
+                normalizedDifficulty,
+                normalizedQuestionType,
+                1,
+                profileSnapshot,
+                excludedTopics
+        );
+
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
         params.put("topic", buildTopicWithExclusion(normalizedTopic, excludedTopics));
         params.put("difficulty", normalizedDifficulty);
         params.put("questionType", normalizedQuestionType);
         params.put("profileSnapshot", truncate(profileSnapshot, 240));
+        params.put("agentContext", agentContext);
         PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-question", params);
 
         try {
@@ -118,14 +135,24 @@ public class CodingPracticeService {
                 "",
                 0
         );
+        int safeCount = Math.min(count, 10);
+        String agentContext = assembleCodingContext(
+                normalizedTopic,
+                normalizedDifficulty,
+                "选择题",
+                safeCount,
+                profileSnapshot,
+                excludedTopics
+        );
 
         Map<String, Object> params = new HashMap<>();
         params.put("skillBlock", mergeSkillGuidance(skillBlock, codingCoachSummary));
         params.put("topic", buildTopicWithExclusion(normalizedTopic, excludedTopics));
         params.put("difficulty", normalizedDifficulty);
-        params.put("count", String.valueOf(Math.min(count, 10)));
+        params.put("count", String.valueOf(safeCount));
         params.put("questionType", "选择题");
         params.put("profileSnapshot", truncate(profileSnapshot, 240));
+        params.put("agentContext", agentContext);
 
         String sp;
         String up;
@@ -190,6 +217,29 @@ public class CodingPracticeService {
             logger.warn("批量选择题生成失败，降级逐题生成。原因: {}", summarizeError(e));
             return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
         }
+    }
+
+    private String assembleCodingContext(String topic,
+                                         String difficulty,
+                                         String questionType,
+                                         int count,
+                                         String profileSnapshot,
+                                         List<String> excludedTopics) {
+        if (contextAssembler == null) {
+            return "";
+        }
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put(CodingPracticeContextAttributes.TOPIC, topic == null ? "" : topic);
+        attributes.put(CodingPracticeContextAttributes.DIFFICULTY, difficulty == null ? "" : difficulty);
+        attributes.put(CodingPracticeContextAttributes.QUESTION_TYPE, questionType == null ? "" : questionType);
+        attributes.put(CodingPracticeContextAttributes.COUNT, count);
+        attributes.put(CodingPracticeContextAttributes.PROFILE_SNAPSHOT, profileSnapshot == null ? "" : profileSnapshot);
+        attributes.put(CodingPracticeContextAttributes.EXCLUDED_TOPICS, excludedTopics == null ? List.of() : excludedTopics);
+        return contextAssembler.assemble(AgentContextQuery.create(
+                AgentContextMode.CODING_PRACTICE,
+                topic == null ? "" : topic,
+                attributes
+        )).render();
     }
 
     /**

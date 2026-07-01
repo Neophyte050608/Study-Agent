@@ -2,6 +2,11 @@ package io.github.imzmq.interview.knowledge.application.coding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
+import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
+import io.github.imzmq.interview.agent.application.context.CodingConstraintsContextSource;
+import io.github.imzmq.interview.agent.application.context.CodingProfileContextSource;
+import io.github.imzmq.interview.agent.application.context.CodingTaskPlanContextSource;
 import io.github.imzmq.interview.chat.application.LlmJsonParser;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
@@ -48,12 +53,18 @@ class CodingPracticeServiceTest {
         );
         routingChatService = new StubRoutingChatService();
         promptManager = new CapturingPromptManager();
+        AgentContextAssembler contextAssembler = new AgentContextAssembler(new AgentContextSourceRegistry(List.of(
+                new CodingConstraintsContextSource(),
+                new CodingProfileContextSource(),
+                new CodingTaskPlanContextSource()
+        )));
         service = new CodingPracticeService(
                 routingChatService,
                 new AgentSkillService("skills"),
                 promptManager,
                 skillOrchestrator,
-                new LlmJsonParser(new ObjectMapper())
+                new LlmJsonParser(new ObjectMapper()),
+                contextAssembler
         );
     }
 
@@ -68,6 +79,39 @@ class CodingPracticeServiceTest {
         String skillBlock = String.valueOf(promptManager.lastVariables.get("skillBlock"));
         assertTrue(skillBlock.contains("Coding Coach"));
         assertTrue(skillBlock.contains("任务: 出题"));
+    }
+
+
+    @Test
+    void shouldInjectAssembledContextIntoQuestionPrompt() {
+        routingChatService.nextResponse = "请完成一道 Two Sum 算法题。";
+
+        service.generateCodingQuestion("数组与字符串", "medium", "弱项：边界条件", List.of("递归"));
+
+        assertEquals("coding-question", promptManager.lastTaskTemplateName);
+        assertEquals("弱项：边界条件", promptManager.lastVariables.get("profileSnapshot"));
+        String agentContext = String.valueOf(promptManager.lastVariables.get("agentContext"));
+        assertTrue(agentContext.contains("【硬性约束】"));
+        assertTrue(agentContext.contains("避免重复主题：递归"));
+        assertTrue(agentContext.contains("【用户画像】"));
+        assertTrue(agentContext.contains("弱项：边界条件"));
+        assertTrue(agentContext.contains("【任务规划】"));
+        assertTrue(agentContext.contains("练习主题：数组与字符串"));
+    }
+
+    @Test
+    void shouldInjectAssembledContextIntoBatchQuizPrompt() {
+        routingChatService.nextResponse = "[{\"index\":1,\"stem\":\"题干\",\"options\":[\"A. a\",\"B. b\",\"C. c\",\"D. d\"],\"correctAnswer\":\"A\",\"explanation\":\"解析\"}]";
+
+        service.generateBatchQuiz("Java基础", "easy", 2, "弱项：集合", List.of("线程"));
+
+        assertEquals("batch-quiz-question", promptManager.lastTaskTemplateName);
+        assertEquals("弱项：集合", promptManager.lastVariables.get("profileSnapshot"));
+        String agentContext = String.valueOf(promptManager.lastVariables.get("agentContext"));
+        assertTrue(agentContext.contains("题目数量：2"));
+        assertTrue(agentContext.contains("题型：选择题"));
+        assertTrue(agentContext.contains("避免重复主题：线程"));
+        assertTrue(agentContext.contains("练习主题：Java基础"));
     }
 
     @Test

@@ -3,6 +3,9 @@ package io.github.imzmq.interview.service;
 import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
 import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
 import io.github.imzmq.interview.agent.application.context.BasicConstraintsContextSource;
+import io.github.imzmq.interview.agent.application.context.CodingConstraintsContextSource;
+import io.github.imzmq.interview.agent.application.context.CodingProfileContextSource;
+import io.github.imzmq.interview.agent.application.context.CodingTaskPlanContextSource;
 import io.github.imzmq.interview.agent.application.context.InterviewKnowledgeContextSource;
 import io.github.imzmq.interview.agent.application.context.InterviewProfileContextSource;
 import io.github.imzmq.interview.agent.application.context.InterviewStrategyContextSource;
@@ -208,7 +211,8 @@ class RAGServiceTest {
                         agentSkillService,
                         promptManager,
                         skillOrchestrator,
-                        llmJsonParser
+                        llmJsonParser,
+                        testContextAssembler()
                 )
         );
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
@@ -699,7 +703,10 @@ class RAGServiceTest {
                 new BasicConstraintsContextSource(),
                 new InterviewProfileContextSource(),
                 new InterviewStrategyContextSource(),
-                new InterviewKnowledgeContextSource()
+                new InterviewKnowledgeContextSource(),
+                new CodingConstraintsContextSource(),
+                new CodingProfileContextSource(),
+                new CodingTaskPlanContextSource()
         )));
     }
 
