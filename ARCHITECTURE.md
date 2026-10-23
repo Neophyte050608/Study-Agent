@@ -112,3 +112,15 @@ Do not add new responsibilities to historical `knowledge.application.chatstream`
   - `mvn -q compile`
   - `mvn test`
   - `mvn -q verify -DskipTests`
+
+## M1 Routing Ownership Status
+
+M1 has completed the first routing boundary migration while keeping the application a single-module modular monolith:
+
+- The former top-level `intent` domain types now belong to `routing.domain`; production code may not recreate top-level `intent` or `turn` packages.
+- The routing module exposes the real cross-module understanding API at `routing.application.contract.UnderstandingService`, with provider-owned result types under `routing.application.contract.result`.
+- `interview.application.IntentShadowObserver` is the current external caller. It starts only after legacy routing has produced and stored its result, runs fire-and-forget, and writes an `INTENT_SHADOW` trace/log only. Its result must not change route selection, scenario handling, SSE events, or terminal state.
+- Shadow execution is disabled by default. The canonical configuration prefix is `app.routing.understanding.shadow.*`; the enable flag also accepts the legacy design key `app.turn.understanding.shadow` and environment variable `APP_TURN_UNDERSTANDING_SHADOW` as fallbacks.
+- The dedicated executor, timeout (capped at 3000 ms), fallback, and consecutive-failure circuit breaker isolate model and capacity failures from the chat chain.
+
+M1 intentionally does not complete structured-output ownership. `routing.application.understanding.IntentRecordMapper` temporarily depends on `chat.application.LlmJsonParser` and `chat.application.SchemaSpec`. This is the M2 handoff debt; do not add more routing-to-chat dependencies or treat it as a precedent.

@@ -33,6 +33,20 @@
 - Cross-module access to `<owner>.application.dto`, use-case implementations, helpers, and `infrastructure` is forbidden.
 - A business module may implement an extension contract owned by `agent`, `chat`, `skill`, or `tool`; the registry depends on the extension interface, not concrete business implementations.
 
+## 4.2 Routing public surface after M1
+
+Routing owns intent understanding, turn-relation classification, intent domain types, and routing decisions:
+
+- Stable cross-module entry: `routing.application.contract.UnderstandingService`.
+- Provider-owned public results: `routing.application.contract.result`.
+- Intent domain model: `routing.domain`.
+- Internal implementation only: `routing.application.understanding`; callers must not import it.
+- Top-level `intent` and `turn` packages are prohibited and must not be recreated.
+
+The current shadow caller is `interview.application.IntentShadowObserver`. It observes the result after legacy routing and must not use it to select a handler or mutate the existing route response. The canonical configuration prefix is `app.routing.understanding.shadow.*`; the legacy `app.turn.understanding.shadow` key is enable-only compatibility, not a package ownership rule.
+
+Temporary M2 debt: `routing.application.understanding.IntentRecordMapper` reuses `chat.application.LlmJsonParser` and `chat.application.SchemaSpec`. Do not extend this reverse dependency. M2 must move structured-output ownership to `modelrouting` before the normal no-`modelrouting -> chat` direction is fully enforced for this path.
+
 ## 5. Migration rule
 - Existing migration to domain packages is complete for main business services and MyBatis persistence code.
 - Top-level `entity`, `mapper`, and `dto` are retired for new business code; do not reintroduce them as acceptable placement.
@@ -82,7 +96,7 @@ Historical packages are migration-only:
 - Do not add generic chat code to `knowledge.application.chatstream` or `knowledge.application.context`.
 - Do not add coding-practice behavior to `knowledge.application.coding`.
 - Do not add generic trace/metrics behavior to `knowledge.application.observability`.
-- Do not add new code to top-level `intent`, `graph`, or `rag`.
+- Do not add new code to top-level `intent`, `turn`, `graph`, or `rag`.
 - Do not add business-specific Agent, Handler, context source, or schema to the generic `agent` module.
 - `RAGService` remains a compatibility facade during migration; new retrieval behavior belongs to focused knowledge services.
 
