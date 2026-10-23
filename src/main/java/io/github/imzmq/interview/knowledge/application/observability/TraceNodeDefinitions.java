@@ -6,6 +6,7 @@ public final class TraceNodeDefinitions {
     public static final TraceNodeDefinition PRE_FILTER = new TraceNodeDefinition("INTENT", "PRE_FILTER");
     public static final TraceNodeDefinition DOMAIN_CLASSIFY = new TraceNodeDefinition("INTENT", "DOMAIN_CLASSIFY");
     public static final TraceNodeDefinition INTENT_ROUTE = new TraceNodeDefinition("INTENT", "INTENT_ROUTE");
+    public static final TraceNodeDefinition INTENT_SHADOW = new TraceNodeDefinition("INTENT", "INTENT_SHADOW");
     public static final TraceNodeDefinition SLOT_REFINE = new TraceNodeDefinition("INTENT", "SLOT_REFINE");
     public static final TraceNodeDefinition REACT_ROUTE_LLM = new TraceNodeDefinition("ROUTING", "REACT_ROUTE_LLM");
     public static final TraceNodeDefinition QUERY_REWRITE = new TraceNodeDefinition("RETRIEVAL", "QUERY_REWRITE");

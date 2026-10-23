@@ -41,6 +41,7 @@ public class ChatStreamingService {
     private final ChatStreamingSupport chatStreamingSupport;
     private final ChatScenarioHandlerRegistry chatScenarioHandlerRegistry;
     private final TraceService traceService;
+    private final IntentShadowObserver intentShadowObserver;
     private final long timeoutMillis;
 
     public ChatStreamingService(
@@ -50,6 +51,7 @@ public class ChatStreamingService {
             ChatStreamingSupport chatStreamingSupport,
             ChatScenarioHandlerRegistry chatScenarioHandlerRegistry,
             TraceService traceService,
+            IntentShadowObserver intentShadowObserver,
             @Qualifier("interviewStreamingExecutor") Executor streamingExecutor,
             @Value("${app.chat.streaming.timeout-millis:180000}") long timeoutMillis) {
         this.webChatService = webChatService;
@@ -58,6 +60,7 @@ public class ChatStreamingService {
         this.chatStreamingSupport = chatStreamingSupport;
         this.chatScenarioHandlerRegistry = chatScenarioHandlerRegistry;
         this.traceService = traceService;
+        this.intentShadowObserver = intentShadowObserver;
         this.streamingExecutor = streamingExecutor;
         this.timeoutMillis = timeoutMillis;
     }
@@ -194,6 +197,13 @@ public class ChatStreamingService {
             TaskResponse response = webChatService.getTaskRouterAgent().dispatch(request);
             chatContext.routeResponse(response);
             chatContext.routeSource(String.valueOf(context.getOrDefault("routeSource", "")));
+            intentShadowObserver.observe(
+                    sessionId,
+                    userId,
+                    content,
+                    intentRoutingHistory == null ? "" : intentRoutingHistory,
+                    rootTrace
+            );
 
             if (taskManager.isCancelled(taskId)) {
                 terminalState = "CANCELLED";

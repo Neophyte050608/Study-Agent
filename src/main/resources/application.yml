@@ -168,6 +168,14 @@ app:
       timeout-millis: 180000
       message-chunk-size: 48
 
+  routing:
+    understanding:
+      shadow:
+        enabled: ${APP_ROUTING_UNDERSTANDING_SHADOW_ENABLED:${app.turn.understanding.shadow:${APP_TURN_UNDERSTANDING_SHADOW:false}}}
+        timeout-millis: ${APP_ROUTING_UNDERSTANDING_SHADOW_TIMEOUT_MILLIS:3000}
+        failure-threshold: ${APP_ROUTING_UNDERSTANDING_SHADOW_FAILURE_THRESHOLD:3}
+        open-duration-millis: ${APP_ROUTING_UNDERSTANDING_SHADOW_OPEN_DURATION_MILLIS:30000}
+
   model-routing:
     enabled: ${APP_MODEL_ROUTING_ENABLED:true}
     probe:
