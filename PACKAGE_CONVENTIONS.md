@@ -24,6 +24,15 @@
 - Agent layer must not depend on controller layer.
 - Application code should not expose persistence-specific DTOs upward.
 
+## 4.1 Cross-module public contracts
+
+- The only normal cross-module business entry is `<owner>.application.contract`.
+- Create a contract only when a real external module calls the capability; do not add empty facades or speculative ports.
+- Provider-owned command/query/result types stay with the provider. Do not move business DTOs into `common`.
+- Contracts must not expose Mapper, DO, infrastructure adapter, Spring Web, or vendor SDK types.
+- Cross-module access to `<owner>.application.dto`, use-case implementations, helpers, and `infrastructure` is forbidden.
+- A business module may implement an extension contract owned by `agent`, `chat`, `skill`, or `tool`; the registry depends on the extension interface, not concrete business implementations.
+
 ## 5. Migration rule
 - Existing migration to domain packages is complete for main business services and MyBatis persistence code.
 - Top-level `entity`, `mapper`, and `dto` are retired for new business code; do not reintroduce them as acceptable placement.
@@ -43,40 +52,39 @@ DTO placement:
 - Application-internal DTOs belong in `<domain>.application.dto`.
 - Persistence-specific DTOs/records belong in `<domain>.infrastructure.persistence` with their owning domain adapter.
 
-## 7. Placement Cheatsheet (Current)
-- Agent configuration/evaluation/skills and runtime context assembly: `agent.application`; context assembly implementation lives in `agent.application.context`.
-- Prompt/template/chat context memory: `chat.application`
-- User identity extraction: `identity.application`
-- Knowledge ingestion config & sync: `ingestion.application`
-- Interview orchestration facade: `interview.application`
-- Retrieval/rag/local graph: `knowledge.application` + `knowledge.domain`
-- Learning profile and events: `learning.application` + `learning.domain`
-- MCP gateway and audit: `mcp.application`
-- Image embedding/index/retrieval: `media.application`
-- Menu/workspace config: `menu.application`
-- Model routing candidates/executor/runtime health: `modelrouting`
-- Trace attribute sanitization and related helpers: `observability.application`
-- Intent tree/routing: `routing.application`
-- Autocomplete and ranking: `search.application`; internal autocomplete DTOs: `search.application.dto`
-- Cross-domain SSE/stream transport support: `common.stream`; business-specific stream orchestration stays in its owning domain.
-- Agent prompt/runtime context assembly belongs in `agent.application.context`; knowledge-specific retrieval and topic policy remain in `knowledge.application.*` and may be wrapped by context sources.
+## 7. Placement Cheatsheet (Target Ownership)
 
-Knowledge package breakdown (mandatory for new code):
-- RAG compatibility entry and packet builder: `knowledge.application` (`RAGService` remains a facade; new code should prefer focused services where possible).
-- Indexing and chunk/lexical tokenizer/index structures: `knowledge.application.indexing`.
-- Local graph chain (candidate recall, llm route, note resolve, wiki/backlink expansion): `knowledge.application.localgraph`.
-- Retrieval orchestration/fusion, query rewrite, evidence evaluation, Web fallback, and RAG adapters: `knowledge.application.retrieval`.
-- Multi-turn topic state and dynamic context policy: `knowledge.application.context`.
-- Streaming chat handlers and stream utilities: `knowledge.application.chatstream`.
-- Coding practice question generation/evaluation/quiz fallback: `knowledge.application.coding`.
-- Retrieval/generation offline eval and interview answer evaluation/scoring: `knowledge.application.evaluation`.
-- RAG trace/event/trace-service: `knowledge.application.observability`.
-- Knowledge base/document catalog operations: `knowledge.application.catalog`.
+- Generic chat session/message/context/stream orchestration: `chat`.
+- Interview lifecycle, answer evaluation, report, resume, and interview-specific Agent/Handler/context: `interview`.
+- Coding practice generation/evaluation/session and practice-specific Agent/Handler/context: `practice`.
+- Learning profile/events/plans and learning-specific Agent/Handler/context: `learning`.
+- Knowledge catalog/indexing/retrieval/evidence/local graph/GraphRAG: `knowledge`.
+- Intent understanding, clarification, relation judgment, and routing: `routing`.
+- Generic Task/Handler contracts, registry, lifecycle, cancellation, A2A, and context assembly mechanism: `agent`.
+- Generic Skill contract/registry/invocation: `skill`; a business-specific Skill implementation belongs to its business owner.
+- Generic Tool contract/authorization/execution: `tool`; MCP protocol adaptation belongs to `mcp`.
+- Model routing, health, execution, failover, and structured model output: `modelrouting`.
+- Trace, span, metrics, and operational query: `observability`.
+- Cross-domain SSE connection/transport only: `common.stream`.
 
-Forbidden placement:
-- Do not add new non-core classes into `knowledge.application` root; do not add new responsibilities directly to `RAGService`. New answer-scoring or evidence-validation logic belongs in `knowledge.application.evaluation`; new coding-practice logic belongs in `knowledge.application.coding`.
-- Do not place new knowledge features under legacy `...service`.
-- Do not place new business persistence classes under top-level `entity`, `mapper`, or `dto`.
+Knowledge package ownership for new code:
+
+- `knowledge.application.catalog`: knowledge base and document catalog use cases.
+- `knowledge.application.indexing`: chunking, tokenizer, lexical and parent-child index use cases.
+- `knowledge.application.retrieval`: retrieval orchestration, fusion, query rewrite, evidence evaluation, and fallback.
+- `knowledge.application.localgraph`: local graph retrieval chain.
+- `knowledge.domain`: knowledge and GraphRAG domain types without Spring Data or vendor dependencies.
+- `knowledge.infrastructure.persistence`: knowledge-owned MyBatis DOs and Mappers.
+- `knowledge.infrastructure.graph`: Neo4j/Spring Data graph adapters and repositories.
+
+Historical packages are migration-only:
+
+- Do not add generic chat code to `knowledge.application.chatstream` or `knowledge.application.context`.
+- Do not add coding-practice behavior to `knowledge.application.coding`.
+- Do not add generic trace/metrics behavior to `knowledge.application.observability`.
+- Do not add new code to top-level `intent`, `graph`, or `rag`.
+- Do not add business-specific Agent, Handler, context source, or schema to the generic `agent` module.
+- `RAGService` remains a compatibility facade during migration; new retrieval behavior belongs to focused knowledge services.
 
 ## 8. Hard Guardrails
 - Controllers cannot use MyBatis Mapper interfaces directly.
@@ -85,3 +93,10 @@ Forbidden placement:
 - MyBatis DO classes and Mapper interfaces must stay in `<domain>.infrastructure.persistence`.
 - Controller-facing DTOs must stay in `<domain>.api`; application-internal DTOs must stay in `<domain>.application.dto`.
 - New code that violates package placement should be moved before merge.
+- Cross-module business calls must target the provider's `application.contract`.
+- A module must not access another module's Mapper, DO, repository implementation, or other infrastructure class.
+- `common` must not depend on a business module.
+- `modelrouting` must not depend on `chat`; shared structured-output logic belongs to `modelrouting`.
+- `observability` must not depend on `knowledge`; business modules record telemetry through observability contracts.
+- Generic `agent` runtime must not import concrete interview, practice, learning, or knowledge Agent/Handler implementations.
+- Existing M0 exceptions are listed in `docs/architecture/module-boundary-baseline.md`; do not add new exceptions.
