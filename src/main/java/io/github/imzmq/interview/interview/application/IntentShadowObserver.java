@@ -60,13 +60,13 @@ public class IntentShadowObserver {
                 throw new IllegalStateException("understanding returned null stage");
             }
             TraceNodeHandle finalShadowTrace = shadowTrace;
-            stage.whenComplete((record, error) -> complete(finalShadowTrace, record, error));
+            stage.whenComplete((record, error) -> complete(finalShadowTrace, rawQuery, record, error));
         } catch (Exception error) {
             failSafely(shadowTrace, error);
         }
     }
 
-    private void complete(TraceNodeHandle shadowTrace, IntentRecord record, Throwable error) {
+    private void complete(TraceNodeHandle shadowTrace, String rawQuery, IntentRecord record, Throwable error) {
         if (error != null) {
             failSafely(shadowTrace, unwrap(error));
             return;
@@ -81,7 +81,8 @@ public class IntentShadowObserver {
                 .toList();
         Map<String, Object> result = Map.of(
                 "relation", record.relation().name(),
-                "standaloneQuery", record.standaloneQuery(),
+                "queryChanged", !safe(rawQuery).equals(record.standaloneQuery()),
+                "standaloneQueryLength", record.standaloneQuery().length(),
                 "taskIds", taskIds,
                 "taskCount", taskIds.size(),
                 "confidence", record.confidence(),
@@ -90,18 +91,16 @@ public class IntentShadowObserver {
         );
         try {
             traceService.success(shadowTrace, result);
-            log.info("intent shadow completed: traceId={}, relation={}, standaloneQuery={}, taskIds={}, taskCount={}, confidence={}, source={}",
-                    shadowTrace.traceId(), record.relation(), record.standaloneQuery(), taskIds,
-                    taskIds.size(), record.confidence(), record.source());
+            log.info("intent shadow completed: traceId={}, relation={}, queryChanged={}, standaloneQueryLength={}, taskIds={}, taskCount={}, confidence={}, source={}",
+                    shadowTrace.traceId(), record.relation(), !safe(rawQuery).equals(record.standaloneQuery()),
+                    record.standaloneQuery().length(), taskIds, taskIds.size(), record.confidence(), record.source());
         } catch (Exception traceError) {
             log.debug("intent shadow success observation failed: traceId={}", shadowTrace.traceId(), traceError);
         }
     }
 
     private void failSafely(TraceNodeHandle shadowTrace, Throwable error) {
-        String message = error.getMessage() == null || error.getMessage().isBlank()
-                ? error.getClass().getSimpleName()
-                : error.getMessage();
+        String message = "intent_shadow_failed";
         if (shadowTrace != null) {
             try {
                 traceService.fail(
@@ -113,7 +112,8 @@ public class IntentShadowObserver {
                 log.debug("intent shadow failure observation failed: traceId={}", shadowTrace.traceId(), traceError);
             }
         }
-        log.debug("intent shadow failed without affecting legacy routing", error);
+        log.debug("intent shadow failed without affecting legacy routing: errorType={}",
+                error.getClass().getSimpleName());
     }
 
     private Throwable unwrap(Throwable error) {

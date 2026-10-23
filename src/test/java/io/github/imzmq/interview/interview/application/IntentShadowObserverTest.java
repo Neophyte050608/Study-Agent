@@ -66,7 +66,8 @@ class IntentShadowObserverTest {
         verify(understandingService).understand("session", "user", "query", "history");
         verify(traceService).success(child, Map.of(
                 "relation", "FOLLOW_UP",
-                "standaloneQuery", "standalone",
+                "queryChanged", true,
+                "standaloneQueryLength", 10,
                 "taskIds", List.of("knowledge.qa"),
                 "taskCount", 1,
                 "confidence", 0.9,
@@ -106,7 +107,7 @@ class IntentShadowObserverTest {
         IntentShadowObserver asyncObserver = new IntentShadowObserver(asyncFailure, properties(true), asyncTrace);
         assertThatCode(() -> asyncObserver.observe("session", "user", "query", "history", root))
                 .doesNotThrowAnyException();
-        verify(asyncTrace).fail(child, "async boom", Map.of("status", "FAILED", "errorType", "IllegalStateException"));
+        verify(asyncTrace).fail(child, "intent_shadow_failed", Map.of("status", "FAILED", "errorType", "IllegalStateException"));
 
         UnderstandingService syncFailure = mock(UnderstandingService.class);
         TraceService syncTrace = mock(TraceService.class);
@@ -119,7 +120,7 @@ class IntentShadowObserverTest {
         IntentShadowObserver syncObserver = new IntentShadowObserver(syncFailure, properties(true), syncTrace);
         assertThatCode(() -> syncObserver.observe("session", "user", "query", "history", root))
                 .doesNotThrowAnyException();
-        verify(syncTrace).fail(child, "sync boom", Map.of("status", "FAILED", "errorType", "IllegalArgumentException"));
+        verify(syncTrace).fail(child, "intent_shadow_failed", Map.of("status", "FAILED", "errorType", "IllegalArgumentException"));
     }
 
     private RoutingUnderstandingProperties properties(boolean enabled) {

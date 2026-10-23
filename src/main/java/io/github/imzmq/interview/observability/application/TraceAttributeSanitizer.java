@@ -40,7 +40,14 @@ public class TraceAttributeSanitizer {
             "candidatePriority",
             "circuitState",
             "nodeType",
-            "nodeName"
+            "nodeName",
+            "relation",
+            "queryChanged",
+            "standaloneQueryLength",
+            "taskIds",
+            "taskCount",
+            "confidence",
+            "source"
     );
 
     private static final Set<String> EXTERNAL_OBSERVATION_KEYS = Set.of(

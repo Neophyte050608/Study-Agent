@@ -55,6 +55,20 @@ TraceAttributeSanitizer.sanitizeForExternalObservation(...)
 
 `sanitizeForExternalObservation(...)` 仅清洗 `AiObservationEvent.attributes`。`AiObservationEvent.traceId`、`nodeId`、`category`、`name`、`status` 属于内部事件元数据，不等于可直接外传字段；其中 `name` 可能是内部节点名称。外部 adapter 必须显式映射这些顶层字段，不得默认原样外传内部 ID、节点名称，或未来可能承载用户输入的字段。如需向外部系统传递 `traceId` / `nodeId`，必须使用内部生成 ID、hash/alias 或受控映射策略，并先在本文档补充对应规则。
 
+## M1 `INTENT_SHADOW` 节点
+
+M1 新增本地 `INTENT_SHADOW` 节点，用于比较统一理解结果而不参与现有路由决策。该节点只允许记录受控元数据：
+
+- `relation`
+- `queryChanged`
+- `standaloneQueryLength`
+- `taskIds` / `taskCount`
+- `confidence`
+- `source`
+- `status`
+
+不得把 raw query、standalone query、history、prompt、completion 或原始异常文本写入 trace/log。失败消息统一为 `intent_shadow_failed`，原始异常只降级为受控错误类型。上述 M1 字段目前只加入本地 `sanitize(...)` 白名单，没有加入 `sanitizeForExternalObservation(...)`，因此不会作为 attributes 默认导出到外部观测系统。
+
 ## 外部观测端口
 
 `observability.application.AiObservationPublisher` 是 framework-neutral 端口。RAG、模型路由、Agent 等业务链路只依赖该端口或更上层的 trace service，不直接关心事件最终写入哪里。

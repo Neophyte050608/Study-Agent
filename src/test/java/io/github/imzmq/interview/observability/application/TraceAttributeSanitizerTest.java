@@ -55,6 +55,30 @@ class TraceAttributeSanitizerTest {
     }
 
     @Test
+    void keepsSafeIntentShadowComparisonAttributesLocally() {
+        TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
+
+        Map<String, Object> sanitized = sanitizer.sanitize(Map.ofEntries(
+                Map.entry("relation", "FOLLOW_UP"),
+                Map.entry("queryChanged", true),
+                Map.entry("standaloneQueryLength", 42),
+                Map.entry("taskIds", "[knowledge.qa]"),
+                Map.entry("taskCount", 1),
+                Map.entry("confidence", 0.9),
+                Map.entry("source", "LLM")
+        ));
+
+        assertThat(sanitized)
+                .containsEntry("relation", "FOLLOW_UP")
+                .containsEntry("queryChanged", "true")
+                .containsEntry("standaloneQueryLength", "42")
+                .containsEntry("taskIds", "[knowledge.qa]")
+                .containsEntry("taskCount", "1")
+                .containsEntry("confidence", "0.9")
+                .containsEntry("source", "LLM");
+    }
+
+    @Test
     void filtersCallerProvidedErrorTypeAndRawError() {
         TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
         Map<String, Object> sanitized = sanitizer.sanitize(Map.of(
