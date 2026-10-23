@@ -71,6 +71,12 @@ class ArchitectureRulesTest {
     }
 
     @ArchTest
+    static final ArchRule modules_should_not_access_other_modules_persistence =
+            ModuleBoundaryRules.noCrossModulePersistenceAccess(
+                    LegacyCrossModulePersistenceDependencies.keys()
+            );
+
+    @ArchTest
     static final ArchRule agent_should_not_depend_on_controller =
             noClasses().that().resideInAnyPackage("..agent..")
                     .should().dependOnClassesThat().resideInAnyPackage("..controller..", "..api..");
@@ -96,6 +102,19 @@ class ArchitectureRulesTest {
                     )
                     .should(exist())
                     .allowEmptyShould(true);
+
+    @Test
+    void legacy_cross_module_persistence_allowlist_matches_real_dependencies() {
+        JavaClasses productionClasses = new ClassFileImporter()
+                .withImportOption(new ImportOption.DoNotIncludeTests())
+                .importPackages(ModuleBoundaryRules.ROOT_PACKAGE);
+        Set<ModuleBoundaryRules.DependencyKey> actual =
+                ModuleBoundaryRules.findCrossModulePersistenceDependencies(productionClasses);
+
+        assertThat(actual)
+                .as("Remove an allowlist entry in the same commit that removes its production dependency")
+                .containsAll(LegacyCrossModulePersistenceDependencies.keys());
+    }
 
     @Test
     void cross_module_persistence_rule_rejects_unlisted_dependency() {
