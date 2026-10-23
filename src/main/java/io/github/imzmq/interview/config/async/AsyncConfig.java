@@ -74,6 +74,20 @@ public class AsyncConfig {
         return executor;
     }
 
+    @Bean(name = "routingUnderstandingExecutor")
+    public Executor routingUnderstandingExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("RoutingUnderstanding-");
+        // Shadow 观测不得反压聊天线程；饱和时由调用方安全降级。
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(false);
+        executor.initialize();
+        return executor;
+    }
+
     @Bean(name = "imageIngestionExecutor")
     public Executor imageIngestionExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
