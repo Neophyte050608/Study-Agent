@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +55,37 @@ class DefaultUnderstandingServiceTest {
         assertThat(timedOut.source()).isEqualTo(DecisionSource.FALLBACK_RULE);
         assertThat(openCircuit.reason()).contains("circuit_open");
         assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void interruptsUnderlyingResolverWhenAttemptTimesOut() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        IntentLlmResolver resolver = org.mockito.Mockito.mock(IntentLlmResolver.class);
+        org.mockito.Mockito.when(resolver.resolve("s", "u", "q", "h"))
+                .thenAnswer(ignored -> {
+                    started.countDown();
+                    try {
+                        Thread.sleep(5_000);
+                    } catch (InterruptedException ex) {
+                        interrupted.countDown();
+                        Thread.currentThread().interrupt();
+                    }
+                    return IntentRecord.fallback("s", "q", "late");
+                });
+        DefaultUnderstandingService service = new DefaultUnderstandingService(
+                resolver,
+                task -> new Thread(task, "RoutingUnderstanding-cancellable-test").start(),
+                properties(500, 3, 1_000),
+                Clock.systemUTC()
+        );
+
+        var resultFuture = service.understand("s", "u", "q", "h").toCompletableFuture();
+
+        assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
+        IntentRecord result = resultFuture.get(2, TimeUnit.SECONDS);
+        assertThat(result.reason()).contains("understanding_failed");
+        assertThat(interrupted.await(1, TimeUnit.SECONDS)).isTrue();
     }
 
     @Test

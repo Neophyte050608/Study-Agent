@@ -11,8 +11,10 @@ import java.time.Clock;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -50,9 +52,23 @@ public class DefaultUnderstandingService implements UnderstandingService {
             return CompletableFuture.completedFuture(IntentRecord.fallback(sessionId, rawQuery, "circuit_open"));
         }
         try {
-            return CompletableFuture
-                    .supplyAsync(() -> resolver.resolve(sessionId, userId, rawQuery, history), executor)
+            CompletableFuture<IntentRecord> attempt = new CompletableFuture<>();
+            FutureTask<Void> task = new FutureTask<>(() -> {
+                try {
+                    attempt.complete(resolver.resolve(sessionId, userId, rawQuery, history));
+                } catch (Throwable error) {
+                    attempt.completeExceptionally(error);
+                }
+                return null;
+            });
+            executor.execute(task);
+            return attempt
                     .orTimeout(properties.getTimeoutMillis(), TimeUnit.MILLISECONDS)
+                    .whenComplete((ignored, error) -> {
+                        if (error instanceof TimeoutException) {
+                            task.cancel(true);
+                        }
+                    })
                     .handle((record, error) -> finishAttempt(sessionId, rawQuery, record, error));
         } catch (RejectedExecutionException ex) {
             recordFailure();

@@ -69,6 +69,10 @@ M1 新增本地 `INTENT_SHADOW` 节点，用于比较统一理解结果而不参
 
 不得把 raw query、standalone query、history、prompt、completion 或原始异常文本写入 trace/log。失败消息统一为 `intent_shadow_failed`，原始异常只降级为受控错误类型。上述 M1 字段目前只加入本地 `sanitize(...)` 白名单，没有加入 `sanitizeForExternalObservation(...)`，因此不会作为 attributes 默认导出到外部观测系统。
 
+`INTENT_SHADOW` 是异步节点，允许晚于聊天根节点结束。根节点结束后本地 trace 仍按既有语义归档；异步回调可以把已归档 trace 中仍为 `RUNNING` 的节点补写为 `COMPLETED` 或 `FAILED`，并重新持久化节点明细。已进入终态的归档节点不得被重复改写。
+
+Shadow 理解使用独立的零队列 executor：只有可立即执行的请求才会进入模型调用，线程池饱和时直接 fallback，不积压已经失去观测价值的请求。应用层 timeout 会完成 fallback 并对底层任务发送中断；模型 HTTP 客户端仍必须保留自己的连接和读取超时，因为第三方客户端是否立即响应线程中断不属于 application future 可以保证的语义。
+
 ## 外部观测端口
 
 `observability.application.AiObservationPublisher` 是 framework-neutral 端口。RAG、模型路由、Agent 等业务链路只依赖该端口或更上层的 trace service，不直接关心事件最终写入哪里。

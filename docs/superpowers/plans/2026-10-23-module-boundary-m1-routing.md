@@ -82,8 +82,8 @@
 - [ ] 运行两个测试，预期因实现尚不存在而 FAIL。
 - [ ] 实现 `IntentLlmResolver`，用 system/user 双消息调用 `RoutingChatService` 的 GENERAL route，并交给 mapper。
 - [ ] 实现 `RoutingUnderstandingProperties`，默认 timeout `3000ms`、failure threshold `3`、open duration `30000ms`，对非法 timeout 做上限约束。
-- [ ] 在 `AsyncConfig` 新增 `routingUnderstandingExecutor`：core 2/max 4/queue 100/`AbortPolicy`，防止饱和时 CallerRuns 阻塞聊天主线程。
-- [ ] 实现 `DefaultUnderstandingService`：`CompletableFuture.supplyAsync(...).orTimeout(...)`；异常计数和 open-until 使用原子变量；open 期间直接给出 fallback，不刷模型错误。
+- [ ] 在 `AsyncConfig` 新增 `routingUnderstandingExecutor`：core 2/max 4/queue 0/`AbortPolicy`，防止饱和时 CallerRuns 阻塞聊天主线程，也不积压已失去观测价值的请求。
+- [ ] 实现 `DefaultUnderstandingService`：用可取消任务承载 resolver，timeout 后先完成 fallback 再向底层任务发送中断；异常计数和 open-until 使用原子变量；open 期间直接给出 fallback，不刷模型错误。
 - [ ] 重跑上述测试，预期 PASS。
 - [ ] 提交 `feat(routing): isolate shadow understanding calls`。
 

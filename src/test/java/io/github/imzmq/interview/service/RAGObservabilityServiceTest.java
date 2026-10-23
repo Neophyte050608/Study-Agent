@@ -27,11 +27,63 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class RAGObservabilityServiceTest {
+
+    @Test
+    void shouldAcceptAsyncChildCompletionAfterRootTraceIsArchived() {
+        ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
+        properties.setRagTraceEnabled(true);
+        RagTraceMapper traceMapper = mock(RagTraceMapper.class);
+        RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
+        RagTraceDO archivedTrace = new RagTraceDO();
+        archivedTrace.setId(1L);
+        when(traceMapper.selectOne(any())).thenReturn(null, archivedTrace);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+
+        service.startNode("trace-async-child", "root-async-child", null, "ROOT", "CHAT_STREAM");
+        service.startNode(
+                "trace-async-child",
+                "shadow-async-child",
+                "root-async-child",
+                "INTENT",
+                "INTENT_SHADOW"
+        );
+
+        service.endNode("trace-async-child", "root-async-child", "input", "output", null);
+
+        assertTrue(service.listActive(10).isEmpty());
+        assertEquals("RUNNING", service.getTraceDetail("trace-async-child")
+                .findNode("shadow-async-child")
+                .status());
+
+        service.endNode("trace-async-child", "shadow-async-child", "query", "intent", null);
+
+        assertTrue(service.listActive(10).isEmpty());
+        assertEquals("COMPLETED", service.getTraceDetail("trace-async-child")
+                .findNode("shadow-async-child")
+                .status());
+        verify(traceMapper).insert(any(RagTraceDO.class));
+        verify(traceMapper).updateById(any(RagTraceDO.class));
+        verify(traceNodeMapper, times(2)).delete(any());
+        ArgumentCaptor<RagTraceNodeDO> nodeCaptor = ArgumentCaptor.forClass(RagTraceNodeDO.class);
+        verify(traceNodeMapper, times(4)).insert(nodeCaptor.capture());
+        RagTraceNodeDO repersistedShadowNode = nodeCaptor.getAllValues().stream()
+                .skip(2)
+                .filter(node -> "shadow-async-child".equals(node.getNodeId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("COMPLETED", repersistedShadowNode.getNodeStatus());
+
+        clearInvocations(traceMapper, traceNodeMapper);
+        service.endNode("trace-async-child", "shadow-async-child", "duplicate", "duplicate", null);
+        verifyNoInteractions(traceMapper, traceNodeMapper);
+    }
 
     @Test
     void shouldUseStructuredRetrievedDocsMetricInOverview() {

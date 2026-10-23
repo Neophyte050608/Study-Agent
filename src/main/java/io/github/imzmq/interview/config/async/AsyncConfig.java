@@ -79,7 +79,8 @@ public class AsyncConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(100);
+        // Shadow 结果过期后没有补算价值；零队列只接受可立即执行的请求。
+        executor.setQueueCapacity(0);
         executor.setThreadNamePrefix("RoutingUnderstanding-");
         // Shadow 观测不得反压聊天线程；饱和时由调用方安全降级。
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());

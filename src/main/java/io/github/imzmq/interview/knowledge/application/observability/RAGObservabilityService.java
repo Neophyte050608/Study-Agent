@@ -185,17 +185,28 @@ public class RAGObservabilityService {
         try {
             RAGTrace trace = activeTraces.get(safeTraceId);
             if (trace == null) {
+                trace = allTraces.stream()
+                        .filter(candidate -> safeTraceId.equals(candidate.traceId()))
+                        .findFirst()
+                        .orElse(null);
+            }
+            if (trace == null) {
                 return;
             }
-            RAGTraceNode node = trace.findNode(nodeId);
-            if (node == null) {
-                return;
-            }
-            node.complete(Instant.now(), inputSummary, outputSummary, errorSummary, metrics, details);
-            publishNodeEvent(safeTraceId, "node_finished", node, trace);
-            if (node.parentNodeId() == null || node.parentNodeId().isBlank()) {
-                publishTraceFinishedEvent(safeTraceId, trace);
-                archiveTrace(safeTraceId, trace);
+            synchronized (trace) {
+                boolean active = activeTraces.get(safeTraceId) == trace;
+                RAGTraceNode node = trace.findNode(nodeId);
+                if (node == null || (!active && !"RUNNING".equals(node.status()))) {
+                    return;
+                }
+                node.complete(Instant.now(), inputSummary, outputSummary, errorSummary, metrics, details);
+                publishNodeEvent(safeTraceId, "node_finished", node, trace);
+                if (active && (node.parentNodeId() == null || node.parentNodeId().isBlank())) {
+                    publishTraceFinishedEvent(safeTraceId, trace);
+                    archiveTrace(safeTraceId, trace);
+                } else if (!active) {
+                    persistTrace(trace);
+                }
             }
         } finally {
             RAGTraceContext.removeNode(nodeId);
@@ -807,8 +818,9 @@ public class RAGObservabilityService {
      * @param trace 已完成的 Trace
      */
     private void archiveTrace(String traceId, RAGTrace trace) {
-        activeTraces.remove(traceId);
+        // 先暴露归档引用再移除活动引用，避免异步子节点在两者之间找不到 Trace。
         allTraces.addLast(trace);
+        activeTraces.remove(traceId, trace);
         while (allTraces.size() > MAX_TRACES) {
             allTraces.removeFirst();
         }
