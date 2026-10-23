@@ -17,8 +17,12 @@ import io.github.imzmq.interview.architecture.fixture.api.ControllerDependingOnM
 import io.github.imzmq.interview.architecture.fixture.application.ApplicationServiceDependingOnMapper;
 import io.github.imzmq.interview.architecture.fixture.infrastructure.persistence.SamplePersistenceDO;
 import io.github.imzmq.interview.architecture.fixture.infrastructure.persistence.SamplePersistenceMapper;
+import io.github.imzmq.interview.architecturefixturesource.application.CrossModulePersistenceConsumer;
+import io.github.imzmq.interview.architecturefixturetarget.infrastructure.persistence.ForeignPersistenceDO;
 import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -92,6 +96,58 @@ class ArchitectureRulesTest {
                     )
                     .should(exist())
                     .allowEmptyShould(true);
+
+    @Test
+    void cross_module_persistence_rule_rejects_unlisted_dependency() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                CrossModulePersistenceConsumer.class,
+                ForeignPersistenceDO.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .noCrossModulePersistenceAccess(Set.of())
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isTrue();
+        assertThat(result.getFailureReport().getDetails())
+                .anySatisfy(detail -> {
+                    assertThat(detail).contains(CrossModulePersistenceConsumer.class.getName());
+                    assertThat(detail).contains(ForeignPersistenceDO.class.getName());
+                });
+    }
+
+    @Test
+    void cross_module_persistence_rule_allows_same_module_persistence() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                ApplicationServiceDependingOnMapper.class,
+                SamplePersistenceMapper.class,
+                SamplePersistenceDO.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .noCrossModulePersistenceAccess(Set.of())
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isFalse();
+    }
+
+    @Test
+    void cross_module_persistence_rule_accepts_exact_allowlisted_dependency() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                CrossModulePersistenceConsumer.class,
+                ForeignPersistenceDO.class
+        );
+        ModuleBoundaryRules.DependencyKey allowed = new ModuleBoundaryRules.DependencyKey(
+                CrossModulePersistenceConsumer.class.getName(),
+                ForeignPersistenceDO.class.getName()
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .noCrossModulePersistenceAccess(Set.of(allowed))
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isFalse();
+    }
 
     private static DescribedPredicate<JavaClass> areMyBatisMappers() {
         return DescribedPredicate.describe(
