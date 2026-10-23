@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -104,6 +105,16 @@ class ArchitectureRulesTest {
                     )
                     .should(exist())
                     .allowEmptyShould(true);
+
+    @ArchTest
+    static final ArchRule intent_record_should_stay_in_routing_public_result_contract =
+            classes().that().haveSimpleName("IntentRecord")
+                    .should().resideInAPackage("io.github.imzmq.interview.routing.application.contract.result");
+
+    @ArchTest
+    static final ArchRule understanding_service_should_stay_in_routing_public_contract =
+            classes().that().haveSimpleName("UnderstandingService")
+                    .should().resideInAPackage("io.github.imzmq.interview.routing.application.contract");
 
     @Test
     void legacy_cross_module_persistence_allowlist_matches_real_dependencies() {
