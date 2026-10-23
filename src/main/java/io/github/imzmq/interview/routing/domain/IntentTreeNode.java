@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.intent.domain;
+package io.github.imzmq.interview.routing.domain;
 
 import java.io.Serializable;
 import java.util.List;

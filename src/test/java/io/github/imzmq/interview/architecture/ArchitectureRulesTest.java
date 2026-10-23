@@ -98,7 +98,9 @@ class ArchitectureRulesTest {
                             "io.github.imzmq.interview.entity..",
                             "io.github.imzmq.interview.mapper..",
                             "io.github.imzmq.interview.dto..",
-                            "io.github.imzmq.interview.stream.."
+                            "io.github.imzmq.interview.stream..",
+                            "io.github.imzmq.interview.intent..",
+                            "io.github.imzmq.interview.turn.."
                     )
                     .should(exist())
                     .allowEmptyShould(true);

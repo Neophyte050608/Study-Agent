@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.routing.application;
 
 import io.github.imzmq.interview.config.routing.IntentTreeProperties;
-import io.github.imzmq.interview.intent.domain.IntentCandidate;
-import io.github.imzmq.interview.intent.domain.IntentRoutingDecision;
-import io.github.imzmq.interview.intent.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.domain.IntentCandidate;
+import io.github.imzmq.interview.routing.domain.IntentRoutingDecision;
+import io.github.imzmq.interview.routing.domain.IntentTreeNode;
 import io.github.imzmq.interview.observability.core.TraceNode;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;

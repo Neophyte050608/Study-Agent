@@ -2,7 +2,7 @@ package io.github.imzmq.interview.routing.application;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import io.github.imzmq.interview.routing.infrastructure.persistence.IntentNodeDO;
-import io.github.imzmq.interview.intent.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.domain.IntentTreeNode;
 
 import java.util.List;
 

@@ -3,7 +3,7 @@ package io.github.imzmq.interview.search.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
 import io.github.imzmq.interview.search.infrastructure.persistence.AutocompleteDictDO;
-import io.github.imzmq.interview.intent.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.domain.IntentTreeNode;
 import io.github.imzmq.interview.search.infrastructure.persistence.AutocompleteDictMapper;
 import io.github.imzmq.interview.routing.application.IntentTreeService;
 import org.slf4j.Logger;
