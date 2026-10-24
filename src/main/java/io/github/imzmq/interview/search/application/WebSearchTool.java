@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.search.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -25,10 +25,10 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
 
     private static final Logger logger = LoggerFactory.getLogger(WebSearchTool.class);
     private final RestTemplate restTemplate = new RestTemplate();
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
 
-    public WebSearchTool(LlmJsonParser llmJsonParser) {
-        this.llmJsonParser = llmJsonParser;
+    public WebSearchTool(StructuredOutputParser structuredOutputParser) {
+        this.structuredOutputParser = structuredOutputParser;
     }
 
     @Override
@@ -49,7 +49,7 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
             if (response == null || response.isBlank()) {
                 return List.of();
             }
-            JsonResult<JsonNode> result = llmJsonParser.parseTree(response, null, null);
+            StructuredOutputResult<JsonNode> result = structuredOutputParser.parseTree(response, null, null);
             if (!result.success()) {
                 return List.of();
             }

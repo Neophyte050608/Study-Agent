@@ -2,7 +2,7 @@ package io.github.imzmq.interview.agent.runtime;
 
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -21,12 +21,12 @@ public class EvaluationAgent {
 
     private final RAGService ragService;
     private final ObjectMapper objectMapper;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
 
-    public EvaluationAgent(RAGService ragService, ObjectMapper objectMapper, LlmJsonParser llmJsonParser) {
+    public EvaluationAgent(RAGService ragService, ObjectMapper objectMapper, StructuredOutputParser structuredOutputParser) {
         this.ragService = ragService;
         this.objectMapper = objectMapper;
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
     }
 
     public String generateFirstQuestion(String resumeContent, String topic) {
@@ -97,7 +97,7 @@ public class EvaluationAgent {
     private ParsedEvaluation parseEvaluation(String raw) {
         String cleanRaw = raw;
         if (raw != null) {
-            String extracted = llmJsonParser.extractJson(raw);
+            String extracted = structuredOutputParser.extractJson(raw);
             cleanRaw = extracted != null ? extracted : raw.trim();
         }
         try {
