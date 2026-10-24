@@ -174,6 +174,55 @@ class ArchitectureRulesTest {
                             "com.volcengine..");
 
     @ArchTest
+    static final ArchRule modelrouting_should_not_depend_on_chat =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.modelrouting..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage("io.github.imzmq.interview.chat..");
+
+    @ArchTest
+    static final ArchRule structured_output_contract_types_should_belong_to_modelrouting_contract =
+            classes().that().haveSimpleName("StructuredOutputParser")
+                    .or().haveSimpleName("StructuredOutputResult")
+                    .or().haveSimpleName("StructuredOutputSchema")
+                    .or().haveSimpleName("StructuredOutputRetry")
+                    .should().resideInAPackage(
+                            "io.github.imzmq.interview.modelrouting.application.contract.structuredoutput");
+
+    @ArchTest
+    static final ArchRule default_structured_output_parser_should_belong_to_modelrouting_implementation =
+            classes().that().haveSimpleName("DefaultStructuredOutputParser")
+                    .should().resideInAPackage(
+                            "io.github.imzmq.interview.modelrouting.application.structuredoutput");
+
+    @ArchTest
+    static final ArchRule external_modules_should_only_use_structured_output_contract =
+            noClasses().that().resideOutsideOfPackage("io.github.imzmq.interview.modelrouting..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage(
+                            "io.github.imzmq.interview.modelrouting.application.structuredoutput..");
+
+    @ArchTest
+    static final ArchRule legacy_chat_structured_output_types_should_not_exist =
+            noClasses().that().haveSimpleName("LlmJsonParser")
+                    .or().haveSimpleName("JsonResult")
+                    .or().haveSimpleName("SchemaSpec")
+                    .or().haveSimpleName("RetryCall")
+                    .should(exist())
+                    .allowEmptyShould(true);
+
+    @ArchTest
+    static final ArchRule structured_output_contract_should_not_expose_framework_or_persistence_types =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.modelrouting.application.contract.structuredoutput..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.modelrouting.infrastructure..",
+                            "org.springframework..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
+
+    @ArchTest
     static final ArchRule intent_record_should_stay_in_routing_public_result_contract =
             classes().that().haveSimpleName("IntentRecord")
                     .should().resideInAPackage("io.github.imzmq.interview.routing.application.contract.result");
