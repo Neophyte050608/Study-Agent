@@ -28,7 +28,8 @@ import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokeniz
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.structuredoutput.DefaultStructuredOutputParser;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
@@ -159,7 +160,7 @@ class ParentChildRetrievalHydrationTest {
                 imageService
         );
         Executor executor = Runnable::run;
-        LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
+        StructuredOutputParser structuredOutputParser = new DefaultStructuredOutputParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
                 vectorStore,
@@ -175,7 +176,7 @@ class ParentChildRetrievalHydrationTest {
                 parentChildIndexService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                llmJsonParser,
+                structuredOutputParser,
                 new InterviewAnswerEvaluationService(
                         routingChatService,
                         observabilityService,
@@ -184,7 +185,7 @@ class ParentChildRetrievalHydrationTest {
                         promptManager,
                         observabilitySwitchProperties,
                         skillOrchestrator,
-                        llmJsonParser,
+                        structuredOutputParser,
                         testContextAssembler()
                 ),
                 new CodingPracticeService(
@@ -192,7 +193,7 @@ class ParentChildRetrievalHydrationTest {
                         agentSkillService,
                         promptManager,
                         skillOrchestrator,
-                        llmJsonParser,
+                        structuredOutputParser,
                         testContextAssembler()
                 )
         );

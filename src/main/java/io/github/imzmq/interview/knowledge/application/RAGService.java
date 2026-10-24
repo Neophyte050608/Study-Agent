@@ -25,8 +25,8 @@ import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -76,7 +76,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final RAGObservabilityService observabilityService;
     private final AgentSkillService agentSkillService;
     private final PromptManager promptManager;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
     // 注入自定义检索线程池
     private final java.util.concurrent.Executor ragRetrieveExecutor;
     // 注入图谱持久化组件
@@ -91,7 +91,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final InterviewAnswerEvaluationService interviewAnswerEvaluationService;
     private final CodingPracticeService codingPracticeService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, LlmJsonParser llmJsonParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService, CodingPracticeService codingPracticeService) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService, CodingPracticeService codingPracticeService) {
         this.agentSkillService = agentSkillService;
         this.promptManager = promptManager;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
@@ -106,7 +106,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         this.parentChildIndexService = parentChildIndexService;
         this.skillOrchestrator = skillOrchestrator;
         this.knowledgePacketBuilder = knowledgePacketBuilder;
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
         this.interviewAnswerEvaluationService = interviewAnswerEvaluationService;
         this.codingPracticeService = codingPracticeService;
     }
@@ -1141,7 +1141,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         }
 
         // 尝试 JSON 解析：如果 LLM 返回了 JSON 格式，直接提取 question 字段
-        JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw.trim(), null, null);
+        StructuredOutputResult<JsonNode> parseResult = structuredOutputParser.parseTree(raw.trim(), null, null);
         if (parseResult.success()) {
             JsonNode node = parseResult.data();
             if (node != null && node.isObject()) {

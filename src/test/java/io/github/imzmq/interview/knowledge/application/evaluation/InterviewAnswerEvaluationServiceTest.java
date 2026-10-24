@@ -9,7 +9,8 @@ import io.github.imzmq.interview.agent.application.context.InterviewStrategyCont
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.structuredoutput.DefaultStructuredOutputParser;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
@@ -52,12 +53,12 @@ class InterviewAnswerEvaluationServiceTest {
     private SkillOrchestrator skillOrchestrator;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private LlmJsonParser llmJsonParser;
+    private StructuredOutputParser structuredOutputParser;
     private InterviewAnswerEvaluationService service;
 
     @BeforeEach
     void setUp() {
-        llmJsonParser = new LlmJsonParser(objectMapper);
+        structuredOutputParser = new DefaultStructuredOutputParser(objectMapper);
         observabilitySwitchProperties = new ObservabilitySwitchProperties();
         observabilitySwitchProperties.setRagTraceEnabled(false);
         observabilityService = new RAGObservabilityService(observabilitySwitchProperties, null, null, null);
@@ -79,7 +80,7 @@ class InterviewAnswerEvaluationServiceTest {
                 promptManager,
                 observabilitySwitchProperties,
                 skillOrchestrator,
-                llmJsonParser,
+                structuredOutputParser,
                 testContextAssembler()
         );
     }

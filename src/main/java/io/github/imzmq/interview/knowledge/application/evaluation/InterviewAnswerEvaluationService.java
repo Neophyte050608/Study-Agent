@@ -10,8 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
@@ -67,7 +67,7 @@ public class InterviewAnswerEvaluationService {
     private final PromptManager promptManager;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final SkillOrchestrator skillOrchestrator;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
     private final AgentContextAssembler contextAssembler;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -78,7 +78,7 @@ public class InterviewAnswerEvaluationService {
                                             PromptManager promptManager,
                                             ObservabilitySwitchProperties observabilitySwitchProperties,
                                             SkillOrchestrator skillOrchestrator,
-                                            LlmJsonParser llmJsonParser,
+                                            StructuredOutputParser structuredOutputParser,
                                             AgentContextAssembler contextAssembler) {
         this.routingChatService = routingChatService;
         this.observabilityService = observabilityService;
@@ -87,7 +87,7 @@ public class InterviewAnswerEvaluationService {
         this.promptManager = promptManager;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.skillOrchestrator = skillOrchestrator;
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
         this.contextAssembler = contextAssembler;
     }
 
@@ -300,7 +300,7 @@ public class InterviewAnswerEvaluationService {
             return rawJson;
         }
 
-        JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(rawJson, null, null);
+        StructuredOutputResult<JsonNode> parseResult = structuredOutputParser.parseTree(rawJson, null, null);
         if (!parseResult.success()) {
             return rawJson;
         }

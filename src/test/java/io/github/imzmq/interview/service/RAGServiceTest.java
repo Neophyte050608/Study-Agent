@@ -42,7 +42,8 @@ import io.github.imzmq.interview.skill.builtin.PersonalizedLearningPlannerSkill;
 import io.github.imzmq.interview.skill.builtin.QueryOptimizerSkill;
 import io.github.imzmq.interview.skill.builtin.QuestionStrategySkill;
 import io.github.imzmq.interview.skill.runtime.SkillExecutor;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.structuredoutput.DefaultStructuredOutputParser;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
@@ -178,7 +179,7 @@ class RAGServiceTest {
                 observabilitySwitchProperties,
                 imageService
         );
-        LlmJsonParser llmJsonParser = new LlmJsonParser(new ObjectMapper());
+        StructuredOutputParser structuredOutputParser = new DefaultStructuredOutputParser(new ObjectMapper());
         ragService = new RAGService(
                 routingChatService,
                 vectorStore,
@@ -194,7 +195,7 @@ class RAGServiceTest {
                 parentChildIndexService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                llmJsonParser,
+                structuredOutputParser,
                 new InterviewAnswerEvaluationService(
                         routingChatService,
                         observabilityService,
@@ -203,7 +204,7 @@ class RAGServiceTest {
                         promptManager,
                         observabilitySwitchProperties,
                         skillOrchestrator,
-                        llmJsonParser,
+                        structuredOutputParser,
                         testContextAssembler()
                 ),
                 new CodingPracticeService(
@@ -211,7 +212,7 @@ class RAGServiceTest {
                         agentSkillService,
                         promptManager,
                         skillOrchestrator,
-                        llmJsonParser,
+                        structuredOutputParser,
                         testContextAssembler()
                 )
         );

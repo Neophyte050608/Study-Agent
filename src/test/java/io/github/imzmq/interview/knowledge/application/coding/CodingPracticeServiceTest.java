@@ -7,7 +7,7 @@ import io.github.imzmq.interview.agent.application.context.AgentContextSourceReg
 import io.github.imzmq.interview.agent.application.context.CodingConstraintsContextSource;
 import io.github.imzmq.interview.agent.application.context.CodingProfileContextSource;
 import io.github.imzmq.interview.agent.application.context.CodingTaskPlanContextSource;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.structuredoutput.DefaultStructuredOutputParser;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
 import io.github.imzmq.interview.knowledge.application.RAGService;
@@ -63,7 +63,7 @@ class CodingPracticeServiceTest {
                 new AgentSkillService("skills"),
                 promptManager,
                 skillOrchestrator,
-                new LlmJsonParser(new ObjectMapper()),
+                new DefaultStructuredOutputParser(new ObjectMapper()),
                 contextAssembler
         );
     }

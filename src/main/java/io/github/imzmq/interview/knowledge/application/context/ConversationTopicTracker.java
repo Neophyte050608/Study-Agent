@@ -5,8 +5,8 @@ import io.github.imzmq.interview.knowledge.domain.TopicState;
 import io.github.imzmq.interview.knowledge.domain.TurnAnalysis;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,19 +41,19 @@ public class ConversationTopicTracker {
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
     private final ObjectMapper objectMapper;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
     private final AtomicLong turnCounter = new AtomicLong(0);
 
     public ConversationTopicTracker(StringRedisTemplate redisTemplate,
                                     RoutingChatService routingChatService,
                                     PromptManager promptManager,
                                     ObjectMapper objectMapper,
-                                    LlmJsonParser llmJsonParser) {
+                                    StructuredOutputParser structuredOutputParser) {
         this.redisTemplate = redisTemplate;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.objectMapper = objectMapper;
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
     }
 
     public TurnAnalysis analyzeTurn(String sessionId, String currentQuestion, String recentHistory) {
@@ -250,7 +250,7 @@ public class ConversationTopicTracker {
         if (raw == null || raw.isBlank()) {
             return TurnAnalysis.defaultContinuation(resolveTopic(previousTopic, currentQuestion));
         }
-        JsonResult<JsonNode> result = llmJsonParser.parseTree(raw, null, null);
+        StructuredOutputResult<JsonNode> result = structuredOutputParser.parseTree(raw, null, null);
         if (!result.success()) {
             log.warn("轮次分析 JSON 解析失败，降级为话题延续: raw={}", raw);
             return TurnAnalysis.defaultContinuation(resolveTopic(previousTopic, currentQuestion));

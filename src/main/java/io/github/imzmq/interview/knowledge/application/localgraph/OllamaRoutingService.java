@@ -6,8 +6,8 @@ import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapServ
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
@@ -41,18 +41,18 @@ public class OllamaRoutingService {
     private final RestClient.Builder restClientBuilder;
     private final PromptManager promptManager;
     private final RoutingChatService routingChatService;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
 
     public OllamaRoutingService(KnowledgeRetrievalProperties properties,
                                 RestClient.Builder restClientBuilder,
                                 PromptManager promptManager,
                                 RoutingChatService routingChatService,
-                                LlmJsonParser llmJsonParser) {
+                                StructuredOutputParser structuredOutputParser) {
         this.properties = properties;
         this.restClientBuilder = restClientBuilder;
         this.promptManager = promptManager;
         this.routingChatService = routingChatService;
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
     }
 
     public List<String> route(String question, List<KnowledgeMapService.KnowledgeNode> candidates) {
@@ -182,7 +182,7 @@ public class OllamaRoutingService {
 
     private List<String> parseMatchesFromLegacyResponse(String raw, List<KnowledgeMapService.KnowledgeNode> candidates) {
         try {
-            JsonResult<JsonNode> rootResult = llmJsonParser.parseTree(raw, null, null);
+            StructuredOutputResult<JsonNode> rootResult = structuredOutputParser.parseTree(raw, null, null);
             if (!rootResult.success()) {
                 throw new BusinessException(
                         ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,
@@ -211,7 +211,7 @@ public class OllamaRoutingService {
 
     private List<String> parseMatchesFromRoutedText(String routedText, List<KnowledgeMapService.KnowledgeNode> candidates) {
         try {
-            JsonResult<JsonNode> routedResult = llmJsonParser.parseTree(routedText, null, null);
+            StructuredOutputResult<JsonNode> routedResult = structuredOutputParser.parseTree(routedText, null, null);
             if (!routedResult.success()) {
                 throw new BusinessException(
                     ErrorCode.LOCAL_GRAPH_OLLAMA_INVALID_JSON,

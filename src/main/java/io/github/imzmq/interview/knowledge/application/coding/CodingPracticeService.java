@@ -7,8 +7,8 @@ import io.github.imzmq.interview.agent.application.context.AgentContextMode;
 import io.github.imzmq.interview.agent.application.context.AgentContextQuery;
 import io.github.imzmq.interview.agent.application.context.CodingPracticeContextAttributes;
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
@@ -48,20 +48,20 @@ public class CodingPracticeService {
     private final AgentSkillService agentSkillService;
     private final PromptManager promptManager;
     private final SkillOrchestrator skillOrchestrator;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
     private final AgentContextAssembler contextAssembler;
 
     public CodingPracticeService(RoutingChatService routingChatService,
                                  AgentSkillService agentSkillService,
                                  PromptManager promptManager,
                                  SkillOrchestrator skillOrchestrator,
-                                 LlmJsonParser llmJsonParser,
+                                 StructuredOutputParser structuredOutputParser,
                                  AgentContextAssembler contextAssembler) {
         this.routingChatService = routingChatService;
         this.agentSkillService = agentSkillService;
         this.promptManager = promptManager;
         this.skillOrchestrator = skillOrchestrator;
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
         this.contextAssembler = contextAssembler;
     }
 
@@ -178,7 +178,7 @@ public class CodingPracticeService {
                 return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
             }
 
-            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
+            StructuredOutputResult<JsonNode> parseResult = structuredOutputParser.parseTree(raw, null, null);
             if (!parseResult.success() || !parseResult.data().isArray() || parseResult.data().isEmpty()) {
                 return fallbackBatchQuiz(normalizedTopic, normalizedDifficulty, count, profileSnapshot, excludedTopics);
             }
@@ -320,7 +320,7 @@ public class CodingPracticeService {
             ), 1, "刷题答案评估");
             logger.debug("====== [CodingPracticeService - evaluateCodingAnswer] Response ======");
             logger.debug("{}", raw);
-            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(raw, null, null);
+            StructuredOutputResult<JsonNode> parseResult = structuredOutputParser.parseTree(raw, null, null);
             if (!parseResult.success()) {
                 throw new RuntimeException("Coding evaluation JSON parse failed: " + parseResult.failureReason());
             }
