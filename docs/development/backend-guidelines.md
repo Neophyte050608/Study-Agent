@@ -45,6 +45,10 @@ Application service 负责用例编排：
 
 复杂流程应拆成小的协作类，不要把所有逻辑塞进一个 service。
 
+跨模块使用 LLM 结构化输出时，依赖
+`modelrouting.application.contract.structuredoutput.StructuredOutputParser`；默认实现属于
+modelrouting 内部，业务模块不得直接构造或注入实现类。结构化输出迁移不得改变调用者原有 fallback。
+
 ## Domain 层
 
 Domain 层放稳定业务概念：

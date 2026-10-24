@@ -135,4 +135,12 @@ M1 has completed the first routing boundary migration while keeping the applicat
 - Shadow execution is disabled by default. The canonical configuration prefix is `app.routing.understanding.shadow.*`; the enable flag also accepts the legacy design key `app.turn.understanding.shadow` and environment variable `APP_TURN_UNDERSTANDING_SHADOW` as fallbacks.
 - The dedicated executor, timeout (capped at 3000 ms), fallback, and consecutive-failure circuit breaker isolate model and capacity failures from the chat chain.
 
-M1 intentionally does not complete structured-output ownership. `routing.application.understanding.IntentRecordMapper` temporarily depends on `chat.application.LlmJsonParser` and `chat.application.SchemaSpec`. This is the M2 handoff debt; do not add more routing-to-chat dependencies or treat it as a precedent.
+## M2 Structured Output Ownership Status
+
+M2 moves generic LLM structured-output parsing out of chat and into modelrouting:
+
+- Cross-module callers depend on `modelrouting.application.contract.structuredoutput.StructuredOutputParser`.
+- Provider-owned result, schema, and retry types live in the same public contract package.
+- `modelrouting.application.structuredoutput.DefaultStructuredOutputParser` is the only Spring default implementation and remains internal to modelrouting.
+- The migration preserves JSON extraction, repair, schema warning/failure, retry, and fallback behavior; chat no longer owns or wraps these types.
+- `modelrouting` has no dependency on `chat`, and external production modules cannot import the implementation package.

@@ -45,8 +45,6 @@ Routing owns intent understanding, turn-relation classification, intent domain t
 
 The current shadow caller is `chat.application.IntentShadowObserver`. It observes the result after legacy routing and must not use it to select a handler or mutate the existing route response. The canonical configuration prefix is `app.routing.understanding.shadow.*`; the legacy `app.turn.understanding.shadow` key is enable-only compatibility, not a package ownership rule.
 
-Temporary M2 debt: `routing.application.understanding.IntentRecordMapper` reuses `chat.application.LlmJsonParser` and `chat.application.SchemaSpec`. Do not extend this reverse dependency. M2 must move structured-output ownership to `modelrouting` before the normal no-`modelrouting -> chat` direction is fully enforced for this path.
-
 ## 4.3 Chat public surface after M3
 
 - Stable cross-module entries: `chat.application.contract.ChatSessionOperations`, `ChatMessageOperations`, `ChatContextOperations`, `ChatTaskOperations`, and `TaskResponsePresentationOperations`.
@@ -56,6 +54,15 @@ Temporary M2 debt: `routing.application.understanding.IntentRecordMapper` reuses
 - Concrete interview/default handlers belong to `interview.application.chat`; knowledge QA belongs to `knowledge.application.chat`.
 - `ActiveCodingChatScenarioHandler` is a documented pre-M4 exception under `interview.application.chat`; new coding behavior still belongs to `practice`, and M4 moves this handler there.
 - `knowledge.application.chatstream` is retired and must not be recreated.
+
+## 4.4 Modelrouting structured-output public surface after M2
+
+- Stable cross-module entry: `modelrouting.application.contract.structuredoutput.StructuredOutputParser`.
+- Provider-owned public types: `StructuredOutputResult`, `StructuredOutputSchema`, and `StructuredOutputRetry` in the same contract package.
+- Internal default implementation: `modelrouting.application.structuredoutput.DefaultStructuredOutputParser`.
+- External production modules depend on the parser interface and contract types only; they must not import the default implementation.
+- Jackson `JsonNode` remains the current result tree shape for behavior compatibility. Do not broaden the contract with Spring Web, persistence, MyBatis, or model-provider SDK types.
+- Do not recreate `LlmJsonParser`, `JsonResult`, `SchemaSpec`, or `RetryCall` under chat or common.
 
 ## 5. Migration rule
 - Existing migration to domain packages is complete for main business services and MyBatis persistence code.
