@@ -78,7 +78,7 @@ MyBatis 相关类放在：
 - 检索编排、融合、query rewrite：`knowledge.application.retrieval`
 - 本地图谱链路：`knowledge.application.localgraph`
 - 多轮上下文策略：`knowledge.application.context`
-- 流式处理：`knowledge.application.chatstream`
+- 通用聊天流式编排：`chat.application`；知识问答场景 Handler：`knowledge.application.chat`
 - 刷题生成、评估、兜底：`knowledge.application.coding`
 - 评测、答案评分、证据校验：`knowledge.application.evaluation`
 - trace、事件、观测：`knowledge.application.observability`

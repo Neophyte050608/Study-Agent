@@ -1,7 +1,8 @@
-package io.github.imzmq.interview.knowledge.application.chatstream;
+package io.github.imzmq.interview.chat.application;
 
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
-import io.github.imzmq.interview.interview.application.WebChatService;
+import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatStreamingOperations;
+import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
 import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.common.stream.StreamEventType;
@@ -18,26 +19,26 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 @Component
-public class ChatStreamingSupport {
+public class ChatStreamingSupport implements ChatStreamingOperations {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private final WebChatService webChatService;
+    private final ChatMessageOperations chatMessageOperations;
     private final StreamTaskManager taskManager;
     private final ChunkedTextStreamer chunkedTextStreamer;
     private final RAGObservabilityService ragObservabilityService;
 
-    public ChatStreamingSupport(WebChatService webChatService,
+    public ChatStreamingSupport(ChatMessageOperations chatMessageOperations,
                                 StreamTaskManager taskManager,
                                 RAGObservabilityService ragObservabilityService) {
-        this.webChatService = webChatService;
+        this.chatMessageOperations = chatMessageOperations;
         this.taskManager = taskManager;
         this.ragObservabilityService = ragObservabilityService;
         this.chunkedTextStreamer = new ChunkedTextStreamer();
     }
 
-    public ChatMessageDO createRunningAssistantPlaceholder(String sessionId, String traceId, String taskId) {
-        return webChatService.createAssistantPlaceholder(
+    public ChatMessageView createRunningAssistantPlaceholder(String sessionId, String traceId, String taskId) {
+        return chatMessageOperations.createAssistantPlaceholder(
                 sessionId,
                 "正在生成中...",
                 buildTerminalMetadata(traceId, taskId, "RUNNING", null),
@@ -54,7 +55,7 @@ public class ChatStreamingSupport {
         if (generationStatus != null && !generationStatus.isBlank()) {
             merged.put("generationStatus", generationStatus);
         }
-        webChatService.updateAssistantMessage(messageId, content, merged, contentType);
+        chatMessageOperations.updateAssistantMessage(messageId, content, merged, contentType);
     }
 
     public Map<String, Object> buildTerminalMetadata(String traceId,
@@ -348,11 +349,3 @@ public class ChatStreamingSupport {
         }
     }
 }
-
-
-
-
-
-
-
-

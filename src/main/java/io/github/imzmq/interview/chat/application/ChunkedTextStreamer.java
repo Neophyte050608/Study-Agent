@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.knowledge.application.chatstream;
+package io.github.imzmq.interview.chat.application;
 
 import io.github.imzmq.interview.common.stream.StreamEventType;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
@@ -46,6 +46,3 @@ public class ChunkedTextStreamer {
         }
     }
 }
-
-
-

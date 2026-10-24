@@ -1,13 +1,19 @@
-package io.github.imzmq.interview.interview.application;
+package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
+import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
+import io.github.imzmq.interview.chat.application.contract.ChatContextOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
+import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations;
+import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
+import io.github.imzmq.interview.chat.application.contract.result.ChatSessionView;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
-import io.github.imzmq.interview.interview.application.TaskResponsePresentationService;
-import io.github.imzmq.interview.chat.application.ChatContextCompressor;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
 import org.slf4j.Logger;
@@ -20,61 +26,61 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
-public class WebChatService {
+public class WebChatService implements ChatSessionOperations, ChatMessageOperations, ChatContextOperations, ChatTaskOperations {
     private static final Logger log = LoggerFactory.getLogger(WebChatService.class);
     private static final int TITLE_MAX_LENGTH = 30;
 
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
-    private final TaskRouterAgent taskRouterAgent;
     private final ChatContextCompressor chatContextCompressor;
-    private final TaskResponsePresentationService taskResponsePresentationService;
+    private final TaskRouterAgent taskRouterAgent;
+    private final TaskResponsePresentationOperations taskResponsePresentationOperations;
 
     public WebChatService(ChatSessionMapper sessionMapper,
                           ChatMessageMapper messageMapper,
                           TaskRouterAgent taskRouterAgent,
                           ChatContextCompressor chatContextCompressor,
-                          TaskResponsePresentationService taskResponsePresentationService) {
+                          TaskResponsePresentationOperations taskResponsePresentationOperations) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.taskRouterAgent = taskRouterAgent;
         this.chatContextCompressor = chatContextCompressor;
-        this.taskResponsePresentationService = taskResponsePresentationService;
+        this.taskResponsePresentationOperations = taskResponsePresentationOperations;
     }
 
     // ======== Session CRUD ========
 
     // 创建新会话：生成 sessionId，绑定 userId，并入库。
-    public ChatSessionDO createSession(String userId, String title) {
+    public ChatSessionView createSession(String userId, String title) {
         ChatSessionDO session = new ChatSessionDO();
         session.setSessionId(UUID.randomUUID().toString());
         session.setUserId(userId);
         session.setTitle(title != null && !title.isBlank() ? title : "新对话");
         session.setDeleted(false);
         sessionMapper.insert(session);
-        return session;
+        return toView(session);
     }
 
     // 列出用户会话，按最近更新时间倒序，满足聊天侧边栏展示。
-    public List<ChatSessionDO> listSessions(String userId) {
+    public List<ChatSessionView> listSessions(String userId) {
         return sessionMapper.selectList(
                 new LambdaQueryWrapper<ChatSessionDO>()
                         .eq(ChatSessionDO::getUserId, userId)
                         .orderByDesc(ChatSessionDO::getUpdatedAt)
-        );
+        ).stream().map(WebChatService::toView).toList();
     }
 
     // 重命名会话标题。
-    public ChatSessionDO renameSession(String sessionId, String newTitle) {
+    public ChatSessionView renameSession(String sessionId, String newTitle) {
         sessionMapper.update(null,
                 new LambdaUpdateWrapper<ChatSessionDO>()
                         .eq(ChatSessionDO::getSessionId, sessionId)
                         .set(ChatSessionDO::getTitle, newTitle)
         );
-        return sessionMapper.selectOne(
+        return toView(sessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSessionDO>()
                         .eq(ChatSessionDO::getSessionId, sessionId)
-        );
+        ));
     }
 
     // 删除会话（当前实现为直接删除记录）。
@@ -114,7 +120,7 @@ public class WebChatService {
     // ======== Message Operations ========
 
     // 拉取消息列表：可按 beforeId 向前翻页，且限制最大 200 条避免一次拉取过大。
-    public List<ChatMessageDO> listMessages(String sessionId, int limit, Long beforeId) {
+    public List<ChatMessageView> listMessages(String sessionId, int limit, Long beforeId) {
         LambdaQueryWrapper<ChatMessageDO> wrapper = new LambdaQueryWrapper<ChatMessageDO>()
                 .eq(ChatMessageDO::getSessionId, sessionId)
                 .orderByAsc(ChatMessageDO::getCreatedAt);
@@ -122,11 +128,11 @@ public class WebChatService {
             wrapper.lt(ChatMessageDO::getId, beforeId);
         }
         wrapper.last("LIMIT " + Math.min(limit, 200));
-        return messageMapper.selectList(wrapper);
+        return messageMapper.selectList(wrapper).stream().map(WebChatService::toView).toList();
     }
 
     // 保存用户消息（用户发言落库）。
-    public ChatMessageDO saveUserMessage(String sessionId, String content) {
+    public ChatMessageView saveUserMessage(String sessionId, String content) {
         ChatMessageDO msg = new ChatMessageDO();
         msg.setMessageId(UUID.randomUUID().toString());
         msg.setSessionId(sessionId);
@@ -136,16 +142,16 @@ public class WebChatService {
         msg.setDeleted(false);
         messageMapper.insert(msg);
         touchSession(sessionId);
-        return msg;
+        return toView(msg);
     }
 
     // 保存助手消息（默认 contentType=text）。
-    public ChatMessageDO saveAssistantMessage(String sessionId, String content, Map<String, Object> metadata) {
+    public ChatMessageView saveAssistantMessage(String sessionId, String content, Map<String, Object> metadata) {
         return saveAssistantMessage(sessionId, content, metadata, "text");
     }
 
     // 保存助手消息（可带 contentType=quiz/rich/scenario_card 等）。
-    public ChatMessageDO saveAssistantMessage(String sessionId, String content, Map<String, Object> metadata, String contentType) {
+    public ChatMessageView saveAssistantMessage(String sessionId, String content, Map<String, Object> metadata, String contentType) {
         ChatMessageDO msg = new ChatMessageDO();
         msg.setMessageId(UUID.randomUUID().toString());
         msg.setSessionId(sessionId);
@@ -156,11 +162,11 @@ public class WebChatService {
         msg.setDeleted(false);
         messageMapper.insert(msg);
         touchSession(sessionId);
-        return msg;
+        return toView(msg);
     }
 
     // 创建占位消息：流式生成开始时先落一条“正在生成中...”。
-    public ChatMessageDO createAssistantPlaceholder(String sessionId,
+    public ChatMessageView createAssistantPlaceholder(String sessionId,
                                                     String content,
                                                     Map<String, Object> metadata,
                                                     String contentType) {
@@ -192,15 +198,15 @@ public class WebChatService {
         touchSession(existing.getSessionId());
     }
 
-    public ChatMessageDO findMessageById(String messageId) {
+    public ChatMessageView findMessageById(String messageId) {
         if (messageId == null || messageId.isBlank()) {
             return null;
         }
-        return messageMapper.selectOne(
+        return toView(messageMapper.selectOne(
                 new LambdaQueryWrapper<ChatMessageDO>()
                         .eq(ChatMessageDO::getMessageId, messageId)
                         .last("LIMIT 1")
-        );
+        ));
     }
 
     // ======== Public helpers (used by ChatStreamingService) ========
@@ -215,9 +221,22 @@ public class WebChatService {
         return chatContextCompressor.buildIntentRoutingContext(sessionId);
     }
 
-    // 统一把任务响应转成 Web 展示文本。
+    @Override
+    public TaskResponse dispatch(TaskRequest request) {
+        return taskRouterAgent.dispatch(request);
+    }
+
+    @Override
     public String extractReplyText(TaskResponse response) {
-        return taskResponsePresentationService.format(response, TaskResponsePresentationService.PresentationChannel.WEB);
+        return taskResponsePresentationOperations.format(response, TaskResponsePresentationOperations.PresentationChannel.WEB);
+    }
+
+    @Override
+    public boolean shouldClearSession(TaskResponse response) {
+        if (!(response != null && response.data() instanceof Map<?, ?> dataMap)) {
+            return false;
+        }
+        return Boolean.TRUE.equals(dataMap.get("clearSession"));
     }
 
     // 若会话是首轮用户输入，则自动更新标题，提升会话列表可读性。
@@ -237,18 +256,6 @@ public class WebChatService {
                             .set(ChatSessionDO::getTitle, title)
             );
         }
-    }
-
-    public TaskRouterAgent getTaskRouterAgent() {
-        return taskRouterAgent;
-    }
-
-    // 当响应中要求 clearSession=true 时，表示下游明确要求重置会话上下文。
-    public boolean shouldClearSession(TaskResponse response) {
-        if (!(response != null && response.data() instanceof Map<?, ?> dataMap)) {
-            return false;
-        }
-        return Boolean.TRUE.equals(dataMap.get("clearSession"));
     }
 
     /**
@@ -293,6 +300,24 @@ public class WebChatService {
         return null;
     }
 
+    private static ChatSessionView toView(ChatSessionDO session) {
+        if (session == null) {
+            return null;
+        }
+        return new ChatSessionView(session.getId(), session.getSessionId(), session.getUserId(), session.getTitle(),
+                session.getContextSummary(), session.getSummaryUpToMsgId(), session.getDeleted(),
+                session.getCreatedAt(), session.getUpdatedAt());
+    }
+
+    private static ChatMessageView toView(ChatMessageDO message) {
+        if (message == null) {
+            return null;
+        }
+        return new ChatMessageView(message.getId(), message.getMessageId(), message.getSessionId(), message.getRole(),
+                message.getContentType(), message.getContent(), message.getMetadata(), message.getDeleted(),
+                message.getCreatedAt());
+    }
+
     // 更新会话更新时间（让会话在列表里上浮）。
     private void touchSession(String sessionId) {
         sessionMapper.update(null,
@@ -302,9 +327,3 @@ public class WebChatService {
         );
     }
 }
-
-
-
-
-
-

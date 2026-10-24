@@ -1,11 +1,11 @@
-package io.github.imzmq.interview.interview.api;
+package io.github.imzmq.interview.chat.api;
 
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
-import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-import io.github.imzmq.interview.interview.application.ChatStreamingService;
+import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
+import io.github.imzmq.interview.chat.application.contract.result.ChatSessionView;
+import io.github.imzmq.interview.chat.application.ChatStreamingService;
 import io.github.imzmq.interview.identity.application.UserIdentityResolver;
-import io.github.imzmq.interview.interview.application.WebChatService;
+import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,54 +26,57 @@ import java.util.Map;
 @RequestMapping("/api/chat")
 public class ChatController {
 
-    private final WebChatService webChatService;
+    private final ChatSessionOperations chatSessionOperations;
+    private final ChatMessageOperations chatMessageOperations;
     private final ChatStreamingService chatStreamingService;
     private final UserIdentityResolver userIdentityResolver;
 
-    public ChatController(WebChatService webChatService,
+    public ChatController(ChatSessionOperations chatSessionOperations,
+                          ChatMessageOperations chatMessageOperations,
                           ChatStreamingService chatStreamingService,
                           UserIdentityResolver userIdentityResolver) {
-        this.webChatService = webChatService;
+        this.chatSessionOperations = chatSessionOperations;
+        this.chatMessageOperations = chatMessageOperations;
         this.chatStreamingService = chatStreamingService;
         this.userIdentityResolver = userIdentityResolver;
     }
 
     @PostMapping("/sessions")
-    public ResponseEntity<ChatSessionDO> createSession(
+    public ResponseEntity<ChatSessionView> createSession(
             @RequestBody(required = false) Map<String, String> body,
             HttpServletRequest request) {
         // 从请求上下文中解析当前用户身份（Web 端多会话隔离关键点）。
         String userId = userIdentityResolver.resolve(request);
         // 允许前端不传 title，此时默认“新对话”。
         String title = body != null ? body.getOrDefault("title", "新对话") : "新对话";
-        return ResponseEntity.ok(webChatService.createSession(userId, title));
+        return ResponseEntity.ok(chatSessionOperations.createSession(userId, title));
     }
 
     @GetMapping("/sessions")
-    public ResponseEntity<List<ChatSessionDO>> listSessions(HttpServletRequest request) {
+    public ResponseEntity<List<ChatSessionView>> listSessions(HttpServletRequest request) {
         String userId = userIdentityResolver.resolve(request);
-        return ResponseEntity.ok(webChatService.listSessions(userId));
+        return ResponseEntity.ok(chatSessionOperations.listSessions(userId));
     }
 
     @PutMapping("/sessions/{sessionId}")
-    public ResponseEntity<ChatSessionDO> renameSession(
+    public ResponseEntity<ChatSessionView> renameSession(
             @PathVariable String sessionId,
             @RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(webChatService.renameSession(sessionId, body.get("title")));
+        return ResponseEntity.ok(chatSessionOperations.renameSession(sessionId, body.get("title")));
     }
 
     @DeleteMapping("/sessions/{sessionId}")
     public ResponseEntity<Void> deleteSession(@PathVariable String sessionId) {
-        webChatService.deleteSession(sessionId);
+        chatSessionOperations.deleteSession(sessionId);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
-    public ResponseEntity<List<ChatMessageDO>> listMessages(
+    public ResponseEntity<List<ChatMessageView>> listMessages(
             @PathVariable String sessionId,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(required = false) Long beforeId) {
-        return ResponseEntity.ok(webChatService.listMessages(sessionId, limit, beforeId));
+        return ResponseEntity.ok(chatMessageOperations.listMessages(sessionId, limit, beforeId));
     }
 
     @PostMapping(value = "/sessions/{sessionId}/stream",
@@ -87,10 +90,22 @@ public class ChatController {
         // 用户本次输入内容。
         String content = String.valueOf(body.getOrDefault("content", ""));
         // 可选检索模式（RAG_ONLY / 混合策略等），空值时由下游决定默认行为。
-        String retrievalModeValue = body == null ? null : String.valueOf(body.getOrDefault("retrievalMode", ""));
-        KnowledgeRetrievalMode retrievalMode = KnowledgeRetrievalMode.fromNullable(retrievalModeValue, null);
+        String retrievalMode = normalizeRetrievalMode(
+                body == null ? null : String.valueOf(body.getOrDefault("retrievalMode", ""))
+        );
         // 转入应用层流式服务，返回 SSE emitter 给前端持续接收 token/event。
         return chatStreamingService.streamChat(sessionId, userId, content, retrievalMode);
+    }
+
+    static String normalizeRetrievalMode(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (normalized) {
+            case "RAG_ONLY", "LOCAL_GRAPH_ONLY", "HYBRID_FUSION" -> normalized;
+            default -> null;
+        };
     }
 
     @PostMapping("/stream/stop")
@@ -102,12 +117,3 @@ public class ChatController {
         return ResponseEntity.ok(Map.of("streamTaskId", taskId, "stopped", stopped));
     }
 }
-
-
-
-
-
-
-
-
-

@@ -1,4 +1,4 @@
-package io.github.imzmq.interview.interview.application;
+package io.github.imzmq.interview.chat.application;
 
 import io.github.imzmq.interview.config.routing.RoutingUnderstandingProperties;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;

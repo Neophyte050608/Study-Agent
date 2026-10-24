@@ -1,7 +1,6 @@
-package io.github.imzmq.interview.knowledge.application.chatstream;
+package io.github.imzmq.interview.chat.application.contract.extension;
 
 import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 
 public class StreamingChatContext {
@@ -9,7 +8,7 @@ public class StreamingChatContext {
     private final String sessionId;
     private final String userId;
     private final String content;
-    private final KnowledgeRetrievalMode retrievalMode;
+    private final String retrievalMode;
     private final String traceId;
     private final String taskId;
     private final StreamEventEmitter emitter;
@@ -21,7 +20,7 @@ public class StreamingChatContext {
     public StreamingChatContext(String sessionId,
                                 String userId,
                                 String content,
-                                KnowledgeRetrievalMode retrievalMode,
+                                String retrievalMode,
                                 String traceId,
                                 String taskId,
                                 StreamEventEmitter emitter) {
@@ -46,7 +45,7 @@ public class StreamingChatContext {
         return content;
     }
 
-    public KnowledgeRetrievalMode retrievalMode() {
+    public String retrievalMode() {
         return retrievalMode;
     }
 
@@ -94,7 +93,3 @@ public class StreamingChatContext {
         this.routeSource = routeSource == null ? "" : routeSource;
     }
 }
-
-
-
-

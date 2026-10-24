@@ -52,6 +52,18 @@ Recommended contract structure:
 
 The `command`, `query`, and `result` subpackages are optional. Public contracts must use business language and must not expose MyBatis DOs, Mapper interfaces, Spring Web types, vendor SDK types, or persistence pagination objects.
 
+### Chat public surface after M3
+
+Generic web chat is owned by `chat`: `chat.api.ChatController` is the unchanged `/api/chat` HTTP/SSE entry, and session/message/stream orchestration stays under `chat.application`.
+
+- Cross-module session, message, context, task, and presentation capabilities are exposed from `chat.application.contract`; session/message results are immutable records under `chat.application.contract.result` and do not expose persistence DOs.
+- Business-owned scenario handlers implement the chat-owned SPI in `chat.application.contract.extension`. The chat registry discovers `List<ChatScenarioHandler>` through Spring ordering and never imports a concrete interview or knowledge handler.
+- Interview result formatting is supplied by the interview-owned `InterviewTaskResultPresenter`; chat's generic presenter no longer imports interview domain/runtime result types.
+- Interview and knowledge handlers may depend on chat contracts only. They cannot access `chat.application` implementations or `chat.infrastructure`.
+- `ActiveCodingChatScenarioHandler` remains temporarily under `interview.application.chat` for M3; M4 moves this concrete practice behavior to the `practice` owner without changing the chat SPI.
+
+M3 removes every chat persistence allowlist entry. It also removes the former M4 `CodingPracticeController -> ChatMessageDO` edge early because that controller now uses `ChatMessageOperations`.
+
 ## Layering Rules
 - API layer: controllers and controller-facing DTO/input-output types.
 - Application layer: orchestration, use-case flow, and application-internal DTOs.
@@ -119,7 +131,7 @@ M1 has completed the first routing boundary migration while keeping the applicat
 
 - The former top-level `intent` domain types now belong to `routing.domain`; production code may not recreate top-level `intent` or `turn` packages.
 - The routing module exposes the real cross-module understanding API at `routing.application.contract.UnderstandingService`, with provider-owned result types under `routing.application.contract.result`.
-- `interview.application.IntentShadowObserver` is the current external caller. It starts only after legacy routing has produced and stored its result, runs fire-and-forget, and writes an `INTENT_SHADOW` trace/log only. Its result must not change route selection, scenario handling, SSE events, or terminal state.
+- `chat.application.IntentShadowObserver` is the current caller after the M3 ownership move. It starts only after legacy routing has produced and stored its result, runs fire-and-forget, and writes an `INTENT_SHADOW` trace/log only. Its result must not change route selection, scenario handling, SSE events, or terminal state.
 - Shadow execution is disabled by default. The canonical configuration prefix is `app.routing.understanding.shadow.*`; the enable flag also accepts the legacy design key `app.turn.understanding.shadow` and environment variable `APP_TURN_UNDERSTANDING_SHADOW` as fallbacks.
 - The dedicated executor, timeout (capped at 3000 ms), fallback, and consecutive-failure circuit breaker isolate model and capacity failures from the chat chain.
 

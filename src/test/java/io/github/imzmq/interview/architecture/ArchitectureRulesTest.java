@@ -107,6 +107,73 @@ class ArchitectureRulesTest {
                     .allowEmptyShould(true);
 
     @ArchTest
+    static final ArchRule generic_chat_controller_should_belong_to_chat_api =
+            classes().that().haveSimpleName("ChatController")
+                    .should().resideInAPackage("io.github.imzmq.interview.chat.api");
+
+    @ArchTest
+    static final ArchRule generic_chat_application_services_should_belong_to_chat =
+            classes().that().haveSimpleName("WebChatService")
+                    .or().haveSimpleName("ChatStreamingService")
+                    .or().haveSimpleName("ChatStreamingSupport")
+                    .or().haveSimpleName("ChunkedTextStreamer")
+                    .or().haveSimpleName("ChatIntentHeuristics")
+                    .should().resideInAPackage("io.github.imzmq.interview.chat.application");
+
+    @ArchTest
+    static final ArchRule chat_scenario_extension_types_should_belong_to_chat_contract =
+            classes().that().haveSimpleName("ChatScenarioHandler")
+                    .or().haveSimpleName("StreamingChatContext")
+                    .should().resideInAPackage("io.github.imzmq.interview.chat.application.contract.extension");
+
+    @ArchTest
+    static final ArchRule generic_chatstream_types_should_not_remain_owned_by_knowledge =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.application.chatstream..")
+                    .should(exist())
+                    .allowEmptyShould(true);
+
+    @ArchTest
+    static final ArchRule business_chat_handlers_should_only_use_chat_public_contracts =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.interview.application.chat..",
+                            "io.github.imzmq.interview.knowledge.application.chat..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("io.github.imzmq.interview.chat.application");
+
+    @ArchTest
+    static final ArchRule chat_should_not_depend_on_concrete_scenario_handlers =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.interview.application.chat..",
+                            "io.github.imzmq.interview.knowledge.application.chat..");
+
+    @ArchTest
+    static final ArchRule chat_should_not_depend_on_interview_implementation =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.interview.application..",
+                            "io.github.imzmq.interview.interview.domain..",
+                            "io.github.imzmq.interview.interview.infrastructure..");
+
+    @ArchTest
+    static final ArchRule interview_should_not_depend_on_chat_infrastructure =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.interview..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.chat.infrastructure..");
+
+    @ArchTest
+    static final ArchRule chat_contracts_should_not_expose_technical_or_persistence_types =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat.application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.chat.infrastructure..",
+                            "org.springframework.web..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
+
+    @ArchTest
     static final ArchRule intent_record_should_stay_in_routing_public_result_contract =
             classes().that().haveSimpleName("IntentRecord")
                     .should().resideInAPackage("io.github.imzmq.interview.routing.application.contract.result");

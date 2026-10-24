@@ -1,20 +1,20 @@
 package io.github.imzmq.interview.im.application.runtime;
 
 import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.interview.application.TaskResponsePresentationService;
+import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ImResponsePresenter {
 
-    private final TaskResponsePresentationService taskResponsePresentationService;
+    private final TaskResponsePresentationOperations taskResponsePresentationOperations;
 
-    public ImResponsePresenter(TaskResponsePresentationService taskResponsePresentationService) {
-        this.taskResponsePresentationService = taskResponsePresentationService;
+    public ImResponsePresenter(TaskResponsePresentationOperations taskResponsePresentationOperations) {
+        this.taskResponsePresentationOperations = taskResponsePresentationOperations;
     }
 
     public String format(TaskResponse response) {
-        return taskResponsePresentationService.format(response, TaskResponsePresentationService.PresentationChannel.IM);
+        return taskResponsePresentationOperations.format(response, TaskResponsePresentationOperations.PresentationChannel.IM);
     }
 }
 

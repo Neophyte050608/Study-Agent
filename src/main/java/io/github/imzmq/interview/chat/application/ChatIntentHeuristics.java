@@ -1,6 +1,10 @@
-package io.github.imzmq.interview.knowledge.application.chatstream;
+package io.github.imzmq.interview.chat.application;
 
-public final class ChatIntentHeuristics {
+import io.github.imzmq.interview.chat.application.contract.extension.ChatIntentPolicy;
+import org.springframework.stereotype.Component;
+
+@Component
+public final class ChatIntentHeuristics implements ChatIntentPolicy {
 
     private static final String[] EXPLICIT_MODE_SWITCH_PREFIXES = {
             "开始面试",
@@ -27,14 +31,8 @@ public final class ChatIntentHeuristics {
             "编码练习"
     };
 
-    private ChatIntentHeuristics() {
-    }
-
-    public static boolean looksLikeNewIntent(String content) {
-        return looksLikeExplicitModeSwitch(content);
-    }
-
-    public static boolean looksLikeExplicitModeSwitch(String content) {
+    @Override
+    public boolean looksLikeExplicitModeSwitch(String content) {
         if (content == null || content.isBlank()) {
             return false;
         }
@@ -51,5 +49,3 @@ public final class ChatIntentHeuristics {
                 || "生成报告".equals(s);
     }
 }
-
-

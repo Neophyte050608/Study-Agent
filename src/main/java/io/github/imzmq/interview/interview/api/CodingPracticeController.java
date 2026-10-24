@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.interview.api;
 
 import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
-import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
-import io.github.imzmq.interview.interview.application.WebChatService;
+import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
+import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -23,14 +23,14 @@ import java.util.Map;
 public class CodingPracticeController {
 
     private final CodingPracticeAgent codingPracticeAgent;
-    private final WebChatService webChatService;
+    private final ChatMessageOperations chatMessageOperations;
     private final ObjectMapper objectMapper;
 
     public CodingPracticeController(CodingPracticeAgent codingPracticeAgent,
-                                    WebChatService webChatService,
+                                    ChatMessageOperations chatMessageOperations,
                                     ObjectMapper objectMapper) {
         this.codingPracticeAgent = codingPracticeAgent;
-        this.webChatService = webChatService;
+        this.chatMessageOperations = chatMessageOperations;
         this.objectMapper = objectMapper;
     }
 
@@ -56,7 +56,7 @@ public class CodingPracticeController {
         String codingSessionId = text(body, "sessionId");
         String cardId = text(body, "cardId");
         Object scenarioPayload = result.get("scenarioPayload");
-        ChatMessageDO existing = validateCardMessage(messageId, chatSessionId, codingSessionId, cardId);
+        ChatMessageView existing = validateCardMessage(messageId, chatSessionId, codingSessionId, cardId);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                     "agent", "CodingPracticeAgent",
@@ -64,7 +64,7 @@ public class CodingPracticeController {
                     "message", "场景题卡片与当前会话状态不一致，请刷新后重试"
             ));
         }
-        webChatService.updateAssistantMessage(
+        chatMessageOperations.updateAssistantMessage(
                 messageId,
                 toJson(scenarioPayload),
                 buildCardMetadata(existing, body, scenarioPayload, "coding_practice_scenario", "coding-scenario-card", "scenario-card"),
@@ -86,7 +86,7 @@ public class CodingPracticeController {
         String codingSessionId = text(body, "sessionId");
         String cardId = text(body, "cardId");
         Object fillPayload = result.get("fillPayload");
-        ChatMessageDO existing = validateCardMessage(messageId, chatSessionId, codingSessionId, cardId);
+        ChatMessageView existing = validateCardMessage(messageId, chatSessionId, codingSessionId, cardId);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                     "agent", "CodingPracticeAgent",
@@ -94,7 +94,7 @@ public class CodingPracticeController {
                     "message", "填空题卡片与当前会话状态不一致，请刷新后重试"
             ));
         }
-        webChatService.updateAssistantMessage(
+        chatMessageOperations.updateAssistantMessage(
                 messageId,
                 toJson(fillPayload),
                 buildCardMetadata(existing, body, fillPayload, "coding_practice_fill", "coding-fill-card", "fill-card"),
@@ -109,7 +109,7 @@ public class CodingPracticeController {
         String chatSessionId = text(body, "chatSessionId");
         String codingSessionId = text(body, "sessionId");
         String cardId = text(body, "cardId");
-        ChatMessageDO existing = validateCardMessage(currentMessageId, chatSessionId, codingSessionId, cardId);
+        ChatMessageView existing = validateCardMessage(currentMessageId, chatSessionId, codingSessionId, cardId);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                     "agent", "CodingPracticeAgent",
@@ -130,7 +130,7 @@ public class CodingPracticeController {
             if (currentPayload != null) {
                 Map<String, Object> currentPayloadMap = objectMapper.convertValue(currentPayload, Map.class);
                 currentPayloadMap.put("canContinue", false);
-                webChatService.updateAssistantMessage(
+                chatMessageOperations.updateAssistantMessage(
                         currentMessageId,
                         toJson(currentPayloadMap),
                         buildCardMetadata(existing, body, currentPayloadMap, "coding_practice_scenario", "coding-scenario-card", "scenario-card"),
@@ -139,7 +139,7 @@ public class CodingPracticeController {
             }
             Object scenarioPayload = result.get("scenarioPayload");
             if (!chatSessionId.isBlank() && scenarioPayload != null) {
-                webChatService.saveAssistantMessage(
+                chatMessageOperations.saveAssistantMessage(
                         chatSessionId,
                         toJson(scenarioPayload),
                         buildCardMetadata(null, body, scenarioPayload, "coding_practice_scenario", "coding-scenario-card", "scenario-card"),
@@ -148,7 +148,7 @@ public class CodingPracticeController {
             }
         } else if ("completed".equals(result.get("status"))) {
             if (!chatSessionId.isBlank()) {
-                webChatService.saveAssistantMessage(
+                chatMessageOperations.saveAssistantMessage(
                         chatSessionId,
                         String.valueOf(result.getOrDefault("message", "本次刷题已全部完成！")),
                         Map.of("type", "coding_practice"),
@@ -166,7 +166,7 @@ public class CodingPracticeController {
         String chatSessionId = text(body, "chatSessionId");
         String codingSessionId = text(body, "sessionId");
         String cardId = text(body, "cardId");
-        ChatMessageDO existing = validateCardMessage(currentMessageId, chatSessionId, codingSessionId, cardId);
+        ChatMessageView existing = validateCardMessage(currentMessageId, chatSessionId, codingSessionId, cardId);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                     "agent", "CodingPracticeAgent",
@@ -187,7 +187,7 @@ public class CodingPracticeController {
             if (currentPayload != null) {
                 Map<String, Object> currentPayloadMap = objectMapper.convertValue(currentPayload, Map.class);
                 currentPayloadMap.put("canContinue", false);
-                webChatService.updateAssistantMessage(
+                chatMessageOperations.updateAssistantMessage(
                         currentMessageId,
                         toJson(currentPayloadMap),
                         buildCardMetadata(existing, body, currentPayloadMap, "coding_practice_fill", "coding-fill-card", "fill-card"),
@@ -196,7 +196,7 @@ public class CodingPracticeController {
             }
             Object fillPayload = result.get("fillPayload");
             if (!chatSessionId.isBlank() && fillPayload != null) {
-                webChatService.saveAssistantMessage(
+                chatMessageOperations.saveAssistantMessage(
                         chatSessionId,
                         toJson(fillPayload),
                         buildCardMetadata(null, body, fillPayload, "coding_practice_fill", "coding-fill-card", "fill-card"),
@@ -205,7 +205,7 @@ public class CodingPracticeController {
             }
         } else if ("completed".equals(result.get("status"))) {
             if (!chatSessionId.isBlank()) {
-                webChatService.saveAssistantMessage(
+                chatMessageOperations.saveAssistantMessage(
                         chatSessionId,
                         String.valueOf(result.getOrDefault("message", "本次刷题已全部完成！")),
                         Map.of("type", "coding_practice"),
@@ -217,15 +217,15 @@ public class CodingPracticeController {
         return ResponseEntity.ok(result);
     }
 
-    private Map<String, Object> buildCardMetadata(ChatMessageDO existingMessage,
+    private Map<String, Object> buildCardMetadata(ChatMessageView existingMessage,
                                                   Map<String, Object> body,
                                                   Object cardPayload,
                                                   String type,
                                                   String routeLabel,
                                                   String defaultRouteSource) {
         Map<String, Object> metadata = new LinkedHashMap<>();
-        if (existingMessage != null && existingMessage.getMetadata() != null) {
-            metadata.putAll(existingMessage.getMetadata());
+        if (existingMessage != null && existingMessage.metadata() != null) {
+            metadata.putAll(existingMessage.metadata());
         }
         metadata.put("type", type);
         metadata.put("routeLabel", routeLabel);
@@ -245,21 +245,21 @@ public class CodingPracticeController {
         return metadata;
     }
 
-    private ChatMessageDO validateCardMessage(String messageId,
+    private ChatMessageView validateCardMessage(String messageId,
                                               String chatSessionId,
                                               String codingSessionId,
                                               String cardId) {
-        ChatMessageDO existing = webChatService.findMessageById(messageId);
+        ChatMessageView existing = chatMessageOperations.findMessageById(messageId);
         if (existing == null) {
             return null;
         }
-        if (!"assistant".equals(existing.getRole())) {
+        if (!"assistant".equals(existing.role())) {
             return null;
         }
-        if (!chatSessionId.isBlank() && !chatSessionId.equals(existing.getSessionId())) {
+        if (!chatSessionId.isBlank() && !chatSessionId.equals(existing.sessionId())) {
             return null;
         }
-        Map<String, Object> metadata = existing.getMetadata();
+        Map<String, Object> metadata = existing.metadata();
         if (metadata == null) {
             return null;
         }
@@ -274,12 +274,12 @@ public class CodingPracticeController {
         return existing;
     }
 
-    private Object parseCardPayload(ChatMessageDO message) {
-        if (message == null || message.getContent() == null || message.getContent().isBlank()) {
+    private Object parseCardPayload(ChatMessageView message) {
+        if (message == null || message.content() == null || message.content().isBlank()) {
             return null;
         }
         try {
-            return objectMapper.readValue(message.getContent(), Map.class);
+            return objectMapper.readValue(message.content(), Map.class);
         } catch (JsonProcessingException e) {
             return null;
         }

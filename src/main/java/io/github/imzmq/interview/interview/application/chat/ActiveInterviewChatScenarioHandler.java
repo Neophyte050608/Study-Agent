@@ -1,15 +1,16 @@
-package io.github.imzmq.interview.knowledge.application.chatstream.handler;
+package io.github.imzmq.interview.interview.application.chat;
 
 import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.TaskType;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.interview.application.WebChatService;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatIntentHeuristics;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
-import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
+import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatIntentPolicy;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatStreamingOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -22,16 +23,22 @@ import java.util.Map;
 @Order(10)
 public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
 
-    private final WebChatService webChatService;
+    private final ChatSessionOperations chatSessionOperations;
+    private final ChatTaskOperations chatTaskOperations;
     private final InterviewOrchestratorAgent interviewOrchestratorAgent;
-    private final ChatStreamingSupport chatStreamingSupport;
+    private final ChatIntentPolicy chatIntentPolicy;
+    private final ChatStreamingOperations chatStreamingOperations;
 
-    public ActiveInterviewChatScenarioHandler(WebChatService webChatService,
+    public ActiveInterviewChatScenarioHandler(ChatSessionOperations chatSessionOperations,
+                                              ChatTaskOperations chatTaskOperations,
                                               InterviewOrchestratorAgent interviewOrchestratorAgent,
-                                              ChatStreamingSupport chatStreamingSupport) {
-        this.webChatService = webChatService;
+                                              ChatStreamingOperations chatStreamingOperations,
+                                              ChatIntentPolicy chatIntentPolicy) {
+        this.chatSessionOperations = chatSessionOperations;
+        this.chatTaskOperations = chatTaskOperations;
         this.interviewOrchestratorAgent = interviewOrchestratorAgent;
-        this.chatStreamingSupport = chatStreamingSupport;
+        this.chatStreamingOperations = chatStreamingOperations;
+        this.chatIntentPolicy = chatIntentPolicy;
     }
 
     @Override
@@ -39,8 +46,8 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         if (context.routeResponse() != null) {
             return false;
         }
-        String activeInterviewId = webChatService.findActiveInterviewSessionId(context.sessionId());
-        if (activeInterviewId == null || activeInterviewId.isBlank() || ChatIntentHeuristics.looksLikeExplicitModeSwitch(context.content())) {
+        String activeInterviewId = chatSessionOperations.findActiveInterviewSessionId(context.sessionId());
+        if (activeInterviewId == null || activeInterviewId.isBlank() || chatIntentPolicy.looksLikeExplicitModeSwitch(context.content())) {
             return false;
         }
         InterviewSession interviewSession = interviewOrchestratorAgent.getSession(activeInterviewId);
@@ -57,18 +64,18 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
                 "history", context.history(),
                 "traceId", context.traceId()
         ));
-        TaskResponse answerResponse = webChatService.getTaskRouterAgent().dispatch(answerRequest);
+        TaskResponse answerResponse = chatTaskOperations.dispatch(answerRequest);
 
-        if (chatStreamingSupport.isCancelled(context.taskId())) {
+        if (chatStreamingOperations.isCancelled(context.taskId())) {
             return true;
         }
 
-        String replyText = webChatService.extractReplyText(answerResponse);
+        String replyText = chatTaskOperations.extractReplyText(answerResponse);
         context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成评价", "status", "running", "percent", 70));
-        chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
+        chatStreamingOperations.sendChunkedText(context.emitter(), replyText, context.taskId());
 
-        if (chatStreamingSupport.isCancelled(context.taskId())) {
+        if (chatStreamingOperations.isCancelled(context.taskId())) {
             return true;
         }
 
@@ -82,7 +89,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         } else {
             metadata.put("type", "interview_answer");
         }
-        chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
+        chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
 
         context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
@@ -93,17 +100,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
                         "routeSource", "active-session"
                 )));
         context.emitter().done();
-        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+        chatStreamingOperations.completeTask(context.taskId(), context.emitter());
         return true;
     }
 }
-
-
-
-
-
-
-
-
-
-

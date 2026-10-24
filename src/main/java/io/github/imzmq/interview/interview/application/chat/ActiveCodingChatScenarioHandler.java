@@ -1,13 +1,14 @@
-package io.github.imzmq.interview.knowledge.application.chatstream.handler;
+package io.github.imzmq.interview.interview.application.chat;
 
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.agent.task.TaskType;
-import io.github.imzmq.interview.interview.application.WebChatService;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatIntentHeuristics;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
-import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
+import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatIntentPolicy;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatStreamingOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -20,13 +21,19 @@ import java.util.Map;
 @Order(20)
 public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
 
-    private final WebChatService webChatService;
-    private final ChatStreamingSupport chatStreamingSupport;
+    private final ChatSessionOperations chatSessionOperations;
+    private final ChatTaskOperations chatTaskOperations;
+    private final ChatStreamingOperations chatStreamingOperations;
+    private final ChatIntentPolicy chatIntentPolicy;
 
-    public ActiveCodingChatScenarioHandler(WebChatService webChatService,
-                                           ChatStreamingSupport chatStreamingSupport) {
-        this.webChatService = webChatService;
-        this.chatStreamingSupport = chatStreamingSupport;
+    public ActiveCodingChatScenarioHandler(ChatSessionOperations chatSessionOperations,
+                                           ChatTaskOperations chatTaskOperations,
+                                           ChatStreamingOperations chatStreamingOperations,
+                                           ChatIntentPolicy chatIntentPolicy) {
+        this.chatSessionOperations = chatSessionOperations;
+        this.chatTaskOperations = chatTaskOperations;
+        this.chatStreamingOperations = chatStreamingOperations;
+        this.chatIntentPolicy = chatIntentPolicy;
     }
 
     @Override
@@ -34,8 +41,8 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
         if (context.routeResponse() != null) {
             return false;
         }
-        String activeCodingId = webChatService.findActiveCodingSessionId(context.sessionId());
-        if (activeCodingId == null || activeCodingId.isBlank() || ChatIntentHeuristics.looksLikeExplicitModeSwitch(context.content())) {
+        String activeCodingId = chatSessionOperations.findActiveCodingSessionId(context.sessionId());
+        if (activeCodingId == null || activeCodingId.isBlank() || chatIntentPolicy.looksLikeExplicitModeSwitch(context.content())) {
             return false;
         }
 
@@ -50,9 +57,9 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                 "history", context.history(),
                 "traceId", context.traceId()
         ));
-        TaskResponse codingResponse = webChatService.getTaskRouterAgent().dispatch(codingRequest);
+        TaskResponse codingResponse = chatTaskOperations.dispatch(codingRequest);
 
-        if (chatStreamingSupport.isCancelled(context.taskId())) {
+        if (chatStreamingOperations.isCancelled(context.taskId())) {
             return true;
         }
 
@@ -70,11 +77,11 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             if (dataMap.get("scenarioPayload") instanceof io.github.imzmq.interview.agent.runtime.CodingPracticeAgent.ScenarioPayload payload) {
                 metadata.put("cardId", payload.cardId());
             }
-            String scenarioJson = chatStreamingSupport.toJson(
+            String scenarioJson = chatStreamingOperations.toJson(
                     dataMap.get("scenarioPayload"),
                     "已为您生成场景题答题卡，请在卡片中作答。"
             );
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
             context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
                     "result", Map.of(
@@ -86,7 +93,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                             "routeSource", "active-session"
                     )));
             context.emitter().done();
-            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
             return true;
         }
 
@@ -104,11 +111,11 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
             if (dataMap.get("fillPayload") instanceof io.github.imzmq.interview.agent.runtime.CodingPracticeAgent.FillPayload payload) {
                 metadata.put("cardId", payload.cardId());
             }
-            String fillJson = chatStreamingSupport.toJson(
+            String fillJson = chatStreamingOperations.toJson(
                     dataMap.get("fillPayload"),
                     "已为您生成填空题答题卡，请在卡片中作答。"
             );
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
             context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
                     "result", Map.of(
@@ -120,11 +127,11 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                             "routeSource", "active-session"
                     )));
             context.emitter().done();
-            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
             return true;
         }
 
-        String replyText = webChatService.extractReplyText(codingResponse);
+        String replyText = chatTaskOperations.extractReplyText(codingResponse);
         boolean isLast = true;
         Object nextQuizPayload = null;
         boolean nextQuizGenerated = false;
@@ -142,7 +149,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                         "history", context.history(),
                         "traceId", context.traceId()
                 ));
-                TaskResponse nextResponse = webChatService.getTaskRouterAgent().dispatch(nextRequest);
+                TaskResponse nextResponse = chatTaskOperations.dispatch(nextRequest);
                 if (nextResponse.success()) {
                     if (nextResponse.data() instanceof Map<?, ?> nextMap
                             && "batch_quiz".equals(nextMap.get("status"))
@@ -150,7 +157,7 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
                         nextQuizPayload = nextMap.get("quizPayload");
                         nextQuizGenerated = true;
                     } else {
-                        String nextText = webChatService.extractReplyText(nextResponse);
+                        String nextText = chatTaskOperations.extractReplyText(nextResponse);
                         replyText = replyText + "\n\n---\n\n" + nextText;
                     }
                 }
@@ -159,9 +166,9 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
 
         context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在评估答案", "status", "running", "percent", 70));
-        chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
+        chatStreamingOperations.sendChunkedText(context.emitter(), replyText, context.taskId());
 
-        if (chatStreamingSupport.isCancelled(context.taskId())) {
+        if (chatStreamingOperations.isCancelled(context.taskId())) {
             return true;
         }
 
@@ -182,29 +189,22 @@ public class ActiveCodingChatScenarioHandler implements ChatScenarioHandler {
 
         if (nextQuizGenerated) {
             context.emitter().emit(StreamEventType.QUIZ.value(), nextQuizPayload);
-            String quizJson = chatStreamingSupport.toJson(
+            String quizJson = chatStreamingOperations.toJson(
                     nextQuizPayload,
                     "已为您生成批量选择题，请在答题卡中作答。"
             );
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), quizJson, metadata, "quiz", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), quizJson, metadata, "quiz", "COMPLETED");
             finishResult.put("content", quizJson);
             finishResult.put("quizPayload", nextQuizPayload);
         } else {
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
         }
 
         context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", finishResult));
         context.emitter().done();
-        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+        chatStreamingOperations.completeTask(context.taskId(), context.emitter());
         return true;
     }
 }
-
-
-
-
-
-
-

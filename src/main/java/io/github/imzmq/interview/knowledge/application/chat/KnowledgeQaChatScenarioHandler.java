@@ -1,11 +1,12 @@
-package io.github.imzmq.interview.knowledge.application.chatstream.handler;
+package io.github.imzmq.interview.knowledge.application.chat;
 
 import io.github.imzmq.interview.agent.runtime.KnowledgeQaAgent;
 import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.interview.application.WebChatService;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
-import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
+import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
+import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatStreamingOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -19,15 +20,15 @@ import java.util.Map;
 public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
 
     private final KnowledgeQaAgent knowledgeQaAgent;
-    private final WebChatService webChatService;
-    private final ChatStreamingSupport chatStreamingSupport;
+    private final ChatSessionOperations chatSessionOperations;
+    private final ChatStreamingOperations chatStreamingOperations;
 
     public KnowledgeQaChatScenarioHandler(KnowledgeQaAgent knowledgeQaAgent,
-                                          WebChatService webChatService,
-                                          ChatStreamingSupport chatStreamingSupport) {
+                                          ChatSessionOperations chatSessionOperations,
+                                          ChatStreamingOperations chatStreamingOperations) {
         this.knowledgeQaAgent = knowledgeQaAgent;
-        this.webChatService = webChatService;
-        this.chatStreamingSupport = chatStreamingSupport;
+        this.chatSessionOperations = chatSessionOperations;
+        this.chatStreamingOperations = chatStreamingOperations;
     }
 
     @Override
@@ -47,16 +48,16 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
 
         Map<String, Object> precomputedTurnAnalysis = extractPrecomputedTurnAnalysis(response);
         StringBuilder fullAnswer = new StringBuilder();
-        Map<String, Object> result = chatStreamingSupport.streamObservedAnswer(
+        Map<String, Object> result = chatStreamingOperations.streamObservedAnswer(
                 context.emitter(),
                 context.taskId(),
                 tokenSink -> knowledgeQaAgent.executeStream(
                         context.content(),
                         context.history(),
-                        context.retrievalMode(),
+                        KnowledgeRetrievalMode.fromNullable(context.retrievalMode(), null),
                         context.sessionId(),
                         token -> {
-                            if (!chatStreamingSupport.isCancelled(context.taskId())) {
+                            if (!chatStreamingOperations.isCancelled(context.taskId())) {
                                 fullAnswer.append(token);
                                 tokenSink.accept(token);
                             }
@@ -65,7 +66,7 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
                 )
         );
 
-        if (chatStreamingSupport.isCancelled(context.taskId())) {
+        if (chatStreamingOperations.isCancelled(context.taskId())) {
             return true;
         }
 
@@ -95,17 +96,17 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
         Object images = result.get("images");
         if (images instanceof List<?> imageList && !imageList.isEmpty()) {
             metadata.put("images", images);
-            chatStreamingSupport.sendImageEvents(context.emitter(), imageList, context.taskId());
-            chatStreamingSupport.updateAssistantPlaceholder(
+            chatStreamingOperations.sendImageEvents(context.emitter(), imageList, context.taskId());
+            chatStreamingOperations.updateAssistantPlaceholder(
                     context.assistantMessageId(),
-                    chatStreamingSupport.buildRichContent(replyText, imageList),
+                    chatStreamingOperations.buildRichContent(replyText, imageList),
                     metadata,
                     "rich",
                     "COMPLETED"
             );
             finishResult.put("images", imageList);
         } else {
-            chatStreamingSupport.updateAssistantPlaceholder(
+            chatStreamingOperations.updateAssistantPlaceholder(
                     context.assistantMessageId(),
                     replyText,
                     metadata,
@@ -114,12 +115,12 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
             );
         }
 
-        webChatService.autoTitleIfNeeded(context.sessionId(), context.content());
+        chatSessionOperations.autoTitleIfNeeded(context.sessionId(), context.content());
         context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
                 "result", finishResult));
         context.emitter().done();
-        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+        chatStreamingOperations.completeTask(context.taskId(), context.emitter());
         return true;
     }
 
@@ -169,10 +170,3 @@ public class KnowledgeQaChatScenarioHandler implements ChatScenarioHandler {
         }
     }
 }
-
-
-
-
-
-
-

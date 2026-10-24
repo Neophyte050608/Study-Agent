@@ -1,6 +1,4 @@
-package io.github.imzmq.interview.interview.application;
-
-import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
+package io.github.imzmq.interview.chat.application;
 
 import io.github.imzmq.interview.agent.task.TaskRequest;
 import io.github.imzmq.interview.agent.task.TaskResponse;
@@ -11,9 +9,7 @@ import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDe
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
 import io.github.imzmq.interview.knowledge.application.observability.TraceService;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandlerRegistry;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
-import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
+import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
 import io.github.imzmq.interview.common.stream.StreamEventType;
@@ -72,7 +68,7 @@ public class ChatStreamingService {
     public SseEmitter streamChat(String sessionId,
                                  String userId,
                                  String content,
-                                 KnowledgeRetrievalMode retrievalMode) {
+                                 String retrievalMode) {
         // 先做输入清洗，降低提示注入/脏数据风险。
         String sanitizedContent = inputSanitizer.sanitize(content);
         // 每次流式请求独立 traceId，便于全链路观测。
@@ -91,7 +87,7 @@ public class ChatStreamingService {
                 "action", "chat",
                 "traceId", traceId,
                 "sessionId", sessionId,
-                "retrievalModeRequested", retrievalMode == null ? "" : retrievalMode.name()
+                "retrievalModeRequested", retrievalMode == null ? "" : retrievalMode
         ));
 
         // 异步执行真正的聊天流程，避免阻塞请求线程。
@@ -116,7 +112,7 @@ public class ChatStreamingService {
     }
 
     private void runChat(String sessionId, String userId, String content,
-                         KnowledgeRetrievalMode retrievalMode,
+                         String retrievalMode,
                          String traceId, String taskId, StreamEventEmitter emitter) {
         // 将 traceId 绑定到当前线程上下文，供后续节点埋点复用。
         RAGTraceContext.setTraceId(traceId);
@@ -133,7 +129,7 @@ public class ChatStreamingService {
                             "sessionId", sessionId,
                             "taskId", taskId,
                             "userId", userId,
-                            "retrievalMode", retrievalMode == null ? "" : retrievalMode.name(),
+                            "retrievalMode", retrievalMode == null ? "" : retrievalMode,
                             "status", "RUNNING"
                     )
             );
@@ -145,7 +141,7 @@ public class ChatStreamingService {
             // 1) 先落用户消息。
             webChatService.saveUserMessage(sessionId, content);
             // 2) 再创建助手占位消息，后续把流式结果回填到该消息。
-            assistantMessageId = chatStreamingSupport.createRunningAssistantPlaceholder(sessionId, traceId, taskId).getMessageId();
+            assistantMessageId = chatStreamingSupport.createRunningAssistantPlaceholder(sessionId, traceId, taskId).messageId();
             taskManager.attachMessage(taskId, assistantMessageId);
             // 3) 通知前端进入思考阶段。
             emitter.emit(StreamEventType.PROGRESS.value(), Map.of(
@@ -189,12 +185,12 @@ public class ChatStreamingService {
             // STREAM_ROUTE_ONLY: 当前阶段只做流式路由判定，不直接走最终问答生成。
             context.put("executionMode", ExecutionMode.STREAM_ROUTE_ONLY.name());
             if (retrievalMode != null) {
-                context.put("retrievalMode", retrievalMode.name());
+                context.put("retrievalMode", retrievalMode);
             }
 
             // 路由 agent 产出结构化响应（包含 route/source/payload 等）。
             TaskRequest request = new TaskRequest(null, payload, context);
-            TaskResponse response = webChatService.getTaskRouterAgent().dispatch(request);
+            TaskResponse response = webChatService.dispatch(request);
             chatContext.routeResponse(response);
             chatContext.routeSource(String.valueOf(context.getOrDefault("routeSource", "")));
             intentShadowObserver.observe(
@@ -245,7 +241,7 @@ public class ChatStreamingService {
                                    String sessionId,
                                    String taskId,
                                    String userId,
-                                   KnowledgeRetrievalMode retrievalMode) {
+                                   String retrievalMode) {
         if (rootTrace == null) {
             return;
         }
@@ -254,7 +250,7 @@ public class ChatStreamingService {
                 "sessionId", sessionId,
                 "taskId", taskId,
                 "userId", userId,
-                "retrievalMode", retrievalMode == null ? "" : retrievalMode.name(),
+                "retrievalMode", retrievalMode == null ? "" : retrievalMode,
                 "status", terminalState
         );
         if ("FAILED".equals(terminalState)) {
@@ -272,16 +268,3 @@ public class ChatStreamingService {
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

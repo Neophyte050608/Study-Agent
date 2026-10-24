@@ -1,5 +1,7 @@
-package io.github.imzmq.interview.knowledge.application.chatstream;
+package io.github.imzmq.interview.chat.application;
 
+import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;
+import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Component;
 
@@ -30,5 +32,3 @@ public class ChatScenarioHandlerRegistry {
         return false;
     }
 }
-
-

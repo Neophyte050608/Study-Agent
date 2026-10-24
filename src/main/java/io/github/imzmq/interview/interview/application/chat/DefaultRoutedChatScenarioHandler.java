@@ -1,12 +1,13 @@
-package io.github.imzmq.interview.knowledge.application.chatstream.handler;
+package io.github.imzmq.interview.interview.application.chat;
 
 import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.task.TaskResponse;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.interview.application.WebChatService;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatScenarioHandler;
-import io.github.imzmq.interview.knowledge.application.chatstream.ChatStreamingSupport;
-import io.github.imzmq.interview.knowledge.application.chatstream.StreamingChatContext;
+import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
+import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatStreamingOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import io.github.imzmq.interview.common.stream.StreamEventType;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -18,13 +19,16 @@ import java.util.Map;
 @Order(200)
 public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
 
-    private final WebChatService webChatService;
-    private final ChatStreamingSupport chatStreamingSupport;
+    private final ChatSessionOperations chatSessionOperations;
+    private final ChatTaskOperations chatTaskOperations;
+    private final ChatStreamingOperations chatStreamingOperations;
 
-    public DefaultRoutedChatScenarioHandler(WebChatService webChatService,
-                                            ChatStreamingSupport chatStreamingSupport) {
-        this.webChatService = webChatService;
-        this.chatStreamingSupport = chatStreamingSupport;
+    public DefaultRoutedChatScenarioHandler(ChatSessionOperations chatSessionOperations,
+                                            ChatTaskOperations chatTaskOperations,
+                                            ChatStreamingOperations chatStreamingOperations) {
+        this.chatSessionOperations = chatSessionOperations;
+        this.chatTaskOperations = chatTaskOperations;
+        this.chatStreamingOperations = chatStreamingOperations;
     }
 
     @Override
@@ -41,7 +45,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
                     "stage", "GENERATING", "label", "正在生成题目", "status", "running", "percent", 100));
             context.emitter().emit(StreamEventType.QUIZ.value(), dataMap.get("quizPayload"));
 
-            String quizJson = chatStreamingSupport.toJson(
+            String quizJson = chatStreamingOperations.toJson(
                     dataMap.get("quizPayload"),
                     "已为您生成批量选择题，请在答题卡中作答。"
             );
@@ -51,7 +55,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
             metadata.put("routeLabel", "coding-batch-quiz");
             metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), quizJson, metadata, "quiz", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), quizJson, metadata, "quiz", "COMPLETED");
 
             context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
@@ -62,7 +66,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
                             "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
                     )));
             context.emitter().done();
-            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
             return true;
         }
 
@@ -72,7 +76,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                     "stage", "GENERATING", "label", "正在生成场景题", "status", "running", "percent", 100));
 
-            String scenarioJson = chatStreamingSupport.toJson(
+            String scenarioJson = chatStreamingOperations.toJson(
                     dataMap.get("scenarioPayload"),
                     "已为您生成场景题答题卡，请在卡片中作答。"
             );
@@ -85,7 +89,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             if (dataMap.get("scenarioPayload") instanceof io.github.imzmq.interview.agent.runtime.CodingPracticeAgent.ScenarioPayload payload) {
                 metadata.put("cardId", payload.cardId());
             }
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
 
             context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
@@ -98,7 +102,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
                             "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
                     )));
             context.emitter().done();
-            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
             return true;
         }
 
@@ -108,7 +112,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                     "stage", "GENERATING", "label", "正在生成填空题", "status", "running", "percent", 100));
 
-            String fillJson = chatStreamingSupport.toJson(
+            String fillJson = chatStreamingOperations.toJson(
                     dataMap.get("fillPayload"),
                     "已为您生成填空题答题卡，请在卡片中作答。"
             );
@@ -121,7 +125,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             if (dataMap.get("fillPayload") instanceof io.github.imzmq.interview.agent.runtime.CodingPracticeAgent.FillPayload payload) {
                 metadata.put("cardId", payload.cardId());
             }
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
 
             context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
@@ -134,7 +138,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
                             "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
                     )));
             context.emitter().done();
-            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
             return true;
         }
 
@@ -144,7 +148,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
 
             String questionText = session.getCurrentQuestion();
             if (questionText == null || questionText.isBlank()) {
-                questionText = webChatService.extractReplyText(response);
+                questionText = chatTaskOperations.extractReplyText(response);
             }
 
             Map<String, Object> interviewPayload = new LinkedHashMap<>();
@@ -155,7 +159,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             interviewPayload.put("totalQuestions", session.getTotalQuestions());
             interviewPayload.put("score", 0);
 
-            String interviewJson = chatStreamingSupport.toJson(interviewPayload, questionText);
+            String interviewJson = chatStreamingOperations.toJson(interviewPayload, questionText);
 
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("traceId", context.traceId());
@@ -163,7 +167,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             metadata.put("type", "interview_start");
             metadata.put("routeLabel", "interview-start");
             metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
-            chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), interviewJson, metadata, "interview_card", "COMPLETED");
+            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), interviewJson, metadata, "interview_card", "COMPLETED");
 
             context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                     "action", "chat",
@@ -176,24 +180,24 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
                             "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
                     )));
             context.emitter().done();
-            chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
             return true;
         }
 
-        String replyText = webChatService.extractReplyText(response);
+        String replyText = chatTaskOperations.extractReplyText(response);
         context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                 "stage", "GENERATING", "label", "正在生成回答", "status", "running", "percent", 70));
-        chatStreamingSupport.sendChunkedText(context.emitter(), replyText, context.taskId());
+        chatStreamingOperations.sendChunkedText(context.emitter(), replyText, context.taskId());
 
-        if (chatStreamingSupport.isCancelled(context.taskId())) {
+        if (chatStreamingOperations.isCancelled(context.taskId())) {
             return true;
         }
 
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("traceId", context.traceId());
         String routeLabel = "task-router";
-        if (webChatService.shouldClearSession(response)) {
-            webChatService.clearSessionContext(context.sessionId(), context.assistantMessageId());
+        if (chatTaskOperations.shouldClearSession(response)) {
+            chatSessionOperations.clearSessionContext(context.sessionId(), context.assistantMessageId());
         }
         if (response.data() instanceof InterviewSession session) {
             metadata.put("interviewSessionId", session.getId());
@@ -213,8 +217,8 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
         }
         metadata.put("routeLabel", routeLabel);
         metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
-        chatStreamingSupport.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
-        webChatService.autoTitleIfNeeded(context.sessionId(), context.content());
+        chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), replyText, metadata, "text", "COMPLETED");
+        chatSessionOperations.autoTitleIfNeeded(context.sessionId(), context.content());
 
         context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
                 "action", "chat",
@@ -225,17 +229,7 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
                         "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
                 )));
         context.emitter().done();
-        chatStreamingSupport.completeTask(context.taskId(), context.emitter());
+        chatStreamingOperations.completeTask(context.taskId(), context.emitter());
         return true;
     }
 }
-
-
-
-
-
-
-
-
-
-

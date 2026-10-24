@@ -1,21 +1,27 @@
-package io.github.imzmq.interview.interview.application;
+package io.github.imzmq.interview.chat.application;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.interview.domain.InterviewSession;
+import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations;
+import io.github.imzmq.interview.chat.application.contract.extension.ChatTaskResultPresenter;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 @Service
-public class TaskResponsePresentationService {
+public class TaskResponsePresentationService implements TaskResponsePresentationOperations {
 
-    public enum PresentationChannel {
-        WEB,
-        IM
+    private final List<ChatTaskResultPresenter> resultPresenters;
+
+    public TaskResponsePresentationService(List<ChatTaskResultPresenter> resultPresenters) {
+        List<ChatTaskResultPresenter> ordered = new ArrayList<>(resultPresenters);
+        AnnotationAwareOrderComparator.sort(ordered);
+        this.resultPresenters = List.copyOf(ordered);
     }
 
+    @Override
     public String format(TaskResponse response, PresentationChannel channel) {
         if (response == null) {
             return defaultDoneMessage(channel);
@@ -27,14 +33,10 @@ public class TaskResponsePresentationService {
         if (data == null) {
             return response.message() != null ? response.message() : defaultDoneMessage(channel);
         }
-        if (data instanceof InterviewSession session) {
-            return session.getCurrentQuestion();
-        }
-        if (data instanceof InterviewOrchestratorAgent.AnswerResult result) {
-            return formatInterviewAnswer(result, channel);
-        }
-        if (data instanceof InterviewOrchestratorAgent.FinalReport report) {
-            return formatFinalReport(report, channel);
+        for (ChatTaskResultPresenter presenter : resultPresenters) {
+            if (presenter.supports(data)) {
+                return presenter.format(data, channel);
+            }
         }
         if (data instanceof Map<?, ?> map) {
             if ("CodingPracticeAgent".equals(map.get("agent"))) {
@@ -47,35 +49,6 @@ public class TaskResponsePresentationService {
             return formatGenericMap(map);
         }
         return String.valueOf(data);
-    }
-
-    private String formatInterviewAnswer(InterviewOrchestratorAgent.AnswerResult result, PresentationChannel channel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("【评分】").append(result.score()).append("\n\n");
-        sb.append("【反馈】\n").append(result.feedback()).append("\n\n");
-        if (result.finished()) {
-            if (channel == PresentationChannel.IM) {
-                sb.append("恭喜！本次模拟面试已结束。你可以发送“生成报告”来查看最终评估。");
-            } else {
-                sb.append("本次模拟面试已结束。你可以说\"生成报告\"查看最终评估。");
-            }
-        } else {
-            sb.append("【下一题】\n").append(result.nextQuestion());
-        }
-        return sb.toString();
-    }
-
-    private String formatFinalReport(InterviewOrchestratorAgent.FinalReport report, PresentationChannel channel) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("====== 面试复盘报告 ======\n\n");
-        sb.append("【总评】\n").append(report.summary()).append("\n\n");
-        sb.append("【薄弱环节】\n").append(report.weak()).append("\n\n");
-        sb.append("【错误点】\n").append(report.wrong()).append("\n\n");
-        if (channel == PresentationChannel.IM) {
-            sb.append("【平均分】").append(String.format("%.1f", report.averageScore())).append("\n\n");
-        }
-        sb.append("【后续建议】\n").append(report.nextFocus());
-        return sb.toString();
     }
 
     private String formatCodingResult(Map<?, ?> map) {
@@ -136,8 +109,3 @@ public class TaskResponsePresentationService {
         return channel == PresentationChannel.IM ? "任务执行完毕。" : "处理完毕。";
     }
 }
-
-
-
-
-

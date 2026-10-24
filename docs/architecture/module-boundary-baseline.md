@@ -41,25 +41,18 @@ The target architecture is defined by `docs/superpowers/specs/2026-10-23-module-
 | feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagMetricsSnapshotMapper` | M7 |
 | feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagTraceDO` | M7 |
 | feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagTraceMapper` | M7 |
-| interview | `interview.api.ChatController` | chat | `ChatMessageDO` | M3 |
-| interview | `interview.api.ChatController` | chat | `ChatSessionDO` | M3 |
-| interview | `interview.api.CodingPracticeController` | chat | `ChatMessageDO` | M4 |
-| interview | `interview.application.WebChatService` | chat | `ChatMessageDO` | M3 |
-| interview | `interview.application.WebChatService` | chat | `ChatMessageMapper` | M3 |
-| interview | `interview.application.WebChatService` | chat | `ChatSessionDO` | M3 |
-| interview | `interview.application.WebChatService` | chat | `ChatSessionMapper` | M3 |
-| interview | `interview.application.ChatStreamingService` | chat | `ChatMessageDO` | M3 |
 | interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagFeedbackDO` | M7 |
 | interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagFeedbackMapper` | M7 |
 | interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagMetricsSnapshotDO` | M7 |
 | interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagMetricsSnapshotMapper` | M7 |
-| knowledge | `knowledge.application.chatstream.ChatStreamingSupport` | chat | `ChatMessageDO` | M3 |
 | media | `media.application.ImageService` | knowledge | `RagParentDO` | M7 |
 | media | `media.application.ImageService` | knowledge | `RagParentMapper` | M7 |
 | search | `search.application.PersonalRanker` | learning | `UserKnowledgeStateDO` | M7 |
 | search | `search.application.PersonalRanker` | learning | `UserKnowledgeStateMapper` | M7 |
 
-Baseline count: **26 exact class dependency pairs**. The M0 scan found one more pair than the pre-implementation inventory: `interview.application.ChatStreamingService -> chat.infrastructure.persistence.ChatMessageDO`; it is frozen as an exact M3 exception rather than hidden by a broader exclusion.
+Current allowlist count after M3: **17 exact class dependency pairs** (down from the M0 baseline of 26).
+
+M3 removed all eight M3 chat persistence pairs by moving generic chat ownership to `chat` and exposing immutable application contracts. It also removed the one former M4 pair `interview.api.CodingPracticeController -> chat.infrastructure.persistence.ChatMessageDO` early by switching the controller to `ChatMessageOperations`. There are no remaining chat persistence exceptions.
 
 ## Removal protocol
 
