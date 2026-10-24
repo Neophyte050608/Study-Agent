@@ -1,7 +1,9 @@
 package io.github.imzmq.interview.interview.application.chat;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.task.TaskResponse;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
 import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
@@ -36,110 +38,6 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
         TaskResponse response = context.routeResponse();
         if (response == null) {
             return false;
-        }
-
-        if (response.data() instanceof Map<?, ?> dataMap
-                && "batch_quiz".equals(dataMap.get("status"))
-                && dataMap.containsKey("quizPayload")) {
-            context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
-                    "stage", "GENERATING", "label", "正在生成题目", "status", "running", "percent", 100));
-            context.emitter().emit(StreamEventType.QUIZ.value(), dataMap.get("quizPayload"));
-
-            String quizJson = chatStreamingOperations.toJson(
-                    dataMap.get("quizPayload"),
-                    "已为您生成批量选择题，请在答题卡中作答。"
-            );
-            Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("traceId", context.traceId());
-            metadata.put("type", "coding_practice_batch");
-            metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
-            metadata.put("routeLabel", "coding-batch-quiz");
-            metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
-            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), quizJson, metadata, "quiz", "COMPLETED");
-
-            context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
-                    "action", "chat",
-                    "result", Map.of(
-                            "content", quizJson,
-                            "traceId", context.traceId(),
-                            "routeLabel", "coding-batch-quiz",
-                            "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
-                    )));
-            context.emitter().done();
-            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
-            return true;
-        }
-
-        if (response.data() instanceof Map<?, ?> dataMap
-                && "scenario_question_generated".equals(dataMap.get("status"))
-                && dataMap.containsKey("scenarioPayload")) {
-            context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
-                    "stage", "GENERATING", "label", "正在生成场景题", "status", "running", "percent", 100));
-
-            String scenarioJson = chatStreamingOperations.toJson(
-                    dataMap.get("scenarioPayload"),
-                    "已为您生成场景题答题卡，请在卡片中作答。"
-            );
-            Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("traceId", context.traceId());
-            metadata.put("type", "coding_practice_scenario");
-            metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
-            metadata.put("routeLabel", "coding-scenario-card");
-            metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
-            if (dataMap.get("scenarioPayload") instanceof io.github.imzmq.interview.agent.runtime.CodingPracticeAgent.ScenarioPayload payload) {
-                metadata.put("cardId", payload.cardId());
-            }
-            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), scenarioJson, metadata, "scenario_card", "COMPLETED");
-
-            context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
-                    "action", "chat",
-                    "result", Map.of(
-                            "content", "",
-                            "scenarioPayload", dataMap.get("scenarioPayload"),
-                            "assistantMessageId", context.assistantMessageId(),
-                            "traceId", context.traceId(),
-                            "routeLabel", "coding-scenario-card",
-                            "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
-                    )));
-            context.emitter().done();
-            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
-            return true;
-        }
-
-        if (response.data() instanceof Map<?, ?> dataMap
-                && "fill_question_generated".equals(dataMap.get("status"))
-                && dataMap.containsKey("fillPayload")) {
-            context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
-                    "stage", "GENERATING", "label", "正在生成填空题", "status", "running", "percent", 100));
-
-            String fillJson = chatStreamingOperations.toJson(
-                    dataMap.get("fillPayload"),
-                    "已为您生成填空题答题卡，请在卡片中作答。"
-            );
-            Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("traceId", context.traceId());
-            metadata.put("type", "coding_practice_fill");
-            metadata.put("codingSessionId", String.valueOf(dataMap.get("sessionId")));
-            metadata.put("routeLabel", "coding-fill-card");
-            metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
-            if (dataMap.get("fillPayload") instanceof io.github.imzmq.interview.agent.runtime.CodingPracticeAgent.FillPayload payload) {
-                metadata.put("cardId", payload.cardId());
-            }
-            chatStreamingOperations.updateAssistantPlaceholder(context.assistantMessageId(), fillJson, metadata, "fill_card", "COMPLETED");
-
-            context.emitter().emit(StreamEventType.FINISH.value(), Map.of(
-                    "action", "chat",
-                    "result", Map.of(
-                            "content", "",
-                            "fillPayload", dataMap.get("fillPayload"),
-                            "assistantMessageId", context.assistantMessageId(),
-                            "traceId", context.traceId(),
-                            "routeLabel", "coding-fill-card",
-                            "routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource()
-                    )));
-            context.emitter().done();
-            chatStreamingOperations.completeTask(context.taskId(), context.emitter());
-            return true;
         }
 
         if (response.data() instanceof InterviewSession session) {
@@ -203,17 +101,9 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             metadata.put("interviewSessionId", session.getId());
             metadata.put("type", "interview_start");
             routeLabel = "interview-start";
-        } else if (response.data() instanceof InterviewOrchestratorAgent.AnswerResult ar) {
+        } else if (response.data() instanceof InterviewAnswerResult ar) {
             metadata.put("type", ar.finished() ? "interview_finished" : "interview_answer");
             routeLabel = ar.finished() ? "interview-finished" : "interview-answer";
-        } else if (response.data() instanceof Map<?, ?> dataMap
-                && "CodingPracticeAgent".equals(dataMap.get("agent"))) {
-            Object codingSid = dataMap.get("sessionId");
-            if (codingSid != null) {
-                metadata.put("codingSessionId", String.valueOf(codingSid));
-            }
-            metadata.put("type", "coding_practice");
-            routeLabel = "coding-practice";
         }
         metadata.put("routeLabel", routeLabel);
         metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());

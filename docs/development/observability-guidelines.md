@@ -4,14 +4,17 @@
 
 ## 当前实现
 
-当前本地 RAG trace 主链路由 `knowledge.application.observability.RAGObservabilityService` 承担：
+当前本地 RAG trace 主链路由 `observability.application.trace.RAGObservabilityService` 承担：
 
 - 记录 RAG/Agent 节点的开始、结束、耗时、状态、检索数量、fallback 等信息。
-- 将 trace summary 和 node detail 持久化到本地 trace 表；数据库不可用时回退到内存历史。
-- 提供最近 trace、活动 trace、单条 trace 详情和概览统计查询。
+- 将 trace summary 和 node detail 持久化到 Observability 自有的 `t_rag_trace`、`t_rag_trace_node`；数据库不可用时回退到内存历史。
 - 通过 `RagTraceEventBus` 与 `RagTraceStreamController` 对外提供 `GET /api/observability/rag-traces/{traceId}/stream` SSE 事件流。
 
-本地 trace 面向开发调试和前端观测页面，属于项目内部能力，不等同于外部观测平台。
+Operational query 由 `observability.application.ObservabilityQueryService` 负责，包括最近/活动 trace、单条详情、概览、dashboard、metrics history/summary 和手动触发快照。现有 Controller 仍可经 `interview.application.ObservabilityApplicationService` 的兼容签名调用，但该兼容层只做委托，不访问 Observability 或 Feedback persistence。
+
+每小时快照聚合归 `observability.application.metrics.MetricsSnapshotScheduler`，数据继续写入 `t_rag_metrics_snapshot`。点赞、点踩、复制等显式用户反馈归 Feedback，表名继续为 `t_rag_feedback`；Observability 只通过 `feedback.application.contract.FeedbackMetricsQuery` 获取聚合计数，不依赖 Feedback 具体服务、DO 或 Mapper。
+
+本地 trace 面向开发调试和前端观测页面，属于项目内部能力，不等同于外部观测平台。`knowledge.application.observability` 已退休，禁止重建。
 
 ## 字段脱敏规则
 
@@ -26,9 +29,9 @@
 
 `sanitize(...)` 只保留本地允许展示的字段，并截断过长值。它可以保留部分本地排障需要的关联字段，例如 `sessionId`、`userId`、`taskId`、`candidateId`、`nodeName`、`fallbackReason` 等，但新增或改造代码不得写入密钥、token、Authorization header、cookie、raw prompt、raw completion 或用户隐私原文。
 
-### 旧有/直接 `RAGObservabilityService` 路径
+### 直接 `RAGObservabilityService` 路径
 
-当前仍存在旧有代码直接调用 `knowledge.application.observability.RAGObservabilityService.endNode(...)` 并传入摘要字符串的路径。这些调用方尚未全量统一经过 `TraceAttributeSanitizer`，因此不能声称当前本地 trace 已经完全不会写入 prompt 或用户原文。
+当前仍存在代码直接调用 `observability.application.trace.RAGObservabilityService.endNode(...)` 并传入摘要字符串的路径。这些调用方尚未全量统一经过 `TraceAttributeSanitizer`，因此不能声称当前本地 trace 已经完全不会写入 prompt 或用户原文。
 
 迁移目标是逐步将这类调用收敛到 `TraceService` / `DefaultTraceService`。如果短期内不得不直接调用 `RAGObservabilityService`，调用方必须只传安全摘要，不能传 raw prompt、raw completion、用户原文、token、Authorization header、cookie、API key 或其他敏感/可识别内容。
 

@@ -7,7 +7,8 @@
 
 - `src/`：Spring Boot 后端
 - `frontend/`：Vue 3 + Vite 前端
-- `sql/`：数据库建表与部分初始化数据
+- `src/main/resources/db/migration/`：Flyway 数据库版本化迁移
+- `sql/`：数据库迁移说明
 - `docker-compose.yml`：本地依赖服务编排
 - `clip-service/`：图片向量服务
 - `eval-service/`：Ragas 评测服务
@@ -296,18 +297,11 @@ npm install
 docker compose up -d mysql redis etcd minio milvus neo4j
 ```
 
-2. 初始化数据库
+2. 等待 Flyway 自动初始化数据库
 
-按顺序执行：
+后端首次连接 MySQL 时会自动执行 `src/main/resources/db/migration/` 下尚未执行的版本化迁移，创建表并写入必要的菜单、意图和内置提示词数据；不需要手动导入 SQL。
 
-- `sql/schema.sql`
-- `sql/data.sql`
-
-建议先创建数据库：
-
-```sql
-CREATE DATABASE IF NOT EXISTS interview_review DEFAULT CHARACTER SET utf8mb4;
-```
+已有数据库第一次接入 Flyway 时会建立基线并执行兼容迁移，不会清空业务数据。迁移脚本一旦应用便不可修改，后续数据库变更必须新增更高版本的 `V<version>__<description>.sql`。
 
 3. 准备私有配置文件
 
@@ -577,7 +571,7 @@ mvn test
 - `application-private.yml` 是否存在
 - MySQL、Redis、Milvus、Neo4j 是否已启动
 - API Key 是否填写
-- MySQL 是否已执行 `sql/schema.sql` 与 `sql/data.sql`
+- Flyway 日志是否显示迁移成功，`flyway_schema_history` 是否记录了当前版本
 
 ### 10.2 页面能打开但接口报错
 
@@ -601,8 +595,8 @@ mvn test
 如果你只是想先写第一版、跑通主流程，建议直接按下面这一套：
 
 1. 启动 `mysql redis etcd minio milvus neo4j`
-2. 导入 `sql/schema.sql` 和 `sql/data.sql`
-3. 准备自己的 `application-private.yml`
+2. 准备自己的 `application-private.yml`；后端启动时由 Flyway 自动初始化 MySQL
+3. 确认 `flyway_schema_history` 已记录当前数据库版本
 4. 后端执行 `mvn spring-boot:run`
 5. 前端执行 `npm install && npm run dev`
 

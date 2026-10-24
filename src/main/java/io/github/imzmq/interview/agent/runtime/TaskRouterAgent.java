@@ -6,12 +6,12 @@ import io.github.imzmq.interview.agent.a2a.A2AMessage;
 import io.github.imzmq.interview.agent.a2a.A2AMetadata;
 import io.github.imzmq.interview.agent.a2a.A2AStatus;
 import io.github.imzmq.interview.agent.a2a.A2ATrace;
-import io.github.imzmq.interview.agent.router.TaskHandler;
+import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
 import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
-import io.github.imzmq.interview.agent.task.ExecutionMode;
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.ExecutionMode;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.routing.domain.IntentPreFilter;
 import io.github.imzmq.interview.routing.domain.IntentRoutingDecision;
@@ -22,10 +22,10 @@ import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.knowledge.application.observability.TraceService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.TraceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -44,12 +44,12 @@ public class TaskRouterAgent {
 
     private static final TraceService NOOP_TRACE_SERVICE = new TraceService() {
         @Override
-        public TraceNodeHandle startRoot(String traceId, io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition definition, Map<String, Object> attributes) {
+        public TraceNodeHandle startRoot(String traceId, io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
             return new TraceNodeHandle(traceId, "", "", definition);
         }
 
         @Override
-        public TraceNodeHandle startChild(String traceId, String parentNodeId, io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition definition, Map<String, Object> attributes) {
+        public TraceNodeHandle startChild(String traceId, String parentNodeId, io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
             return new TraceNodeHandle(traceId, "", parentNodeId, definition);
         }
 
@@ -62,11 +62,6 @@ public class TaskRouterAgent {
         }
     };
 
-    private final InterviewOrchestratorAgent interviewOrchestratorAgent;
-    private final CodingPracticeAgent codingPracticeAgent;
-    private final NoteMakingAgent noteMakingAgent;
-    private final LearningProfileAgent learningProfileAgent;
-    private final KnowledgeQaAgent knowledgeQaAgent;
     private final PromptManager promptManager;
     private final IntentTreeRoutingService intentTreeRoutingService;
     private final IntentPreFilter intentPreFilter;
@@ -78,11 +73,6 @@ public class TaskRouterAgent {
 
     @Autowired
     public TaskRouterAgent(
-            InterviewOrchestratorAgent interviewOrchestratorAgent,
-            CodingPracticeAgent codingPracticeAgent,
-            NoteMakingAgent noteMakingAgent,
-            LearningProfileAgent learningProfileAgent,
-            KnowledgeQaAgent knowledgeQaAgent,
             PromptManager promptManager,
             IntentTreeRoutingService intentTreeRoutingService,
             IntentPreFilter intentPreFilter,
@@ -92,11 +82,6 @@ public class TaskRouterAgent {
             TaskHandlerRegistry taskHandlerRegistry,
             TraceService traceService
     ) {
-        this.interviewOrchestratorAgent = interviewOrchestratorAgent;
-        this.codingPracticeAgent = codingPracticeAgent;
-        this.noteMakingAgent = noteMakingAgent;
-        this.learningProfileAgent = learningProfileAgent;
-        this.knowledgeQaAgent = knowledgeQaAgent;
         this.promptManager = promptManager;
         this.intentTreeRoutingService = intentTreeRoutingService;
         this.intentPreFilter = intentPreFilter;
@@ -108,11 +93,6 @@ public class TaskRouterAgent {
     }
 
     public TaskRouterAgent(
-            InterviewOrchestratorAgent interviewOrchestratorAgent,
-            CodingPracticeAgent codingPracticeAgent,
-            NoteMakingAgent noteMakingAgent,
-            LearningProfileAgent learningProfileAgent,
-            KnowledgeQaAgent knowledgeQaAgent,
             PromptManager promptManager,
             IntentTreeRoutingService intentTreeRoutingService,
             IntentPreFilter intentPreFilter,
@@ -122,11 +102,6 @@ public class TaskRouterAgent {
             TaskHandlerRegistry taskHandlerRegistry
     ) {
         this(
-                interviewOrchestratorAgent,
-                codingPracticeAgent,
-                noteMakingAgent,
-                learningProfileAgent,
-                knowledgeQaAgent,
                 promptManager,
                 intentTreeRoutingService,
                 intentPreFilter,

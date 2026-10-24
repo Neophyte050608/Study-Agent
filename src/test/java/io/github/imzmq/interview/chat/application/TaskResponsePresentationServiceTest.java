@@ -1,7 +1,10 @@
 package io.github.imzmq.interview.chat.application;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.task.TaskResponse;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewFinalReport;
+
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.interview.application.chat.InterviewTaskResultPresenter;
 import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations.PresentationChannel;
@@ -33,27 +36,13 @@ class TaskResponsePresentationServiceTest {
     }
 
     @Test
-    void preservesCodingMessages() {
-        Map<String, Object> coding = new LinkedHashMap<>();
-        coding.put("agent", "CodingPracticeAgent");
-        coding.put("status", "evaluated");
-        coding.put("score", 88);
-        coding.put("feedback", "思路正确");
-        coding.put("nextHint", "关注边界");
-        coding.put("progress", "1/2");
-
-        assertThat(service.format(TaskResponse.ok(coding), PresentationChannel.WEB))
-                .isEqualTo("【得分】88\n\n【解析与反馈】\n思路正确\n\n【提示】关注边界\n\n进度：1/2");
-    }
-
-    @Test
     void preservesInterviewSessionAnswerAndReportMessages() {
         InterviewSession session = new InterviewSession();
         session.setCurrentQuestion("请解释 JVM 内存模型");
         assertThat(service.format(TaskResponse.ok(session), PresentationChannel.WEB))
                 .isEqualTo("请解释 JVM 内存模型");
 
-        InterviewOrchestratorAgent.AnswerResult answer = new InterviewOrchestratorAgent.AnswerResult(
+        InterviewAnswerResult answer = new InterviewAnswerResult(
                 85, "基础扎实", "下一题", 85.0, true, 1, 1,
                 "MEDIUM", "DONE", 80.0, 80, 90, 85, 75, "", List.of(), List.of());
         assertThat(service.format(TaskResponse.ok(answer), PresentationChannel.WEB))
@@ -61,7 +50,7 @@ class TaskResponsePresentationServiceTest {
         assertThat(service.format(TaskResponse.ok(answer), PresentationChannel.IM))
                 .isEqualTo("【评分】85\n\n【反馈】\n基础扎实\n\n恭喜！本次模拟面试已结束。你可以发送“生成报告”来查看最终评估。");
 
-        InterviewOrchestratorAgent.FinalReport report = new InterviewOrchestratorAgent.FinalReport(
+        InterviewFinalReport report = new InterviewFinalReport(
                 "整体良好", "", "并发", "边界遗漏", "", "继续刷题", 86.25, 3);
         assertThat(service.format(TaskResponse.ok(report), PresentationChannel.WEB))
                 .isEqualTo("====== 面试复盘报告 ======\n\n【总评】\n整体良好\n\n【薄弱环节】\n并发\n\n【错误点】\n边界遗漏\n\n【后续建议】\n继续刷题");

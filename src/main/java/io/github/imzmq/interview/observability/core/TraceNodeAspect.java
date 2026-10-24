@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.observability.core;
 
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.knowledge.application.observability.TraceService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.TraceService;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;

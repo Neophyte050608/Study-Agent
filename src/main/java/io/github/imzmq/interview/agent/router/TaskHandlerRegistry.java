@@ -1,6 +1,8 @@
 package io.github.imzmq.interview.agent.router;
 
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
+
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;

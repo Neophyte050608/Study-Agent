@@ -8,9 +8,9 @@ import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import org.springframework.stereotype.Service;
 

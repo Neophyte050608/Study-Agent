@@ -20,7 +20,7 @@ M0 和 M1 已完成并提交：
 
 ### 2.2 当前工作树状态
 
-M3 已在工作树完成，但尚未提交：
+M7A 已在工作树完成，前序 M2-M6 边界保持不变：
 
 - `/api/chat` 入口迁到 `chat.api.ChatController`。
 - 通用会话、消息、上下文、流式编排和展示编排归 `chat.application`。
@@ -32,6 +32,18 @@ M3 已在工作树完成，但尚未提交：
 - `TaskResponsePresentationService` 通过 presenter extension 与 interview 结果解耦。
 - M3 chat persistence allowlist 已清零。
 - `CodingPracticeController -> ChatMessageDO` 的原 M4 例外已提前清除。
+- `practice` 已成为 coding-practice API、service、agent、task handler、chat handler/presenter、context source、DTO 和 skill 的唯一 owner。
+- Chat、Agent、Skill 均通过各自已有扩展注册机制发现 Practice 实现；通用模块不 import Practice 具体类。
+- `knowledge.application.coding` 与原 interview coding handler 例外已退休，并由 ArchUnit 防回归。
+- M4 未新增或删除 persistence allowlist。
+- M5 已将 Interview Agent、TaskHandler、context、answer evaluation、report skill 和 resume loader 归还 `interview`。
+- 跨模块任务结果只公开 `InterviewAnswerResult` 与 `InterviewFinalReport`；start 保持返回现有 `InterviewSession`。
+- generic agent 不再注入或 import concrete Interview Agent；knowledge 不再反向拥有 Interview evaluation delegate。
+- 三条 M5 persistence 例外已删除，allowlist 从 17 降至 14。
+- M6 已将 generic agent task/context 签名闭包和 extension SPI 公开到 `agent.application.contract`，业务实现及 schema 由各 owner 的 Spring bean 提供。
+- M7A 已将 trace runtime、trace/metrics persistence、snapshot aggregation 和 operational query 归还 Observability，将显式反馈 persistence 归还 Feedback。
+- Observability 通过 `FeedbackMetricsQuery` 获取反馈聚合；Interview 仅保留现有 API 的兼容委托和 Knowledge-owned evaluation。
+- M7A 删除 10 条 persistence 例外，allowlist 从 14 降至 4；剩余仅为 M7B Media/Knowledge 与 M7C Search/Learning。
 
 当前工作树中还有用户维护的 `AGENTS.md` 修改和 `.DS_Store` 文件。它们不属于本路线的产物，不得在后续边界改造提交中被覆盖、删除或误提交。
 
@@ -62,22 +74,19 @@ git diff --check
 
 ### 2.4 剩余结构问题
 
-当前显式跨模块 persistence allowlist 已从 26 条下降到 17 条，但源码 import 图仍包含一个较大的强连通分量，涉及：
+当前显式跨模块 persistence allowlist 已从 26 条下降到 4 条。剩余 persistence 穿透只涉及 Media/Knowledge 与 Search/Learning；源码 import 图的其他历史边界债务仍需按后续 gate 收敛。此前较大的强连通分量涉及：
 
 ```text
 agent, chat, config, feedback, ingestion, interview, knowledge,
 media, modelrouting, observability, routing, search, skill
 ```
 
-这说明 M3 已经修正通用聊天 ownership 和一类 persistence 穿透，但整体依赖方向尚未稳定。主要剩余问题是：
+G1-G5 已依次修正 structured output、Practice、Interview、generic Agent runtime、Observability/Feedback ownership。主要剩余问题是：
 
-1. 通用 structured output 仍由 `chat` 错误拥有。
-2. practice 实现分散在 interview、knowledge、agent 和 skill。
-3. interview 实现仍有一部分位于 generic agent、knowledge、rag 和 skill。
-4. generic agent 仍拥有业务专属 handler 和 context source。
-5. observability、feedback、knowledge persistence 的归属互相穿透。
-6. media 和 search 直接访问其他模块的 persistence 类型。
-7. 顶层 `graph`、`rag` 历史包尚未退休。
+1. Media 仍直接访问 Knowledge persistence。
+2. Search 仍直接访问 Learning persistence。
+3. 顶层 `graph`、`rag` 的其他历史类型尚未全部退休。
+4. 最终 contract-only、module cycle 与退休包硬规则尚需在 M8 统一收紧。
 
 ## 3. 设计不变量
 
@@ -312,7 +321,7 @@ POST /api/coding/fill-card/next
 
 只迁 owner，不改变当前 practice session 的内存状态、模型调用顺序、fallback、评分语义或部署模型。chat 只能依赖 `ChatScenarioHandler` SPI；agent 只能依赖通用 TaskHandler/context extension；skill registry 不得 import practice 实现。
 
-### 8.5 退出条件
+### 8.5 退出条件（已完成）
 
 - `practice` 成为 coding-practice 实现的唯一 owner。
 - interview、knowledge、agent、skill 不再拥有 practice 具体实现。
@@ -322,9 +331,9 @@ POST /api/coding/fill-card/next
 
 ## 9. G3：M5 Interview Ownership
 
-### 9.1 当前问题
+### 9.1 迁移前问题（已解决）
 
-interview 业务实现仍分散在：
+M5 开始前，interview 业务实现分散在：
 
 ```text
 agent.runtime.EvaluationAgent
@@ -338,7 +347,7 @@ rag.core.ResumeLoader
 skill.builtin.InterviewReportGeneratorSkill
 ```
 
-剩余 allowlist 中还有三条 generic agent 访问 interview persistence 的 M5 例外。
+当时剩余 allowlist 中还有三条 generic agent 访问 interview persistence 的 M5 例外；M5 已删除这些例外。
 
 ### 9.2 迁移原则
 
@@ -355,7 +364,7 @@ skill.builtin.InterviewReportGeneratorSkill
 7. 迁 interview report skill。
 8. 删除三条 M5 allowlist 并增加 generic agent ownership 规则。
 
-### 9.4 退出条件
+### 9.4 退出条件（已完成）
 
 - generic agent 不再拥有 interview 具体 Agent、Handler 或 ContextSource。
 - knowledge 不再拥有 interview answer evaluation。
@@ -382,14 +391,16 @@ AgentContextAssembler
 
 - generic agent 只拥有 Task/Handler contract、registry、生命周期、取消、A2A 和通用 context assembly。
 - interview、practice、learning、knowledge 的 Handler 和 ContextSource 留在各自 owner。
-- Spring 继续通过 `List<TaskHandler>` 和 `List<AgentContextSource>` 完成注册。
-- 删除 agent runtime 中的业务硬编码分支和业务 schema。
+- Spring 继续通过 `List<TaskHandler>`、`List<AgentContextSource>` 和 `List<AgentContextSchemaProvider>` 完成注册。
+- task/context 签名闭包公开在 `agent.application.contract`，registry 与 assembler 保持内部实现。
+- Knowledge、Interview、Practice 由 owner-local provider bean 提供 schema；generic Tool Task schema 因描述通用工具执行机制而保留在 agent。
+- 删除 agent runtime 中的业务硬编码分支、中央业务 schema 和手写实现清单。
 
 ### 10.3 禁止范围
 
 不在 G4 引入 DAG、重写 A2A、改变 task lifecycle，或一次性把所有 `Map<String, Object>` 替换为强类型。`TaskRequest` 强类型化需要单独设计和行为迁移计划。
 
-### 10.4 退出条件
+### 10.4 退出条件（已完成）
 
 - generic agent 不 import interview、practice、learning、knowledge 的具体实现。
 - registry 只依赖 extension contract。
@@ -423,7 +434,7 @@ t_rag_feedback
 - 当前 `interview.application.ObservabilityApplicationService` 的跨域观测查询迁 observability。
 - `knowledge.application.observability` 的通用实现和 persistence 迁 observability。
 
-### 11.3 退出条件
+### 11.3 退出条件（已完成）
 
 - observability 不依赖 knowledge。
 - feedback 不依赖 knowledge persistence。
@@ -554,7 +565,7 @@ git diff --check
 
 ## 17. 下一步
 
-1. 先按 G0 对当前 M3 工作树做最终复查和固化。
-2. G0 稳定后，为 G1 单独编写 `docs/superpowers/plans/2026-10-24-module-boundary-m2-structured-output.md`。
-3. G1 的详细计划必须基于实际调用者、现有 parser public API 和测试逐项编写，不提前把 G2-G8 合并成一个巨型实施计划。
-4. G1 完成后再基于新的代码基线规划 G2，后续 gate 同理。
+1. 固化 G5 / M7A Observability 与 Feedback Persistence 的独立提交边界。
+2. 分别规划并实施 M7B Media/Knowledge 与 M7C Search/Learning，不与 M8 合并。
+3. 将剩余 persistence allowlist 从 4 条降至 0 后，再执行 M7D Graph/RAG Retirement 和 M8 最终 ArchUnit 收紧。
+4. 在 M7-M8 边界治理完成后，再评估 Outbox、PostgreSQL 真相源和 `local-lite` 降级增强。

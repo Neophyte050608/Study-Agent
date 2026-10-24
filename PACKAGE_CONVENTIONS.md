@@ -52,7 +52,7 @@ The current shadow caller is `chat.application.IntentShadowObserver`. It observe
 - Scenario extension SPI: `chat.application.contract.extension.ChatScenarioHandler`, `StreamingChatContext`, `ChatStreamingOperations`, `ChatIntentPolicy`, and `ChatTaskResultPresenter`.
 - Generic registry and streaming implementations stay internal to `chat.application`; external handlers must not inject `WebChatService`, `ChatStreamingSupport`, or other chat implementation classes.
 - Concrete interview/default handlers belong to `interview.application.chat`; knowledge QA belongs to `knowledge.application.chat`.
-- `ActiveCodingChatScenarioHandler` is a documented pre-M4 exception under `interview.application.chat`; new coding behavior still belongs to `practice`, and M4 moves this handler there.
+- Coding chat handlers and result presentation belong to `practice.application.chat` and implement only chat-owned extension contracts.
 - `knowledge.application.chatstream` is retired and must not be recreated.
 
 ## 4.4 Modelrouting structured-output public surface after M2
@@ -63,6 +63,50 @@ The current shadow caller is `chat.application.IntentShadowObserver`. It observe
 - External production modules depend on the parser interface and contract types only; they must not import the default implementation.
 - Jackson `JsonNode` remains the current result tree shape for behavior compatibility. Do not broaden the contract with Spring Web, persistence, MyBatis, or model-provider SDK types.
 - Do not recreate `LlmJsonParser`, `JsonResult`, `SchemaSpec`, or `RetryCall` under chat or common.
+
+
+## 4.5 Practice ownership after M4
+
+- HTTP entry: `practice.api.CodingPracticeController`; all `/api/coding` paths remain owned by Practice.
+- Use-case logic and DTOs: `practice.application` and `practice.application.dto`.
+- Coding Agent and task handler: `practice.application.agent`; the generic agent router discovers the handler through `TaskHandlerRegistry` and must not inject `CodingPracticeAgent`.
+- Coding context sources: `practice.application.context`; they implement the generic agent context extension contracts.
+- Coding chat scenarios and task-result presenter: `practice.application.chat`; Chat discovers them through its extension registry.
+- Coding interview skill: `practice.application.skill`; the generic skill registry discovers it through `ExecutableSkill`.
+- `knowledge.application.coding` and coding-practice implementations under `agent`, `interview`, or `skill` are retired.
+
+## 4.6 Interview ownership after M5
+
+- Interview Agents and task handlers: `interview.application.agent`; generic `agent` discovers handlers through its registry and must not import Interview implementations.
+- Interview context attributes and sources: `interview.application.context`; they implement generic agent context contracts.
+- Answer evaluation: `interview.application.evaluation`; Knowledge may expose retrieval output, but must not own or delegate Interview evaluation.
+- Cross-module task-visible results: `interview.application.contract.result.InterviewAnswerResult` and `InterviewFinalReport`. These records may contain only stable business/JDK types.
+- Interview start keeps the existing `InterviewSession` result for behavior compatibility; do not add an empty or speculative `InterviewStartResult`.
+- Report skill: `interview.application.skill`; resume loading adapter: `interview.infrastructure.resume`.
+- Historical Interview implementations under `agent.runtime`, `agent.router.handler`, `agent.application.context`, `knowledge.application.evaluation`, top-level `rag`, or generic `skill.builtin` are retired and must not be recreated.
+
+## 4.7 Generic Agent public surface after M6
+
+- Task request/response/type/execution mode: `agent.application.contract.task`.
+- Context query/schema/slot/result value types: `agent.application.contract.context`.
+- Extension SPI: `agent.application.contract.extension.TaskHandler`, `AgentContextSource`, and `AgentContextSchemaProvider`.
+- Registry and assembly implementations stay internal to `agent`; external modules implement the SPI as Spring beans and must not inject or import concrete registry internals unless they are assembling the generic runtime itself.
+- Knowledge QA Agents, handlers, context sources, attributes, and schema provider belong to `knowledge.application.agent` or `knowledge.application.context`.
+- Learning Agents, handlers, and context sources belong to `learning.application.agent` or `learning.application.context`.
+- Interview and Practice provide owner-local context schema beans from `interview.application.context` and `practice.application.context`.
+- Tool Task context sources, attributes, and schema stay in `agent.application.context` because they are generic tool-execution mechanics. Do not move a business schema into generic agent for central registration.
+- Add a new context mode by supplying an owner-local `AgentContextSchemaProvider`; do not restore static defaults, a mode switch, or a handwritten provider list in `AgentContextAssembler`.
+
+## 4.8 Observability and Feedback ownership after M7A
+
+- Trace runtime, node definitions, event bus, and local trace orchestration: `observability.application.trace`.
+- Operational trace/metrics/dashboard queries: `observability.application.ObservabilityQueryService`.
+- Hourly metrics aggregation and retention: `observability.application.metrics.MetricsSnapshotScheduler`.
+- Trace and metrics persistence: `observability.infrastructure.persistence`; the existing `t_rag_trace`, `t_rag_trace_node`, and `t_rag_metrics_snapshot` table names remain unchanged.
+- Explicit user feedback use cases and `t_rag_feedback` persistence: `feedback.application` and `feedback.infrastructure.persistence`.
+- Cross-module feedback aggregates are exposed only through `feedback.application.contract.FeedbackMetricsQuery` and `feedback.application.contract.result.FeedbackMetrics`; callers must not depend on the concrete service or persistence types.
+- `interview.application.ObservabilityApplicationService` is a compatibility orchestrator for existing API signatures and Knowledge-owned evaluation. New operational observability behavior belongs to Observability.
+- `knowledge.application.observability` is retired and must not be recreated.
 
 ## 5. Migration rule
 - Existing migration to domain packages is complete for main business services and MyBatis persistence code.
@@ -112,7 +156,7 @@ Historical packages are migration-only:
 
 - Do not add generic chat code to `knowledge.application.chatstream` or `knowledge.application.context`.
 - Do not add coding-practice behavior to `knowledge.application.coding`.
-- Do not add generic trace/metrics behavior to `knowledge.application.observability`.
+- `knowledge.application.observability` is retired; do not recreate it or place generic trace/metrics behavior under Knowledge.
 - Do not add new code to top-level `intent`, `turn`, `graph`, or `rag`.
 - Do not add business-specific Agent, Handler, context source, or schema to the generic `agent` module.
 - `RAGService` remains a compatibility facade during migration; new retrieval behavior belongs to focused knowledge services.

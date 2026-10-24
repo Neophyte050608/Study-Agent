@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.im.application.runtime;
 
-import io.github.imzmq.interview.agent.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations;
 import org.springframework.stereotype.Component;
 

@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.modelrouting.core;
 
 import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.knowledge.application.observability.TraceService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.TraceService;
 import io.github.imzmq.interview.modelrouting.execution.ModelRoutingExecutor;
 import io.github.imzmq.interview.modelrouting.execution.ModelSelector;
 import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;

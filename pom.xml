@@ -18,6 +18,7 @@
         <spring-ai.version>1.0.0-SNAPSHOT</spring-ai.version>
         <rocketmq-spring.version>2.3.5</rocketmq-spring.version>
         <fastmcp4j.version>0.4.0-beta</fastmcp4j.version>
+        <flyway.version>11.20.3</flyway.version>
         <opentelemetry.version>1.63.0</opentelemetry.version>
     </properties>
     <dependencies>
@@ -150,6 +151,15 @@
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!-- Flyway owns relational schema and reference-data migrations. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
         </dependency>
         <!-- 解决 Milvus SDK 与 Protobuf 版本冲突问题 -->
         <dependency>

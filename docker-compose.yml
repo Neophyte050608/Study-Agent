@@ -91,7 +91,6 @@ services:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/config:/etc/mysql/conf.d
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/data:/var/lib/mysql
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/logs:/var/log/mysql
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/mysql/init:/docker-entrypoint-initdb.d
       - /etc/localtime:/etc/localtime:ro
     ports:
       - 3307:3306

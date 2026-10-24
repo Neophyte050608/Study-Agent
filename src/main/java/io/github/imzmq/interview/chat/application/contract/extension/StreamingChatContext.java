@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.chat.application.contract.extension;
 
-import io.github.imzmq.interview.agent.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 
 public class StreamingChatContext {

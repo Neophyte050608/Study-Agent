@@ -32,27 +32,20 @@ The target architecture is defined by `docs/superpowers/specs/2026-10-23-module-
 
 | Source module | Source class | Target module | Target persistence type | Cleanup |
 | --- | --- | --- | --- | --- |
-| agent | `agent.runtime.InterviewOrchestratorAgent` | interview | `SessionRepository` | M5 |
-| agent | `agent.runtime.RollingSummaryAgent` | interview | `InterviewSessionMapper` | M5 |
-| agent | `agent.runtime.RollingSummaryAgent` | interview | `SessionRepository` | M5 |
-| feedback | `feedback.application.FeedbackApplicationService` | knowledge | `RagFeedbackDO` | M7 |
-| feedback | `feedback.application.FeedbackApplicationService` | knowledge | `RagFeedbackMapper` | M7 |
-| feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagMetricsSnapshotDO` | M7 |
-| feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagMetricsSnapshotMapper` | M7 |
-| feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagTraceDO` | M7 |
-| feedback | `feedback.application.MetricsSnapshotScheduler` | knowledge | `RagTraceMapper` | M7 |
-| interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagFeedbackDO` | M7 |
-| interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagFeedbackMapper` | M7 |
-| interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagMetricsSnapshotDO` | M7 |
-| interview | `interview.application.ObservabilityApplicationService` | knowledge | `RagMetricsSnapshotMapper` | M7 |
 | media | `media.application.ImageService` | knowledge | `RagParentDO` | M7 |
 | media | `media.application.ImageService` | knowledge | `RagParentMapper` | M7 |
 | search | `search.application.PersonalRanker` | learning | `UserKnowledgeStateDO` | M7 |
 | search | `search.application.PersonalRanker` | learning | `UserKnowledgeStateMapper` | M7 |
 
-Current allowlist count after M3: **17 exact class dependency pairs** (down from the M0 baseline of 26).
+Current allowlist count after M7A: **4 exact class dependency pairs** (down from the M0 baseline of 26). The remaining entries belong only to M7B Media/Knowledge and M7C Search/Learning.
 
 M3 removed all eight M3 chat persistence pairs by moving generic chat ownership to `chat` and exposing immutable application contracts. It also removed the one former M4 pair `interview.api.CodingPracticeController -> chat.infrastructure.persistence.ChatMessageDO` early by switching the controller to `ChatMessageOperations`. There are no remaining chat persistence exceptions.
+
+M4 moved all concrete coding-practice behavior to `practice` and introduced no persistence dependency, so the allowlist remained at 17 pairs.
+
+M5 moved Interview Agents and their persistence access into the `interview` owner. The former three `agent.runtime` to Interview persistence pairs are now same-module dependencies and were removed from the executable allowlist and this table, reducing it from 17 to 14.
+
+M7A moved trace runtime plus trace/metrics persistence and operational queries to `observability`, moved explicit feedback persistence to `feedback`, and introduced `FeedbackMetricsQuery` for aggregate counts. The ten former Feedback/Observability-to-Knowledge persistence pairs were removed, reducing the allowlist from 14 to 4. Table names and schemas remain unchanged.
 
 ## Removal protocol
 

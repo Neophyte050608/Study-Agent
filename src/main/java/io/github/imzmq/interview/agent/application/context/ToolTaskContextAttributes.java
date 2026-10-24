@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.agent.application.context;
 
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
+
 import java.util.List;
 
 public final class ToolTaskContextAttributes {

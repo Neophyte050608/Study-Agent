@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.agent.application;
 
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

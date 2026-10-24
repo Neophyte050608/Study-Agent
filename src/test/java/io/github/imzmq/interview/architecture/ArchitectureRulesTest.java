@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.architecture;
 
+import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
+import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
+
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -137,7 +140,8 @@ class ArchitectureRulesTest {
     static final ArchRule business_chat_handlers_should_only_use_chat_public_contracts =
             noClasses().that().resideInAnyPackage(
                             "io.github.imzmq.interview.interview.application.chat..",
-                            "io.github.imzmq.interview.knowledge.application.chat..")
+                            "io.github.imzmq.interview.knowledge.application.chat..",
+                            "io.github.imzmq.interview.practice.application.chat..")
                     .should().dependOnClassesThat()
                     .resideInAPackage("io.github.imzmq.interview.chat.application");
 
@@ -146,7 +150,8 @@ class ArchitectureRulesTest {
             noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat..")
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "io.github.imzmq.interview.interview.application.chat..",
-                            "io.github.imzmq.interview.knowledge.application.chat..");
+                            "io.github.imzmq.interview.knowledge.application.chat..",
+                            "io.github.imzmq.interview.practice.application.chat..");
 
     @ArchTest
     static final ArchRule chat_should_not_depend_on_interview_implementation =
@@ -161,6 +166,177 @@ class ArchitectureRulesTest {
             noClasses().that().resideInAnyPackage("io.github.imzmq.interview.interview..")
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "io.github.imzmq.interview.chat.infrastructure..");
+
+    @ArchTest
+    static final ArchRule interview_specific_implementations_should_belong_to_interview =
+            classes().that().haveSimpleName("InterviewOrchestratorAgent")
+                    .or().haveSimpleName("EvaluationAgent")
+                    .or().haveSimpleName("KnowledgeLayerAgent")
+                    .or().haveSimpleName("RollingSummaryAgent")
+                    .or().haveSimpleName("InterviewStartTaskHandler")
+                    .or().haveSimpleName("InterviewAnswerTaskHandler")
+                    .or().haveSimpleName("InterviewReportTaskHandler")
+                    .or().haveSimpleName("InterviewContextAttributes")
+                    .or().haveSimpleName("InterviewProfileContextSource")
+                    .or().haveSimpleName("InterviewStrategyContextSource")
+                    .or().haveSimpleName("InterviewKnowledgeContextSource")
+                    .or().haveSimpleName("InterviewAnswerEvaluationService")
+                    .or().haveSimpleName("ResumeLoader")
+                    .or().haveSimpleName("InterviewReportGeneratorSkill")
+                    .should().resideInAnyPackage("io.github.imzmq.interview.interview..");
+
+    @ArchTest
+    static final ArchRule generic_modules_should_not_depend_on_concrete_interview_implementations =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent..",
+                            "io.github.imzmq.interview.knowledge..",
+                            "io.github.imzmq.interview.rag..",
+                            "io.github.imzmq.interview.skill..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.interview.application.agent..",
+                            "io.github.imzmq.interview.interview.application.context..",
+                            "io.github.imzmq.interview.interview.application.evaluation..",
+                            "io.github.imzmq.interview.interview.application.skill..",
+                            "io.github.imzmq.interview.interview.infrastructure.resume..");
+
+    @ArchTest
+    static final ArchRule interview_contracts_should_not_expose_technical_or_persistence_types =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.interview.application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.interview.infrastructure..",
+                            "org.springframework.web..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
+
+    @ArchTest
+    static final ArchRule agent_extension_contracts_should_belong_to_public_extension_package =
+            classes().that().haveSimpleName("TaskHandler")
+                    .or().haveSimpleName("AgentContextSource")
+                    .or().haveSimpleName("AgentContextSchemaProvider")
+                    .should().resideInAPackage(
+                            "io.github.imzmq.interview.agent.application.contract.extension");
+
+    @ArchTest
+    static final ArchRule generic_agent_should_not_depend_on_business_agent_or_context_implementations =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.agent..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.application.agent..",
+                            "io.github.imzmq.interview.knowledge.application.context..",
+                            "io.github.imzmq.interview.learning.application.agent..",
+                            "io.github.imzmq.interview.learning.application.context..",
+                            "io.github.imzmq.interview.interview.application.agent..",
+                            "io.github.imzmq.interview.interview.application.context..",
+                            "io.github.imzmq.interview.practice.application.agent..",
+                            "io.github.imzmq.interview.practice.application.context..");
+
+    @ArchTest
+    static final ArchRule agent_public_contract_should_not_expose_technical_or_persistence_types =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent.application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..infrastructure..",
+                            "org.springframework.web..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
+
+    @ArchTest
+    static final ArchRule knowledge_agent_implementations_should_belong_to_knowledge =
+            classes().that().haveSimpleName("KnowledgeQaAgent")
+                    .or().haveSimpleName("KnowledgeQaTaskHandler")
+                    .or().haveSimpleName("KnowledgeQaContextAttributes")
+                    .or().haveSimpleName("DialogSignalContextSource")
+                    .or().haveSimpleName("KnowledgeContextSource")
+                    .should().resideInAnyPackage("io.github.imzmq.interview.knowledge..");
+
+    @ArchTest
+    static final ArchRule learning_agent_implementations_should_belong_to_learning =
+            classes().that().haveSimpleName("NoteMakingAgent")
+                    .or().haveSimpleName("LearningPlanTaskHandler")
+                    .or().haveSimpleName("ProfileEventUpsertTaskHandler")
+                    .or().haveSimpleName("ProfileSnapshotQueryTaskHandler")
+                    .or().haveSimpleName("ProfileTrainingPlanQueryTaskHandler")
+                    .or().haveSimpleName("LearningProfileContextSource")
+                    .should().resideInAnyPackage("io.github.imzmq.interview.learning..");
+
+    @ArchTest
+    static final ArchRule coding_practice_implementations_should_belong_to_practice =
+            classes().that().haveSimpleName("CodingPracticeController")
+                    .or().haveSimpleName("CodingPracticeService")
+                    .or().haveSimpleName("CodingPracticeAgent")
+                    .or().haveSimpleName("CodingPracticeTaskHandler")
+                    .or().haveSimpleName("ActiveCodingChatScenarioHandler")
+                    .or().haveSimpleName("CodingPracticeCardChatScenarioHandler")
+                    .or().haveSimpleName("CodingPracticeTaskResultPresenter")
+                    .or().haveSimpleName("CodingPracticeContextAttributes")
+                    .or().haveSimpleName("CodingConstraintsContextSource")
+                    .or().haveSimpleName("CodingProfileContextSource")
+                    .or().haveSimpleName("CodingTaskPlanContextSource")
+                    .or().haveSimpleName("CodingInterviewCoachSkill")
+                    .should().resideInAnyPackage("io.github.imzmq.interview.practice..");
+
+    @ArchTest
+    static final ArchRule historical_knowledge_coding_package_should_not_exist =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.knowledge.application.coding..")
+                    .should(exist())
+                    .allowEmptyShould(true);
+
+    @ArchTest
+    static final ArchRule observability_persistence_should_belong_to_observability =
+            classes().that().haveSimpleName("RagTraceDO")
+                    .or().haveSimpleName("RagTraceMapper")
+                    .or().haveSimpleName("RagTraceNodeDO")
+                    .or().haveSimpleName("RagTraceNodeMapper")
+                    .or().haveSimpleName("RagMetricsSnapshotDO")
+                    .or().haveSimpleName("RagMetricsSnapshotMapper")
+                    .should().resideInAPackage(
+                            "io.github.imzmq.interview.observability.infrastructure.persistence");
+
+    @ArchTest
+    static final ArchRule feedback_persistence_should_belong_to_feedback =
+            classes().that().haveSimpleName("RagFeedbackDO")
+                    .or().haveSimpleName("RagFeedbackMapper")
+                    .should().resideInAPackage(
+                            "io.github.imzmq.interview.feedback.infrastructure.persistence");
+
+    @ArchTest
+    static final ArchRule historical_knowledge_observability_package_should_not_exist =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.application.observability..")
+                    .should(exist())
+                    .allowEmptyShould(true);
+
+    @ArchTest
+    static final ArchRule observability_and_feedback_should_not_depend_on_knowledge_persistence =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.observability..",
+                            "io.github.imzmq.interview.feedback..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.infrastructure.persistence..");
+
+    @ArchTest
+    static final ArchRule feedback_contract_should_not_expose_framework_or_persistence_types =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.feedback.application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.feedback.infrastructure..",
+                            "org.springframework..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..");
+
+    @ArchTest
+    static final ArchRule generic_modules_should_not_depend_on_concrete_practice_implementations =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent..",
+                            "io.github.imzmq.interview.chat..",
+                            "io.github.imzmq.interview.interview..",
+                            "io.github.imzmq.interview.knowledge..",
+                            "io.github.imzmq.interview.skill..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage("io.github.imzmq.interview.practice..");
 
     @ArchTest
     static final ArchRule chat_contracts_should_not_expose_technical_or_persistence_types =

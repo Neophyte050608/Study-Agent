@@ -1,5 +1,4 @@
 package io.github.imzmq.interview.knowledge.application;
-import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.interview.domain.Question;
@@ -13,13 +12,11 @@ import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
-import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
-import io.github.imzmq.interview.knowledge.application.coding.CodingPracticeService;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
 import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
@@ -88,10 +85,8 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final ParentChildIndexService parentChildIndexService;
     private final SkillOrchestrator skillOrchestrator;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
-    private final InterviewAnswerEvaluationService interviewAnswerEvaluationService;
-    private final CodingPracticeService codingPracticeService;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService, CodingPracticeService codingPracticeService) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser) {
         this.agentSkillService = agentSkillService;
         this.promptManager = promptManager;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
@@ -107,31 +102,9 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         this.skillOrchestrator = skillOrchestrator;
         this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.structuredOutputParser = structuredOutputParser;
-        this.interviewAnswerEvaluationService = interviewAnswerEvaluationService;
-        this.codingPracticeService = codingPracticeService;
     }
 
     public record EvaluationResult(String json, int inputTokens, int outputTokens) {}
-
-    /**
-     * 评估入口：执行“检索→评估→证据校验→观测记录”的完整链路。
-     */
-    public String processAnswer(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot) {
-        return executeWithinTraceRoot("PROCESS", "RAG Answer Evaluation", "Q: " + question, () -> {
-            KnowledgePacket packet = buildKnowledgePacket(question, userAnswer);
-            return interviewAnswerEvaluationService.evaluateAndValidate(
-                    topic,
-                    question,
-                    userAnswer,
-                    difficultyLevel,
-                    followUpState,
-                    topicMastery,
-                    profileSnapshot,
-                    "",
-                    packet
-            );
-        });
-    }
 
     /**
      * 构建知识包（默认允许 Web fallback）。
@@ -154,38 +127,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 () -> knowledgePacketBuilder.build(question, userAnswer, allowWebFallback, this));
     }
 
-    /**
-     * 基于检索上下文执行回答评估（LLM 生成）。
-     *
-     * <p>兼容入口：评估主链路已迁移到 {@link InterviewAnswerEvaluationService}。</p>
-     */
-    public EvaluationResult evaluateWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
-        return interviewAnswerEvaluationService.evaluateWithKnowledge(
-                topic,
-                question,
-                userAnswer,
-                difficultyLevel,
-                followUpState,
-                topicMastery,
-                profileSnapshot,
-                strategyHint,
-                packet
-        );
-    }
-
-    /**
-     * 在缺少父节点时自动补齐一层 Trace 根节点，避免链路被拆成多个孤立片段。
-     *
-     * <p>如果当前线程已经处于某个 Trace 节点内部，则直接复用现有父节点，
-     * 不再额外创建新根节点；只有在直接调用入口方法时才会自动包一层根节点。</p>
-     *
-     * @param nodeType 根节点类型
-     * @param nodeName 根节点名称
-     * @param inputSummary 根节点输入摘要
-     * @param action 需要在根节点内执行的动作
-     * @return 动作执行结果
-     * @param <T> 返回值类型
-     */
     private <T> T executeWithinTraceRoot(String nodeType, String nodeName, String inputSummary, Supplier<T> action) {
         String currentNodeId = RAGTraceContext.getCurrentNodeId();
         if (currentNodeId != null && !currentNodeId.isBlank()) {
@@ -1048,27 +989,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         }
     }
 
-    public String generateCodingQuestion(String topic, String difficulty, String profileSnapshot, List<String> excludedTopics) {
-        return codingPracticeService.generateCodingQuestion(topic, difficulty, profileSnapshot, excludedTopics);
-    }
-
-    /**
-     * 批量生成选择题，返回结构化 QuizQuestion 列表。
-     * 使用单次 LLM 调用生成 N 道题目。
-     */
-    public List<CodingPracticeAgent.QuizQuestion> generateBatchQuiz(
-            String topic, String difficulty, int count, String profileSnapshot, List<String> excludedTopics) {
-        return codingPracticeService.generateBatchQuiz(topic, difficulty, count, profileSnapshot, excludedTopics);
-    }
-
-    public CodingAssessment evaluateCodingAnswer(String topic, String difficulty, String question, String answer) {
-        return codingPracticeService.evaluateCodingAnswer(topic, difficulty, question, answer);
-    }
-
-    public String generateNextCodingQuestion(String topic, String difficulty, String question, String answer, int score) {
-        return codingPracticeService.generateNextCodingQuestion(topic, difficulty, question, answer, score);
-    }
-
     public String generateLearningPlan(String topic, String weakPoint, String recentPerformance) {
         String normalizedTopic = topic == null || topic.isBlank() ? "后端基础" : topic.trim();
         // 使用新抽离的 personalized-learning-planner 技能
@@ -1438,14 +1358,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             filtered.add(image);
         }
         return filtered;
-    }
-
-    public record CodingAssessment(
-            int score,
-            String feedback,
-            String nextHint,
-            String nextQuestion
-    ) {
     }
 
 }

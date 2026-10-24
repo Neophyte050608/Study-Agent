@@ -1,10 +1,12 @@
 package io.github.imzmq.interview.im.application.service;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.im.domain.UnifiedMessage;
 import io.github.imzmq.interview.im.domain.UnifiedReply;
@@ -162,7 +164,7 @@ public class ImWebhookService {
                         conversationStore.setActiveSession(sessionId, session.getId());
                     }
                     // 如果面试已结束，清除 activeSessionId
-                    if (response.data() instanceof InterviewOrchestratorAgent.AnswerResult result && result.finished()) {
+                    if (response.data() instanceof InterviewAnswerResult result && result.finished()) {
                         conversationStore.clearSession(sessionId); // 这里也可以只清 activeSession
                     }
                 } else {

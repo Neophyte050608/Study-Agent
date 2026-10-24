@@ -1,14 +1,19 @@
 package io.github.imzmq.interview.service;
 
+import io.github.imzmq.interview.interview.application.context.InterviewAgentContextSchemaProvider;
+import io.github.imzmq.interview.practice.application.context.CodingPracticeAgentContextSchemaProvider;
+import io.github.imzmq.interview.knowledge.application.context.KnowledgeQaAgentContextSchemaProvider;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
+
 import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
 import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
-import io.github.imzmq.interview.agent.application.context.BasicConstraintsContextSource;
-import io.github.imzmq.interview.agent.application.context.CodingConstraintsContextSource;
-import io.github.imzmq.interview.agent.application.context.CodingProfileContextSource;
-import io.github.imzmq.interview.agent.application.context.CodingTaskPlanContextSource;
-import io.github.imzmq.interview.agent.application.context.InterviewKnowledgeContextSource;
-import io.github.imzmq.interview.agent.application.context.InterviewProfileContextSource;
-import io.github.imzmq.interview.agent.application.context.InterviewStrategyContextSource;
+import io.github.imzmq.interview.knowledge.application.context.BasicConstraintsContextSource;
+import io.github.imzmq.interview.practice.application.context.CodingConstraintsContextSource;
+import io.github.imzmq.interview.practice.application.context.CodingProfileContextSource;
+import io.github.imzmq.interview.practice.application.context.CodingTaskPlanContextSource;
+import io.github.imzmq.interview.interview.application.context.InterviewKnowledgeContextSource;
+import io.github.imzmq.interview.interview.application.context.InterviewProfileContextSource;
+import io.github.imzmq.interview.interview.application.context.InterviewStrategyContextSource;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
@@ -16,10 +21,9 @@ import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
-import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
-import io.github.imzmq.interview.knowledge.application.coding.CodingPracticeService;
+import io.github.imzmq.interview.interview.application.evaluation.InterviewAnswerEvaluationService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -36,7 +40,7 @@ import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.mcp.application.McpGatewayService;
 import io.github.imzmq.interview.skill.builtin.EvidenceEvaluatorSkill;
-import io.github.imzmq.interview.skill.builtin.CodingInterviewCoachSkill;
+import io.github.imzmq.interview.practice.application.skill.CodingInterviewCoachSkill;
 import io.github.imzmq.interview.skill.builtin.PersonalizedLearningPlannerSkill;
 import io.github.imzmq.interview.skill.builtin.QueryOptimizerSkill;
 import io.github.imzmq.interview.skill.builtin.QuestionStrategySkill;
@@ -176,26 +180,8 @@ class ParentChildRetrievalHydrationTest {
                 parentChildIndexService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                structuredOutputParser,
-                new InterviewAnswerEvaluationService(
-                        routingChatService,
-                        observabilityService,
-                        agentSkillService,
-                        promptTemplateService,
-                        promptManager,
-                        observabilitySwitchProperties,
-                        skillOrchestrator,
-                        structuredOutputParser,
-                        testContextAssembler()
-                ),
-                new CodingPracticeService(
-                        routingChatService,
-                        agentSkillService,
-                        promptManager,
-                        skillOrchestrator,
-                        structuredOutputParser,
-                        testContextAssembler()
-                )
+                structuredOutputParser
+
         );
     }
 
@@ -253,7 +239,7 @@ class ParentChildRetrievalHydrationTest {
                 new CodingConstraintsContextSource(),
                 new CodingProfileContextSource(),
                 new CodingTaskPlanContextSource()
-        )));
+        )), List.of(new InterviewAgentContextSchemaProvider(), new CodingPracticeAgentContextSchemaProvider(), new KnowledgeQaAgentContextSchemaProvider()));
     }
 
 }

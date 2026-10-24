@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.knowledge.application;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;

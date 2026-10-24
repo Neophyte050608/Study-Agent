@@ -7,7 +7,7 @@ import io.github.imzmq.interview.config.observability.ObservabilitySwitchPropert
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.localgraph.LocalGraphKnowledgeService;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RagKnowledgeService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;

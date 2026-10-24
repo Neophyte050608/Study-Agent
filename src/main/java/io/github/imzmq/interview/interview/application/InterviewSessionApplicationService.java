@@ -1,10 +1,13 @@
 package io.github.imzmq.interview.interview.application;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewFinalReport;
+
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import org.springframework.stereotype.Service;
@@ -52,7 +55,7 @@ public class InterviewSessionApplicationService {
                 Map.of("sessionId", sessionId == null ? "" : sessionId, "userAnswer", userAnswer == null ? "" : userAnswer),
                 context
         ));
-        if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.AnswerResult result)) {
+        if (!response.success() || !(response.data() instanceof InterviewAnswerResult result)) {
             throw new IllegalStateException(response.message());
         }
         return new InterviewService.AnswerResult(
@@ -77,7 +80,7 @@ public class InterviewSessionApplicationService {
                 Map.of("sessionId", sessionId == null ? "" : sessionId, "userId", userId == null ? "" : userId),
                 context
         ));
-        if (!response.success() || !(response.data() instanceof InterviewOrchestratorAgent.FinalReport report)) {
+        if (!response.success() || !(response.data() instanceof InterviewFinalReport report)) {
             throw new IllegalStateException(response.message());
         }
         return new InterviewService.FinalReport(

@@ -1,6 +1,9 @@
 package io.github.imzmq.interview.interview.application.chat;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewFinalReport;
+
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations.PresentationChannel;
 import io.github.imzmq.interview.chat.application.contract.extension.ChatTaskResultPresenter;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
@@ -12,8 +15,8 @@ public class InterviewTaskResultPresenter implements ChatTaskResultPresenter {
     @Override
     public boolean supports(Object result) {
         return result instanceof InterviewSession
-                || result instanceof InterviewOrchestratorAgent.AnswerResult
-                || result instanceof InterviewOrchestratorAgent.FinalReport;
+                || result instanceof InterviewAnswerResult
+                || result instanceof InterviewFinalReport;
     }
 
     @Override
@@ -21,16 +24,16 @@ public class InterviewTaskResultPresenter implements ChatTaskResultPresenter {
         if (result instanceof InterviewSession session) {
             return session.getCurrentQuestion();
         }
-        if (result instanceof InterviewOrchestratorAgent.AnswerResult answer) {
+        if (result instanceof InterviewAnswerResult answer) {
             return formatAnswer(answer, channel);
         }
-        if (result instanceof InterviewOrchestratorAgent.FinalReport report) {
+        if (result instanceof InterviewFinalReport report) {
             return formatReport(report, channel);
         }
         throw new IllegalArgumentException("Unsupported interview result: " + result);
     }
 
-    private String formatAnswer(InterviewOrchestratorAgent.AnswerResult result, PresentationChannel channel) {
+    private String formatAnswer(InterviewAnswerResult result, PresentationChannel channel) {
         StringBuilder sb = new StringBuilder();
         sb.append("【评分】").append(result.score()).append("\n\n");
         sb.append("【反馈】\n").append(result.feedback()).append("\n\n");
@@ -46,7 +49,7 @@ public class InterviewTaskResultPresenter implements ChatTaskResultPresenter {
         return sb.toString();
     }
 
-    private String formatReport(InterviewOrchestratorAgent.FinalReport report, PresentationChannel channel) {
+    private String formatReport(InterviewFinalReport report, PresentationChannel channel) {
         StringBuilder sb = new StringBuilder();
         sb.append("====== 面试复盘报告 ======\n\n");
         sb.append("【总评】\n").append(report.summary()).append("\n\n");

@@ -1,9 +1,20 @@
 package io.github.imzmq.interview.agent.application.context;
 
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextSchema;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextSlot;
+import io.github.imzmq.interview.agent.application.contract.context.AgentRuntimeContext;
+import io.github.imzmq.interview.agent.application.contract.context.ContextItem;
+import io.github.imzmq.interview.agent.application.contract.context.FilledContextSlot;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSchemaProvider;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,14 +27,22 @@ public class AgentContextAssembler {
     private final int globalCharBudget;
     private final Map<AgentContextMode, AgentContextSchema> schemas;
 
-    public AgentContextAssembler(AgentContextSourceRegistry registry) {
-        this(registry, DEFAULT_GLOBAL_CHAR_BUDGET);
+    @Autowired
+    public AgentContextAssembler(
+            AgentContextSourceRegistry registry,
+            List<AgentContextSchemaProvider> schemaProviders
+    ) {
+        this(registry, schemaProviders, DEFAULT_GLOBAL_CHAR_BUDGET);
     }
 
-    public AgentContextAssembler(AgentContextSourceRegistry registry, int globalCharBudget) {
+    public AgentContextAssembler(
+            AgentContextSourceRegistry registry,
+            List<AgentContextSchemaProvider> schemaProviders,
+            int globalCharBudget
+    ) {
         this.registry = registry;
         this.globalCharBudget = Math.max(1, globalCharBudget);
-        this.schemas = AgentContextSchema.defaults();
+        this.schemas = indexSchemas(schemaProviders);
     }
 
     public AgentRuntimeContext assemble(AgentContextQuery query) {
@@ -46,12 +65,36 @@ public class AgentContextAssembler {
         return new AgentRuntimeContext(schema.mode(), filled, trace);
     }
 
+    private Map<AgentContextMode, AgentContextSchema> indexSchemas(
+            List<AgentContextSchemaProvider> schemaProviders
+    ) {
+        Map<AgentContextMode, AgentContextSchema> indexed = new EnumMap<>(AgentContextMode.class);
+        if (schemaProviders == null) {
+            return Map.of();
+        }
+        for (AgentContextSchemaProvider provider : schemaProviders) {
+            if (provider == null || provider.schema() == null) {
+                continue;
+            }
+            AgentContextSchema schema = provider.schema();
+            AgentContextSchema previous = indexed.put(schema.mode(), schema);
+            if (previous != null) {
+                throw new IllegalStateException("duplicate agent context schema: " + schema.mode());
+            }
+        }
+        return Map.copyOf(indexed);
+    }
+
     private AgentContextSchema resolveSchema(AgentContextQuery query) {
         Object override = query.attribute("schema");
         if (override instanceof AgentContextSchema schema) {
             return schema;
         }
-        return schemas.getOrDefault(query.mode(), AgentContextSchema.knowledgeQa());
+        AgentContextSchema schema = schemas.get(query.mode());
+        if (schema == null) {
+            throw new IllegalStateException("no agent context schema registered for " + query.mode());
+        }
+        return schema;
     }
 
     private FilledContextSlot fillSlot(AgentContextSlot slot, AgentContextQuery query) {

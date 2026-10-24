@@ -1,14 +1,14 @@
 package io.github.imzmq.interview.chat.application;
 
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.ExecutionMode;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.ExecutionMode;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.security.core.InputSanitizer;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinition;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.knowledge.application.observability.TraceService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.TraceService;
 import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;

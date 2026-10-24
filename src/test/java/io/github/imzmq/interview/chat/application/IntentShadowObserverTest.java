@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.chat.application;
 
 import io.github.imzmq.interview.config.routing.RoutingUnderstandingProperties;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeDefinitions;
-import io.github.imzmq.interview.knowledge.application.observability.TraceNodeHandle;
-import io.github.imzmq.interview.knowledge.application.observability.TraceService;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.trace.TraceService;
 import io.github.imzmq.interview.routing.application.contract.UnderstandingService;
 import io.github.imzmq.interview.routing.application.contract.result.DecisionSource;
 import io.github.imzmq.interview.routing.application.contract.result.IntentRecord;

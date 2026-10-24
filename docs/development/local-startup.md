@@ -29,7 +29,7 @@ bash scripts/dev-start.sh
 
 1. 启动基础依赖容器：`mysql redis etcd minio milvus neo4j`
 2. 等待 MySQL、Redis、Milvus、Neo4j 端口就绪
-3. 使用 `local-lite` profile 启动后端
+3. 使用 `local-lite` profile 启动后端，Flyway 自动迁移 MySQL
 4. 启动前端 Vite 开发服务
 
 启动完成后访问：
@@ -168,12 +168,17 @@ lsof -nP -iTCP:9596 -sTCP:LISTEN
 lsof -nP -iTCP:5173 -sTCP:LISTEN
 ```
 
-### 数据库还没初始化
+### 数据库迁移失败
 
-如果后端启动后提示表不存在，需要先初始化数据库。参考 README 的“手动启动方式”部分，执行：
+MySQL 表结构和必要的参考数据由 Flyway 自动管理，不再手工导入 `sql/schema.sql` 或 `sql/data.sql`。启动失败时先查看后端日志中的 Flyway 错误，并检查：
 
-- `sql/schema.sql`
-- `sql/data.sql`
+- MySQL 是否可连接，以及账号是否有建表、建索引和写入权限
+- `flyway_schema_history` 中是否存在失败记录
+- 是否有人修改过已执行的迁移脚本，导致 checksum 校验失败
+
+迁移脚本位于 `src/main/resources/db/migration/`。已经应用的脚本不可修改；数据库变化必须新增更高版本迁移。
+
+已有的非空 Study-Agent 数据库首次接入时会按 V1 建立基线，再执行 V2 及后续迁移。基线不会自动识别或修复历史库中的未知字段差异；这类差异需要审计后新增 V3+ 显式迁移。
 
 ## 不在一键脚本中默认启动的服务
 

@@ -1,9 +1,11 @@
 package io.github.imzmq.interview.feedback.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackDO;
+import io.github.imzmq.interview.feedback.application.contract.FeedbackMetricsQuery;
+import io.github.imzmq.interview.feedback.application.contract.result.FeedbackMetrics;
 import io.github.imzmq.interview.feedback.domain.FeedbackEvent;
-import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagFeedbackMapper;
+import io.github.imzmq.interview.feedback.infrastructure.persistence.RagFeedbackDO;
+import io.github.imzmq.interview.feedback.infrastructure.persistence.RagFeedbackMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -11,7 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 
 @Service
-public class FeedbackApplicationService {
+public class FeedbackApplicationService implements FeedbackMetricsQuery {
 
     private static final Logger logger = LoggerFactory.getLogger(FeedbackApplicationService.class);
 
@@ -44,5 +46,14 @@ public class FeedbackApplicationService {
                 .eq(RagFeedbackDO::getFeedbackType, feedbackType)
                 .ge(RagFeedbackDO::getCreatedAt, from)
                 .lt(RagFeedbackDO::getCreatedAt, to));
+    }
+
+    @Override
+    public FeedbackMetrics summarize(LocalDateTime from, LocalDateTime to) {
+        return new FeedbackMetrics(
+                countByType(from, to, FeedbackEvent.FeedbackType.THUMBS_UP.name()),
+                countByType(from, to, FeedbackEvent.FeedbackType.THUMBS_DOWN.name()),
+                countByType(from, to, FeedbackEvent.FeedbackType.COPY.name())
+        );
     }
 }

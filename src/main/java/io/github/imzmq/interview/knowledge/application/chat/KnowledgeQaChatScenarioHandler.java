@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.chat;
 
-import io.github.imzmq.interview.agent.runtime.KnowledgeQaAgent;
-import io.github.imzmq.interview.agent.task.TaskResponse;
+import io.github.imzmq.interview.knowledge.application.agent.KnowledgeQaAgent;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
 import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;

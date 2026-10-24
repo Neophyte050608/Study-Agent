@@ -1,18 +1,14 @@
 package io.github.imzmq.interview.agent;
 
-import io.github.imzmq.interview.agent.runtime.CodingPracticeAgent;
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.runtime.KnowledgeQaAgent;
-import io.github.imzmq.interview.agent.runtime.NoteMakingAgent;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
 import io.github.imzmq.interview.agent.a2a.A2ABus;
 import io.github.imzmq.interview.agent.a2a.A2AMessage;
-import io.github.imzmq.interview.agent.router.TaskHandler;
+import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
 import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
-import io.github.imzmq.interview.agent.task.ExecutionMode;
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.ExecutionMode;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.routing.domain.IntentPreFilter;
 import io.github.imzmq.interview.routing.domain.IntentRoutingDecision;
 import io.github.imzmq.interview.routing.domain.PreFilterResult;
@@ -20,9 +16,8 @@ import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
 import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -61,11 +56,6 @@ class TaskRouterAgentTest {
         };
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 mock(IntentTreeRoutingService.class),
                 mock(IntentPreFilter.class),
@@ -106,11 +96,6 @@ class TaskRouterAgentTest {
         };
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 mock(IntentTreeRoutingService.class),
                 mock(IntentPreFilter.class),
@@ -152,11 +137,6 @@ class TaskRouterAgentTest {
         ));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 intentTreeRoutingService,
                 intentPreFilter,
@@ -188,11 +168,6 @@ class TaskRouterAgentTest {
         when(intentPreFilter.filter("/help")).thenReturn(Optional.of(PreFilterResult.directReply("help text")));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 mock(IntentTreeRoutingService.class),
                 intentPreFilter,
@@ -221,11 +196,6 @@ class TaskRouterAgentTest {
         IntentPreFilter intentPreFilter = new IntentPreFilter();
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 mock(IntentTreeRoutingService.class),
                 intentPreFilter,
@@ -265,11 +235,6 @@ class TaskRouterAgentTest {
                 .thenReturn("{\"taskType\":\"UNKNOWN\"}");
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 promptManager,
                 intentTreeRoutingService,
                 intentPreFilter,
@@ -314,11 +279,6 @@ class TaskRouterAgentTest {
                 .thenReturn("{\"taskType\":\"UNKNOWN\"}");
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 promptManager,
                 intentTreeRoutingService,
                 intentPreFilter,
@@ -351,11 +311,6 @@ class TaskRouterAgentTest {
         Map<String, Object> context = new java.util.HashMap<>(Map.of("traceId", "trace-clear", "sessionId", "session-1"));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 mock(IntentTreeRoutingService.class),
                 intentPreFilter,
@@ -384,11 +339,6 @@ class TaskRouterAgentTest {
         when(handler.taskType()).thenReturn(TaskType.KNOWLEDGE_QA);
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 mock(IntentTreeRoutingService.class),
                 mock(IntentPreFilter.class),
@@ -472,11 +422,6 @@ class TaskRouterAgentTest {
         };
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 intentTreeRoutingService,
                 intentPreFilter,
@@ -532,11 +477,6 @@ class TaskRouterAgentTest {
                 .thenReturn(Map.of());
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 mock(PromptManager.class),
                 intentTreeRoutingService,
                 mock(IntentPreFilter.class),
@@ -589,11 +529,6 @@ class TaskRouterAgentTest {
         ));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(InterviewOrchestratorAgent.class),
-                mock(CodingPracticeAgent.class),
-                mock(NoteMakingAgent.class),
-                mock(LearningProfileAgent.class),
-                mock(KnowledgeQaAgent.class),
                 promptManager,
                 intentTreeRoutingService,
                 mock(IntentPreFilter.class),

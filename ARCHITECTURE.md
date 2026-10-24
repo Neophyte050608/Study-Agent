@@ -59,10 +59,55 @@ Generic web chat is owned by `chat`: `chat.api.ChatController` is the unchanged 
 - Cross-module session, message, context, task, and presentation capabilities are exposed from `chat.application.contract`; session/message results are immutable records under `chat.application.contract.result` and do not expose persistence DOs.
 - Business-owned scenario handlers implement the chat-owned SPI in `chat.application.contract.extension`. The chat registry discovers `List<ChatScenarioHandler>` through Spring ordering and never imports a concrete interview or knowledge handler.
 - Interview result formatting is supplied by the interview-owned `InterviewTaskResultPresenter`; chat's generic presenter no longer imports interview domain/runtime result types.
-- Interview and knowledge handlers may depend on chat contracts only. They cannot access `chat.application` implementations or `chat.infrastructure`.
-- `ActiveCodingChatScenarioHandler` remains temporarily under `interview.application.chat` for M3; M4 moves this concrete practice behavior to the `practice` owner without changing the chat SPI.
+- Interview, knowledge, and practice handlers may depend on chat contracts only. They cannot access `chat.application` implementations or `chat.infrastructure`.
+- Practice supplies `ActiveCodingChatScenarioHandler`, `CodingPracticeCardChatScenarioHandler`, and `CodingPracticeTaskResultPresenter` through the chat-owned extension SPI. Generic chat does not import these concrete implementations.
 
-M3 removes every chat persistence allowlist entry. It also removes the former M4 `CodingPracticeController -> ChatMessageDO` edge early because that controller now uses `ChatMessageOperations`.
+M3 removed every chat persistence allowlist entry. It also removed the former M4 `CodingPracticeController -> ChatMessageDO` edge early because that controller now uses `ChatMessageOperations`.
+
+### Practice ownership after M4
+
+Coding practice is owned end-to-end by `practice`: `/api/coding`, question generation and evaluation, the in-memory practice session, the coding Agent and TaskHandler, chat handlers/presenter, context sources, application DTOs, and the coding interview skill all live under `practice`.
+
+- Chat discovers practice handlers and result presentation through `ChatScenarioHandler` and `ChatTaskResultPresenter`.
+- Agent discovers `CodingPracticeTaskHandler` and coding context sources through the existing handler/context registries; generic routing does not inject `CodingPracticeAgent`.
+- Skill discovery uses the generic `ExecutableSkill` registry; generic skill code does not import `CodingInterviewCoachSkill`.
+- `knowledge.application.coding` and the former interview-owned coding handler exception are retired and guarded by ArchUnit.
+- M4 adds no cross-module persistence exception. The allowlist remains at 17 exact dependency pairs.
+
+### Interview ownership after M5
+
+Interview lifecycle, answer evaluation, report generation, resume input, interview-specific Agents, TaskHandlers, and context sources are owned by `interview`. Generic `agent`, `knowledge`, top-level `rag`, and generic `skill` no longer own or import these concrete implementations.
+
+- Interview-specific Agents and handlers live under `interview.application.agent`; generic routing continues to dispatch through `TaskHandlerRegistry` and has no concrete `InterviewOrchestratorAgent` dependency.
+- Interview context sources implement the generic agent context extension contracts from `interview.application.context`.
+- Answer and final-report task results consumed across modules are immutable records under `interview.application.contract.result`: `InterviewAnswerResult` and `InterviewFinalReport`. Start continues to return the existing `InterviewSession`; no synthetic start-result contract was introduced.
+- `InterviewAnswerEvaluationService` belongs to Interview and consumes Knowledge output; `RAGService` no longer exposes Interview evaluation delegates or depends on Interview evaluation.
+- Resume loading and the report-generation skill live under `interview.infrastructure.resume` and `interview.application.skill`.
+- M5 removed all three generic-agent-to-Interview persistence exceptions. At the M5 checkpoint, the allowlist contained 14 exact M7 dependency pairs.
+
+### Generic Agent Runtime boundary after M6
+
+Generic `agent` owns the reusable task/context extension contract and runtime mechanics, not business-specific Agents, handlers, context sources, or schemas.
+
+- Public task and context value types live under `agent.application.contract.task` and `agent.application.contract.context`.
+- Spring extension SPI lives under `agent.application.contract.extension`: `TaskHandler`, `AgentContextSource`, and `AgentContextSchemaProvider`.
+- `TaskHandlerRegistry`, `AgentContextSourceRegistry`, and `AgentContextAssembler` remain internal implementations. Spring discovers `List<TaskHandler>`, `List<AgentContextSource>`, and `List<AgentContextSchemaProvider>`; registries and the assembler do not maintain concrete business class lists.
+- Knowledge QA and Learning implementations now live under their real owners. Interview and Practice implementations remain under their owners from M5/M4.
+- Knowledge, Interview, and Practice provide their context schemas from owner-local provider beans. Generic Tool Task context and its schema remain in `agent` because they describe reusable execution plans, tool state, task memory, and generic tool constraints rather than a business capability.
+- Query-level context schema override, slot order and budgets remain supported. Duplicate provider modes and missing registered schemas fail explicitly.
+- M6 changes no HTTP/SSE contract, A2A behavior, task lifecycle, model invocation, fallback, persistence ownership, or deployment topology. At the M6 checkpoint, the cross-module persistence allowlist therefore remained at 14 exact M7 pairs.
+
+### Observability and Feedback ownership after M7A
+
+M7A assigns operational telemetry and explicit user feedback to their semantic owners without changing the existing tables, HTTP/SSE contracts, trace lifecycle, scheduling windows, or fallback behavior.
+
+- Trace runtime and event delivery live under `observability.application.trace`; trace and metrics DOs/Mappers live under `observability.infrastructure.persistence`.
+- `observability.application.ObservabilityQueryService` owns recent/active trace queries, trace detail and overview, feedback-backed dashboard aggregates, metrics history/summary, and manual snapshot triggering.
+- `observability.application.metrics.MetricsSnapshotScheduler` owns hourly snapshot aggregation and consumes only `feedback.application.contract.FeedbackMetricsQuery` for thumbs-up, thumbs-down, and copy counts.
+- `feedback.application.FeedbackApplicationService` owns `t_rag_feedback` persistence and implements the stable feedback aggregate query contract without exposing MyBatis types.
+- `interview.application.ObservabilityApplicationService` remains a compatibility orchestrator for existing controller signatures and Knowledge-owned evaluation; operational observability methods delegate to `ObservabilityQueryService` and no longer access Observability or Feedback persistence.
+- Existing table names remain `t_rag_trace`, `t_rag_trace_node`, `t_rag_metrics_snapshot`, and `t_rag_feedback`.
+- `knowledge.application.observability` is retired and guarded by ArchUnit. M7A removed ten persistence exceptions; exactly four M7B/M7C exceptions remain.
 
 ## Layering Rules
 - API layer: controllers and controller-facing DTO/input-output types.
@@ -115,7 +160,7 @@ DTO placement follows caller-facing ownership:
 - Trace, span, runtime metrics, and observability queries -> `observability`.
 - Cross-domain SSE connection and transport only -> `common.stream`; task state belongs to `agent`, message state belongs to `chat`.
 
-Do not add new responsibilities to historical `knowledge.application.chatstream`, `knowledge.application.coding`, `knowledge.application.observability`, top-level `intent`, `graph`, or `rag` packages.
+The historical `knowledge.application.chatstream`, `knowledge.application.coding`, and `knowledge.application.observability` packages are retired and must not be recreated. Do not add new responsibilities to top-level `intent`, `graph`, or `rag` packages while their remaining migration debt is being removed.
 
 ## Enforcement
 - ArchUnit tests enforce key boundaries.

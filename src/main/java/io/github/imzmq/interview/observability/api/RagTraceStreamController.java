@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.observability.api;
 
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
-import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus;
-import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus.RagTraceStreamEvent;
-import io.github.imzmq.interview.knowledge.application.observability.RagTraceEventBus.TraceSummary;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RagTraceEventBus;
+import io.github.imzmq.interview.observability.application.trace.RagTraceEventBus.RagTraceStreamEvent;
+import io.github.imzmq.interview.observability.application.trace.RagTraceEventBus.TraceSummary;
 import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;

@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.agent.application.context;
 
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

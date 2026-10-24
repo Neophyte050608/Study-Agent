@@ -1,14 +1,5 @@
 package io.github.imzmq.interview.service;
 
-import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
-import io.github.imzmq.interview.agent.application.context.AgentContextSourceRegistry;
-import io.github.imzmq.interview.agent.application.context.BasicConstraintsContextSource;
-import io.github.imzmq.interview.agent.application.context.CodingConstraintsContextSource;
-import io.github.imzmq.interview.agent.application.context.CodingProfileContextSource;
-import io.github.imzmq.interview.agent.application.context.CodingTaskPlanContextSource;
-import io.github.imzmq.interview.agent.application.context.InterviewKnowledgeContextSource;
-import io.github.imzmq.interview.agent.application.context.InterviewProfileContextSource;
-import io.github.imzmq.interview.agent.application.context.InterviewStrategyContextSource;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
@@ -18,10 +9,8 @@ import io.github.imzmq.interview.graph.domain.TechConceptRepository;
 import io.github.imzmq.interview.graph.domain.TechConceptSnippetView;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
-import io.github.imzmq.interview.knowledge.application.evaluation.InterviewAnswerEvaluationService;
-import io.github.imzmq.interview.knowledge.application.coding.CodingPracticeService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -29,15 +18,14 @@ import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackServ
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.agent.application.AgentSkillService;
 import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.mcp.application.McpGatewayService;
 import io.github.imzmq.interview.skill.builtin.EvidenceEvaluatorSkill;
-import io.github.imzmq.interview.skill.builtin.CodingInterviewCoachSkill;
-import io.github.imzmq.interview.skill.builtin.InterviewReportGeneratorSkill;
+import io.github.imzmq.interview.practice.application.skill.CodingInterviewCoachSkill;
+import io.github.imzmq.interview.interview.application.skill.InterviewReportGeneratorSkill;
 import io.github.imzmq.interview.skill.builtin.PersonalizedLearningPlannerSkill;
 import io.github.imzmq.interview.skill.builtin.QueryOptimizerSkill;
 import io.github.imzmq.interview.skill.builtin.QuestionStrategySkill;
@@ -48,7 +36,6 @@ import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
 import io.github.imzmq.interview.search.application.WebSearchTool;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +50,6 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.ResourceAccessException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -107,9 +93,6 @@ class RAGServiceTest {
 
     @Mock
     private AgentSkillService agentSkillService;
-
-    @Mock
-    private PromptTemplateService promptTemplateService;
 
     @Mock
     private PromptManager promptManager;
@@ -195,26 +178,8 @@ class RAGServiceTest {
                 parentChildIndexService,
                 skillOrchestrator,
                 knowledgePacketBuilder,
-                structuredOutputParser,
-                new InterviewAnswerEvaluationService(
-                        routingChatService,
-                        observabilityService,
-                        agentSkillService,
-                        promptTemplateService,
-                        promptManager,
-                        observabilitySwitchProperties,
-                        skillOrchestrator,
-                        structuredOutputParser,
-                        testContextAssembler()
-                ),
-                new CodingPracticeService(
-                        routingChatService,
-                        agentSkillService,
-                        promptManager,
-                        skillOrchestrator,
-                        structuredOutputParser,
-                        testContextAssembler()
-                )
+                structuredOutputParser
+
         );
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
                 .thenReturn(new PromptManager.PromptPair("system", "user"));
@@ -336,39 +301,6 @@ class RAGServiceTest {
     }
 
     @Test
-    void shouldFilterInvalidEvidenceReferences() throws Exception {
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
-                .thenReturn(
-                        "Spring Transaction"
-                );
-        when(promptManager.renderSplit(eq("interviewer"), eq("evaluation"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
-        when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
-                .thenReturn(new RoutingChatService.RoutingResult("""
-                        {"score":85,"accuracy":84,"logic":83,"depth":82,"boundary":81,
-                        "deductions":["边界解释不足"],
-                        "citations":["99. [fake]","1. [ok]"],
-                        "conflicts":["异常结论~7","隔离级别描述不全~1"],
-                        "feedback":"回答较好","nextQuestion":"说一下面试中的事务隔离级别"}
-                        """, 0, 0, 0L));
-
-        Document vectorDoc = new Document("事务的隔离级别包括读未提交、读已提交、可重复读和串行化。");
-        vectorDoc.getMetadata().put("file_path", "note/tx.md");
-        vectorDoc.getMetadata().put("knowledge_tags", "技术栈");
-        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of(vectorDoc));
-        when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
-
-        String result = ragService.processAnswer("Spring", "什么是事务隔离级别", "回答", "INTERMEDIATE", "PROBE", 72.0, "画像");
-        JsonNode node = new ObjectMapper().readTree(result);
-
-        assertEquals(1, node.path("citations").size());
-        assertEquals("1. [ok]", node.path("citations").get(0).asText());
-        assertEquals(1, node.path("conflicts").size());
-        assertEquals("隔离级别描述不全~1", node.path("conflicts").get(0).asText());
-        assertTrue(node.path("deductions").toString().contains("自动过滤"));
-    }
-
-    @Test
     void shouldInjectKnowledgeSkillIntoRewritePrompt() {
         when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("### Skill: query-optimizer\n遵循混合检索流程");
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
@@ -419,12 +351,9 @@ class RAGServiceTest {
                 "result", Map.of()
         ));
 
-        ragService.processAnswer("缓存", "如何保证缓存一致性", "回答", "INTERMEDIATE", "PROBE", 70.0, "画像");
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("如何保证缓存一致性", "回答");
 
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(promptManager, atLeastOnce()).renderSplit(eq("interviewer"), eq("evaluation"), captor.capture());
-        Object evidence = captor.getValue().get("retrievalEvidence");
-        assertTrue(String.valueOf(evidence).contains("1. [interview_experience:interview/tencent.md]"));
+        assertTrue(packet.retrievalEvidence().contains("1. [interview_experience:interview/tencent.md]"));
     }
 
     @Test
@@ -466,37 +395,6 @@ class RAGServiceTest {
 
         assertTrue(firstQuestion.contains("JVM"));
         assertTrue(firstQuestion.contains("自我介绍"));
-    }
-
-    @Test
-    void shouldReturnFallbackEvaluationWhenLayeredEvaluateTimeout() throws Exception {
-        when(agentSkillService.resolveSkillBlock("query-optimizer")).thenReturn("");
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), nullable(String.class), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
-                .thenReturn("JVM 内存模型");
-        when(promptManager.renderSplit(eq("interviewer"), eq("evaluation"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
-        when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
-                .thenThrow(new ResourceAccessException("timeout"));
-        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
-                "status", "blocked",
-                "result", Map.of()
-        ));
-
-        RAGService.EvaluationResult result = ragService.evaluateWithKnowledge(
-                "Java",
-                "什么是 JVM 内存模型",
-                "我的回答",
-                "INTERMEDIATE",
-                "PROBE",
-                70.0,
-                "画像",
-                "",
-                new RAGService.KnowledgePacket("query", List.of(), "", "[]", true)
-        );
-
-        JsonNode node = new ObjectMapper().readTree(result.json());
-        assertEquals(0, node.path("score").asInt());
-        assertTrue(node.path("feedback").asText().contains("超时") || node.path("feedback").asText().contains("不可用"));
     }
 
     @Test
@@ -580,38 +478,6 @@ class RAGServiceTest {
         assertTrue(packet.webFallbackUsed());
         assertTrue(packet.context().contains("Web info about HashMap treeify"));
         verify(webSearchTool, times(1)).run(any(WebSearchTool.Query.class));
-    }
-
-    @Test
-    void shouldInjectExecutableCodingCoachIntoCodingQuestionPrompt() {
-        when(promptManager.renderSplit(eq("coding-coach"), eq("coding-question"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
-                .thenReturn("请完成一道 Two Sum 算法题。");
-
-        ragService.generateCodingQuestion("数组与字符串", "medium", "高级后端开发", List.of());
-
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(promptManager, atLeastOnce()).renderSplit(eq("coding-coach"), eq("coding-question"), captor.capture());
-        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
-        assertTrue(skillBlock.contains("Coding Coach"));
-        assertTrue(skillBlock.contains("任务: 出题"));
-    }
-
-    @Test
-    void shouldInjectExecutableCodingCoachIntoCodingEvaluationPrompt() {
-        when(promptManager.renderSplit(eq("coding-coach"), eq("coding-evaluation"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
-        when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
-                .thenReturn("{\"score\":80,\"feedback\":\"ok\",\"nextHint\":\"补复杂度\",\"nextQuestion\":\"再优化一下空间复杂度\"}");
-
-        ragService.evaluateCodingAnswer("算法", "medium", "Two Sum", "使用 HashMap 一次遍历");
-
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(promptManager, atLeastOnce()).renderSplit(eq("coding-coach"), eq("coding-evaluation"), captor.capture());
-        String skillBlock = String.valueOf(captor.getValue().get("skillBlock"));
-        assertTrue(skillBlock.contains("Coding Coach"));
-        assertTrue(skillBlock.contains("任务: 评估"));
     }
 
     @Test
@@ -699,16 +565,5 @@ class RAGServiceTest {
     }
 
 
-    private AgentContextAssembler testContextAssembler() {
-        return new AgentContextAssembler(new AgentContextSourceRegistry(List.of(
-                new BasicConstraintsContextSource(),
-                new InterviewProfileContextSource(),
-                new InterviewStrategyContextSource(),
-                new InterviewKnowledgeContextSource(),
-                new CodingConstraintsContextSource(),
-                new CodingProfileContextSource(),
-                new CodingTaskPlanContextSource()
-        )));
-    }
 
 }

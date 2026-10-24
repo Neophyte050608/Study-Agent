@@ -1,14 +1,14 @@
 package io.github.imzmq.interview.interview.application;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.knowledge.application.observability.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;

@@ -75,20 +75,35 @@ MyBatis 相关类放在：
 
 例如模型服务、Milvus、Neo4j、Feishu/QQ、MCP 等集成，都应封装在明确 adapter/client 后，不要散落在业务流程中。
 
+## 数据库迁移
+
+MySQL 表结构和必要参考数据由 Flyway 管理，迁移目录为：
+
+```text
+src/main/resources/db/migration/
+```
+
+- 禁止在运行代码或 Docker 初始化目录中另建一套 schema 真相源。
+- 已应用的版本化迁移不可修改；变更必须新增更高版本的 `V<version>__<description>.sql`。
+- 参考数据迁移必须可重复采用已有数据库，不能覆盖用户已定制的数据。
+- 数据库迁移变更至少运行 `FlywayDatabaseMigrationTest`；条件允许时还应对临时 MySQL 运行 `FlywayMySqlMigrationIntegrationTest`。
+
 ## Knowledge 与 RAG 规则
 
 `knowledge.application.RAGService` 只保留兼容入口和主流程门面。新增逻辑按职责放置：
 
 - 检索编排、融合、query rewrite：`knowledge.application.retrieval`
 - 本地图谱链路：`knowledge.application.localgraph`
-- 多轮上下文策略：`knowledge.application.context`
+- Knowledge QA 的 Agent、Handler 与上下文：`knowledge.application.agent`、`knowledge.application.context`
 - 通用聊天流式编排：`chat.application`；知识问答场景 Handler：`knowledge.application.chat`
-- 刷题生成、评估、兜底：`knowledge.application.coding`
-- 评测、答案评分、证据校验：`knowledge.application.evaluation`
-- trace、事件、观测：`knowledge.application.observability`
+- 刷题生成、评估、兜底：`practice.application`
+- 面试答案评分：`interview.application.evaluation`
+- 通用 trace runtime、事件和 operational query：`observability.application.trace`、`observability.application.ObservabilityQueryService`
+- metrics snapshot 聚合：`observability.application.metrics`
+- 显式用户反馈及其聚合契约：`feedback.application`、`feedback.application.contract`
 - 知识库和文档管理：`knowledge.application.catalog`
 
-不要把新职责继续加到 `knowledge.application` 根包。
+不要把新职责继续加到 `knowledge.application` 根包，也不要重建已退休的 `knowledge.application.coding` 或 `knowledge.application.observability`。跨模块只能调用 provider 的 `application.contract`，不得直接访问其他模块的 DO、Mapper 或具体 application service。
 
 ## Agent Runtime 预留边界
 

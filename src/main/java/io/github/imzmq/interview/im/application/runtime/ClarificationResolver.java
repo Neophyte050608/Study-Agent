@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.im.application.runtime;
 
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.config.routing.IntentTreeProperties;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
 import com.fasterxml.jackson.databind.JsonNode;

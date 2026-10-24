@@ -1,5 +1,12 @@
 package io.github.imzmq.interview.agent.application.context;
 
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextSlot;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextSlotKind;
+import io.github.imzmq.interview.agent.application.contract.context.ContextItem;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
+
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

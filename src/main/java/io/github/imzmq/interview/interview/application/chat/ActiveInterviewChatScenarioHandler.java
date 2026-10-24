@@ -1,9 +1,11 @@
 package io.github.imzmq.interview.interview.application.chat;
 
-import io.github.imzmq.interview.agent.runtime.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.task.TaskRequest;
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+
+import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
 import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
@@ -84,7 +86,7 @@ public class ActiveInterviewChatScenarioHandler implements ChatScenarioHandler {
         metadata.put("interviewSessionId", activeInterviewId);
         metadata.put("routeLabel", "interview-answer");
         metadata.put("routeSource", "active-session");
-        if (answerResponse.data() instanceof InterviewOrchestratorAgent.AnswerResult ar && ar.finished()) {
+        if (answerResponse.data() instanceof InterviewAnswerResult ar && ar.finished()) {
             metadata.put("type", "interview_finished");
         } else {
             metadata.put("type", "interview_answer");

@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.agent.task.TaskResponse;
-import io.github.imzmq.interview.agent.task.TaskType;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.identity.application.UserIdentityResolver;
 import io.github.imzmq.interview.interview.api.support.RequestPayloadMapper;
