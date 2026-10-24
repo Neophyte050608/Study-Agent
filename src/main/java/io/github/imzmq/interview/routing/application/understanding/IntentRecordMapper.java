@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.routing.application.understanding;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.SchemaSpec;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputSchema;
 import io.github.imzmq.interview.routing.application.contract.result.DecisionSource;
 import io.github.imzmq.interview.routing.application.contract.result.IntentRecord;
 import io.github.imzmq.interview.routing.application.contract.result.IntentTask;
@@ -17,24 +17,24 @@ import java.util.Map;
 @Component
 public class IntentRecordMapper {
 
-    private static final SchemaSpec SCHEMA = SchemaSpec.builder()
+    private static final StructuredOutputSchema SCHEMA = StructuredOutputSchema.builder()
             .required("relation", "standaloneQuery", "tasks", "confidence", "reason")
-            .type("relation", SchemaSpec.JsonType.STRING, "NEW_TOPIC")
-            .type("standaloneQuery", SchemaSpec.JsonType.STRING, "")
-            .type("tasks", SchemaSpec.JsonType.ARRAY, List.of())
-            .type("confidence", SchemaSpec.JsonType.NUMBER, 0D)
-            .type("reason", SchemaSpec.JsonType.STRING, "")
+            .type("relation", StructuredOutputSchema.JsonType.STRING, "NEW_TOPIC")
+            .type("standaloneQuery", StructuredOutputSchema.JsonType.STRING, "")
+            .type("tasks", StructuredOutputSchema.JsonType.ARRAY, List.of())
+            .type("confidence", StructuredOutputSchema.JsonType.NUMBER, 0D)
+            .type("reason", StructuredOutputSchema.JsonType.STRING, "")
             .allowed("relation", "NEW_TOPIC", "FOLLOW_UP", "REFINE", "CORRECT", "RETURN", "CONFIRM", "CHITCHAT")
             .build();
 
-    private final LlmJsonParser parser;
+    private final StructuredOutputParser parser;
 
-    public IntentRecordMapper(LlmJsonParser parser) {
+    public IntentRecordMapper(StructuredOutputParser parser) {
         this.parser = parser;
     }
 
     public IntentRecord map(String sessionId, String rawQuery, String rawResponse) {
-        JsonResult<JsonNode> parsed = parser.parseTree(rawResponse, SCHEMA, null);
+        StructuredOutputResult<JsonNode> parsed = parser.parseTree(rawResponse, SCHEMA, null);
         if (!parsed.success()) {
             return IntentRecord.fallback(sessionId, rawQuery, parsed.failureReason());
         }

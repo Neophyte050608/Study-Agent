@@ -8,10 +8,10 @@ import io.github.imzmq.interview.observability.core.TraceNode;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
-import io.github.imzmq.interview.chat.application.JsonResult;
-import io.github.imzmq.interview.chat.application.SchemaSpec;
-import io.github.imzmq.interview.chat.application.RetryCall;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputSchema;
+import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputRetry;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
@@ -36,11 +36,11 @@ public class IntentTreeRoutingService {
     private final IntentSlotRefineCaseService intentSlotRefineCaseService;
     private final RoutingChatService routingChatService;
     private final String intentPreferredModel;
-    private final LlmJsonParser llmJsonParser;
+    private final StructuredOutputParser structuredOutputParser;
 
-    private static final SchemaSpec INTENT_SCHEMA = SchemaSpec.builder()
+    private static final StructuredOutputSchema INTENT_SCHEMA = StructuredOutputSchema.builder()
             .required("taskType", "intentId", "confidence")
-            .type("confidence", SchemaSpec.JsonType.NUMBER, 0.0)
+            .type("confidence", StructuredOutputSchema.JsonType.NUMBER, 0.0)
             .allowed("dialogAct", "FOLLOW_UP", "NEW_QUESTION", "COMPARISON", "SUMMARY", "RETURN", "")
             .allowed("contextPolicy", "CONTINUE", "SWITCH", "RETURN", "SUMMARY", "SAFE_MIN", "")
             .build();
@@ -52,7 +52,7 @@ public class IntentTreeRoutingService {
             IntentSlotRefineCaseService intentSlotRefineCaseService,
             ModelRoutingProperties modelRoutingProperties,
             RoutingChatService routingChatService,
-            LlmJsonParser llmJsonParser
+            StructuredOutputParser structuredOutputParser
     ) {
         this.promptManager = promptManager;
         this.properties = properties;
@@ -60,7 +60,7 @@ public class IntentTreeRoutingService {
         this.intentSlotRefineCaseService = intentSlotRefineCaseService;
         this.routingChatService = routingChatService;
         this.intentPreferredModel = modelRoutingProperties.getIntentModel();
-        this.llmJsonParser = llmJsonParser;
+        this.structuredOutputParser = structuredOutputParser;
     }
 
     public boolean enabled() {
@@ -118,13 +118,13 @@ public class IntentTreeRoutingService {
                     truncateForLog(query),
                     truncateForLog(response));
 
-            RetryCall retry = (repairHint, attempt) -> routingChatService.call(
+            StructuredOutputRetry retry = (repairHint, attempt) -> routingChatService.call(
                     pair.systemPrompt(),
                     pair.userPrompt() + repairHint,
                     ModelRouteType.GENERAL, intentPreferredModel,
                     "意图分类-重试" + attempt);
 
-            JsonResult<JsonNode> result = llmJsonParser.parseTree(response, INTENT_SCHEMA, retry);
+            StructuredOutputResult<JsonNode> result = structuredOutputParser.parseTree(response, INTENT_SCHEMA, retry);
             if (!result.success()) {
                 return routeFailureDecision("json_parse:" + result.failureReason());
             }
@@ -152,7 +152,7 @@ public class IntentTreeRoutingService {
             if (response == null || response.isBlank()) {
                 return Map.of();
             }
-            JsonResult<JsonNode> parseResult = llmJsonParser.parseTree(response, null, null);
+            StructuredOutputResult<JsonNode> parseResult = structuredOutputParser.parseTree(response, null, null);
             if (!parseResult.success()) {
                 return Map.of();
             }

@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.routing.application.understanding;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.imzmq.interview.chat.application.LlmJsonParser;
+import io.github.imzmq.interview.modelrouting.application.structuredoutput.DefaultStructuredOutputParser;
 import io.github.imzmq.interview.routing.application.contract.result.DecisionSource;
 import io.github.imzmq.interview.routing.application.contract.result.TurnRelation;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,7 +15,7 @@ class IntentRecordMapperTest {
 
     @BeforeEach
     void setUp() {
-        mapper = new IntentRecordMapper(new LlmJsonParser(new ObjectMapper()));
+        mapper = new IntentRecordMapper(new DefaultStructuredOutputParser(new ObjectMapper()));
     }
 
     @Test
