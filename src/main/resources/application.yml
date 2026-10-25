@@ -155,8 +155,8 @@ app:
     clip:
       service-url: ${APP_MULTIMODAL_CLIP_SERVICE_URL:http://localhost:8200}
     vlm:
-      enabled: ${APP_MULTIMODAL_VLM_ENABLED:true}
-      api-key: ${APP_MULTIMODAL_VLM_API_KEY:d8d1f2022f7e494c864862f12a6bf2fc.xjw1LjRZkEze2rTC}
+      enabled: ${APP_MULTIMODAL_VLM_ENABLED:false}
+      api-key: ${APP_MULTIMODAL_VLM_API_KEY:}
       base-url: ${APP_MULTIMODAL_VLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
       model: ${APP_MULTIMODAL_VLM_MODEL:glm-4v}
     visual:

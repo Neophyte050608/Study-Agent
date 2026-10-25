@@ -1,0 +1,8 @@
+# Copy this file to application-private.yml and provide secrets through your local environment.
+# application-private.yml is ignored by Git; never commit real credentials.
+spring:
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY:}
+    zhipuai:
+      api-key: ${ZHIPU_API_KEY:}

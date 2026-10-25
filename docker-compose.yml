@@ -102,16 +102,19 @@ services:
       retries: 10
 
   redis:
-    image: redis:latest
+    image: redis:7.2-alpine
     container_name: redis
     restart: always
     ports:
       - 6379:6379
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redis/config/redis.conf:/usr/local/etc/redis/redis.conf:rw
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/redis/data:/data:rw
     command:
-      /bin/bash -c "redis-server /usr/local/etc/redis/redis.conf"
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - MIQI6666
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "MIQI6666", "ping"]
       interval: 10s

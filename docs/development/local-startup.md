@@ -19,6 +19,16 @@ npm install
 cd ..
 ```
 
+首次启动还需要准备本地私有配置。示例文件不包含密钥，复制后通过本机环境变量提供主对话与 Embedding Key：
+
+```bash
+cp application-private.example.yml application-private.yml
+export DEEPSEEK_API_KEY="<你的主对话模型 Key>"
+export ZHIPU_API_KEY="<你的 Embedding Key>"
+```
+
+`application-private.yml` 已被 Git 忽略。不要把真实 Key 写入聊天、公共配置或提交到仓库。
+
 之后在项目根目录执行：
 
 ```bash
@@ -132,6 +142,16 @@ npm run dev
 bash scripts/dev-start.sh
 ```
 
+### 模型 Key 未配置
+
+如果后端提示 `OpenAI API key must be set`，确认：
+
+- 项目根目录存在 `application-private.yml`
+- 当前启动终端已设置 `DEEPSEEK_API_KEY`
+- 当前启动终端已设置 `ZHIPU_API_KEY`
+
+配置 Key 只让 Spring AI 完成初始化；Milvus 仍须可连接，主对话和向量化功能调用时也需要有效 Key。
+
 ### 前端依赖未安装
 
 如果看到 `frontend/node_modules` 缺失提示，执行：
@@ -149,6 +169,18 @@ cd ..
 ```bash
 bash scripts/dev-stop.sh
 ```
+
+### Docker 镜像拉取长时间无进度
+
+先验证 Docker daemon 的代理配置和镜像仓库连通性：
+
+```bash
+docker info
+docker compose pull etcd
+docker compose pull minio
+```
+
+如果不同仓库的镜像都无进度，而宿主机可以访问仓库，优先检查 Docker Desktop 的代理设置并重启 Docker Desktop；这不是应用配置或模型 Key 导致的问题。
 
 ### 端口被占用
 

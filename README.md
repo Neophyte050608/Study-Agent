@@ -305,7 +305,15 @@ docker compose up -d mysql redis etcd minio milvus neo4j
 
 3. 准备私有配置文件
 
-在项目根目录创建 `application-private.yml`，至少补齐你自己的 API Key 和本地连接信息。
+复制仓库提供的安全模板，并在本机环境变量中提供 API Key：
+
+```bash
+cp application-private.example.yml application-private.yml
+export DEEPSEEK_API_KEY="<你的主对话模型 Key>"
+export ZHIPU_API_KEY="<你的 Embedding Key>"
+```
+
+`application-private.yml` 已被 Git 忽略；不要提交或在聊天中发送真实 Key。本地 Docker 默认连接参数已在公共配置中给出，无需重复填写，只有覆盖默认连接时才需要补充。
 
 4. 启动后端
 
@@ -498,29 +506,12 @@ spring:
 spring:
   ai:
     openai:
-      api-key: your-chat-api-key
+      api-key: ${DEEPSEEK_API_KEY:}
     zhipuai:
-      api-key: your-embedding-api-key
-
-  data:
-    redis:
-      host: 127.0.0.1
-      port: 6379
-      password: your-redis-password
-
-  neo4j:
-    authentication:
-      password: your-neo4j-password
-
-app:
-  a2a:
-    bus:
-      type: inmemory
-
-  eval:
-    rag-quality:
-      engine: java
+      api-key: ${ZHIPU_API_KEY:}
 ```
+
+仓库根目录的 `application-private.example.yml` 与上面内容一致。MySQL、Redis、Neo4j、内存 A2A 总线和 Java 评测引擎已有本地默认值；只有需要覆盖默认参数时，才在私有配置中添加对应项。
 
 如果你要启用 RocketMQ，再补：
 
