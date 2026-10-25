@@ -1,13 +1,16 @@
 package io.github.imzmq.interview.observability.application.trace;
 
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeMetrics;
+
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceDO;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceNodeDO;
 import io.github.imzmq.interview.observability.application.trace.DefaultTraceService;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.observability.application.trace.RagTraceEventBus;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceMapper;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceNodeMapper;
@@ -99,7 +102,7 @@ class RAGObservabilityServiceTest {
                 "question",
                 "legacy summary",
                 null,
-                new RAGObservabilityService.NodeMetrics(7, false)
+                new TraceNodeMetrics(7, false)
         );
         service.endNode("trace-1", "root-1", "input", "output", null);
 
@@ -124,8 +127,8 @@ class RAGObservabilityServiceTest {
                 "question",
                 "fallback output",
                 null,
-                new RAGObservabilityService.NodeMetrics(0, true),
-                new RAGObservabilityService.NodeDetails(
+                new TraceNodeMetrics(0, true),
+                new TraceNodeDetails(
                         1,
                         "RAG_ONLY",
                         null,
@@ -236,7 +239,7 @@ class RAGObservabilityServiceTest {
                 "",
                 "",
                 null,
-                new RAGObservabilityService.NodeMetrics(5, false),
+                new TraceNodeMetrics(5, false),
                 "COMPLETED"
         );
         RAGObservabilityService.RAGTraceNode generationNode = RAGObservabilityService.RAGTraceNode.restore(
@@ -376,7 +379,7 @@ class RAGObservabilityServiceTest {
 
         service.startNode("trace-db", "root-db", null, "ROOT", "Task Dispatch");
         service.startNode("trace-db", "retrieval-db", "root-db", "RETRIEVAL", "Hybrid Retrieval");
-        service.endNode("trace-db", "retrieval-db", "input", "legacy summary", null, new RAGObservabilityService.NodeMetrics(5, true));
+        service.endNode("trace-db", "retrieval-db", "input", "legacy summary", null, new TraceNodeMetrics(5, true));
         service.endNode("trace-db", "root-db", "input", "output", null);
 
         ArgumentCaptor<RagTraceDO> traceCaptor = ArgumentCaptor.forClass(RagTraceDO.class);

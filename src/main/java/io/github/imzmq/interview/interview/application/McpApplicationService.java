@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.application;
 
-import io.github.imzmq.interview.mcp.application.McpGatewayService;
+import io.github.imzmq.interview.mcp.application.contract.McpCapabilityOperations;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -9,9 +9,9 @@ import java.util.Map;
 @Service
 public class McpApplicationService {
 
-    private final McpGatewayService mcpGatewayService;
+    private final McpCapabilityOperations mcpGatewayService;
 
-    public McpApplicationService(McpGatewayService mcpGatewayService) {
+    public McpApplicationService(McpCapabilityOperations mcpGatewayService) {
         this.mcpGatewayService = mcpGatewayService;
     }
 

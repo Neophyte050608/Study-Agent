@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.ingestion.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionConfigOperations;
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestConfigDO;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestConfigMapper;
@@ -15,7 +16,7 @@ import java.util.Map;
  * 负责管理 /api/ingest/config 的配置读取与持久化。
  */
 @Service
-public class IngestConfigService {
+public class IngestConfigService implements IngestionConfigOperations {
 
     private static final String DEFAULT_CONFIG_KEY = "default";
     private static final String LOCAL_KNOWLEDGE_INDEX_CONFIG_KEY = "local_knowledge_index";

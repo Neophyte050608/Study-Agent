@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -26,14 +26,14 @@ public class ProfileController {
     private static final long MAX_RESUME_SIZE_BYTES = 20L * 1024 * 1024;
 
     private final InterviewService interviewService;
-    private final UserIdentityResolver userIdentityResolver;
+    private final UserIdentityQuery userIdentityQuery;
 
     public ProfileController(
             InterviewService interviewService,
-            UserIdentityResolver userIdentityResolver
+            UserIdentityQuery userIdentityQuery
     ) {
         this.interviewService = interviewService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
     }
 
     /**
@@ -41,7 +41,7 @@ public class ProfileController {
      */
     @GetMapping("/profile/topic-capability")
     public ResponseEntity<?> topicCapability(@RequestParam("topic") String topic, HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         return ResponseEntity.ok(interviewService.getTopicCapabilityCurve(userId, topic));
     }
 
@@ -50,7 +50,7 @@ public class ProfileController {
      */
     @GetMapping("/profile/overview")
     public ResponseEntity<?> profileOverview(HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         return ResponseEntity.ok(interviewService.getProfileOverview(userId));
     }
 
@@ -66,7 +66,7 @@ public class ProfileController {
             @RequestParam(value = "mode", required = false, defaultValue = "interview") String mode,
             HttpServletRequest request
     ) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         return ResponseEntity.ok(Map.of(
                 "mode", mode,
                 "recommendation", interviewService.getProfileRecommendation(userId, mode)
@@ -129,5 +129,13 @@ public class ProfileController {
             logger.error("Resume upload failed", e);
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("message", "简历上传失败，请稍后重试"));
         }
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }

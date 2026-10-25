@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.retrieval;
 
-import io.github.imzmq.interview.agent.application.AgentSkillService;
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
 import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
@@ -34,12 +34,12 @@ public class QueryRewriteService {
     );
 
     private final RoutingChatService routingChatService;
-    private final AgentSkillService agentSkillService;
+    private final AgentSkillInstructions agentSkillService;
     private final SkillOrchestrator skillOrchestrator;
     private final ConcurrentHashMap<String, CachedRewrite> rewriteCache = new ConcurrentHashMap<>();
 
     public QueryRewriteService(RoutingChatService routingChatService,
-                               AgentSkillService agentSkillService,
+                               AgentSkillInstructions agentSkillService,
                                SkillOrchestrator skillOrchestrator) {
         this.routingChatService = routingChatService;
         this.agentSkillService = agentSkillService;

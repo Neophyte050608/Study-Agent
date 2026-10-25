@@ -1,22 +1,27 @@
 package io.github.imzmq.interview.knowledge.application;
+
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
+
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeMetrics;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
-import io.github.imzmq.interview.interview.domain.Question;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgeInterviewReportEntry;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
-import io.github.imzmq.interview.agent.application.AgentSkillService;
-import io.github.imzmq.interview.media.application.ImageService;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
 import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
@@ -70,14 +75,14 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final RoutingChatService routingChatService;
     private final VectorStore vectorStore;
     private final LexicalIndexService lexicalIndexService;
-    private final RAGObservabilityService observabilityService;
-    private final AgentSkillService agentSkillService;
-    private final PromptManager promptManager;
+    private final RagTraceOperations ragTraceOperations;
+    private final AgentSkillInstructions agentSkillService;
+    private final PromptRenderer promptRenderer;
     private final StructuredOutputParser structuredOutputParser;
     // 注入自定义检索线程池
     private final java.util.concurrent.Executor ragRetrieveExecutor;
     // 注入图谱持久化组件
-    private final io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository;
+    private final io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptRepository techConceptRepository;
     // 可观测开关配置
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final RetrievalTokenizerService retrievalTokenizerService;
@@ -86,15 +91,15 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     private final SkillOrchestrator skillOrchestrator;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RAGObservabilityService observabilityService, AgentSkillService agentSkillService, PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser) {
+    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RagTraceOperations ragTraceOperations, AgentSkillInstructions agentSkillService, PromptRenderer promptRenderer, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser) {
         this.agentSkillService = agentSkillService;
-        this.promptManager = promptManager;
+        this.promptRenderer = promptRenderer;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.techConceptRepository = techConceptRepository;
         this.routingChatService = routingChatService;
         this.vectorStore = vectorStore;
         this.lexicalIndexService = lexicalIndexService;
-        this.observabilityService = observabilityService;
+        this.ragTraceOperations = ragTraceOperations;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.retrievalTokenizerService = retrievalTokenizerService;
         this.parentChildRetrievalProperties = parentChildRetrievalProperties;
@@ -134,13 +139,13 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         }
         String traceId = RAGTraceContext.getTraceId();
         String rootNodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(traceId, rootNodeId, null, nodeType, nodeName);
+        ragTraceOperations.startNode(traceId, rootNodeId, null, nodeType, nodeName);
         try {
             T result = action.get();
-            observabilityService.endNode(traceId, rootNodeId, inputSummary, nodeName + " completed", null);
+            ragTraceOperations.endNode(traceId, rootNodeId, inputSummary, nodeName + " completed", null);
             return result;
         } catch (RuntimeException e) {
-            observabilityService.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
+            ragTraceOperations.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
             throw e;
         }
     }
@@ -152,7 +157,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                                             Map<String, Object> attributes) {
         String safeParentNodeId = parentNodeId == null ? RAGTraceContext.getCurrentNodeId() : parentNodeId;
         String nodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(traceId, nodeId, safeParentNodeId, definition.nodeType(), definition.nodeName());
+        ragTraceOperations.startNode(traceId, nodeId, safeParentNodeId, definition.nodeType(), definition.nodeName());
         return new TraceNodeHandle(traceId, nodeId, safeParentNodeId, definition);
     }
 
@@ -163,16 +168,16 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
 
     private void completeTraceSuccess(TraceNodeHandle handle,
                                       Map<String, Object> result,
-                                      RAGObservabilityService.NodeMetrics metrics) {
+                                      TraceNodeMetrics metrics) {
         completeTraceSuccess(handle, result, metrics, null);
     }
 
     @Override
     public void completeTraceSuccess(TraceNodeHandle handle,
                                      Map<String, Object> result,
-                                     RAGObservabilityService.NodeMetrics metrics,
-                                     RAGObservabilityService.NodeDetails details) {
-        observabilityService.endNode(
+                                     TraceNodeMetrics metrics,
+                                     TraceNodeDetails details) {
+        ragTraceOperations.endNode(
                 handle.traceId(),
                 handle.nodeId(),
                 "",
@@ -229,22 +234,22 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                     return graphDocs;
                 }
 
-                List<io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView> batchResults =
+                List<io.github.imzmq.interview.knowledge.infrastructure.graph.BatchedConceptSnippetView> batchResults =
                         techConceptRepository.findRelatedConceptSnippetsBatch(queryTokens);
                 if (batchResults == null || batchResults.isEmpty()) {
                     return graphDocs;
                 }
 
-                Map<String, List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView>> grouped = batchResults.stream()
+                Map<String, List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView>> grouped = batchResults.stream()
                         .collect(Collectors.groupingBy(
-                                io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView::getAnchor,
+                                io.github.imzmq.interview.knowledge.infrastructure.graph.BatchedConceptSnippetView::getAnchor,
                                 LinkedHashMap::new,
-                                Collectors.mapping(item -> (io.github.imzmq.interview.graph.domain.TechConceptSnippetView) item, Collectors.toList())
+                                Collectors.mapping(item -> (io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView) item, Collectors.toList())
                         ));
 
-                for (Map.Entry<String, List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView>> entry : grouped.entrySet()) {
+                for (Map.Entry<String, List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView>> entry : grouped.entrySet()) {
                     String token = entry.getKey();
-                    List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView> relatedConcepts = entry.getValue();
+                    List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView> relatedConcepts = entry.getValue();
                     String graphContext = buildGraphConceptContext(token, relatedConcepts);
                     if (graphContext.isBlank()) {
                         continue;
@@ -543,7 +548,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
      * @param relatedConcepts 图谱返回的关联概念摘要
      * @return 描述性图谱上下文；若无有效内容则返回空字符串
      */
-    private String buildGraphConceptContext(String anchorConcept, List<io.github.imzmq.interview.graph.domain.TechConceptSnippetView> relatedConcepts) {
+    private String buildGraphConceptContext(String anchorConcept, List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView> relatedConcepts) {
         if (relatedConcepts == null || relatedConcepts.isEmpty()) {
             return "";
         }
@@ -565,7 +570,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
      * @param concept 图谱概念摘要
      * @return 单个概念的可读文本
      */
-    private String formatGraphConceptSnippet(io.github.imzmq.interview.graph.domain.TechConceptSnippetView concept) {
+    private String formatGraphConceptSnippet(io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView concept) {
         if (concept == null) {
             return "";
         }
@@ -919,7 +924,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             vars.put("profileSnapshot", truncate(profileSnapshot, 500));
             vars.put("topic", buildTopicWithExclusion(topic == null ? "" : topic, excludedTopics));
             vars.put("skipIntro", skipIntro);
-            PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "first-question", vars);
+            RenderedPrompt pair = promptRenderer.renderSplit("interviewer", "first-question", vars);
             String rawQuestion = routingChatService.callWithFirstPacketProbeSupplier(
                     () -> buildFallbackFirstQuestion(topic),
                     pair.systemPrompt(),
@@ -936,11 +941,11 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
          }
     }
 
-    public String generateFinalReport(String topic, List<Question> history, String targetedSuggestion, String rollingSummary) {
+    public String generateFinalReport(String topic, List<KnowledgeInterviewReportEntry> history, String targetedSuggestion, String rollingSummary) {
         // 使用新抽离的 interview-report-generator 和 interview-growth-coach 技能
         String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("interview-report-generator", "interview-growth-coach"));
         String reportStrategySummary = resolveFinalReportSummary(topic, history, targetedSuggestion, rollingSummary);
-        List<Question> safeHistory = history == null ? List.of() : history;
+        List<KnowledgeInterviewReportEntry> safeHistory = history == null ? List.of() : history;
         
         // 结合 Rolling Summary 机制，如果存在滚动总结，则将其作为极高权重的历史基线传入
         String baseContext = rollingSummary == null || rollingSummary.isBlank() ? "" : "【前期面试表现滚动总结】\n" + rollingSummary + "\n\n";
@@ -949,7 +954,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         // 因为已经有了 rollingSummary 覆盖了前面的对话，这里我们只需要保留最近 5 轮的详细记录即可，防止 Prompt 过长
         int historySize = safeHistory.size();
         int recentCount = Math.min(historySize, 5);
-        List<Question> recentHistoryList = recentCount <= 0
+        List<KnowledgeInterviewReportEntry> recentHistoryList = recentCount <= 0
                 ? List.of()
                 : safeHistory.subList(historySize - recentCount, historySize);
 
@@ -958,12 +963,12 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 : recentHistoryList.stream()
                 .map(item -> {
                     // 对于最近 5 轮，我们仍然保留 150 个字符的截断作为双保险，避免个别回答异常冗长
-                    String shortAnswer = item.getUserAnswer() != null && item.getUserAnswer().length() > 150 
-                            ? item.getUserAnswer().substring(0, 150) + "..." 
-                            : item.getUserAnswer();
-                    return "Q: " + item.getQuestionText() + "\n" +
+                    String shortAnswer = item.answer() != null && item.answer().length() > 150
+                            ? item.answer().substring(0, 150) + "..."
+                            : item.answer();
+                    return "Q: " + item.question() + "\n" +
                            "A(简): " + shortAnswer + "\n" +
-                           "Score: " + item.getScore() + " | FB: " + item.getFeedback();
+                           "Score: " + item.score() + " | FB: " + item.feedback();
                 })
                 .collect(Collectors.joining("\n\n---\n\n"));
 
@@ -973,7 +978,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         params.put("targetedSuggestion", targetedSuggestion);
         params.put("baseContext", baseContext);
         params.put("history", qaHistory);
-        PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "final-report", params);
+        RenderedPrompt pair = promptRenderer.renderSplit("interviewer", "final-report", params);
 
         try {
             logger.debug("[generateFinalReport] Prompt length={}", pair.userPrompt().length());
@@ -1000,7 +1005,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         params.put("topic", normalizedTopic);
         params.put("weakPoint", truncate(weakPoint, 200));
         params.put("recentPerformance", truncate(recentPerformance, 300));
-        PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "learning-plan", params);
+        RenderedPrompt pair = promptRenderer.renderSplit("interviewer", "learning-plan", params);
 
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(
@@ -1017,18 +1022,18 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         }
     }
 
-    private String buildFallbackReport(List<Question> history, String targetedSuggestion) {
+    private String buildFallbackReport(List<KnowledgeInterviewReportEntry> history, String targetedSuggestion) {
         String incomplete = history.stream()
-                .filter(q -> q.getScore() >= 60 && q.getScore() < 80)
-                .map(q -> "问题《" + q.getQuestionText() + "》：要点覆盖不完整。")
+                .filter(q -> q.score() >= 60 && q.score() < 80)
+                .map(q -> "问题《" + q.question() + "》：要点覆盖不完整。")
                 .collect(Collectors.joining("\n"));
         String weak = history.stream()
-                .filter(q -> q.getScore() >= 40 && q.getScore() < 60)
-                .map(q -> "问题《" + q.getQuestionText() + "》：表达或结构较弱。")
+                .filter(q -> q.score() >= 40 && q.score() < 60)
+                .map(q -> "问题《" + q.question() + "》：表达或结构较弱。")
                 .collect(Collectors.joining("\n"));
         String wrong = history.stream()
-                .filter(q -> q.getScore() < 40)
-                .map(q -> "问题《" + q.getQuestionText() + "》：存在明显事实或原理错误。")
+                .filter(q -> q.score() < 40)
+                .map(q -> "问题《" + q.question() + "》：存在明显事实或原理错误。")
                 .collect(Collectors.joining("\n"));
         String summary = "已完成本轮面试，请优先复习低分题的核心原理，并通过结构化回答提升完整度。";
         return "<summary>" + summary + "</summary>\n" +
@@ -1230,7 +1235,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     }
 
     private String resolveFinalReportSummary(String topic,
-                                             List<Question> history,
+                                             List<KnowledgeInterviewReportEntry> history,
                                              String targetedSuggestion,
                                              String rollingSummary) {
         SkillExecutionResult result = skillOrchestrator.execute(
@@ -1240,7 +1245,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                         "rag-service",
                         Map.of(
                                 "topic", topic == null ? "" : topic,
-                                "history", history == null ? List.of() : history,
+                                "history", toReportSkillHistory(history),
                                 "targetedSuggestion", targetedSuggestion == null ? "" : targetedSuggestion,
                                 "rollingSummary", rollingSummary == null ? "" : rollingSummary
                         ),
@@ -1248,6 +1253,20 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 )
         );
         return result.succeeded() ? result.textOutput("reportSummary") : "";
+    }
+
+    private List<Map<String, Object>> toReportSkillHistory(List<KnowledgeInterviewReportEntry> history) {
+        if (history == null || history.isEmpty()) {
+            return List.of();
+        }
+        return history.stream()
+                .map(item -> Map.<String, Object>of(
+                        "question", item.question(),
+                        "answer", item.answer(),
+                        "score", item.score(),
+                        "feedback", item.feedback()
+                ))
+                .toList();
     }
 
     private double sourceTypeBoost(Document doc) {
@@ -1279,7 +1298,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     public record KnowledgePacket(
             String retrievalQuery,
             List<Document> retrievedDocs,
-            List<ImageService.ImageResult> retrievedImages,
+            List<ImageResult> retrievedImages,
             String context,
             String imageContext,
             String retrievalEvidence,
@@ -1317,21 +1336,21 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
     }
 
     @Override
-    public List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,
-                                                             List<ImageService.ImageResult> semanticImages) {
-        Map<String, ImageService.ImageResult> merged = new LinkedHashMap<>();
+    public List<ImageResult> mergeImageResults(List<ImageResult> associatedImages,
+                                                             List<ImageResult> semanticImages) {
+        Map<String, ImageResult> merged = new LinkedHashMap<>();
         if (semanticImages != null) {
-            for (ImageService.ImageResult image : semanticImages) {
+            for (ImageResult image : semanticImages) {
                 merged.put(image.imageId(), image);
             }
         }
         if (associatedImages != null) {
-            for (ImageService.ImageResult image : associatedImages) {
+            for (ImageResult image : associatedImages) {
                 merged.compute(image.imageId(), (key, existing) ->
                         existing == null || image.relevanceScore() > existing.relevanceScore() ? image : existing);
             }
         }
-        List<ImageService.ImageResult> ranked = merged.values().stream()
+        List<ImageResult> ranked = merged.values().stream()
                 .sorted((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()))
                 .limit(3)
                 .toList();
@@ -1342,9 +1361,9 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         if (topScore < FINAL_IMAGE_MIN_SCORE) {
             return List.of();
         }
-        List<ImageService.ImageResult> filtered = new ArrayList<>();
+        List<ImageResult> filtered = new ArrayList<>();
         for (int i = 0; i < ranked.size(); i++) {
-            ImageService.ImageResult image = ranked.get(i);
+            ImageResult image = ranked.get(i);
             if (i == 0) {
                 filtered.add(image);
                 continue;

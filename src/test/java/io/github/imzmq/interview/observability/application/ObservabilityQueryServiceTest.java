@@ -2,6 +2,8 @@ package io.github.imzmq.interview.observability.application;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.feedback.application.contract.FeedbackMetricsQuery;
+import io.github.imzmq.interview.observability.application.contract.query.TraceDetailView;
+import io.github.imzmq.interview.observability.application.contract.query.TraceSummary;
 import io.github.imzmq.interview.observability.application.metrics.MetricsSnapshotScheduler;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagMetricsSnapshotMapper;
@@ -35,20 +37,20 @@ class ObservabilityQueryServiceTest {
 
         assertEquals(List.of("trace-success", "trace-fallback", "trace-empty"),
                 service.getRecentRagTraces(10, "SUCCESS", false, false, false, false, null)
-                        .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                        .stream().map(TraceSummary::traceId).toList());
         assertEquals(List.of("trace-slow"), service.getRecentRagTraces(10, "SLOW", false, false, false, false, null)
-                .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                .stream().map(TraceSummary::traceId).toList());
         assertEquals(List.of("trace-running"), service.getRecentRagTraces(10, "RUNNING", false, false, false, false, null)
-                .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                .stream().map(TraceSummary::traceId).toList());
         assertEquals(List.of("trace-fallback"), service.getRecentRagTraces(10, null, false, true, false, false, null)
-                .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                .stream().map(TraceSummary::traceId).toList());
         assertEquals(List.of("trace-empty"), service.getRecentRagTraces(10, null, false, false, true, false, null)
-                .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                .stream().map(TraceSummary::traceId).toList());
         assertEquals(List.of("trace-slow", "trace-fallback", "trace-empty"),
                 service.getRecentRagTraces(10, null, true, false, false, false, null)
-                        .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                        .stream().map(TraceSummary::traceId).toList());
         assertEquals(List.of("trace-fallback"), service.getRecentRagTraces(10, null, false, false, false, false, "fallback")
-                .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                .stream().map(TraceSummary::traceId).toList());
         verify(ragObservabilityService, atLeastOnce()).listRecentSummaries(1000);
     }
 
@@ -67,7 +69,33 @@ class ObservabilityQueryServiceTest {
         assertEquals(List.of("trace-mid"), service.getRecentRagTraces(
                         10, null, false, false, false, false, null,
                         Instant.parse("2026-04-13T14:05:30Z"), Instant.parse("2026-04-13T14:06:30Z"))
-                .stream().map(RAGObservabilityService.TraceSummary::traceId).toList());
+                .stream().map(TraceSummary::traceId).toList());
+    }
+
+    @Test
+    void shouldExposeImmutableContractTraceDetailWithoutInternalTraceTypes() {
+        ObservabilitySwitchProperties properties = new ObservabilitySwitchProperties();
+        properties.setRagTraceEnabled(true);
+        RAGObservabilityService ragObservabilityService = mock(RAGObservabilityService.class);
+        Instant startedAt = Instant.parse("2026-04-13T14:00:00Z");
+        RAGObservabilityService.RAGTrace trace = new RAGObservabilityService.RAGTrace("trace-detail", startedAt);
+        RAGObservabilityService.RAGTraceNode node = new RAGObservabilityService.RAGTraceNode(
+                "node-1", null, "ROOT", "root", startedAt);
+        node.complete(startedAt.plusMillis(25), "in", "out", null, null, null);
+        trace.addNode(node);
+        when(ragObservabilityService.getTraceDetailView("trace-detail"))
+                .thenReturn(new RAGObservabilityService.TraceDetailView(
+                        trace,
+                        summary("trace-detail", "COMPLETED", false, List.of(), startedAt, startedAt.plusMillis(25))
+                ));
+        ObservabilityQueryService service = service(ragObservabilityService, properties);
+
+        TraceDetailView result = service.getRagTraceDetail("trace-detail");
+
+        assertEquals("trace-detail", result.trace().traceId());
+        assertEquals(25L, result.trace().getDurationMs());
+        assertEquals("node-1", result.trace().nodes().getFirst().nodeId());
+        assertEquals("COMPLETED", result.summary().traceStatus());
     }
 
     private static ObservabilityQueryService service(RAGObservabilityService traceService,

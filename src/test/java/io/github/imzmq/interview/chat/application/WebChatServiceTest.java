@@ -3,7 +3,7 @@ package io.github.imzmq.interview.chat.application;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
-import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
 import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
 import io.github.imzmq.interview.chat.application.contract.result.ChatSessionView;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
@@ -37,10 +37,10 @@ class WebChatServiceTest {
     private final ChatSessionMapper sessionMapper = mock(ChatSessionMapper.class);
     private final ChatMessageMapper messageMapper = mock(ChatMessageMapper.class);
     private final ChatContextCompressor contextCompressor = mock(ChatContextCompressor.class);
-    private final TaskRouterAgent taskRouterAgent = mock(TaskRouterAgent.class);
+    private final AgentTaskOperations agentTaskOperations = mock(AgentTaskOperations.class);
     private final io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations presentationService = mock(io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations.class);
     private final WebChatService service = new WebChatService(
-            sessionMapper, messageMapper, taskRouterAgent, contextCompressor, presentationService);
+            sessionMapper, messageMapper, agentTaskOperations, contextCompressor, presentationService);
 
     @Test
     void maps_every_session_persistence_field_to_public_result() {

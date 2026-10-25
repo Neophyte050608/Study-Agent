@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.ingestion.pipeline;
 
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionSyncSummary;
+
 import io.github.imzmq.interview.ingestion.application.IngestionService;
 
 import java.util.function.Supplier;
@@ -12,7 +14,7 @@ import java.util.function.Supplier;
  *     <li>同步提交器：真正执行入库落库（向量/词法/图谱/增量标记等）的同步函数</li>
  *     <li>计数供应器：用于统计 FETCH/PARSE/ENHANCE/CHUNK 阶段的输入输出规模</li>
  *     <li>当前计数：用于阶段间传递“上一阶段输出规模”，便于生成阶段日志</li>
- *     <li>摘要：同步提交后产生的 {@link IngestionService.SyncSummary}，用于任务层状态计算与回包</li>
+ *     <li>摘要：同步提交后产生的 {@link IngestionSyncSummary}，用于任务层状态计算与回包</li>
  * </ul>
  *
  * <p>注意：PARSE/ENHANCE/CHUNK 的统计通常较重，因此通过 resolveXXX() 做懒加载并缓存结果，
@@ -23,7 +25,7 @@ public class IngestionExecutionContext {
     /**
      * 执行真实入库落库动作的供应器（一般来自 {@link io.github.imzmq.interview.ingestion.application.IngestionService}）。
      */
-    private final Supplier<IngestionService.SyncSummary> syncSupplier;
+    private final Supplier<IngestionSyncSummary> syncSupplier;
     /**
      * 统计“源文档数量”的供应器（FETCH 阶段输出）。
      */
@@ -47,7 +49,7 @@ public class IngestionExecutionContext {
     /**
      * 同步提交后写入的入库摘要；只有在 SYNC_MARK/LEGACY_SYNC 等提交阶段才会被设置。
      */
-    private IngestionService.SyncSummary summary;
+    private IngestionSyncSummary summary;
     /**
      * PARSE 阶段统计缓存，避免重复计算。
      */
@@ -62,7 +64,7 @@ public class IngestionExecutionContext {
     private Integer chunkCount;
 
     public IngestionExecutionContext(
-            Supplier<IngestionService.SyncSummary> syncSupplier,
+            Supplier<IngestionSyncSummary> syncSupplier,
             Supplier<Integer> sourceCountSupplier,
             Supplier<Integer> parsedCountSupplier,
             Supplier<Integer> enhancedCountSupplier,
@@ -75,7 +77,7 @@ public class IngestionExecutionContext {
         this.chunkCountSupplier = chunkCountSupplier;
     }
 
-    public Supplier<IngestionService.SyncSummary> getSyncSupplier() {
+    public Supplier<IngestionSyncSummary> getSyncSupplier() {
         return syncSupplier;
     }
 
@@ -132,7 +134,7 @@ public class IngestionExecutionContext {
         this.currentCount = currentCount;
     }
 
-    public IngestionService.SyncSummary getSummary() {
+    public IngestionSyncSummary getSummary() {
         return summary;
     }
 
@@ -143,7 +145,7 @@ public class IngestionExecutionContext {
      *
      * @param summary 同步摘要
      */
-    public void setSummary(IngestionService.SyncSummary summary) {
+    public void setSummary(IngestionSyncSummary summary) {
         this.summary = summary;
     }
 }

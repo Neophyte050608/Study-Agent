@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.knowledge.domain;
 
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
+
 
 import java.util.List;
 
@@ -19,7 +20,7 @@ public record KnowledgeContextPacket(
         String context,
         String imageContext,
         String retrievalEvidence,
-        List<ImageService.ImageResult> retrievedImages,
+        List<ImageResult> retrievedImages,
         boolean webFallbackUsed,
         int retrievedDocCount,
         List<String> retrievedDocumentRefs

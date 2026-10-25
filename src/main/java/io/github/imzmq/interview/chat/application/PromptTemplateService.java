@@ -2,6 +2,7 @@ package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import io.github.imzmq.interview.chat.application.contract.PromptExampleQuery;
 import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class PromptTemplateService {
+public class PromptTemplateService implements PromptExampleQuery {
     private final PromptTemplateMapper templateMapper;
     private final PromptManager promptManager;
     private final ResourceLoader resourceLoader;

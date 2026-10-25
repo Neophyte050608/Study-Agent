@@ -2,9 +2,9 @@ package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.github.imzmq.interview.agent.a2a.A2ABus;
-import io.github.imzmq.interview.agent.a2a.A2AIntent;
-import io.github.imzmq.interview.agent.a2a.A2AMessage;
+import io.github.imzmq.interview.agent.application.contract.AgentMessagingOperations;
+import io.github.imzmq.interview.agent.application.contract.message.AgentMessage;
+import io.github.imzmq.interview.agent.application.contract.message.AgentMessageIntent;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
@@ -27,27 +27,27 @@ public class ChatMemoryExtractorAgent {
     private final ChatSessionMapper sessionMapper;
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
-    private final A2ABus a2aBus;
+    private final AgentMessagingOperations agentMessaging;
 
     public ChatMemoryExtractorAgent(UserChatMemoryMapper memoryMapper,
                                     ChatSessionMapper sessionMapper,
                                     RoutingChatService routingChatService,
                                     PromptManager promptManager,
-                                    A2ABus a2aBus) {
+                                    AgentMessagingOperations agentMessaging) {
         this.memoryMapper = memoryMapper;
         this.sessionMapper = sessionMapper;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
-        this.a2aBus = a2aBus;
+        this.agentMessaging = agentMessaging;
     }
 
     @PostConstruct
     public void init() {
-        a2aBus.subscribe("ChatMemoryExtractorAgent", this::handleMemorize);
+        agentMessaging.subscribe("ChatMemoryExtractorAgent", this::handleMemorize);
     }
 
-    private void handleMemorize(A2AMessage message) {
-        if (message.intent() != A2AIntent.CROSS_SESSION_MEMORIZE) {
+    private void handleMemorize(AgentMessage message) {
+        if (message.intent() != AgentMessageIntent.CROSS_SESSION_MEMORIZE) {
             return;
         }
         try {

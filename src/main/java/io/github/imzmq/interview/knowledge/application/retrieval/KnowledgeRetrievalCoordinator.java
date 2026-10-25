@@ -1,16 +1,19 @@
 package io.github.imzmq.interview.knowledge.application.retrieval;
+
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.knowledge.application.localgraph.LocalGraphKnowledgeService;
-import io.github.imzmq.interview.media.application.ImageService;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeMetrics;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -38,17 +41,17 @@ public class KnowledgeRetrievalCoordinator {
     private final KnowledgeRetrievalProperties properties;
     private final RagKnowledgeService ragKnowledgeService;
     private final LocalGraphKnowledgeService localGraphKnowledgeService;
-    private final RAGObservabilityService ragObservabilityService;
+    private final RagTraceOperations ragTraceOperations;
     private final ConcurrentHashMap<String, CachedRetrieval> retrievalCache = new ConcurrentHashMap<>();
 
     public KnowledgeRetrievalCoordinator(KnowledgeRetrievalProperties properties,
                                          RagKnowledgeService ragKnowledgeService,
                                          LocalGraphKnowledgeService localGraphKnowledgeService,
-                                         RAGObservabilityService ragObservabilityService) {
+                                         RagTraceOperations ragTraceOperations) {
         this.properties = properties;
         this.ragKnowledgeService = ragKnowledgeService;
         this.localGraphKnowledgeService = localGraphKnowledgeService;
-        this.ragObservabilityService = ragObservabilityService;
+        this.ragTraceOperations = ragTraceOperations;
     }
 
     public KnowledgeContextPacket retrieve(String question, String userAnswer) {
@@ -176,7 +179,7 @@ public class KnowledgeRetrievalCoordinator {
     private KnowledgeContextPacket mergeHybridPackets(String question,
                                                       KnowledgeContextPacket localPacket,
                                                       KnowledgeContextPacket ragPacket) {
-        List<ImageService.ImageResult> mergedImages = mergeImages(localPacket == null ? List.of() : localPacket.retrievedImages(),
+        List<ImageResult> mergedImages = mergeImages(localPacket == null ? List.of() : localPacket.retrievedImages(),
                 ragPacket == null ? List.of() : ragPacket.retrievedImages());
         String mergedContext = buildHybridContext(localPacket, ragPacket);
         String mergedEvidence = mergeEvidence(localPacket == null ? "" : localPacket.retrievalEvidence(),
@@ -226,7 +229,7 @@ public class KnowledgeRetrievalCoordinator {
     private void traceFallback(BusinessException exception) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(
+        ragTraceOperations.startNode(
                 traceId,
                 nodeId,
                 RAGTraceContext.getCurrentNodeId(),
@@ -234,14 +237,14 @@ public class KnowledgeRetrievalCoordinator {
                 TraceNodeDefinitions.LOCAL_GRAPH_FALLBACK.nodeName()
         );
         String reason = errorCodeName(exception);
-        ragObservabilityService.endNode(
+        ragTraceOperations.endNode(
                 traceId,
                 nodeId,
                 exception.getMessage(),
                 "fallbackTo=RAG_ONLY",
                 reason,
                 null,
-                new RAGObservabilityService.NodeDetails(
+                new TraceNodeDetails(
                         1,
                         KnowledgeRetrievalMode.RAG_ONLY.name(),
                         null,
@@ -267,7 +270,7 @@ public class KnowledgeRetrievalCoordinator {
         }
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(
+        ragTraceOperations.startNode(
                 traceId,
                 nodeId,
                 RAGTraceContext.getCurrentNodeId(),
@@ -280,14 +283,14 @@ public class KnowledgeRetrievalCoordinator {
         output.put("docCount", packet.retrievedDocCount());
         output.put("retrievedDocs", packet.retrievedDocCount());
         output.put("docRefs", packet.retrievedDocumentRefs());
-        ragObservabilityService.endNode(
+        ragTraceOperations.endNode(
                 traceId,
                 nodeId,
                 packet.retrievalQuery(),
                 outputLabel + output,
                 null,
-                new RAGObservabilityService.NodeMetrics(packet.retrievedDocCount(), packet.webFallbackUsed()),
-                new RAGObservabilityService.NodeDetails(
+                new TraceNodeMetrics(packet.retrievedDocCount(), packet.webFallbackUsed()),
+                new TraceNodeDetails(
                         1,
                         packet.retrievalModeResolved() == null ? null : packet.retrievalModeResolved().name(),
                         null,
@@ -383,9 +386,9 @@ public class KnowledgeRetrievalCoordinator {
         return Math.max(0, merged);
     }
 
-    private List<ImageService.ImageResult> mergeImages(List<ImageService.ImageResult> localImages,
-                                                       List<ImageService.ImageResult> ragImages) {
-        Map<String, ImageService.ImageResult> merged = new LinkedHashMap<>();
+    private List<ImageResult> mergeImages(List<ImageResult> localImages,
+                                                       List<ImageResult> ragImages) {
+        Map<String, ImageResult> merged = new LinkedHashMap<>();
         mergeImageList(merged, localImages);
         mergeImageList(merged, ragImages);
         return merged.values().stream()
@@ -394,12 +397,12 @@ public class KnowledgeRetrievalCoordinator {
                 .toList();
     }
 
-    private void mergeImageList(Map<String, ImageService.ImageResult> target,
-                                List<ImageService.ImageResult> images) {
+    private void mergeImageList(Map<String, ImageResult> target,
+                                List<ImageResult> images) {
         if (images == null || images.isEmpty()) {
             return;
         }
-        for (ImageService.ImageResult image : images) {
+        for (ImageResult image : images) {
             if (image == null || image.imageId() == null || image.imageId().isBlank()) {
                 continue;
             }
@@ -409,13 +412,13 @@ public class KnowledgeRetrievalCoordinator {
         }
     }
 
-    public static String buildImageContext(List<ImageService.ImageResult> images) {
+    public static String buildImageContext(List<ImageResult> images) {
         if (images == null || images.isEmpty()) {
             return "";
         }
         StringBuilder builder = new StringBuilder();
         int index = 1;
-        for (ImageService.ImageResult image : images) {
+        for (ImageResult image : images) {
             builder.append("[图").append(index++).append("] ")
                     .append(image.summaryText() == null ? image.imageName() : image.summaryText())
                     .append(" - 来源: ").append(image.imageName())

@@ -5,12 +5,11 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeC
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeDocumentDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildDO;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeChunkCtrlMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.KnowledgeDocumentMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagChildMapper;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentMapper;
-import io.github.imzmq.interview.ingestion.application.IngestionService;
+import io.github.imzmq.interview.knowledge.application.contract.extension.KnowledgeDocumentIngestionSupport;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -24,23 +23,20 @@ public class KnowledgeDocumentService {
     private final RagChildMapper ragChildMapper;
     private final KnowledgeDocumentMapper knowledgeDocumentMapper;
     private final KnowledgeChunkCtrlMapper knowledgeChunkCtrlMapper;
-    private final IngestionService ingestionService;
-    private final IngestionTaskService ingestionTaskService;
+    private final KnowledgeDocumentIngestionSupport ingestionSupport;
 
     public KnowledgeDocumentService(
             RagParentMapper ragParentMapper,
             RagChildMapper ragChildMapper,
             KnowledgeDocumentMapper knowledgeDocumentMapper,
             KnowledgeChunkCtrlMapper knowledgeChunkCtrlMapper,
-            IngestionService ingestionService,
-            IngestionTaskService ingestionTaskService
+            KnowledgeDocumentIngestionSupport ingestionSupport
     ) {
         this.ragParentMapper = ragParentMapper;
         this.ragChildMapper = ragChildMapper;
         this.knowledgeDocumentMapper = knowledgeDocumentMapper;
         this.knowledgeChunkCtrlMapper = knowledgeChunkCtrlMapper;
-        this.ingestionService = ingestionService;
-        this.ingestionTaskService = ingestionTaskService;
+        this.ingestionSupport = ingestionSupport;
     }
 
     public Map<String, Object> pageDocuments(Long kbId, Integer pageNo, Integer pageSize, String status, String keyword) {
@@ -224,27 +220,27 @@ public class KnowledgeDocumentService {
     }
 
     public boolean deleteDocument(String docId) {
-        if (ingestionTaskService.hasRunningTasks()) {
+        if (ingestionSupport.hasRunningTasks()) {
             return false;
         }
         DocumentScope scope = resolveDocumentScope(docId);
         if (scope == null || scope.sourceLocation == null || scope.sourceLocation.isBlank()) {
             return false;
         }
-        boolean ok = ingestionService.deleteByFilePath(scope.sourceLocation);
+        boolean ok = ingestionSupport.deleteByFilePath(scope.sourceLocation);
         knowledgeDocumentMapper.delete(new LambdaQueryWrapper<KnowledgeDocumentDO>().eq(KnowledgeDocumentDO::getSourceLocation, scope.sourceLocation));
         return ok;
     }
 
     public boolean rechunkDocument(String docId) {
-        if (ingestionTaskService.hasRunningTasks()) {
+        if (ingestionSupport.hasRunningTasks()) {
             return false;
         }
         DocumentScope scope = resolveDocumentScope(docId);
         if (scope == null || scope.sourceLocation == null || scope.sourceLocation.isBlank()) {
             return false;
         }
-        return ingestionService.rechunkByFilePath(scope.sourceLocation);
+        return ingestionSupport.rechunkByFilePath(scope.sourceLocation);
     }
 
     public boolean setChunkEnabled(String docId, String chunkId, boolean enabled) {

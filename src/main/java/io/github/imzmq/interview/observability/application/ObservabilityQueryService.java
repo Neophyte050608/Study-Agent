@@ -4,6 +4,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.feedback.application.contract.FeedbackMetricsQuery;
 import io.github.imzmq.interview.feedback.application.contract.result.FeedbackMetrics;
+import io.github.imzmq.interview.observability.application.contract.ObservabilityQueryOperations;
+import io.github.imzmq.interview.observability.application.contract.query.RetrievalLatencyStats;
+import io.github.imzmq.interview.observability.application.contract.query.TraceDetailView;
+import io.github.imzmq.interview.observability.application.contract.query.TraceNodeView;
+import io.github.imzmq.interview.observability.application.contract.query.TraceSummary;
+import io.github.imzmq.interview.observability.application.contract.query.TraceView;
 import io.github.imzmq.interview.observability.application.metrics.MetricsSnapshotScheduler;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagMetricsSnapshotDO;
@@ -21,7 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
-public class ObservabilityQueryService {
+public class ObservabilityQueryService implements ObservabilityQueryOperations {
     private static final int TRACE_FILTER_SCAN_LIMIT = 1_000;
 
     private final RAGObservabilityService ragObservabilityService;
@@ -42,11 +48,11 @@ public class ObservabilityQueryService {
         this.metricsSnapshotScheduler = metricsSnapshotScheduler;
     }
 
-    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
+    public List<TraceSummary> getRecentRagTraces(int limit) {
         return getRecentRagTraces(limit, null, false, false, false, false, null, null, null);
     }
 
-    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+    public List<TraceSummary> getRecentRagTraces(int limit,
                                                                          String status,
                                                                          boolean riskyOnly,
                                                                          boolean fallbackOnly,
@@ -56,7 +62,7 @@ public class ObservabilityQueryService {
         return getRecentRagTraces(limit, status, riskyOnly, fallbackOnly, emptyRetrievalOnly, slowOnly, query, null, null);
     }
 
-    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+    public List<TraceSummary> getRecentRagTraces(int limit,
                                                                          String status,
                                                                          boolean riskyOnly,
                                                                          boolean fallbackOnly,
@@ -71,6 +77,7 @@ public class ObservabilityQueryService {
         int effectiveLimit = limit <= 0 ? 20 : limit;
         int scanLimit = Math.max(effectiveLimit, TRACE_FILTER_SCAN_LIMIT);
         return ragObservabilityService.listRecentSummaries(scanLimit).stream()
+                .map(this::toTraceSummary)
                 .filter(item -> matchesStatus(item, status))
                 .filter(item -> !riskyOnly || item.riskCount() != null && item.riskCount() > 0)
                 .filter(item -> !fallbackOnly || containsRisk(item, "fallback_triggered"))
@@ -82,18 +89,90 @@ public class ObservabilityQueryService {
                 .toList();
     }
 
-    public List<RAGObservabilityService.TraceSummary> getActiveRagTraces(int limit) {
+    public List<TraceSummary> getActiveRagTraces(int limit) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return List.of();
         }
-        return ragObservabilityService.listActiveSummaries(limit);
+        return ragObservabilityService.listActiveSummaries(limit).stream()
+                .map(this::toTraceSummary)
+                .toList();
     }
 
-    public RAGObservabilityService.TraceDetailView getRagTraceDetail(String traceId) {
+    public TraceDetailView getRagTraceDetail(String traceId) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return null;
         }
-        return ragObservabilityService.getTraceDetailView(traceId);
+        return toTraceDetailView(ragObservabilityService.getTraceDetailView(traceId));
+    }
+
+    @Override
+    public RetrievalLatencyStats getRetrievalLatencyStats(Integer limit, Integer hours) {
+        RAGObservabilityService.RetrievalLatencyStats stats =
+                ragObservabilityService.getRetrievalLatencyStats(limit, hours);
+        return new RetrievalLatencyStats(
+                stats.p95LatencyMs(),
+                stats.p99LatencyMs(),
+                stats.sampleSize(),
+                stats.windowMode(),
+                stats.windowLimit(),
+                stats.windowHours()
+        );
+    }
+
+    private TraceSummary toTraceSummary(RAGObservabilityService.TraceSummary summary) {
+        return new TraceSummary(
+                summary.traceId(),
+                summary.traceStatus(),
+                summary.businessDurationMs(),
+                summary.connectionDurationMs(),
+                summary.firstTokenMs(),
+                summary.streamDispatchMs(),
+                summary.retrievedDocCount(),
+                summary.displayedDocCount(),
+                summary.fallbackCount(),
+                summary.failedNodeCount(),
+                summary.slowTrace(),
+                summary.riskTags(),
+                summary.riskCount(),
+                summary.nodeCount(),
+                summary.retrievalNodeCount(),
+                summary.startedAt(),
+                summary.endedAt(),
+                summary.followUpCount()
+        );
+    }
+
+    private TraceDetailView toTraceDetailView(RAGObservabilityService.TraceDetailView detail) {
+        if (detail == null) {
+            return null;
+        }
+        RAGObservabilityService.RAGTrace trace = detail.trace();
+        List<TraceNodeView> nodes = trace.nodes().stream()
+                .map(node -> new TraceNodeView(
+                        node.nodeId(),
+                        node.parentNodeId(),
+                        node.nodeType(),
+                        node.nodeName(),
+                        node.startTime(),
+                        node.endTime(),
+                        node.inputSummary(),
+                        node.outputSummary(),
+                        node.errorSummary(),
+                        node.metrics(),
+                        node.details(),
+                        node.status(),
+                        node.durationMs()
+                ))
+                .toList();
+        TraceView traceView = new TraceView(
+                trace.traceId(),
+                trace.startTime(),
+                nodes,
+                trace.getDurationMs(),
+                trace.getEffectiveStartTime(),
+                trace.getEffectiveEndTime()
+        );
+        return new TraceDetailView(traceView, toTraceSummary(detail.summary()));
     }
 
     public Map<String, Object> getRagOverview() {
@@ -212,7 +291,7 @@ public class ObservabilityQueryService {
         return metricsSnapshotScheduler.backfillMissingSnapshots(168);
     }
 
-    private boolean matchesStatus(RAGObservabilityService.TraceSummary item, String status) {
+    private boolean matchesStatus(TraceSummary item, String status) {
         if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
             return true;
         }
@@ -224,11 +303,11 @@ public class ObservabilityQueryService {
         return requested.equals(displayStatus);
     }
 
-    private boolean containsRisk(RAGObservabilityService.TraceSummary item, String riskTag) {
+    private boolean containsRisk(TraceSummary item, String riskTag) {
         return item.riskTags() != null && item.riskTags().contains(riskTag);
     }
 
-    private boolean matchesQuery(RAGObservabilityService.TraceSummary item, String query) {
+    private boolean matchesQuery(TraceSummary item, String query) {
         if (query == null || query.isBlank()) {
             return true;
         }
@@ -238,7 +317,7 @@ public class ObservabilityQueryService {
         return haystack.toLowerCase(Locale.ROOT).contains(normalized);
     }
 
-    private boolean matchesTimeWindow(RAGObservabilityService.TraceSummary item, Instant startedAfter, Instant endedBefore) {
+    private boolean matchesTimeWindow(TraceSummary item, Instant startedAfter, Instant endedBefore) {
         Instant traceTime = item.endedAt() != null ? item.endedAt() : item.startedAt();
         if (traceTime == null) {
             return startedAfter == null && endedBefore == null;

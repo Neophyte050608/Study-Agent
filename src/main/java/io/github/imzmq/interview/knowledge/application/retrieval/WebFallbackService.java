@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.retrieval;
 
-import io.github.imzmq.interview.search.application.WebSearchTool;
+import io.github.imzmq.interview.search.application.contract.WebSearchOperations;
+import io.github.imzmq.interview.search.application.contract.WebSearchQuery;
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.core.SkillDefinition;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
@@ -16,11 +17,11 @@ public class WebFallbackService {
 
     private final SkillOrchestrator skillOrchestrator;
     private final SkillMcpClient skillMcpClient;
-    private final WebSearchTool webSearchTool;
+    private final WebSearchOperations webSearchTool;
 
     public WebFallbackService(SkillOrchestrator skillOrchestrator,
                               SkillMcpClient skillMcpClient,
-                              WebSearchTool webSearchTool) {
+                              WebSearchOperations webSearchTool) {
         this.skillOrchestrator = skillOrchestrator;
         this.skillMcpClient = skillMcpClient;
         this.webSearchTool = webSearchTool;
@@ -55,7 +56,7 @@ public class WebFallbackService {
         if (!snippets.isEmpty()) {
             return snippets;
         }
-        return webSearchTool.run(new WebSearchTool.Query(query, 3));
+        return webSearchTool.search(new WebSearchQuery(query, 3));
     }
 
     private List<String> extractSearchSnippets(Map<String, Object> mcpResult) {

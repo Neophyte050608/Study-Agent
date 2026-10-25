@@ -21,6 +21,14 @@ import io.github.imzmq.interview.architecture.fixture.application.ApplicationSer
 import io.github.imzmq.interview.architecture.fixture.infrastructure.persistence.SamplePersistenceDO;
 import io.github.imzmq.interview.architecture.fixture.infrastructure.persistence.SamplePersistenceMapper;
 import io.github.imzmq.interview.architecturefixturesource.application.CrossModulePersistenceConsumer;
+import io.github.imzmq.interview.architecturefixturesource.application.ForeignContractConsumer;
+import io.github.imzmq.interview.architecturefixturesource.application.ForeignImplementationConsumer;
+import io.github.imzmq.interview.architecturefixturesource.application.LocalApplicationService;
+import io.github.imzmq.interview.architecturefixturesource.application.SameModuleInternalConsumer;
+import io.github.imzmq.interview.architecturefixturesource.application.contract.SourcePublicOperation;
+import io.github.imzmq.interview.architecturefixturetarget.application.InternalApplicationService;
+import io.github.imzmq.interview.architecturefixturetarget.application.ReverseContractConsumer;
+import io.github.imzmq.interview.architecturefixturetarget.application.contract.PublicOperation;
 import io.github.imzmq.interview.architecturefixturetarget.infrastructure.persistence.ForeignPersistenceDO;
 import org.apache.ibatis.annotations.Mapper;
 import org.junit.jupiter.api.Test;
@@ -81,14 +89,106 @@ class ArchitectureRulesTest {
             );
 
     @ArchTest
+    static final ArchRule modules_should_only_access_other_modules_through_application_contracts =
+            ModuleBoundaryRules.onlyAccessOtherModulesThroughApplicationContracts();
+
+    @ArchTest
+    static final ArchRule top_level_modules_should_be_acyclic =
+            ModuleBoundaryRules.topLevelModulesShouldBeAcyclic();
+
+    @ArchTest
+    static final ArchRule business_modules_should_not_depend_on_agent_a2a_internals =
+            noClasses().that().resideOutsideOfPackage("io.github.imzmq.interview.agent..")
+                    .and().resideOutsideOfPackage("io.github.imzmq.interview.config..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent.a2a..");
+
+    @ArchTest
+    static final ArchRule business_modules_should_not_depend_on_agent_runtime_implementations =
+            noClasses().that().resideOutsideOfPackage("io.github.imzmq.interview.agent..")
+                    .and().resideOutsideOfPackage("io.github.imzmq.interview.config..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent.runtime..");
+
+    @ArchTest
+    static final ArchRule business_modules_should_not_depend_on_interview_domain =
+            noClasses().that().resideOutsideOfPackage("io.github.imzmq.interview.interview..")
+                    .and().resideOutsideOfPackage("io.github.imzmq.interview.config..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.interview.domain..");
+
+    @ArchTest
+    static final ArchRule public_application_contracts_should_not_expose_private_or_technical_types =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview..application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview..domain..",
+                            "io.github.imzmq.interview..infrastructure..",
+                            "org.springframework.web..",
+                            "org.springframework.ai..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
+
+    @ArchTest
+    static final ArchRule common_should_not_depend_on_product_or_platform_modules =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.common..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent..",
+                            "io.github.imzmq.interview.chat..",
+                            "io.github.imzmq.interview.feedback..",
+                            "io.github.imzmq.interview.identity..",
+                            "io.github.imzmq.interview.im..",
+                            "io.github.imzmq.interview.ingestion..",
+                            "io.github.imzmq.interview.interview..",
+                            "io.github.imzmq.interview.knowledge..",
+                            "io.github.imzmq.interview.learning..",
+                            "io.github.imzmq.interview.mcp..",
+                            "io.github.imzmq.interview.media..",
+                            "io.github.imzmq.interview.menu..",
+                            "io.github.imzmq.interview.modelrouting..",
+                            "io.github.imzmq.interview.observability..",
+                            "io.github.imzmq.interview.practice..",
+                            "io.github.imzmq.interview.routing..",
+                            "io.github.imzmq.interview.search..",
+                            "io.github.imzmq.interview.security..",
+                            "io.github.imzmq.interview.skill..",
+                            "io.github.imzmq.interview.tool..");
+
+    @ArchTest
+    static final ArchRule observability_should_not_depend_on_knowledge =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.observability..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge..");
+
+    @ArchTest
+    static final ArchRule domain_should_not_depend_on_api_infrastructure_or_technical_frameworks =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview..domain..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview..api..",
+                            "io.github.imzmq.interview..infrastructure..",
+                            "org.springframework.web..",
+                            "org.springframework.ai..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
+
+    @ArchTest
     static final ArchRule agent_should_not_depend_on_controller =
             noClasses().that().resideInAnyPackage("..agent..")
                     .should().dependOnClassesThat().resideInAnyPackage("..controller..", "..api..");
 
     @ArchTest
-    static final ArchRule controller_should_not_depend_on_tool_runtime_implementations =
+    static final ArchRule controllers_should_not_depend_on_external_sdks_or_runtime_implementations =
             noClasses().that().resideInAnyPackage("..controller..", "..api..")
-                    .should().dependOnClassesThat().resideInAnyPackage("..tool.runtime..");
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent.runtime..",
+                            "io.github.imzmq.interview..application.agent..",
+                            "io.github.imzmq.interview.tool.runtime..",
+                            "org.springframework.ai..",
+                            "dev.langchain4j..",
+                            "com.volcengine..");
 
     @ArchTest
     static final ArchRule entity_should_not_depend_on_service_or_controller =
@@ -97,14 +197,19 @@ class ArchitectureRulesTest {
                     .allowEmptyShould(true);
 
     @ArchTest
-    static final ArchRule main_code_should_not_use_retired_top_level_entity_mapper_or_dto_packages =
+    static final ArchRule retired_packages_should_not_exist =
             noClasses().that().resideInAnyPackage(
                             "io.github.imzmq.interview.entity..",
                             "io.github.imzmq.interview.mapper..",
                             "io.github.imzmq.interview.dto..",
                             "io.github.imzmq.interview.stream..",
                             "io.github.imzmq.interview.intent..",
-                            "io.github.imzmq.interview.turn.."
+                            "io.github.imzmq.interview.turn..",
+                            "io.github.imzmq.interview.graph..",
+                            "io.github.imzmq.interview.rag..",
+                            "io.github.imzmq.interview.knowledge.application.chatstream..",
+                            "io.github.imzmq.interview.knowledge.application.coding..",
+                            "io.github.imzmq.interview.knowledge.application.observability.."
                     )
                     .should(exist())
                     .allowEmptyShould(true);
@@ -128,13 +233,6 @@ class ArchitectureRulesTest {
             classes().that().haveSimpleName("ChatScenarioHandler")
                     .or().haveSimpleName("StreamingChatContext")
                     .should().resideInAPackage("io.github.imzmq.interview.chat.application.contract.extension");
-
-    @ArchTest
-    static final ArchRule generic_chatstream_types_should_not_remain_owned_by_knowledge =
-            noClasses().that().resideInAnyPackage(
-                            "io.github.imzmq.interview.knowledge.application.chatstream..")
-                    .should(exist())
-                    .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule business_chat_handlers_should_only_use_chat_public_contracts =
@@ -279,12 +377,6 @@ class ArchitectureRulesTest {
                     .should().resideInAnyPackage("io.github.imzmq.interview.practice..");
 
     @ArchTest
-    static final ArchRule historical_knowledge_coding_package_should_not_exist =
-            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.knowledge.application.coding..")
-                    .should(exist())
-                    .allowEmptyShould(true);
-
-    @ArchTest
     static final ArchRule observability_persistence_should_belong_to_observability =
             classes().that().haveSimpleName("RagTraceDO")
                     .or().haveSimpleName("RagTraceMapper")
@@ -303,19 +395,50 @@ class ArchitectureRulesTest {
                             "io.github.imzmq.interview.feedback.infrastructure.persistence");
 
     @ArchTest
-    static final ArchRule historical_knowledge_observability_package_should_not_exist =
-            noClasses().that().resideInAnyPackage(
-                            "io.github.imzmq.interview.knowledge.application.observability..")
-                    .should(exist())
-                    .allowEmptyShould(true);
-
-    @ArchTest
     static final ArchRule observability_and_feedback_should_not_depend_on_knowledge_persistence =
             noClasses().that().resideInAnyPackage(
                             "io.github.imzmq.interview.observability..",
                             "io.github.imzmq.interview.feedback..")
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "io.github.imzmq.interview.knowledge.infrastructure.persistence..");
+
+    @ArchTest
+    static final ArchRule media_should_not_depend_on_knowledge_persistence =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.media..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.infrastructure.persistence..");
+
+    @ArchTest
+    static final ArchRule external_modules_should_not_depend_on_knowledge_graph_infrastructure =
+            noClasses().that().resideOutsideOfPackage("io.github.imzmq.interview.knowledge..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.infrastructure.graph..");
+
+    @ArchTest
+    static final ArchRule knowledge_contract_should_not_expose_framework_or_persistence_types =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.knowledge.infrastructure..",
+                            "org.springframework..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..");
+
+    @ArchTest
+    static final ArchRule search_should_not_depend_on_learning_persistence =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.search..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.learning.infrastructure.persistence..");
+
+    @ArchTest
+    static final ArchRule learning_contract_should_not_expose_framework_or_persistence_types =
+            noClasses().that().resideInAnyPackage(
+                            "io.github.imzmq.interview.learning.application.contract..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.learning.infrastructure..",
+                            "org.springframework..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..");
 
     @ArchTest
     static final ArchRule feedback_contract_should_not_expose_framework_or_persistence_types =
@@ -409,6 +532,13 @@ class ArchitectureRulesTest {
                     .should().resideInAPackage("io.github.imzmq.interview.routing.application.contract");
 
     @Test
+    void legacy_cross_module_persistence_allowlist_is_permanently_empty() {
+        assertThat(LegacyCrossModulePersistenceDependencies.keys())
+                .as("M8 forbids reintroducing historical cross-module persistence exceptions")
+                .isEmpty();
+    }
+
+    @Test
     void legacy_cross_module_persistence_allowlist_matches_real_dependencies() {
         JavaClasses productionClasses = new ClassFileImporter()
                 .withImportOption(new ImportOption.DoNotIncludeTests())
@@ -419,6 +549,97 @@ class ArchitectureRulesTest {
         assertThat(actual)
                 .as("Remove an allowlist entry in the same commit that removes its production dependency")
                 .containsAll(LegacyCrossModulePersistenceDependencies.keys());
+    }
+
+    @Test
+    void cross_module_application_rule_rejects_foreign_implementation_dependency() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                ForeignImplementationConsumer.class,
+                InternalApplicationService.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .onlyAccessOtherModulesThroughApplicationContracts(Set.of(
+                        "architecturefixturesource", "architecturefixturetarget"
+                ))
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isTrue();
+        assertThat(result.getFailureReport().getDetails())
+                .anySatisfy(detail -> {
+                    assertThat(detail).contains(ForeignImplementationConsumer.class.getName());
+                    assertThat(detail).contains(InternalApplicationService.class.getName());
+                });
+    }
+
+    @Test
+    void cross_module_application_rule_accepts_provider_contract_dependency() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                ForeignContractConsumer.class,
+                PublicOperation.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .onlyAccessOtherModulesThroughApplicationContracts(Set.of(
+                        "architecturefixturesource", "architecturefixturetarget"
+                ))
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isFalse();
+    }
+
+    @Test
+    void cross_module_application_rule_accepts_same_module_implementation_dependency() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                SameModuleInternalConsumer.class,
+                LocalApplicationService.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .onlyAccessOtherModulesThroughApplicationContracts(Set.of(
+                        "architecturefixturesource", "architecturefixturetarget"
+                ))
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isFalse();
+    }
+
+    @Test
+    void module_cycle_rule_rejects_contract_cycle() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                ForeignContractConsumer.class,
+                PublicOperation.class,
+                ReverseContractConsumer.class,
+                SourcePublicOperation.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .topLevelModulesShouldBeAcyclic(Set.of(
+                        "architecturefixturesource", "architecturefixturetarget"
+                ))
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isTrue();
+        assertThat(result.getFailureReport().getDetails())
+                .anySatisfy(detail -> assertThat(detail).contains(
+                        "architecturefixturesource -> architecturefixturetarget -> architecturefixturesource"
+                ));
+    }
+
+    @Test
+    void module_cycle_rule_accepts_acyclic_contract_graph() {
+        JavaClasses fixtures = new ClassFileImporter().importClasses(
+                ForeignContractConsumer.class,
+                PublicOperation.class
+        );
+
+        EvaluationResult result = ModuleBoundaryRules
+                .topLevelModulesShouldBeAcyclic(Set.of(
+                        "architecturefixturesource", "architecturefixturetarget"
+                ))
+                .evaluate(fixtures);
+
+        assertThat(result.hasViolation()).isFalse();
     }
 
     @Test

@@ -37,13 +37,16 @@ M7A 已在工作树完成，前序 M2-M6 边界保持不变：
 - `knowledge.application.coding` 与原 interview coding handler 例外已退休，并由 ArchUnit 防回归。
 - M4 未新增或删除 persistence allowlist。
 - M5 已将 Interview Agent、TaskHandler、context、answer evaluation、report skill 和 resume loader 归还 `interview`。
-- 跨模块任务结果只公开 `InterviewAnswerResult` 与 `InterviewFinalReport`；start 保持返回现有 `InterviewSession`。
+- 跨模块任务结果公开 `InterviewSessionStarted`、`InterviewAnswerResult` 与 `InterviewFinalReport`；`INTERVIEW_START` 在 Interview 模块内部将 `InterviewSession` 映射为稳定公开结果，外部模块不再依赖 Interview domain。
 - generic agent 不再注入或 import concrete Interview Agent；knowledge 不再反向拥有 Interview evaluation delegate。
 - 三条 M5 persistence 例外已删除，allowlist 从 17 降至 14。
 - M6 已将 generic agent task/context 签名闭包和 extension SPI 公开到 `agent.application.contract`，业务实现及 schema 由各 owner 的 Spring bean 提供。
 - M7A 已将 trace runtime、trace/metrics persistence、snapshot aggregation 和 operational query 归还 Observability，将显式反馈 persistence 归还 Feedback。
 - Observability 通过 `FeedbackMetricsQuery` 获取反馈聚合；Interview 仅保留现有 API 的兼容委托和 Knowledge-owned evaluation。
 - M7A 删除 10 条 persistence 例外，allowlist 从 14 降至 4；剩余仅为 M7B Media/Knowledge 与 M7C Search/Learning。
+- M7B 已由 Knowledge 提供父块图片引用查询/替换 contract 和稳定 result view，Media 不再访问 Knowledge persistence；两条例外已删除，allowlist 从 4 降至 2。
+- M7C 已由 Learning 提供用户知识状态 query contract 和稳定 result view，Search 不再访问 Learning persistence；最后两条例外已删除，allowlist 从 2 降至 0。
+- M7D 已将 Spring Data Neo4j 节点、projection 和 repository 归入 `knowledge.infrastructure.graph`，Ingestion 与启动预热改用 Knowledge 公开契约；空的顶层 RAG 配置已删除，顶层 `graph`、`rag` 已退休。
 
 当前工作树中还有用户维护的 `AGENTS.md` 修改和 `.DS_Store` 文件。它们不属于本路线的产物，不得在后续边界改造提交中被覆盖、删除或误提交。
 
@@ -74,19 +77,14 @@ git diff --check
 
 ### 2.4 剩余结构问题
 
-当前显式跨模块 persistence allowlist 已从 26 条下降到 4 条。剩余 persistence 穿透只涉及 Media/Knowledge 与 Search/Learning；源码 import 图的其他历史边界债务仍需按后续 gate 收敛。此前较大的强连通分量涉及：
+当前显式跨模块 persistence allowlist 已从 26 条下降到 0 条，新的跨模块 persistence 穿透会被 ArchUnit 直接拒绝；源码 import 图的其他历史边界债务仍需按后续 gate 收敛。此前较大的强连通分量涉及：
 
 ```text
 agent, chat, config, feedback, ingestion, interview, knowledge,
 media, modelrouting, observability, routing, search, skill
 ```
 
-G1-G5 已依次修正 structured output、Practice、Interview、generic Agent runtime、Observability/Feedback ownership。主要剩余问题是：
-
-1. Media 仍直接访问 Knowledge persistence。
-2. Search 仍直接访问 Learning persistence。
-3. 顶层 `graph`、`rag` 的其他历史类型尚未全部退休。
-4. 最终 contract-only、module cycle 与退休包硬规则尚需在 M8 统一收紧。
+G1-G7/M7D 已依次修正 structured output、Practice、Interview、generic Agent runtime、Observability/Feedback ownership、Media/Knowledge、Search/Learning persistence 边界和 Graph/RAG ownership。顶层 `graph`、`rag` 已退休；剩余工作是 M8 的 contract-only、module cycle 与最终退休包硬规则收紧。
 
 ## 3. 设计不变量
 
@@ -447,29 +445,25 @@ t_rag_feedback
 
 两个边界彼此独立，可以拆成两个独立提交，但共同目标是用稳定 query contract 替代 persistence 穿透。
 
-### 12.1 M7B Media/Knowledge
+### 12.1 M7B Media/Knowledge（已完成）
 
-当前 `media.application.ImageService` 直接访问 `knowledge` 的 `RagParentDO` 和 `RagParentMapper`。
+实现结果：
 
-目标方案：
+- Knowledge 提供 `ParentImageReferenceQuery`、`ParentImageReferenceCommand` 和稳定的 `ParentImageReferences` result view。
+- `ParentImageReferenceService` 在 Knowledge 内部完成按文件路径查询和按 parent ID 替换图片引用，持久化 ownership 未移动。
+- `media.application.ImageService` 只消费 Knowledge contract，不再 import Knowledge 的 `RagParentDO` 或 `RagParentMapper`；公开契约不暴露 MyBatis 查询/分页类型。
+- ArchUnit 禁止 Media 依赖 Knowledge persistence，并禁止 Knowledge contract 暴露 infrastructure/framework 类型。
+- 两条 media/knowledge allowlist 已删除；图片关联、评分、去重、排序、limit、空结果和父块引用替换行为保持不变。
 
-- knowledge 提供最小文档/父块查询 contract 和稳定 result view。
-- media 只消费该 query contract。
-- knowledge persistence 不迁到 media，也不向 media 暴露 DO、Mapper 或 MyBatis 分页类型。
+### 12.2 M7C Search/Learning（已完成）
 
-退出条件：两条 media/knowledge allowlist 删除，图片行为和父块查询行为不变。
+实现结果：
 
-### 12.2 M7C Search/Learning
-
-当前 `search.application.PersonalRanker` 直接访问 `learning` 的 `UserKnowledgeStateDO` 和 `UserKnowledgeStateMapper`。
-
-目标方案：
-
-- learning 提供 profile/state query contract 和稳定 result view。
-- search 只消费该 contract。
-- persistence DO 和 Mapper 继续由 learning 拥有。
-
-退出条件：两条 search/learning allowlist 删除，personal ranking 行为不变。
+- Learning 提供 `UserKnowledgeStateQuery` 和稳定的 `UserKnowledgeStateView`，公开结果只包含 Search 实际需要的 topic 和 mastery score。
+- `UserKnowledgeStateService` 在 Learning 内部完成 `user_id` 查询以及 DO 到稳定 result 的映射，persistence DO 和 Mapper ownership 未移动。
+- `search.application.PersonalRanker` 只消费 Learning contract，不再 import `UserKnowledgeStateDO`、`UserKnowledgeStateMapper` 或 MyBatis wrapper。
+- ArchUnit 禁止 Search 依赖 Learning persistence，并禁止 Learning contract 暴露 infrastructure/framework 类型。
+- 最后两条 search/learning allowlist 已删除；弱项加权、空分数、重复 topic、排序、copy 和 limit 行为保持不变，跨模块 persistence allowlist 达到 0。
 
 ## 13. G7：M7D Graph/RAG Retirement
 
@@ -477,23 +471,19 @@ t_rag_feedback
 
 退休含义模糊的顶层 `graph` 和 `rag` 包，将类型放回真实 owner。
 
-### 13.2 迁移方向
+### 13.2 实现结果（已完成）
 
-- GraphRAG 领域模型迁 `knowledge.domain`。
-- Neo4j/Spring Data 类型迁 `knowledge.infrastructure.graph`。
-- `ResumeLoader` 按 G3 核实结果归 interview 或 ingestion，不继续留在顶层 rag。
-- `VectorStoreConfig` 按真实装配对象归 knowledge/config owner；只有确认无调用方、无框架扫描作用并有验证后才能单独删除。
+- 核实后剩余四个 GraphRAG 类型全部带有 Spring Data Neo4j 节点、repository 或 projection 语义，因此整体迁入 `knowledge.infrastructure.graph`，没有把框架类型伪装为 `knowledge.domain`。
+- Knowledge 新增 `KnowledgeGraphIndexCommand` 与 `KnowledgeGraphWarmup` 两个真实调用者驱动的公开契约；Ingestion 和启动预热不再跨模块注入 Neo4j repository。
+- `KnowledgeGraphIndexService` 在 Knowledge 内部保持原有文件名到概念名、描述截断、wiki link 过滤、关系保存和 warmup 查询语义。
+- `ResumeLoader` 已在 G3/M5 归 `interview.infrastructure.resume`，真实文件系统不存在顶层 RAG 副本。
+- `VectorStoreConfig` 无调用方、无显式 `@Import`、没有活动 Bean，仅有注释示例；删除后 `VectorStore` 继续由 Spring AI 自动装配。
+- 顶层 `graph`、`rag` 不再存在，ArchUnit 禁止重建，并禁止 Knowledge 外部模块依赖 `knowledge.infrastructure.graph`。
+- Characterization tests 锁定节点标签、关系、默认类型、projection、repository 签名和两条 Cypher 查询。
 
-### 13.3 退出条件
+## 14. G8：最终 ArchUnit 收紧（已完成）
 
-- 顶层 `graph` 和 `rag` 不存在。
-- Spring Data 类型不伪装成纯 domain。
-- ArchUnit 禁止重新创建顶层 `graph`、`rag`。
-- knowledge graph 和 vector store 启动装配、查询行为不变。
-
-## 14. G8：最终 ArchUnit 收紧
-
-G8 只在前述 gate 完成后启用以下硬规则：
+G8 已在前述 gate 完成后启用以下硬规则：
 
 1. 跨模块 persistence allowlist 必须为空。
 2. 跨模块业务调用只能进入 provider 的：
@@ -520,7 +510,14 @@ G8 只在前述 gate 完成后启用以下硬规则：
     knowledge.application.observability
     ```
 
-由于现有源码仍存在大强连通分量，cycle check 不能提前作为全仓硬规则；每个 gate 应先防止本阶段修复的边重新出现，最后再统一启用无环约束。
+实现结果：
+
+- 跨模块 persistence allowlist 永久保持 0，并有独立测试断言。
+- 显式模块目录驱动 contract-only 与 cycle 规则；`bootstrap`、`config` 仅作为技术装配根，不作为业务边起点。
+- 顶层 public-contract 图已无环，且没有 cycle ignore list。
+- 真实反向协作改为消费者自有 extension SPI：Agent/Chat 提示词、Routing/Chat 提示词、Knowledge/Ingestion 支撑、Media/Ingestion 源路径、Media/Knowledge 父块图片引用、Learning/Knowledge 学习计划生成。
+- `AgentTaskOperations` 统一 generic task dispatch，Agent 与 Interview 不再互相依赖具体 application implementation。
+- Controller、domain、retired packages 以及 `common`、`modelrouting`、`observability`、generic Agent 的固定方向均由 ArchUnit 执行。
 
 ## 15. 每个 gate 的统一实施协议
 
@@ -565,7 +562,5 @@ git diff --check
 
 ## 17. 下一步
 
-1. 固化 G5 / M7A Observability 与 Feedback Persistence 的独立提交边界。
-2. 分别规划并实施 M7B Media/Knowledge 与 M7C Search/Learning，不与 M8 合并。
-3. 将剩余 persistence allowlist 从 4 条降至 0 后，再执行 M7D Graph/RAG Retirement 和 M8 最终 ArchUnit 收紧。
-4. 在 M7-M8 边界治理完成后，再评估 Outbox、PostgreSQL 真相源和 `local-lite` 降级增强。
+1. 复查并固化 M8 最终边界治理的提交边界。
+2. 在 M8 边界治理完成后，另开设计评估 Outbox、PostgreSQL 真相源和 `local-lite` 降级增强。

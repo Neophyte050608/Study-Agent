@@ -5,7 +5,7 @@ import io.github.imzmq.interview.interview.application.contract.result.Interview
 
 import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
-import io.github.imzmq.interview.interview.domain.InterviewSession;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewSessionStarted;
 import io.github.imzmq.interview.interview.application.chat.InterviewTaskResultPresenter;
 import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations.PresentationChannel;
 import org.junit.jupiter.api.Test;
@@ -37,8 +37,7 @@ class TaskResponsePresentationServiceTest {
 
     @Test
     void preservesInterviewSessionAnswerAndReportMessages() {
-        InterviewSession session = new InterviewSession();
-        session.setCurrentQuestion("请解释 JVM 内存模型");
+        InterviewSessionStarted session = new InterviewSessionStarted("s-1", "请解释 JVM 内存模型", 5);
         assertThat(service.format(TaskResponse.ok(session), PresentationChannel.WEB))
                 .isEqualTo("请解释 JVM 内存模型");
 

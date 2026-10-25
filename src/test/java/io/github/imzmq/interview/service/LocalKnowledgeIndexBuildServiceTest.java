@@ -2,6 +2,8 @@ package io.github.imzmq.interview.service;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.ingestion.application.NoteLoader;
+import io.github.imzmq.interview.knowledge.application.contract.extension.LocalKnowledgeSourceSupport;
 import io.github.imzmq.interview.knowledge.application.indexing.LocalKnowledgeIndexBuildService;
 import io.github.imzmq.interview.knowledge.application.indexing.LocalKnowledgeScopeService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -53,9 +55,8 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
+                localKnowledgeSourceSupport(ingestConfigService),
                 properties,
-                ingestConfigService,
                 new LocalKnowledgeScopeService(),
                 objectMapper
         );
@@ -107,9 +108,8 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
+                localKnowledgeSourceSupport(ingestConfigService),
                 properties,
-                ingestConfigService,
                 new LocalKnowledgeScopeService(),
                 objectMapper
         );
@@ -182,9 +182,8 @@ class LocalKnowledgeIndexBuildServiceTest {
         ));
 
         LocalKnowledgeIndexBuildService service = new LocalKnowledgeIndexBuildService(
-                new io.github.imzmq.interview.ingestion.application.NoteLoader(),
+                localKnowledgeSourceSupport(ingestConfigService),
                 properties,
-                ingestConfigService,
                 new LocalKnowledgeScopeService(),
                 objectMapper
         );
@@ -207,6 +206,34 @@ class LocalKnowledgeIndexBuildServiceTest {
         JsonNode root = objectMapper.readTree(output.toFile());
         assertEquals(1, root.path("nodes").size());
         assertEquals("learning/tech/rag", root.path("nodes").get(0).path("id").asText());
+    }
+
+    private LocalKnowledgeSourceSupport localKnowledgeSourceSupport(IngestConfigService configService) {
+        NoteLoader noteLoader = new NoteLoader();
+        return new LocalKnowledgeSourceSupport() {
+            @Override
+            public List<Path> loadNotePaths(String vaultPath, List<String> includeDirs, List<String> ignoredDirs) {
+                return noteLoader.loadNotes(vaultPath, includeDirs, ignoredDirs)
+                        .stream()
+                        .map(note -> note.path())
+                        .toList();
+            }
+
+            @Override
+            public Map<String, String> getConfig() {
+                return configService.getConfig();
+            }
+
+            @Override
+            public String getLocalKnowledgeIndexPath() {
+                return configService.getLocalKnowledgeIndexPath();
+            }
+
+            @Override
+            public void saveLocalKnowledgeIndexPath(String indexFilePath) {
+                configService.saveLocalKnowledgeIndexPath(indexFilePath);
+            }
+        };
     }
 
     private JsonNode findNode(JsonNode nodes, String expectedId) {

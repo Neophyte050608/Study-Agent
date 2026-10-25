@@ -31,7 +31,7 @@
 - Provider-owned command/query/result types stay with the provider. Do not move business DTOs into `common`.
 - Contracts must not expose Mapper, DO, infrastructure adapter, Spring Web, or vendor SDK types.
 - Cross-module access to `<owner>.application.dto`, use-case implementations, helpers, and `infrastructure` is forbidden.
-- A business module may implement an extension contract owned by `agent`, `chat`, `skill`, or `tool`; the registry depends on the extension interface, not concrete business implementations.
+- A module may implement a real consumer-owned extension contract under `<consumer>.application.contract.extension`; the consumer depends on its SPI, not the collaborating module’s concrete implementation. Use this dependency-inversion pattern only when a normal provider contract would create a reverse edge.
 
 ## 4.2 Routing public surface after M1
 
@@ -80,8 +80,8 @@ The current shadow caller is `chat.application.IntentShadowObserver`. It observe
 - Interview Agents and task handlers: `interview.application.agent`; generic `agent` discovers handlers through its registry and must not import Interview implementations.
 - Interview context attributes and sources: `interview.application.context`; they implement generic agent context contracts.
 - Answer evaluation: `interview.application.evaluation`; Knowledge may expose retrieval output, but must not own or delegate Interview evaluation.
-- Cross-module task-visible results: `interview.application.contract.result.InterviewAnswerResult` and `InterviewFinalReport`. These records may contain only stable business/JDK types.
-- Interview start keeps the existing `InterviewSession` result for behavior compatibility; do not add an empty or speculative `InterviewStartResult`.
+- Cross-module task-visible results: `interview.application.contract.result.InterviewSessionStarted`, `InterviewAnswerResult`, and `InterviewFinalReport`. These records may contain only stable business/JDK types.
+- `INTERVIEW_START` maps the internal `InterviewSession` entity to `InterviewSessionStarted`; modules outside Interview must not inspect or import Interview domain types.
 - Report skill: `interview.application.skill`; resume loading adapter: `interview.infrastructure.resume`.
 - Historical Interview implementations under `agent.runtime`, `agent.router.handler`, `agent.application.context`, `knowledge.application.evaluation`, top-level `rag`, or generic `skill.builtin` are retired and must not be recreated.
 
@@ -97,6 +97,14 @@ The current shadow caller is `chat.application.IntentShadowObserver`. It observe
 - Tool Task context sources, attributes, and schema stay in `agent.application.context` because they are generic tool-execution mechanics. Do not move a business schema into generic agent for central registration.
 - Add a new context mode by supplying an owner-local `AgentContextSchemaProvider`; do not restore static defaults, a mode switch, or a handwritten provider list in `AgentContextAssembler`.
 
+### M9 Agent public-surface closure
+
+- Generic task dispatch: `agent.application.contract.AgentTaskOperations`; external modules must not inject `TaskRouterAgent` or any other `agent.runtime` implementation.
+- Business asynchronous publish/subscribe: `agent.application.contract.AgentMessagingOperations` with `command.AgentMessageCommand` and `message.AgentMessage`/`AgentMessageIntent`. External modules must not construct `A2AMessage` or import `agent.a2a`.
+- A2A operational administration: `agent.application.contract.AgentA2AOperations` and `result.A2ABatchReplayResult`. Controllers call this contract for idempotency inspection/clear and DLQ replay; RocketMQ-specific checks remain inside Agent.
+- `agent.a2a` is internal to Agent. `config.agent` may depend on it only as the Spring composition root. Do not expose A2A metadata/status/trace types from a public contract.
+- Every public application contract is covered by the repository-wide contract-purity rule; keep public records limited to stable business concepts and JDK types.
+
 ## 4.8 Observability and Feedback ownership after M7A
 
 - Trace runtime, node definitions, event bus, and local trace orchestration: `observability.application.trace`.
@@ -107,6 +115,38 @@ The current shadow caller is `chat.application.IntentShadowObserver`. It observe
 - Cross-module feedback aggregates are exposed only through `feedback.application.contract.FeedbackMetricsQuery` and `feedback.application.contract.result.FeedbackMetrics`; callers must not depend on the concrete service or persistence types.
 - `interview.application.ObservabilityApplicationService` is a compatibility orchestrator for existing API signatures and Knowledge-owned evaluation. New operational observability behavior belongs to Observability.
 - `knowledge.application.observability` is retired and must not be recreated.
+
+## 4.9 Media and Knowledge public surface after M7B/M8
+
+- M7B first removed the persistence penetration through Knowledge-owned query/command contracts. M8 then inverted the remaining public-contract cycle through the Media-owned `media.application.contract.extension.ParentImageReferenceSupport`.
+- `ParentImageReferenceSupport.ParentImageReferences` contains only parent ID, file path, and image IDs; it must not expose `RagParentDO`, `RagParentMapper`, query wrappers, or MyBatis pagination types.
+- `knowledge.application.indexing.ParentImageReferenceService` implements the Media SPI while Knowledge keeps parent persistence under `knowledge.infrastructure.persistence`. Media does not import Knowledge contracts or infrastructure.
+- Source paths used by image resolution and file-serving validation come from the Media-owned `MediaSourcePathSupport`; Ingestion implements it by mapping the existing `paths` and `imagePath` configuration values. Path ordering, newline splitting, normalization, and validation behavior stay in Media.
+- New parent/image persistence behavior stays inside Knowledge; new ingestion-configuration behavior stays inside Ingestion. The Media SPIs expose only the values required by Media.
+
+## 4.10 Search and Learning public surface after M7C
+
+- User knowledge-state lookup is exposed by `learning.application.contract.UserKnowledgeStateQuery`.
+- The public result `learning.application.contract.result.UserKnowledgeStateView` contains only the stable topic and mastery-score fields required by Search; do not expose `UserKnowledgeStateDO`, `UserKnowledgeStateMapper`, query wrappers, or MyBatis pagination types.
+- The implementation belongs to `learning.application.profile.UserKnowledgeStateService`; Learning persistence remains under `learning.infrastructure.persistence`.
+- Search may consume this contract but must not access Learning infrastructure. Personal ranking weights, weak-topic matching, sorting, and limits stay owned by `search.application.PersonalRanker`.
+
+## 4.11 Knowledge graph ownership after M7D
+
+- Spring Data Neo4j nodes, projections, and repositories belong to `knowledge.infrastructure.graph`; framework-annotated persistence models must not be placed in `knowledge.domain`.
+- Cross-module graph writes use `knowledge.application.contract.command.KnowledgeGraphIndexCommand` and its stable source-document record.
+- Cross-module startup probing uses `knowledge.application.contract.KnowledgeGraphWarmup`; callers must not inject `TechConceptRepository`.
+- `knowledge.application.indexing.KnowledgeGraphIndexService` is the adapter-facing implementation. Only Knowledge code may depend on `knowledge.infrastructure.graph`.
+- Top-level `graph` and `rag` packages are retired. Vector-store runtime beans continue to come from Spring AI auto-configuration; do not recreate an empty placeholder configuration.
+
+## 4.12 Final M8 contract and cycle rules
+
+- `ModuleBoundaryRules` uses the explicit top-level module catalog; adding a capability owner requires updating the catalog and the architecture documentation together.
+- `bootstrap` and `config` are technical composition roots. They may wire concrete beans but are excluded as business edge origins.
+- Cross-module application implementation imports are forbidden. Normal calls use the provider’s `application.contract`; dependency inversion uses a narrow consumer-owned `application.contract.extension` SPI with an active adapter.
+- The public-contract module graph must stay acyclic. Do not add a cycle allowlist, package exclusion, or synthetic facade to silence the rule.
+- M8 consumer-owned SPIs include Agent and Routing prompt rendering, Knowledge/Ingestion collaboration, Media source paths and parent-image references, and Learning plan generation.
+- The cross-module persistence allowlist is permanently empty. A new violation is a defect to repair, not baseline debt to record.
 
 ## 5. Migration rule
 - Existing migration to domain packages is complete for main business services and MyBatis persistence code.
@@ -145,7 +185,7 @@ DTO placement:
 Knowledge package ownership for new code:
 
 - `knowledge.application.catalog`: knowledge base and document catalog use cases.
-- `knowledge.application.indexing`: chunking, tokenizer, lexical and parent-child index use cases.
+- `knowledge.application.indexing`: chunking, tokenizer, lexical, parent-child, and Neo4j graph index use cases.
 - `knowledge.application.retrieval`: retrieval orchestration, fusion, query rewrite, evidence evaluation, and fallback.
 - `knowledge.application.localgraph`: local graph retrieval chain.
 - `knowledge.domain`: knowledge and GraphRAG domain types without Spring Data or vendor dependencies.

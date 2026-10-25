@@ -11,7 +11,11 @@ import io.github.imzmq.interview.learning.infrastructure.persistence.LearningDec
 import io.github.imzmq.interview.learning.infrastructure.persistence.LearningTrajectoryMapper;
 import io.github.imzmq.interview.learning.infrastructure.persistence.TopicDifficultyLevelMapper;
 import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateMapper;
-import io.github.imzmq.interview.learning.domain.TrainingProfileSnapshot;
+import io.github.imzmq.interview.learning.application.contract.LearningEvent;
+import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
+import io.github.imzmq.interview.learning.application.contract.LearningSource;
+import io.github.imzmq.interview.learning.application.contract.result.TopicCapabilityCurve;
+import io.github.imzmq.interview.learning.application.contract.result.TrainingProfileSnapshot;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
@@ -30,7 +34,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
-public class LearningProfileAgent {
+public class LearningProfileAgent implements LearningProfileOperations {
 
     private static final String DEFAULT_USER = "local-user";
     private static final String DEFAULT_TOPIC = "未命名主题";
@@ -703,13 +707,6 @@ public class LearningProfileAgent {
         public String lastEventAt = "";
     }
 
-    public record TopicCapabilityCurve(
-            String topic,
-            List<String> timestamps,
-            List<Double> scores,
-            double averageScore
-    ) {
-    }
 }
 
 

@@ -2,7 +2,11 @@ package io.github.imzmq.interview.interview.application.agent;
 
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.interview.application.evaluation.InterviewAnswerEvaluationService;
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.KnowledgeInterviewOperations;
+import io.github.imzmq.interview.knowledge.application.contract.KnowledgeRetrievalOperations;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgeInterviewReportEntry;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
+import io.github.imzmq.interview.interview.application.evaluation.InterviewEvaluationOutput;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,36 +24,44 @@ import java.util.regex.Pattern;
 @Component
 public class EvaluationAgent {
 
-    private final RAGService ragService;
+    private final KnowledgeRetrievalOperations knowledgeRetrievalOperations;
+    private final KnowledgeInterviewOperations knowledgeInterviewOperations;
     private final ObjectMapper objectMapper;
     private final StructuredOutputParser structuredOutputParser;
     private final InterviewAnswerEvaluationService interviewAnswerEvaluationService;
 
-    public EvaluationAgent(RAGService ragService, ObjectMapper objectMapper, StructuredOutputParser structuredOutputParser, InterviewAnswerEvaluationService interviewAnswerEvaluationService) {
-        this.ragService = ragService;
+    public EvaluationAgent(
+            KnowledgeRetrievalOperations knowledgeRetrievalOperations,
+            KnowledgeInterviewOperations knowledgeInterviewOperations,
+            ObjectMapper objectMapper,
+            StructuredOutputParser structuredOutputParser,
+            InterviewAnswerEvaluationService interviewAnswerEvaluationService
+    ) {
+        this.knowledgeRetrievalOperations = knowledgeRetrievalOperations;
+        this.knowledgeInterviewOperations = knowledgeInterviewOperations;
         this.objectMapper = objectMapper;
         this.structuredOutputParser = structuredOutputParser;
         this.interviewAnswerEvaluationService = interviewAnswerEvaluationService;
     }
 
     public String generateFirstQuestion(String resumeContent, String topic) {
-        return ragService.generateFirstQuestion(resumeContent, topic, "暂无历史画像。", false, List.of());
+        return knowledgeInterviewOperations.generateFirstQuestion(resumeContent, topic, "暂无历史画像。", false, List.of());
     }
 
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot) {
-        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, false, List.of());
+        return knowledgeInterviewOperations.generateFirstQuestion(resumeContent, topic, profileSnapshot, false, List.of());
     }
 
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro) {
-        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, List.of());
+        return knowledgeInterviewOperations.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, List.of());
     }
 
     public String generateFirstQuestion(String resumeContent, String topic, String profileSnapshot, boolean skipIntro, List<String> excludedTopics) {
-        return ragService.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, excludedTopics);
+        return knowledgeInterviewOperations.generateFirstQuestion(resumeContent, topic, profileSnapshot, skipIntro, excludedTopics);
     }
 
     public EvaluationResult evaluateAnswer(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot) {
-        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket(question, userAnswer);
+        KnowledgePacket packet = knowledgeRetrievalOperations.buildKnowledgePacket(question, userAnswer);
         String raw = interviewAnswerEvaluationService.evaluateAndValidate(
                 topic, question, userAnswer, difficultyLevel, followUpState, topicMastery,
                 profileSnapshot, "", packet);
@@ -58,15 +70,15 @@ public class EvaluationAgent {
         return new EvaluationResult(parsed.score(), parsed.accuracy(), parsed.logic(), parsed.depth(), parsed.boundary(), parsed.deductions(), parsed.citations(), parsed.conflicts(), feedback, parsed.nextQuestion());
     }
 
-    public LayeredEvaluation evaluateAnswerWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, RAGService.KnowledgePacket packet) {
+    public LayeredEvaluation evaluateAnswerWithKnowledge(String topic, String question, String userAnswer, String difficultyLevel, String followUpState, double topicMastery, String profileSnapshot, String strategyHint, KnowledgePacket packet) {
         // 四层链路下的核心评估入口：将策略提示与知识包一并下发。
-        RAGService.EvaluationResult evalResult = interviewAnswerEvaluationService.evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, strategyHint, packet);
+        InterviewEvaluationOutput evalResult = interviewAnswerEvaluationService.evaluateWithKnowledge(topic, question, userAnswer, difficultyLevel, followUpState, topicMastery, profileSnapshot, strategyHint, packet);
         ParsedEvaluation parsed = parseEvaluation(evalResult.json());
         String feedback = enrichFeedback(parsed.feedback(), parsed.accuracy(), parsed.logic(), parsed.depth(), parsed.boundary(), parsed.deductions());
         EvaluationResult result = new EvaluationResult(parsed.score(), parsed.accuracy(), parsed.logic(), parsed.depth(), parsed.boundary(), parsed.deductions(), parsed.citations(), parsed.conflicts(), feedback, parsed.nextQuestion());
         LayerTrace trace = new LayerTrace(
                 packet == null ? "" : packet.retrievalQuery(),
-                packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
+                packet == null ? 0 : packet.retrievedDocumentCount(),
                 packet != null && packet.webFallbackUsed(),
                 strategyHint == null ? "" : strategyHint,
                 evalResult.inputTokens(),
@@ -76,7 +88,15 @@ public class EvaluationAgent {
     }
 
     public FinalReportContent summarize(String topic, List<Question> history, String targetedSuggestion, String rollingSummary) {
-        String raw = ragService.generateFinalReport(topic, history, targetedSuggestion, rollingSummary);
+        List<KnowledgeInterviewReportEntry> reportHistory = history == null ? List.of() : history.stream()
+                .map(question -> new KnowledgeInterviewReportEntry(
+                        question.getQuestionText(),
+                        question.getUserAnswer(),
+                        question.getScore(),
+                        question.getFeedback()
+                ))
+                .toList();
+        String raw = knowledgeInterviewOperations.generateFinalReport(topic, reportHistory, targetedSuggestion, rollingSummary);
         String summary = extractTag(raw, "summary");
         String incomplete = extractTag(raw, "incomplete");
         String weak = extractTag(raw, "weak");

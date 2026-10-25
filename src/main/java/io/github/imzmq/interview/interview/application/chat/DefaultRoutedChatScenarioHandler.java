@@ -1,10 +1,10 @@
 package io.github.imzmq.interview.interview.application.chat;
 
 import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewSessionStarted;
 
 import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
-import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
 import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
 import io.github.imzmq.interview.chat.application.contract.extension.ChatScenarioHandler;
@@ -40,28 +40,28 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
             return false;
         }
 
-        if (response.data() instanceof InterviewSession session) {
+        if (response.data() instanceof InterviewSessionStarted started) {
             context.emitter().emit(StreamEventType.PROGRESS.value(), Map.of(
                     "stage", "GENERATING", "label", "正在生成面试题目", "status", "running", "percent", 100));
 
-            String questionText = session.getCurrentQuestion();
+            String questionText = started.currentQuestion();
             if (questionText == null || questionText.isBlank()) {
                 questionText = chatTaskOperations.extractReplyText(response);
             }
 
             Map<String, Object> interviewPayload = new LinkedHashMap<>();
             interviewPayload.put("interviewState", "asking");
-            interviewPayload.put("interviewSessionId", session.getId());
+            interviewPayload.put("interviewSessionId", started.sessionId());
             interviewPayload.put("question", questionText);
             interviewPayload.put("questionIndex", 1);
-            interviewPayload.put("totalQuestions", session.getTotalQuestions());
+            interviewPayload.put("totalQuestions", started.totalQuestions());
             interviewPayload.put("score", 0);
 
             String interviewJson = chatStreamingOperations.toJson(interviewPayload, questionText);
 
             Map<String, Object> metadata = new LinkedHashMap<>();
             metadata.put("traceId", context.traceId());
-            metadata.put("interviewSessionId", session.getId());
+            metadata.put("interviewSessionId", started.sessionId());
             metadata.put("type", "interview_start");
             metadata.put("routeLabel", "interview-start");
             metadata.put("routeSource", context.routeSource().isBlank() ? "routed-chat" : context.routeSource());
@@ -97,8 +97,8 @@ public class DefaultRoutedChatScenarioHandler implements ChatScenarioHandler {
         if (chatTaskOperations.shouldClearSession(response)) {
             chatSessionOperations.clearSessionContext(context.sessionId(), context.assistantMessageId());
         }
-        if (response.data() instanceof InterviewSession session) {
-            metadata.put("interviewSessionId", session.getId());
+        if (response.data() instanceof InterviewSessionStarted started) {
+            metadata.put("interviewSessionId", started.sessionId());
             metadata.put("type", "interview_start");
             routeLabel = "interview-start";
         } else if (response.data() instanceof InterviewAnswerResult ar) {

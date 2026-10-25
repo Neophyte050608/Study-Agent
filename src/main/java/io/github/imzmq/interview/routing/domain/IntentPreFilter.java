@@ -1,6 +1,8 @@
 package io.github.imzmq.interview.routing.domain;
 
 import io.github.imzmq.interview.observability.core.TraceNode;
+import io.github.imzmq.interview.routing.application.contract.IntentPreFilterOperations;
+import io.github.imzmq.interview.routing.application.contract.result.PreFilterResult;
 
 import org.springframework.stereotype.Component;
 
@@ -16,7 +18,7 @@ import java.util.regex.Pattern;
  * 在调用 LLM 意图分类之前，通过关键词和正则快速截获可以确定的意图。
  */
 @Component
-public class IntentPreFilter {
+public class IntentPreFilter implements IntentPreFilterOperations {
 
     private static final String HELP_REPLY =
             "我是你的 AI 面试官助理。你可以尝试这样和我对话：\n" +
@@ -120,6 +122,7 @@ public class IntentPreFilter {
      * @return 如果规则命中返回 PreFilterResult，否则返回 empty
      */
     @TraceNode(type = "INTENT", name = "PRE_FILTER")
+    @Override
     public Optional<PreFilterResult> filter(String query) {
         if (query == null || query.isBlank()) {
             return Optional.empty();
@@ -265,6 +268,7 @@ public class IntentPreFilter {
      * @param query   用户原始输入
      * @param payload 当前已有的槽位 map（会被就地修改）
      */
+    @Override
     public void fillMissingSlots(String query, Map<String, Object> payload) {
         if (query == null || query.isBlank() || payload == null) {
             return;

@@ -1,17 +1,23 @@
 package io.github.imzmq.interview.knowledge.application;
 
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
+
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeMetrics;
+
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
 import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
+import io.github.imzmq.interview.media.application.contract.MediaDocument;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
@@ -34,14 +40,14 @@ public class KnowledgePacketBuilder {
     private final WebFallbackService webFallbackService;
     private final SkillOrchestrator skillOrchestrator;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
-    private final ImageService imageService;
+    private final MediaImageOperations imageService;
 
     public KnowledgePacketBuilder(QueryRewriteService queryRewriteService,
                                   EvidenceEvaluationService evidenceEvaluationService,
                                   WebFallbackService webFallbackService,
                                   SkillOrchestrator skillOrchestrator,
                                   ObservabilitySwitchProperties observabilitySwitchProperties,
-                                  @org.springframework.lang.Nullable ImageService imageService) {
+                                  @org.springframework.lang.Nullable MediaImageOperations imageService) {
         this.queryRewriteService = queryRewriteService;
         this.evidenceEvaluationService = evidenceEvaluationService;
         this.webFallbackService = webFallbackService;
@@ -77,8 +83,8 @@ public class KnowledgePacketBuilder {
                         "docRefs", delegate.summarizeRetrievedDocuments(retrievedDocs),
                         "status", "COMPLETED"
                 ),
-                new RAGObservabilityService.NodeMetrics(retrievedDocs.size(), false),
-                new RAGObservabilityService.NodeDetails(
+                new TraceNodeMetrics(retrievedDocs.size(), false),
+                new TraceNodeDetails(
                         1,
                         KnowledgeRetrievalMode.RAG_ONLY.name(),
                         null,
@@ -95,11 +101,13 @@ public class KnowledgePacketBuilder {
         );
 
         TraceNodeHandle associatedImageTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_ASSOC_RETRIEVE, Map.of("status", "RUNNING"));
-        List<ImageService.ImageResult> associatedImages = imageService == null ? List.of() : imageService.findImagesForDocuments(retrievedDocs);
+        List<ImageResult> associatedImages = imageService == null
+                ? List.of()
+                : imageService.findImagesForDocuments(toMediaDocuments(retrievedDocs));
         delegate.completeTraceSuccess(associatedImageTrace, Map.of(
                 "imageCount", associatedImages.size(),
                 "status", "COMPLETED"
-        ), null, new RAGObservabilityService.NodeDetails(
+        ), null, new TraceNodeDetails(
                 1,
                 KnowledgeRetrievalMode.RAG_ONLY.name(),
                 null,
@@ -115,11 +123,11 @@ public class KnowledgePacketBuilder {
         ));
 
         TraceNodeHandle semanticImageTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_SEMANTIC_RETRIEVE, Map.of("status", "RUNNING"));
-        List<ImageService.ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), delegate.containsVisualIntent(rewrittenQuery.fullQuery()));
+        List<ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), delegate.containsVisualIntent(rewrittenQuery.fullQuery()));
         delegate.completeTraceSuccess(semanticImageTrace, Map.of(
                 "imageCount", semanticImages.size(),
                 "status", "COMPLETED"
-        ), null, new RAGObservabilityService.NodeDetails(
+        ), null, new TraceNodeDetails(
                 1,
                 KnowledgeRetrievalMode.RAG_ONLY.name(),
                 null,
@@ -134,7 +142,7 @@ public class KnowledgePacketBuilder {
                 null
         ));
 
-        List<ImageService.ImageResult> retrievedImages = delegate.mergeImageResults(associatedImages, semanticImages);
+        List<ImageResult> retrievedImages = delegate.mergeImageResults(associatedImages, semanticImages);
         String imageContext = KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages);
         String retrievalEvidence = delegate.buildRetrievalEvidence(retrievedDocs);
         boolean webFallbackUsed = false;
@@ -161,8 +169,8 @@ public class KnowledgePacketBuilder {
                             "docCount", webContext.size(),
                             "status", "COMPLETED"
                     ),
-                    new RAGObservabilityService.NodeMetrics(0, true),
-                    new RAGObservabilityService.NodeDetails(
+                    new TraceNodeMetrics(0, true),
+                    new TraceNodeDetails(
                             1,
                             KnowledgeRetrievalMode.RAG_ONLY.name(),
                             null,
@@ -191,8 +199,8 @@ public class KnowledgePacketBuilder {
 
         String buildWebEvidence(List<String> webContext);
 
-        List<ImageService.ImageResult> mergeImageResults(List<ImageService.ImageResult> associatedImages,
-                                                         List<ImageService.ImageResult> semanticImages);
+        List<ImageResult> mergeImageResults(List<ImageResult> associatedImages,
+                                                         List<ImageResult> semanticImages);
 
         boolean containsVisualIntent(String query);
 
@@ -204,7 +212,13 @@ public class KnowledgePacketBuilder {
 
         void completeTraceSuccess(TraceNodeHandle handle,
                                   Map<String, Object> attributes,
-                                  RAGObservabilityService.NodeMetrics metrics,
-                                  RAGObservabilityService.NodeDetails details);
+                                  TraceNodeMetrics metrics,
+                                  TraceNodeDetails details);
+    }
+
+    private List<MediaDocument> toMediaDocuments(List<Document> documents) {
+        return documents.stream()
+                .map(document -> new MediaDocument(document.getId(), document.getText(), document.getMetadata()))
+                .toList();
     }
 }

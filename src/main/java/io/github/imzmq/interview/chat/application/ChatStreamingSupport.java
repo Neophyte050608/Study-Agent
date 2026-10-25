@@ -3,8 +3,9 @@ package io.github.imzmq.interview.chat.application;
 import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
 import io.github.imzmq.interview.chat.application.contract.extension.ChatStreamingOperations;
 import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
 import io.github.imzmq.interview.common.stream.StreamEventType;
 import io.github.imzmq.interview.common.stream.StreamTaskManager;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
@@ -26,14 +27,14 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
     private final ChatMessageOperations chatMessageOperations;
     private final StreamTaskManager taskManager;
     private final ChunkedTextStreamer chunkedTextStreamer;
-    private final RAGObservabilityService ragObservabilityService;
+    private final RagTraceOperations ragTraceOperations;
 
     public ChatStreamingSupport(ChatMessageOperations chatMessageOperations,
                                 StreamTaskManager taskManager,
-                                RAGObservabilityService ragObservabilityService) {
+                                RagTraceOperations ragTraceOperations) {
         this.chatMessageOperations = chatMessageOperations;
         this.taskManager = taskManager;
-        this.ragObservabilityService = ragObservabilityService;
+        this.ragTraceOperations = ragTraceOperations;
         this.chunkedTextStreamer = new ChunkedTextStreamer();
     }
 
@@ -97,7 +98,7 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
                 if (traceId != null && !traceId.isBlank()
                         && parentNodeId != null && !parentNodeId.isBlank()
                         && nodeStarted.compareAndSet(0, 1)) {
-                    ragObservabilityService.startNode(
+                    ragTraceOperations.startNode(
                             traceId,
                             nodeId,
                             parentNodeId,
@@ -158,7 +159,7 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
             return action.apply(null);
         }
         String nodeId = java.util.UUID.randomUUID().toString();
-        ragObservabilityService.startNode(
+        ragTraceOperations.startNode(
                 traceId,
                 nodeId,
                 parentNodeId,
@@ -179,14 +180,14 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
             if (imageEventCount > 0) {
                 output.put("imageEventCount", imageEventCount);
             }
-            ragObservabilityService.endNode(
+            ragTraceOperations.endNode(
                     traceId,
                     nodeId,
                     "",
                     output.toString(),
                     null,
                     null,
-                    new RAGObservabilityService.NodeDetails(
+                    new TraceNodeDetails(
                             1,
                             null,
                             null,
@@ -204,14 +205,14 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
             return result;
         } catch (RuntimeException ex) {
             long completionMs = System.currentTimeMillis() - start;
-            ragObservabilityService.endNode(
+            ragTraceOperations.endNode(
                     traceId,
                     nodeId,
                     "",
                     Map.of("status", "FAILED", "completionMs", completionMs).toString(),
                     ex.getMessage(),
                     null,
-                    new RAGObservabilityService.NodeDetails(
+                    new TraceNodeDetails(
                             1,
                             null,
                             null,
@@ -233,7 +234,7 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
     private String resolveDispatchParentNodeId(String traceId) {
         String parentNodeId = io.github.imzmq.interview.observability.core.RAGTraceContext.getCurrentNodeId();
         if (parentNodeId == null || parentNodeId.isBlank()) {
-            parentNodeId = ragObservabilityService.getActiveRootNodeId(traceId);
+            parentNodeId = ragTraceOperations.getActiveRootNodeId(traceId);
         }
         return parentNodeId;
     }
@@ -252,14 +253,14 @@ public class ChatStreamingSupport implements ChatStreamingOperations {
         output.put("status", error == null ? "COMPLETED" : "FAILED");
         output.put("completionMs", completionMs);
         output.put("chunkCount", chunkCount);
-        ragObservabilityService.endNode(
+        ragTraceOperations.endNode(
                 traceId,
                 nodeId,
                 "",
                 output.toString(),
                 error == null ? null : error.getMessage(),
                 null,
-                new RAGObservabilityService.NodeDetails(
+                new TraceNodeDetails(
                         1,
                         null,
                         null,

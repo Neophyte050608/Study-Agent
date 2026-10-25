@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.search.api;
 
 import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import io.github.imzmq.interview.search.application.AutocompleteService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -23,12 +23,12 @@ public class AutocompleteController {
     private static final int MAX_LIMIT = 50;
 
     private final AutocompleteService autocompleteService;
-    private final UserIdentityResolver userIdentityResolver;
+    private final UserIdentityQuery userIdentityQuery;
 
     public AutocompleteController(AutocompleteService autocompleteService,
-                                  UserIdentityResolver userIdentityResolver) {
+                                  UserIdentityQuery userIdentityQuery) {
         this.autocompleteService = autocompleteService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
     }
 
     @GetMapping
@@ -41,7 +41,7 @@ public class AutocompleteController {
         }
         int clampedLimit = Math.max(1, Math.min(limit, MAX_LIMIT));
 
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         List<AutocompleteItem> results = autocompleteService.search(query.trim(), userId, clampedLimit);
         return ResponseEntity.ok(results);
     }
@@ -57,12 +57,20 @@ public class AutocompleteController {
 
     @PostMapping("/dict/refresh")
     public ResponseEntity<Void> refreshDict(HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.status(403).build();
         }
         autocompleteService.refreshTree();
         return ResponseEntity.ok().build();
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }
 

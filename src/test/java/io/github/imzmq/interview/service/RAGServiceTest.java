@@ -1,17 +1,20 @@
 package io.github.imzmq.interview.service;
 
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.config.knowledge.RagRetrievalProperties;
 import io.github.imzmq.interview.config.skill.SkillExecutionProperties;
 import io.github.imzmq.interview.interview.domain.Question;
-import io.github.imzmq.interview.graph.domain.TechConceptRepository;
-import io.github.imzmq.interview.graph.domain.TechConceptSnippetView;
+import io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptRepository;
+import io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
 import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
 import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgeInterviewReportEntry;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
@@ -35,7 +38,8 @@ import io.github.imzmq.interview.modelrouting.application.structuredoutput.Defau
 import io.github.imzmq.interview.skill.client.SkillMcpClient;
 import io.github.imzmq.interview.skill.runtime.SkillOrchestrator;
 import io.github.imzmq.interview.skill.runtime.SkillRegistry;
-import io.github.imzmq.interview.search.application.WebSearchTool;
+import io.github.imzmq.interview.search.application.contract.WebSearchOperations;
+import io.github.imzmq.interview.search.application.contract.WebSearchQuery;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,7 +87,7 @@ class RAGServiceTest {
     private VectorStore vectorStore;
 
     @Mock
-    private WebSearchTool webSearchTool;
+    private WebSearchOperations webSearchTool;
 
     @Mock
     private LexicalIndexService lexicalIndexService;
@@ -182,7 +186,7 @@ class RAGServiceTest {
 
         );
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
+                .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
                 .thenReturn(new RoutingChatService.RoutingResult("{\"score\":80,\"accuracy\":80,\"logic\":80,\"depth\":80,\"boundary\":80,\"deductions\":[],\"citations\":[\"1. [ok]\"],\"conflicts\":[],\"feedback\":\"ok\",\"nextQuestion\":\"继续\"}", 0, 0, 0L));
     }
@@ -221,7 +225,7 @@ class RAGServiceTest {
 
         assertFalse(packet.webFallbackUsed());
         assertEquals("[]", packet.retrievalEvidence());
-        verify(webSearchTool, never()).run(any(WebSearchTool.Query.class));
+        verify(webSearchTool, never()).search(any(WebSearchQuery.class));
         verify(mcpGatewayService, never()).invoke(anyString(), eq("web.search"), anyMap(), anyMap());
     }
 
@@ -236,11 +240,11 @@ class RAGServiceTest {
                 "status", "fallback_stub",
                 "result", Map.of()
         ));
-        when(webSearchTool.run(any())).thenReturn(List.of("Web info about concurrency"));
+        when(webSearchTool.search(any())).thenReturn(List.of("Web info about concurrency"));
 
         ragService.buildKnowledgePacket("什么是并发", "同时执行");
 
-        verify(webSearchTool, times(1)).run(any(WebSearchTool.Query.class));
+        verify(webSearchTool, times(1)).search(any(WebSearchQuery.class));
     }
 
     @Test
@@ -262,12 +266,12 @@ class RAGServiceTest {
                 "status", "fallback_stub",
                 "result", Map.of()
         ));
-        when(webSearchTool.run(any())).thenReturn(List.of("Redis 基于内存访问与高效数据结构实现低延迟"));
+        when(webSearchTool.search(any())).thenReturn(List.of("Redis 基于内存访问与高效数据结构实现低延迟"));
 
         RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("Redis 为什么快", "");
 
         assertTrue(packet.webFallbackUsed());
-        verify(webSearchTool, times(1)).run(any(WebSearchTool.Query.class));
+        verify(webSearchTool, times(1)).search(any(WebSearchQuery.class));
     }
 
     /**
@@ -310,7 +314,7 @@ class RAGServiceTest {
                 "status", "blocked",
                 "result", Map.of()
         ));
-        when(webSearchTool.run(any())).thenReturn(List.of("fallback"));
+        when(webSearchTool.search(any())).thenReturn(List.of("fallback"));
         when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
 
         ragService.buildKnowledgePacket("什么是事务", "用于一致性");
@@ -387,7 +391,7 @@ class RAGServiceTest {
     @Test
     void shouldReturnFallbackFirstQuestionWhenChatModelTimeout() {
         when(promptManager.renderSplit(eq("interviewer"), eq("first-question"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
+                .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("你好！欢迎参加今天的 JVM 模拟面试。在正式开始技术交流之前，能请你先花 1-2 分钟做一个简单的自我介绍吗？");
 
@@ -400,7 +404,7 @@ class RAGServiceTest {
     @Test
     void shouldNormalizeVerboseFirstQuestionOutput() {
         when(promptManager.renderSplit(eq("interviewer"), eq("first-question"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
+                .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("""
                         **第一题：请简述 Java 中 HashMap 的实现原理？**
@@ -420,7 +424,7 @@ class RAGServiceTest {
     @Test
     void shouldInjectExecutableQuestionStrategyIntoFirstQuestionPrompt() {
         when(promptManager.renderSplit(eq("interviewer"), eq("first-question"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
+                .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("请你先做一个简短的自我介绍，然后聊聊 Spring Boot 自动配置原理。");
 
@@ -471,19 +475,19 @@ class RAGServiceTest {
                 "status", "fallback_stub",
                 "result", Map.of()
         ));
-        when(webSearchTool.run(any())).thenReturn(List.of("Web info about HashMap treeify"));
+        when(webSearchTool.search(any())).thenReturn(List.of("Web info about HashMap treeify"));
 
         RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("HashMap 为什么会树化", "");
 
         assertTrue(packet.webFallbackUsed());
         assertTrue(packet.context().contains("Web info about HashMap treeify"));
-        verify(webSearchTool, times(1)).run(any(WebSearchTool.Query.class));
+        verify(webSearchTool, times(1)).search(any(WebSearchQuery.class));
     }
 
     @Test
     void shouldInjectExecutableLearningPlannerIntoLearningPlanPrompt() {
         when(promptManager.renderSplit(eq("interviewer"), eq("learning-plan"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
+                .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.callWithFirstPacketProbeSupplier(any(Supplier.class), anyString(), anyString(), any(ModelRouteType.class), any(TimeoutHint.class), anyString()))
                 .thenReturn("Day1: 学概念 | 练习: 看一题 | 复盘: 记错点");
 
@@ -499,13 +503,13 @@ class RAGServiceTest {
     @Test
     void shouldInjectExecutableReportStrategyIntoFinalReportPrompt() {
         when(promptManager.renderSplit(eq("interviewer"), eq("final-report"), anyMap()))
-                .thenReturn(new PromptManager.PromptPair("system", "user"));
+                .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.call(anyString(), anyString(), any(ModelRouteType.class), anyString()))
                 .thenReturn("<summary>整体表现一般</summary>");
 
-        List<Question> history = List.of(
-                new Question("Redis 为什么快", "因为在内存", 45, 0, 0, 0, 0, "", "", "", "只回答了表层现象"),
-                new Question("说一下 JVM 垃圾回收器", "回答不完整", 68, 0, 0, 0, 0, "", "", "", "缺少分代与收集器对比")
+        List<KnowledgeInterviewReportEntry> history = List.of(
+                new KnowledgeInterviewReportEntry("Redis 为什么快", "因为在内存", 45, "只回答了表层现象"),
+                new KnowledgeInterviewReportEntry("说一下 JVM 垃圾回收器", "回答不完整", 68, "缺少分代与收集器对比")
         );
 
         ragService.generateFinalReport("Java", history, "下一轮重点补 JVM 与 Redis 原理链路", "前几轮存在基础概念混淆");
@@ -540,8 +544,8 @@ class RAGServiceTest {
         };
     }
 
-    private io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView batchGraphConcept(String anchor, String name, String description, String type) {
-        return new io.github.imzmq.interview.graph.domain.BatchedConceptSnippetView() {
+    private io.github.imzmq.interview.knowledge.infrastructure.graph.BatchedConceptSnippetView batchGraphConcept(String anchor, String name, String description, String type) {
+        return new io.github.imzmq.interview.knowledge.infrastructure.graph.BatchedConceptSnippetView() {
             @Override
             public String getAnchor() {
                 return anchor;

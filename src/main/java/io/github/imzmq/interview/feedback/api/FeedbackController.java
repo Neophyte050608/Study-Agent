@@ -2,7 +2,7 @@ package io.github.imzmq.interview.feedback.api;
 
 import io.github.imzmq.interview.feedback.application.FeedbackApplicationService;
 import io.github.imzmq.interview.feedback.domain.FeedbackEvent;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,12 +14,12 @@ import java.util.Map;
 public class FeedbackController {
 
     private final FeedbackApplicationService feedbackApplicationService;
-    private final UserIdentityResolver userIdentityResolver;
+    private final UserIdentityQuery userIdentityQuery;
 
     public FeedbackController(FeedbackApplicationService feedbackApplicationService,
-                              UserIdentityResolver userIdentityResolver) {
+                              UserIdentityQuery userIdentityQuery) {
         this.feedbackApplicationService = feedbackApplicationService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
     }
 
     @PostMapping("/feedback")
@@ -37,7 +37,7 @@ public class FeedbackController {
             return ResponseEntity.badRequest().build();
         }
 
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         FeedbackEvent event = FeedbackEvent.fromRequest(
                 asString(payload.get("traceId")),
                 asString(payload.get("messageId")),
@@ -53,5 +53,13 @@ public class FeedbackController {
 
     private String asString(Object value) {
         return value == null ? null : value.toString().trim();
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }

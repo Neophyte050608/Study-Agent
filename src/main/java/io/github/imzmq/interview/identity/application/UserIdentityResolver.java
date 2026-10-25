@@ -1,14 +1,15 @@
 package io.github.imzmq.interview.identity.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.function.Supplier;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -25,27 +26,26 @@ import java.security.NoSuchAlgorithmException;
  * <p>安全注意：非 JWT token 不会原样写入标识，而是做哈希截断，避免把敏感凭证暴露到日志/审计/数据库。</p>
  */
 @Component
-public class UserIdentityResolver {
+public class UserIdentityResolver implements UserIdentityQuery {
 
     @Value("${app.security.mode:open}")
     private String securityMode;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public String resolve(HttpServletRequest request) {
+    @Override
+    public String resolve(String authorization, String userIdHeader, Supplier<String> sessionIdSupplier) {
         if ("open".equalsIgnoreCase(securityMode)) {
             return "default-user";
         }
-        String authorization = request.getHeader("Authorization");
         String fromBearer = resolveFromBearer(authorization);
         if (!fromBearer.isBlank()) {
             return fromBearer;
         }
-        String xUserId = request.getHeader("X-User-Id");
-        if (xUserId != null && !xUserId.isBlank()) {
-            return sanitizePrincipal(xUserId);
+        if (userIdHeader != null && !userIdHeader.isBlank()) {
+            return sanitizePrincipal(userIdHeader);
         }
-        return "session:" + request.getSession(true).getId();
+        return "session:" + sessionIdSupplier.get();
     }
 
     private String resolveFromBearer(String authorization) {

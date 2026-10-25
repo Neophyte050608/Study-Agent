@@ -1,5 +1,9 @@
 package io.github.imzmq.interview.observability.application.trace;
 
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeMetrics;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
@@ -7,7 +11,7 @@ import io.github.imzmq.interview.observability.infrastructure.persistence.RagTra
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceNodeDO;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceMapper;
 import io.github.imzmq.interview.observability.infrastructure.persistence.RagTraceNodeMapper;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +44,7 @@ import java.util.stream.Collectors;
  * <p>3. 对外提供最近 Trace、Trace 详情与概览统计，优先读取数据库历史，失败时回退内存。</p>
  */
 @Service
-public class RAGObservabilityService {
+public class RAGObservabilityService implements RagTraceOperations {
 
     private static final Logger logger = LoggerFactory.getLogger(RAGObservabilityService.class);
     private static final int MAX_TRACES = 300;
@@ -156,7 +160,7 @@ public class RAGObservabilityService {
      * @param errorSummary 错误摘要
      * @param metrics 节点结构化指标
      */
-    public void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary, NodeMetrics metrics) {
+    public void endNode(String traceId, String nodeId, String inputSummary, String outputSummary, String errorSummary, TraceNodeMetrics metrics) {
         endNode(traceId, nodeId, inputSummary, outputSummary, errorSummary, metrics, null);
     }
 
@@ -176,8 +180,8 @@ public class RAGObservabilityService {
                         String inputSummary,
                         String outputSummary,
                         String errorSummary,
-                        NodeMetrics metrics,
-                        NodeDetails details) {
+                        TraceNodeMetrics metrics,
+                        TraceNodeDetails details) {
         if (!observabilitySwitchProperties.isRagTraceEnabled()) {
             return;
         }
@@ -980,7 +984,7 @@ public class RAGObservabilityService {
         boolean webFallbackUsed = trace.nodes().stream()
                 .map(RAGTraceNode::metrics)
                 .filter(Objects::nonNull)
-                .map(NodeMetrics::webFallbackUsed)
+                .map(TraceNodeMetrics::webFallbackUsed)
                 .anyMatch(Boolean.TRUE::equals);
 
         RagTraceDO traceDO = new RagTraceDO();
@@ -1064,13 +1068,13 @@ public class RAGObservabilityService {
                 nodeDO.getInputSummary(),
                 nodeDO.getOutputSummary(),
                 nodeDO.getErrorSummary(),
-                new NodeMetrics(nodeDO.getRetrievedDocs(), nodeDO.getWebFallbackUsed()),
-                resolveNodeDetails(nodeDO),
+                new TraceNodeMetrics(nodeDO.getRetrievedDocs(), nodeDO.getWebFallbackUsed()),
+                resolveTraceNodeDetails(nodeDO),
                 nodeDO.getNodeStatus()
         );
     }
 
-    private NodeDetails resolveNodeDetails(RagTraceNodeDO nodeDO) {
+    private TraceNodeDetails resolveTraceNodeDetails(RagTraceNodeDO nodeDO) {
         if (nodeDO == null) {
             return null;
         }
@@ -1104,7 +1108,7 @@ public class RAGObservabilityService {
                 && modelName == null) {
             return null;
         }
-        return new NodeDetails(
+        return new TraceNodeDetails(
                 1,
                 retrievalMode,
                 null,
@@ -1226,7 +1230,7 @@ public class RAGObservabilityService {
         Long firstTokenMs = nodes.stream()
                 .map(RAGTraceNode::details)
                 .filter(Objects::nonNull)
-                .map(NodeDetails::firstTokenMs)
+                .map(TraceNodeDetails::firstTokenMs)
                 .filter(Objects::nonNull)
                 .min(Long::compareTo)
                 .orElse(null);
@@ -1234,7 +1238,7 @@ public class RAGObservabilityService {
                 .filter(node -> TraceNodeDefinitions.STREAM_DISPATCH.nodeName().equals(node.nodeName()))
                 .map(RAGTraceNode::details)
                 .filter(Objects::nonNull)
-                .map(NodeDetails::completionMs)
+                .map(TraceNodeDetails::completionMs)
                 .filter(Objects::nonNull)
                 .max(Long::compareTo)
                 .orElse(null);
@@ -1405,9 +1409,6 @@ public class RAGObservabilityService {
      * @param retrievedDocs 召回文档数
      * @param webFallbackUsed 是否触发 Web fallback
      */
-    public record NodeMetrics(Integer retrievedDocs, Boolean webFallbackUsed) {
-    }
-
     public record TraceSummary(
             String traceId,
             String traceStatus,
@@ -1462,35 +1463,6 @@ public class RAGObservabilityService {
     /**
      * 节点结构化详情，供前端与后续告警/汇总逻辑直接消费。
      */
-    public record NodeDetails(
-            Integer schemaVersion,
-            String retrievalMode,
-            String intentRoute,
-            Boolean cacheHit,
-            Integer retrievedDocCount,
-            List<String> retrievedDocumentRefs,
-            Integer webSearchCount,
-            Integer imageSearchCount,
-            String fallbackReason,
-            String modelName,
-            Long firstTokenMs,
-            Long completionMs
-    ) {
-        public NodeDetails {
-            schemaVersion = schemaVersion == null || schemaVersion <= 0 ? 1 : schemaVersion;
-            retrievalMode = retrievalMode == null || retrievalMode.isBlank() ? null : retrievalMode.trim();
-            intentRoute = intentRoute == null || intentRoute.isBlank() ? null : intentRoute.trim();
-            retrievedDocCount = retrievedDocCount == null ? null : Math.max(0, retrievedDocCount);
-            retrievedDocumentRefs = retrievedDocumentRefs == null ? List.of() : List.copyOf(retrievedDocumentRefs);
-            webSearchCount = webSearchCount == null ? null : Math.max(0, webSearchCount);
-            imageSearchCount = imageSearchCount == null ? null : Math.max(0, imageSearchCount);
-            fallbackReason = fallbackReason == null || fallbackReason.isBlank() ? null : fallbackReason.trim();
-            modelName = modelName == null || modelName.isBlank() ? null : modelName.trim();
-            firstTokenMs = firstTokenMs == null ? null : Math.max(0L, firstTokenMs);
-            completionMs = completionMs == null ? null : Math.max(0L, completionMs);
-        }
-    }
-
     /**
      * RAG Trace 领域模型。
      *
@@ -1601,8 +1573,8 @@ public class RAGObservabilityService {
         private String inputSummary;
         private String outputSummary;
         private String errorSummary;
-        private NodeMetrics metrics;
-        private NodeDetails details;
+        private TraceNodeMetrics metrics;
+        private TraceNodeDetails details;
         private String status = "RUNNING";
 
         /**
@@ -1648,8 +1620,8 @@ public class RAGObservabilityService {
                 String inputSummary,
                 String outputSummary,
                 String errorSummary,
-                NodeMetrics metrics,
-                NodeDetails details,
+                TraceNodeMetrics metrics,
+                TraceNodeDetails details,
                 String status
         ) {
             RAGTraceNode node = new RAGTraceNode(
@@ -1681,7 +1653,7 @@ public class RAGObservabilityService {
                 String inputSummary,
                 String outputSummary,
                 String errorSummary,
-                NodeMetrics metrics,
+                TraceNodeMetrics metrics,
                 String status
         ) {
             return restore(
@@ -1713,8 +1685,8 @@ public class RAGObservabilityService {
                              String inputSummary,
                              String outputSummary,
                              String errorSummary,
-                             NodeMetrics metrics,
-                             NodeDetails details) {
+                             TraceNodeMetrics metrics,
+                             TraceNodeDetails details) {
             this.endTime = endTime;
             this.inputSummary = inputSummary;
             this.outputSummary = outputSummary;
@@ -1839,25 +1811,25 @@ public class RAGObservabilityService {
             return errorSummary;
         }
 
-        public NodeMetrics metrics() {
+        public TraceNodeMetrics metrics() {
             return metrics;
         }
 
         /**
          * @return 结构化指标
          */
-        public NodeMetrics getMetrics() {
+        public TraceNodeMetrics getMetrics() {
             return metrics;
         }
 
-        public NodeDetails details() {
+        public TraceNodeDetails details() {
             return details;
         }
 
         /**
          * @return 节点结构化详情
          */
-        public NodeDetails getDetails() {
+        public TraceNodeDetails getDetails() {
             return details;
         }
 

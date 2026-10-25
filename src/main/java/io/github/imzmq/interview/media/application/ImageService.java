@@ -2,16 +2,18 @@ package io.github.imzmq.interview.media.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
-import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO;
+import io.github.imzmq.interview.media.application.contract.MediaDocument;
+import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
+import io.github.imzmq.interview.media.application.contract.extension.ParentImageReferenceSupport;
+import io.github.imzmq.interview.media.application.contract.extension.ParentImageReferenceSupport.ParentImageReferences;
 import io.github.imzmq.interview.media.infrastructure.persistence.TextImageRelationDO;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.media.application.contract.extension.MediaSourcePathSupport;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
-import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentMapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.TextImageRelationMapper;
 import io.github.imzmq.interview.media.application.ImageReferenceExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -34,7 +36,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
-public class ImageService {
+public class ImageService implements MediaImageOperations {
 
     private static final Logger logger = LoggerFactory.getLogger(ImageService.class);
     private static final Path BROWSER_ASSET_ROOT = Paths.get("uploads", "browser-assets");
@@ -47,8 +49,8 @@ public class ImageService {
     private final ImageIndexService imageIndexService;
     private final ImageMetadataMapper imageMetadataMapper;
     private final TextImageRelationMapper textImageRelationMapper;
-    private final RagParentMapper ragParentMapper;
-    private final IngestConfigService ingestConfigService;
+    private final ParentImageReferenceSupport parentImageReferenceSupport;
+    private final MediaSourcePathSupport mediaSourcePathSupport;
     private final int imageSearchTopK;
     private final double associatedImageMinScore;
     private final double semanticImageMinScore;
@@ -58,8 +60,8 @@ public class ImageService {
                         ImageIndexService imageIndexService,
                         ImageMetadataMapper imageMetadataMapper,
                         TextImageRelationMapper textImageRelationMapper,
-                        RagParentMapper ragParentMapper,
-                        IngestConfigService ingestConfigService,
+                        ParentImageReferenceSupport parentImageReferenceSupport,
+                        MediaSourcePathSupport mediaSourcePathSupport,
                         @org.springframework.beans.factory.annotation.Value("${app.multimodal.image-search-top-k:3}") int imageSearchTopK,
                         @org.springframework.beans.factory.annotation.Value("${app.multimodal.associated-image-min-score:0.45}") double associatedImageMinScore,
                         @org.springframework.beans.factory.annotation.Value("${app.multimodal.semantic-image-min-score:0.60}") double semanticImageMinScore) {
@@ -68,8 +70,8 @@ public class ImageService {
         this.imageIndexService = imageIndexService;
         this.imageMetadataMapper = imageMetadataMapper;
         this.textImageRelationMapper = textImageRelationMapper;
-        this.ragParentMapper = ragParentMapper;
-        this.ingestConfigService = ingestConfigService;
+        this.parentImageReferenceSupport = parentImageReferenceSupport;
+        this.mediaSourcePathSupport = mediaSourcePathSupport;
         this.imageSearchTopK = imageSearchTopK;
         this.associatedImageMinScore = associatedImageMinScore;
         this.semanticImageMinScore = semanticImageMinScore;
@@ -81,7 +83,7 @@ public class ImageService {
         return imageReferenceExtractor.embedSummaries(markdown, refs);
     }
 
-    public void indexImagesForDocument(String notePath, String markdown, List<Document> chunks) {
+    public void indexImagesForDocument(String notePath, String markdown, List<MediaDocument> chunks) {
         List<ImageReferenceExtractor.ImageReference> refs = imageReferenceExtractor.extract(markdown, notePath, resolveImageBasePath(notePath));
         if (refs.isEmpty()) {
             clearRelationsForChunks(chunks);
@@ -107,13 +109,13 @@ public class ImageService {
         clearRelationsForChunks(chunks);
         Map<String, Set<String>> parentToImages = new LinkedHashMap<>();
         LocalDateTime now = LocalDateTime.now();
-        for (Document chunk : chunks) {
-            if (chunk == null || chunk.getMetadata() == null || chunk.getText() == null) {
+        for (MediaDocument chunk : chunks) {
+            if (chunk == null || chunk.metadata() == null || chunk.text() == null) {
                 continue;
             }
             String childId = stringMetadata(chunk, "child_id");
             if (childId == null || childId.isBlank()) {
-                childId = chunk.getId();
+                childId = chunk.id();
             }
             String parentId = stringMetadata(chunk, "parent_id");
             if (parentId == null || parentId.isBlank()) {
@@ -143,14 +145,14 @@ public class ImageService {
         updateParentsWithImageRefs(parentToImages);
     }
 
-    public List<ImageResult> findImagesForDocuments(List<Document> retrievedDocs) {
+    public List<ImageResult> findImagesForDocuments(List<MediaDocument> retrievedDocs) {
         if (retrievedDocs == null || retrievedDocs.isEmpty()) {
             return List.of();
         }
         List<String> chunkIds = retrievedDocs.stream()
                 .map(doc -> {
-                    Object childId = doc.getMetadata().get("child_id");
-                    return childId == null || String.valueOf(childId).isBlank() ? doc.getId() : String.valueOf(childId);
+                    Object childId = doc.metadata().get("child_id");
+                    return childId == null || String.valueOf(childId).isBlank() ? doc.id() : String.valueOf(childId);
                 })
                 .filter(Objects::nonNull)
                 .distinct()
@@ -167,10 +169,10 @@ public class ImageService {
         }
         Map<String, Double> chunkScoreMap = retrievedDocs.stream().collect(Collectors.toMap(
                 doc -> {
-                    Object childId = doc.getMetadata().get("child_id");
-                    return childId == null || String.valueOf(childId).isBlank() ? doc.getId() : String.valueOf(childId);
+                    Object childId = doc.metadata().get("child_id");
+                    return childId == null || String.valueOf(childId).isBlank() ? doc.id() : String.valueOf(childId);
                 },
-                doc -> parseScore(doc.getMetadata().get("retrieval_score")),
+                doc -> parseScore(doc.metadata().get("retrieval_score")),
                 Math::max,
                 LinkedHashMap::new
         ));
@@ -283,16 +285,14 @@ public class ImageService {
             return List.of();
         }
 
-        List<RagParentDO> parents = ragParentMapper.selectList(
-                new LambdaQueryWrapper<RagParentDO>().in(RagParentDO::getFilePath, candidates)
-        );
+        List<ParentImageReferences> parents = parentImageReferenceSupport.findByFilePaths(candidates);
         if (parents.isEmpty()) {
             return List.of();
         }
 
         Map<String, Double> semanticScoreMap = loadSemanticImageScores(query);
         List<String> imageIds = parents.stream()
-                .map(RagParentDO::getImageRefs)
+                .map(ParentImageReferences::imageIds)
                 .filter(Objects::nonNull)
                 .flatMap(Collection::stream)
                 .filter(Objects::nonNull)
@@ -313,12 +313,12 @@ public class ImageService {
                 ));
 
         Map<String, ImageResult> deduplicated = new LinkedHashMap<>();
-        for (RagParentDO parent : parents) {
-            if (parent == null || parent.getImageRefs() == null || parent.getImageRefs().isEmpty()) {
+        for (ParentImageReferences parent : parents) {
+            if (parent == null || parent.imageIds().isEmpty()) {
                 continue;
             }
-            double noteWeight = normalizedWeights.getOrDefault(parent.getFilePath(), 0.0d);
-            for (String imageId : parent.getImageRefs()) {
+            double noteWeight = normalizedWeights.getOrDefault(parent.filePath(), 0.0d);
+            for (String imageId : parent.imageIds()) {
                 if (imageId == null || imageId.isBlank()) {
                     continue;
                 }
@@ -440,12 +440,12 @@ public class ImageService {
         );
     }
 
-    private void clearRelationsForChunks(List<Document> chunks) {
+    private void clearRelationsForChunks(List<MediaDocument> chunks) {
         if (chunks == null || chunks.isEmpty()) {
             return;
         }
         List<String> chunkIds = chunks.stream()
-                .map(chunk -> chunk == null || chunk.getMetadata() == null ? null : stringMetadata(chunk, "child_id"))
+                .map(chunk -> chunk == null || chunk.metadata() == null ? null : stringMetadata(chunk, "child_id"))
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
@@ -461,13 +461,10 @@ public class ImageService {
         if (parentToImages == null || parentToImages.isEmpty()) {
             return;
         }
-        List<RagParentDO> parents = ragParentMapper.selectList(
-                new LambdaQueryWrapper<RagParentDO>().in(RagParentDO::getParentId, parentToImages.keySet())
-        );
-        for (RagParentDO parent : parents) {
-            parent.setImageRefs(new ArrayList<>(parentToImages.getOrDefault(parent.getParentId(), Set.of())));
-            ragParentMapper.updateById(parent);
-        }
+        Map<String, List<String>> replacements = new LinkedHashMap<>();
+        parentToImages.forEach((parentId, imageIds) ->
+                replacements.put(parentId, new ArrayList<>(imageIds)));
+        parentImageReferenceSupport.replaceByParentIds(replacements);
     }
 
     private String resolveVaultPath(String notePath) {
@@ -489,11 +486,11 @@ public class ImageService {
     }
 
     private String currentVaultPath() {
-        return normalizeConfigValue(ingestConfigService.getConfig().get("paths"));
+        return normalizeConfigValue(mediaSourcePathSupport.currentSourcePaths().vaultPaths());
     }
 
     private String currentImageBasePath() {
-        return normalizeConfigValue(ingestConfigService.getConfig().get("imagePath"));
+        return normalizeConfigValue(mediaSourcePathSupport.currentSourcePaths().imagePath());
     }
 
     private String resolveImageBasePath(String notePath) {
@@ -541,10 +538,10 @@ public class ImageService {
         return hydrated;
     }
 
-    private RelationScore scoreChunkImageRelation(Document chunk, ImageReferenceExtractor.ImageReference ref) {
-        String chunkText = normalizeText(chunk.getText());
+    private RelationScore scoreChunkImageRelation(MediaDocument chunk, ImageReferenceExtractor.ImageReference ref) {
+        String chunkText = normalizeText(chunk.text());
         String sectionPath = normalizeText(stringMetadata(chunk, "section_path"));
-        String chunkBody = normalizeText(stripMetadataPrefix(chunk.getText()));
+        String chunkBody = normalizeText(stripMetadataPrefix(chunk.text()));
 
         double score = 0.0d;
         List<String> reasons = new ArrayList<>();
@@ -673,8 +670,8 @@ public class ImageService {
         return parts.length == 0 ? raw.trim() : parts[0].trim();
     }
 
-    private String stringMetadata(Document document, String key) {
-        Object value = document.getMetadata().get(key);
+    private String stringMetadata(MediaDocument document, String key) {
+        Object value = document.metadata().get(key);
         return value == null ? null : String.valueOf(value);
     }
 
@@ -732,18 +729,6 @@ public class ImageService {
         } catch (Exception ignored) {
             return null;
         }
-    }
-
-    public record ImageResult(
-            String imageId,
-            String imageName,
-            String accessUrl,
-            String thumbnailUrl,
-            String summaryText,
-            String sourceChunkId,
-            double relevanceScore,
-            String retrieveChannel
-    ) {
     }
 
     private record RelationScore(double score, String reason) {

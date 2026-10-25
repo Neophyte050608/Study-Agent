@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataMapper;
 import io.github.imzmq.interview.media.application.ImageReferenceExtractor;
-import io.github.imzmq.interview.modelrouting.application.VisionModelService;
+import io.github.imzmq.interview.modelrouting.application.contract.VisionSummaryOperations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -21,12 +21,12 @@ public class ImageIngestionPipeline {
     private static final Logger logger = LoggerFactory.getLogger(ImageIngestionPipeline.class);
 
     private final ImageMetadataCollector imageMetadataCollector;
-    private final VisionModelService visionModelService;
+    private final VisionSummaryOperations visionModelService;
     private final ImageMetadataMapper imageMetadataMapper;
     private final ImageIndexService imageIndexService;
 
     public ImageIngestionPipeline(ImageMetadataCollector imageMetadataCollector,
-                                  VisionModelService visionModelService,
+                                  VisionSummaryOperations visionModelService,
                                   ImageMetadataMapper imageMetadataMapper,
                                   ImageIndexService imageIndexService) {
         this.imageMetadataCollector = imageMetadataCollector;

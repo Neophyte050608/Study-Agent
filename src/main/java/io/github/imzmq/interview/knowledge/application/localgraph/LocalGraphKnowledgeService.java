@@ -1,16 +1,18 @@
 package io.github.imzmq.interview.knowledge.application.localgraph;
+
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
 import io.github.imzmq.interview.knowledge.application.indexing.KnowledgeMapService;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import org.springframework.stereotype.Service;
 
@@ -34,22 +36,22 @@ public class LocalGraphKnowledgeService {
     private final LocalCandidateRecallService localCandidateRecallService;
     private final OllamaRoutingService ollamaRoutingService;
     private final NoteGraphResolver noteGraphResolver;
-    private final RAGObservabilityService ragObservabilityService;
-    private final ImageService imageService;
+    private final RagTraceOperations ragTraceOperations;
+    private final MediaImageOperations imageService;
 
     public LocalGraphKnowledgeService(KnowledgeRetrievalProperties properties,
                                       KnowledgeMapService knowledgeMapService,
                                       LocalCandidateRecallService localCandidateRecallService,
                                       OllamaRoutingService ollamaRoutingService,
                                       NoteGraphResolver noteGraphResolver,
-                                      RAGObservabilityService ragObservabilityService,
-                                      ImageService imageService) {
+                                      RagTraceOperations ragTraceOperations,
+                                      MediaImageOperations imageService) {
         this.properties = properties;
         this.knowledgeMapService = knowledgeMapService;
         this.localCandidateRecallService = localCandidateRecallService;
         this.ollamaRoutingService = ollamaRoutingService;
         this.noteGraphResolver = noteGraphResolver;
-        this.ragObservabilityService = ragObservabilityService;
+        this.ragTraceOperations = ragTraceOperations;
         this.imageService = imageService;
     }
 
@@ -97,7 +99,7 @@ public class LocalGraphKnowledgeService {
                 "Local note context is too thin"
             );
         }
-        List<ImageService.ImageResult> retrievedImages = findAssociatedImages(question, graphContext, snapshot.vaultRoot());
+        List<ImageResult> retrievedImages = findAssociatedImages(question, graphContext, snapshot.vaultRoot());
 
         return new KnowledgeContextPacket(
                 requestedMode,
@@ -122,7 +124,7 @@ public class LocalGraphKnowledgeService {
                         java.util.function.Function<T, String> outputBuilder) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(
+        ragTraceOperations.startNode(
                 traceId,
                 nodeId,
                 RAGTraceContext.getCurrentNodeId(),
@@ -131,7 +133,7 @@ public class LocalGraphKnowledgeService {
         );
         try {
             T result = action.call();
-            ragObservabilityService.endNode(
+            ragTraceOperations.endNode(
                     traceId,
                     nodeId,
                     inputSummary,
@@ -140,7 +142,7 @@ public class LocalGraphKnowledgeService {
             );
             return result;
         } catch (BusinessException e) {
-            ragObservabilityService.endNode(
+            ragTraceOperations.endNode(
                     traceId,
                     nodeId,
                     inputSummary,
@@ -149,7 +151,7 @@ public class LocalGraphKnowledgeService {
             );
             throw e;
         } catch (Exception e) {
-            ragObservabilityService.endNode(
+            ragTraceOperations.endNode(
                     traceId,
                     nodeId,
                     inputSummary,
@@ -262,7 +264,7 @@ public class LocalGraphKnowledgeService {
         }
     }
 
-    private List<ImageService.ImageResult> findAssociatedImages(String question,
+    private List<ImageResult> findAssociatedImages(String question,
                                                                 NoteGraphResolver.NoteGraphContext graphContext,
                                                                 String vaultRoot) {
         if (imageService == null || graphContext == null) {

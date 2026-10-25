@@ -1,18 +1,11 @@
 package io.github.imzmq.interview.modelrouting.api;
 
 import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
-import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
-import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
-import io.github.imzmq.interview.modelrouting.core.ModelRoutingCandidate;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
-import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import io.github.imzmq.interview.modelrouting.application.OllamaHealthService;
+import io.github.imzmq.interview.modelrouting.application.ModelCandidateProbeService;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,32 +19,24 @@ import java.util.Map;
 @RequestMapping("/api/model-routing")
 public class ModelRoutingController {
 
-    private static final Logger logger = LoggerFactory.getLogger(ModelRoutingController.class);
-
     private final RoutingChatService routingChatService;
     private final ModelRoutingProperties properties;
     private final OllamaHealthService ollamaHealthService;
     private final ModelCandidateService modelCandidateService;
-    private final ModelHealthStore modelHealthStore;
-    private final DynamicModelFactory dynamicModelFactory;
-    private final ModelProbeAwaiter modelProbeAwaiter;
+    private final ModelCandidateProbeService modelCandidateProbeService;
     private final boolean allowPlaintextKeyExport;
 
     public ModelRoutingController(RoutingChatService routingChatService,
                                   ModelRoutingProperties properties,
                                   OllamaHealthService ollamaHealthService,
                                   ModelCandidateService modelCandidateService,
-                                  ModelHealthStore modelHealthStore,
-                                  DynamicModelFactory dynamicModelFactory,
-                                  ModelProbeAwaiter modelProbeAwaiter,
+                                  ModelCandidateProbeService modelCandidateProbeService,
                                   @Value("${app.security.allow-plaintext-key-export:false}") boolean allowPlaintextKeyExport) {
         this.routingChatService = routingChatService;
         this.properties = properties;
         this.ollamaHealthService = ollamaHealthService;
         this.modelCandidateService = modelCandidateService;
-        this.modelHealthStore = modelHealthStore;
-        this.dynamicModelFactory = dynamicModelFactory;
-        this.modelProbeAwaiter = modelProbeAwaiter;
+        this.modelCandidateProbeService = modelCandidateProbeService;
         this.allowPlaintextKeyExport = allowPlaintextKeyExport;
     }
 
@@ -127,29 +112,9 @@ public class ModelRoutingController {
 
     @PostMapping("/candidates/{id}/probe")
     public ResponseEntity<Map<String, Object>> probeCandidate(@PathVariable Long id) {
-        ModelCandidateDO entity = modelCandidateService.getById(id);
-        if (entity == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("candidateName", entity.getName());
-        ModelRoutingCandidate candidate = ModelRoutingCandidate.from(entity);
-        ChatModel chatModel = dynamicModelFactory.getByCandidate(candidate);
-        if (chatModel == null) {
-            throw new IllegalStateException("无法创建模型实例");
-        }
-        long start = System.currentTimeMillis();
-        var builder = org.springframework.ai.chat.client.ChatClient.builder(chatModel).build().prompt();
-        reactor.core.publisher.Flux<String> tokenFlux = builder.user("ping").stream().content();
-        String response = modelProbeAwaiter.awaitFirstToken(tokenFlux, TimeoutHint.FAST);
-        long latency = System.currentTimeMillis() - start;
-        modelHealthStore.markSuccess(entity.getName());
-        result.put("status", "healthy");
-        result.put("latencyMs", latency);
-        result.put("response", response.length() > 100 ? response.substring(0, 100) + "..." : response);
-        result.put("circuitState", modelHealthStore.stateOf(entity.getName()).name());
-        return ResponseEntity.ok(result);
+        return modelCandidateProbeService.probe(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     private ModelCandidateDTO applySecurityFlags(ModelCandidateDTO dto) {

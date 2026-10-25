@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.interview.application.agent;
 
+import io.github.imzmq.interview.agent.application.contract.AgentMessagingOperations;
+import io.github.imzmq.interview.agent.application.contract.command.AgentMessageCommand;
+import io.github.imzmq.interview.agent.application.contract.message.AgentMessageIntent;
 import io.github.imzmq.interview.interview.application.contract.result.InterviewFinalReport;
 
 import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
@@ -9,10 +12,10 @@ import io.github.imzmq.interview.interview.domain.InterviewStage;
 import io.github.imzmq.interview.interview.domain.Question;
 import io.github.imzmq.interview.interview.infrastructure.resume.ResumeLoader;
 import io.github.imzmq.interview.security.core.InputSanitizer;
-import io.github.imzmq.interview.learning.application.LearningEvent;
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.learning.application.LearningSource;
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.learning.application.contract.LearningEvent;
+import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
+import io.github.imzmq.interview.learning.application.contract.LearningSource;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
 import io.github.imzmq.interview.interview.infrastructure.persistence.SessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,21 +54,21 @@ public class InterviewOrchestratorAgent {
     private final KnowledgeLayerAgent knowledgeLayerAgent;
     private final ResumeLoader resumeLoader;
     private final SessionRepository sessionRepository;
-    private final LearningProfileAgent learningProfileAgent;
+    private final LearningProfileOperations learningProfileAgent;
     private final InputSanitizer inputSanitizer;
-    /** Agent-to-Agent 消息总线，用于跨 Agent 异步发送滚动总结任务 */
-    private final io.github.imzmq.interview.agent.a2a.A2ABus a2aBus;
+    /** Agent 异步消息公开契约，用于发送滚动总结任务。 */
+    private final AgentMessagingOperations agentMessaging;
     /** 自定义画像异步更新线程池 */
     private final java.util.concurrent.Executor profileUpdateExecutor;
 
-    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileAgent learningProfileAgent, InputSanitizer inputSanitizer, io.github.imzmq.interview.agent.a2a.A2ABus a2aBus, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
+    public InterviewOrchestratorAgent(EvaluationAgent evaluationAgent, KnowledgeLayerAgent knowledgeLayerAgent, ResumeLoader resumeLoader, SessionRepository sessionRepository, LearningProfileOperations learningProfileAgent, InputSanitizer inputSanitizer, AgentMessagingOperations agentMessaging, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor) {
         this.evaluationAgent = evaluationAgent;
         this.knowledgeLayerAgent = knowledgeLayerAgent;
         this.resumeLoader = resumeLoader;
         this.sessionRepository = sessionRepository;
         this.learningProfileAgent = learningProfileAgent;
         this.inputSanitizer = inputSanitizer;
-        this.a2aBus = a2aBus;
+        this.agentMessaging = agentMessaging;
         this.profileUpdateExecutor = profileUpdateExecutor;
     }
 
@@ -184,7 +187,7 @@ public class InterviewOrchestratorAgent {
         );
 
         // 2. 知识层：针对问答进行检索增强（用净化后的原文检索，非包装版本）
-        RAGService.KnowledgePacket packet = knowledgeLayerAgent.gatherKnowledge(currentQ, sanitizedAnswer);
+        KnowledgePacket packet = knowledgeLayerAgent.gatherKnowledge(currentQ, sanitizedAnswer);
 
         // 3. 评估层：产出结构化打分（总分+各维度）与下一题（inlined from EvaluationLayerAgent）
         String strategy = decisionPlan == null ? "" : decisionPlan.strategyHint();
@@ -246,28 +249,22 @@ public class InterviewOrchestratorAgent {
                     "feedback", (Object) q.getFeedback()
             )).toList();
 
-            // 发送异步 MQ 消息，交给 RollingSummaryAgent 处理
-            io.github.imzmq.interview.agent.a2a.A2AMessage summaryMsg = new io.github.imzmq.interview.agent.a2a.A2AMessage(
-                    "1.0",
-                    java.util.UUID.randomUUID().toString(),
-                    java.util.UUID.randomUUID().toString(),
+            // 发送异步消息，交给 RollingSummaryAgent 处理
+            agentMessaging.publish(new AgentMessageCommand(
                     "InterviewOrchestratorAgent",
                     "RollingSummaryAgent",
-                    "",
-                    io.github.imzmq.interview.agent.a2a.A2AIntent.ROLLING_SUMMARY,
+                    AgentMessageIntent.ROLLING_SUMMARY,
                     Map.of(
                             "sessionId", session.getId(),
                             "targetCount", dialogueCount,
                             "recentHistory", recentHistory
                     ),
+                    "rolling-summary",
+                    "InterviewOrchestratorAgent",
                     Map.of(),
-                    io.github.imzmq.interview.agent.a2a.A2AStatus.PENDING,
-                    null,
-                    new io.github.imzmq.interview.agent.a2a.A2AMetadata("rolling-summary", "InterviewOrchestratorAgent", Map.of()),
-                    new io.github.imzmq.interview.agent.a2a.A2ATrace(java.util.UUID.randomUUID().toString(), null),
-                    java.time.Instant.now()
-            );
-            a2aBus.publish(summaryMsg);
+                    UUID.randomUUID().toString(),
+                    null
+            ));
         }
 
         // 6. 自适应状态机更新：回写掌握度、难度和追问阶段

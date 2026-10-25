@@ -1,5 +1,11 @@
 package io.github.imzmq.interview.observability.application.trace;
 
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceService;
+
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
+
 import io.github.imzmq.interview.observability.application.AiObservationEvent;
 import io.github.imzmq.interview.observability.application.AiObservationPublisher;
 import io.github.imzmq.interview.observability.application.NoopAiObservationPublisher;
@@ -107,7 +113,7 @@ public class DefaultTraceService implements TraceService {
         return sanitized.isEmpty() ? "" : sanitized.toString();
     }
 
-    private RAGObservabilityService.NodeDetails toNodeDetails(Map<String, Object> payload) {
+    private TraceNodeDetails toNodeDetails(Map<String, Object> payload) {
         Map<String, Object> sanitized = traceAttributeSanitizer.sanitize(payload);
         if (sanitized.isEmpty()) {
             return null;
@@ -128,7 +134,7 @@ public class DefaultTraceService implements TraceService {
                 && imageSearchCount == null) {
             return null;
         }
-        return new RAGObservabilityService.NodeDetails(
+        return new TraceNodeDetails(
                 1,
                 retrievalMode,
                 null,

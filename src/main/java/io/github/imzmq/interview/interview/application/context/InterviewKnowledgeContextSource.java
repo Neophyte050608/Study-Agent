@@ -7,7 +7,7 @@ import io.github.imzmq.interview.agent.application.contract.context.AgentContext
 import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
 import io.github.imzmq.interview.agent.application.contract.context.ContextItem;
 
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -31,7 +31,7 @@ public class InterviewKnowledgeContextSource implements AgentContextSource {
         if (query == null || query.mode() != AgentContextMode.INTERVIEW) {
             return List.of();
         }
-        RAGService.KnowledgePacket packet = InterviewContextAttributes.packet(query);
+        KnowledgePacket packet = InterviewContextAttributes.packet(query);
         if (packet == null) {
             return List.of();
         }
@@ -40,12 +40,12 @@ public class InterviewKnowledgeContextSource implements AgentContextSource {
             return List.of();
         }
         return List.of(new ContextItem(text, 1.0, id(), Map.of(
-                "retrievedDocs", String.valueOf(packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size()),
+                "retrievedDocs", String.valueOf(packet.retrievedDocumentCount()),
                 "webFallbackUsed", String.valueOf(packet.webFallbackUsed())
         )));
     }
 
-    private String buildKnowledgeText(RAGService.KnowledgePacket packet) {
+    private String buildKnowledgeText(KnowledgePacket packet) {
         StringBuilder builder = new StringBuilder();
         appendSection(builder, "检索上下文", packet.context());
         appendSection(builder, "图片上下文", packet.imageContext());

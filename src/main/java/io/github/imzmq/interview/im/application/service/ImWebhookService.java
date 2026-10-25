@@ -1,13 +1,12 @@
 package io.github.imzmq.interview.im.application.service;
 
 import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewSessionStarted;
 
-import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
 import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
-import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.im.domain.UnifiedMessage;
 import io.github.imzmq.interview.im.domain.UnifiedReply;
 import io.github.imzmq.interview.im.application.runtime.ClarificationResolver;
@@ -38,7 +37,7 @@ public class ImWebhookService {
 
     private final StringRedisTemplate redisTemplate;
     private final ImConversationStore conversationStore;
-    private final TaskRouterAgent taskRouterAgent;
+    private final AgentTaskOperations agentTaskOperations;
     private final ImPlatformAdapterRegistry imPlatformAdapterRegistry;
     private final ImCommandDispatcher imCommandDispatcher;
     private final ClarificationResolver clarificationResolver;
@@ -47,7 +46,7 @@ public class ImWebhookService {
     public ImWebhookService(
             StringRedisTemplate redisTemplate,
             ImConversationStore conversationStore,
-            TaskRouterAgent taskRouterAgent,
+            AgentTaskOperations agentTaskOperations,
             ImPlatformAdapterRegistry imPlatformAdapterRegistry,
             ImCommandDispatcher imCommandDispatcher,
             ClarificationResolver clarificationResolver,
@@ -55,7 +54,7 @@ public class ImWebhookService {
     ) {
         this.redisTemplate = redisTemplate;
         this.conversationStore = conversationStore;
-        this.taskRouterAgent = taskRouterAgent;
+        this.agentTaskOperations = agentTaskOperations;
         this.imPlatformAdapterRegistry = imPlatformAdapterRegistry;
         this.imCommandDispatcher = imCommandDispatcher;
         this.clarificationResolver = clarificationResolver;
@@ -149,7 +148,8 @@ public class ImWebhookService {
                 TaskRequest request = new TaskRequest(forcedTaskType, payload, context);
 
                 // 4. 调用任务路由器进行分发处理
-                TaskResponse response = taskRouterAgent.dispatch(request);
+                TaskResponse response = agentTaskOperations.dispatchTask(
+                        request.taskType(), request.payload(), request.context());
 
                 // 5. 格式化执行结果并异步回复给用户
                 String replyText;
@@ -160,8 +160,8 @@ public class ImWebhookService {
                     clarificationResolver.captureState(sessionId, response, conversationStore);
                     
                     // 如果是新开启的面试会话，记录 activeSessionId
-                    if (response.data() instanceof InterviewSession session) {
-                        conversationStore.setActiveSession(sessionId, session.getId());
+                    if (response.data() instanceof InterviewSessionStarted started) {
+                        conversationStore.setActiveSession(sessionId, started.sessionId());
                     }
                     // 如果面试已结束，清除 activeSessionId
                     if (response.data() instanceof InterviewAnswerResult result && result.finished()) {

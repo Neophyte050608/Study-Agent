@@ -6,9 +6,8 @@ import io.github.imzmq.interview.agent.application.contract.context.AgentContext
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextSlotFilter;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextSlotKind;
 import io.github.imzmq.interview.agent.application.contract.context.ContextItem;
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.document.Document;
 
 import java.util.List;
 import java.util.Map;
@@ -34,10 +33,9 @@ class InterviewKnowledgeContextSourceTest {
     @Test
     void fetchRendersPacketContextImageAndEvidenceSummary() {
         InterviewKnowledgeContextSource source = new InterviewKnowledgeContextSource();
-        RAGService.KnowledgePacket packet = new RAGService.KnowledgePacket(
+        KnowledgePacket packet = new KnowledgePacket(
                 "full query",
-                List.of(new Document("文档证据内容")),
-                List.of(),
+                1,
                 "RAG 文本上下文",
                 "图片上下文",
                 "[1] 文档证据内容",

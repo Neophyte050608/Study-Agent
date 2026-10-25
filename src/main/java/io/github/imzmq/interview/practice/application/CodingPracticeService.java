@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.practice.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.imzmq.interview.agent.application.AgentSkillService;
-import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextOperations;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
 import io.github.imzmq.interview.practice.application.context.CodingPracticeContextAttributes;
@@ -10,7 +10,8 @@ import io.github.imzmq.interview.modelrouting.application.contract.structuredout
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.practice.application.dto.CodingAssessment;
 import io.github.imzmq.interview.practice.application.dto.QuizQuestion;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
@@ -45,21 +46,21 @@ public class CodingPracticeService {
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
 
     private final RoutingChatService routingChatService;
-    private final AgentSkillService agentSkillService;
-    private final PromptManager promptManager;
+    private final AgentSkillInstructions agentSkillService;
+    private final PromptRenderer promptRenderer;
     private final SkillOrchestrator skillOrchestrator;
     private final StructuredOutputParser structuredOutputParser;
-    private final AgentContextAssembler contextAssembler;
+    private final AgentContextOperations contextAssembler;
 
     public CodingPracticeService(RoutingChatService routingChatService,
-                                 AgentSkillService agentSkillService,
-                                 PromptManager promptManager,
+                                 AgentSkillInstructions agentSkillService,
+                                 PromptRenderer promptRenderer,
                                  SkillOrchestrator skillOrchestrator,
                                  StructuredOutputParser structuredOutputParser,
-                                 AgentContextAssembler contextAssembler) {
+                                 AgentContextOperations contextAssembler) {
         this.routingChatService = routingChatService;
         this.agentSkillService = agentSkillService;
-        this.promptManager = promptManager;
+        this.promptRenderer = promptRenderer;
         this.skillOrchestrator = skillOrchestrator;
         this.structuredOutputParser = structuredOutputParser;
         this.contextAssembler = contextAssembler;
@@ -96,7 +97,7 @@ public class CodingPracticeService {
         params.put("questionType", normalizedQuestionType);
         params.put("profileSnapshot", truncate(profileSnapshot, 240));
         params.put("agentContext", agentContext);
-        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-question", params);
+        RenderedPrompt pair = promptRenderer.renderSplit("coding-coach", "coding-question", params);
 
         try {
             logger.debug("====== [CodingPracticeService - generateCodingQuestion] Prompt Template ======");
@@ -157,7 +158,7 @@ public class CodingPracticeService {
         String sp;
         String up;
         try {
-            PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "batch-quiz-question", params);
+            RenderedPrompt pair = promptRenderer.renderSplit("coding-coach", "batch-quiz-question", params);
             sp = pair.systemPrompt();
             up = pair.userPrompt();
         } catch (Exception e) {
@@ -309,7 +310,7 @@ public class CodingPracticeService {
         params.put("questionType", normalizedQuestionType);
         params.put("question", truncate(safeQuestion, 1200));
         params.put("answer", truncate(safeAnswer, 800));
-        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-evaluation", params);
+        RenderedPrompt pair = promptRenderer.renderSplit("coding-coach", "coding-evaluation", params);
 
         try {
             logger.debug("====== [CodingPracticeService - evaluateCodingAnswer] Prompt Template ======");
@@ -360,7 +361,7 @@ public class CodingPracticeService {
         params.put("question", truncate(question, 240));
         params.put("answer", truncate(answer, 500));
         params.put("score", String.valueOf(score));
-        PromptManager.PromptPair pair = promptManager.renderSplit("coding-coach", "coding-next-question", params);
+        RenderedPrompt pair = promptRenderer.renderSplit("coding-coach", "coding-next-question", params);
 
         try {
             String raw = callWithRetry(() -> routingChatService.callWithFirstPacketProbeSupplier(

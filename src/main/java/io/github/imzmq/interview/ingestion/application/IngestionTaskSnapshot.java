@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.ingestion.application;
 
 import io.github.imzmq.interview.ingestion.pipeline.IngestionNodeLog;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionTaskStatus;
 
 import java.util.List;
 import java.util.Map;

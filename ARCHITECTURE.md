@@ -20,14 +20,14 @@ The codebase remains a modular monolith. Top-level packages are capability owner
 - Platform support: `modelrouting`, `observability`, `ingestion`, `media`, `search`, `im`, `identity`, `security`, `menu`.
 - Technical support: `common`, `bootstrap`, `config`.
 
-The map is a migration target. During M0-M7, existing classes may remain in historical packages only when listed in the module-boundary design or baseline. New code must use the target owner immediately.
+The M0-M7 ownership migration is complete. New code must use the target owner immediately; retired top-level packages are guarded by architecture tests.
 
 Ambiguous top-level ownership is retired as follows:
 
-- `intent` merges into `routing.domain`.
-- GraphRAG domain types move to `knowledge.domain`; Spring Data and Neo4j adapters move to `knowledge.infrastructure.graph`.
-- `rag` classes move to their concrete knowledge, interview, observability, or configuration owner.
-- Coding practice becomes the independent `practice` capability.
+- `intent` has merged into `routing.domain`.
+- Spring Data Neo4j nodes, projections, and repositories belong to `knowledge.infrastructure.graph`; they are persistence adapter types, not pure domain objects.
+- The ambiguous top-level `graph` and `rag` packages are retired; Knowledge graph behavior is exposed to real cross-module callers through Knowledge application contracts.
+- Coding practice is the independent `practice` capability.
 
 The full class migration catalog is defined in `docs/superpowers/specs/2026-10-23-module-boundary-and-package-ownership-design.md`.
 
@@ -107,7 +107,65 @@ M7A assigns operational telemetry and explicit user feedback to their semantic o
 - `feedback.application.FeedbackApplicationService` owns `t_rag_feedback` persistence and implements the stable feedback aggregate query contract without exposing MyBatis types.
 - `interview.application.ObservabilityApplicationService` remains a compatibility orchestrator for existing controller signatures and Knowledge-owned evaluation; operational observability methods delegate to `ObservabilityQueryService` and no longer access Observability or Feedback persistence.
 - Existing table names remain `t_rag_trace`, `t_rag_trace_node`, `t_rag_metrics_snapshot`, and `t_rag_feedback`.
-- `knowledge.application.observability` is retired and guarded by ArchUnit. M7A removed ten persistence exceptions; exactly four M7B/M7C exceptions remain.
+- `knowledge.application.observability` is retired and guarded by ArchUnit. M7A removed ten persistence exceptions; exactly four M7B/M7C exceptions remained at that checkpoint.
+
+### Media and Knowledge boundary after M7B
+
+M7B keeps Knowledge parent persistence private while preserving image indexing and associated-image retrieval behavior.
+
+- Knowledge exposes parent-image lookup through `knowledge.application.contract.ParentImageReferenceQuery` and replacement through `ParentImageReferenceCommand`.
+- `knowledge.application.contract.result.ParentImageReferences` is the stable immutable cross-module view; it contains only parent ID, file path, and image IDs.
+- `knowledge.application.indexing.ParentImageReferenceService` implements both use cases and is the only M7B service that accesses `RagParentDO` and `RagParentMapper`.
+- `media.application.ImageService` consumes only the Knowledge contracts. Scoring, deduplication, ordering, limits, parent selection, and replacement semantics are unchanged.
+- ArchUnit prevents Media from accessing Knowledge persistence and prevents Knowledge contracts from exposing infrastructure, Spring, MyBatis-Plus, or MyBatis types.
+- M7B removed two persistence exceptions; exactly two M7C Search/Learning exceptions remain.
+
+### Search and Learning boundary after M7C
+
+M7C keeps Learning profile persistence private while preserving personal autocomplete ranking behavior.
+
+- Learning exposes user knowledge-state lookup through `learning.application.contract.UserKnowledgeStateQuery`.
+- `learning.application.contract.result.UserKnowledgeStateView` is the stable cross-module view and contains only the topic and mastery score required by Search.
+- `learning.application.profile.UserKnowledgeStateService` owns the `user_id` persistence query and maps Learning DOs to stable results.
+- `search.application.PersonalRanker` consumes only the Learning contract. Weak-topic matching, null-score handling, duplicate-topic resolution, ranking weights, sorting, copying, and limits are unchanged.
+- ArchUnit prevents Search from accessing Learning persistence and prevents Learning contracts from exposing infrastructure, Spring, MyBatis-Plus, or MyBatis types.
+- M7C removed the final two persistence exceptions; the cross-module persistence allowlist is now empty.
+
+### Graph/RAG retirement after M7D
+
+M7D retires the ambiguous top-level `graph` and `rag` packages without changing GraphRAG queries or Spring AI vector-store assembly.
+
+- `TechConcept`, `TechConceptRepository`, `TechConceptSnippetView`, and `BatchedConceptSnippetView` live together under `knowledge.infrastructure.graph` because they carry Spring Data Neo4j annotations or projection/repository semantics.
+- `knowledge.application.indexing.KnowledgeGraphIndexService` owns concept graph writes and warmup queries. Ingestion uses `KnowledgeGraphIndexCommand`; startup warmup uses `KnowledgeGraphWarmup`; neither caller imports Knowledge infrastructure.
+- Node labels, relationship type/direction, default concept type, description truncation, link filtering, repository method signatures, and both Cypher queries are preserved by characterization tests.
+- The former `rag.core.VectorStoreConfig` was an empty configuration with only a commented example bean. It was removed after confirming no imports or explicit configuration references; runtime `VectorStore` creation remains Spring AI auto-configuration.
+- ArchUnit prevents top-level `graph`/`rag` production packages from returning and prevents modules outside Knowledge from depending on `knowledge.infrastructure.graph`.
+
+## Final boundary enforcement after M8
+
+M8 turns the completed ownership migration into executable repository constraints without splitting the Maven module or changing deployment topology.
+
+- The historical cross-module persistence allowlist is permanently empty; `ArchitectureRulesTest` asserts the zero-debt invariant and rejects every new cross-module `infrastructure.persistence` edge.
+- The module catalog is explicit. `bootstrap` and `config` are technical composition roots and may assemble implementations; they do not contribute business-origin edges to the cycle graph.
+- Cross-module application calls enter the provider through `<provider>.application.contract`. The top-level graph is built from those public-contract business edges and must remain acyclic; there is no module-cycle ignore list.
+- When a normal provider contract would create a reverse dependency, the consumer owns a narrow `application.contract.extension` SPI and the collaborating module implements it. M8 uses this pattern for Agent task prompts, Routing prompts, Knowledge/Ingestion collaboration, Media source paths and parent-image references, and Learning plan generation.
+- Generic task dispatch is exposed by `agent.application.contract.AgentTaskOperations`; Agent evaluation and Interview orchestration no longer depend on each other's concrete application implementation.
+- Controller isolation, domain isolation, retired-package enforcement, `common`, `modelrouting`, `observability`, and generic-Agent dependency directions are all executable ArchUnit rules.
+
+These extension SPIs are caller-driven stable contracts with active Spring implementations. Do not create an empty port or adapter merely to make the graph appear layered.
+
+## Public-surface closure after M9
+
+M9 closes the highest-risk implementation leaks that remained after ownership and cycle governance. It does not split the Maven module or change the A2A transport, task lifecycle, persistence schema, or HTTP/SSE contracts.
+
+- Every `<module>.application.contract` is guarded by one generic purity rule: public contracts cannot expose another module's domain type, infrastructure type, Spring Web/AI type, MyBatis type, or vendor SDK type.
+- Agent task dispatch is exposed by `AgentTaskOperations`; business modules cannot depend on `agent.runtime` implementations.
+- Operational A2A administration is exposed by `AgentA2AOperations`. Idempotency inspection/clear and RocketMQ DLQ replay stay inside Agent application services instead of leaking `A2ABus`, `A2AIdempotencyStore`, or `RocketMqA2ABus` to controllers.
+- Business asynchronous messaging is exposed by `AgentMessagingOperations`, `AgentMessageCommand`, `AgentMessage`, and `AgentMessageIntent`. Chat and Interview publish/subscribe through this public surface; only Agent internals and the configuration composition root know `agent.a2a`.
+- Interview start task dispatch returns `InterviewSessionStarted`, a stable result containing only session ID, current question, and total-question count. IM no longer imports `interview.domain.InterviewSession`; modules outside Interview are prohibited from depending on Interview domain types.
+- Routing intent candidates, decisions, tree nodes, and pre-filter results live under `routing.application.contract.result`; Agent runtime consumes Routing only through its public contracts.
+
+Focused ArchUnit rules enforce the Agent runtime/A2A isolation and the Interview domain boundary in addition to the generic contract-purity, persistence, controller, and cycle rules.
 
 ## Layering Rules
 - API layer: controllers and controller-facing DTO/input-output types.
@@ -130,9 +188,9 @@ Cross-module dependency direction:
 - `common` does not depend on business modules.
 - `modelrouting` does not depend on `chat`.
 - `observability` does not depend on `knowledge`.
-- Top-level module cycles are forbidden after the M8 migration gate.
+- The public-contract top-level module graph is acyclic and guarded without an ignore list.
 
-M0 freezes existing cross-module persistence violations in `docs/architecture/module-boundary-baseline.md`; the allowlist is migration debt and must only shrink.
+M0 froze the historical cross-module persistence violations in `docs/architecture/module-boundary-baseline.md`; M8 makes the now-empty allowlist a permanent invariant.
 
 ## Persistence Placement
 
@@ -160,7 +218,7 @@ DTO placement follows caller-facing ownership:
 - Trace, span, runtime metrics, and observability queries -> `observability`.
 - Cross-domain SSE connection and transport only -> `common.stream`; task state belongs to `agent`, message state belongs to `chat`.
 
-The historical `knowledge.application.chatstream`, `knowledge.application.coding`, and `knowledge.application.observability` packages are retired and must not be recreated. Do not add new responsibilities to top-level `intent`, `graph`, or `rag` packages while their remaining migration debt is being removed.
+The historical `knowledge.application.chatstream`, `knowledge.application.coding`, and `knowledge.application.observability` packages are retired and must not be recreated. Top-level `intent`, `turn`, `graph`, and `rag` packages are also retired and guarded by ArchUnit.
 
 ## Enforcement
 - ArchUnit tests enforce key boundaries.

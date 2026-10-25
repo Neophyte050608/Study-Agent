@@ -2,7 +2,7 @@ package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
 import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.chat.application.contract.ChatContextOperations;
@@ -33,17 +33,17 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
     private final ChatContextCompressor chatContextCompressor;
-    private final TaskRouterAgent taskRouterAgent;
+    private final AgentTaskOperations agentTaskOperations;
     private final TaskResponsePresentationOperations taskResponsePresentationOperations;
 
     public WebChatService(ChatSessionMapper sessionMapper,
                           ChatMessageMapper messageMapper,
-                          TaskRouterAgent taskRouterAgent,
+                          AgentTaskOperations agentTaskOperations,
                           ChatContextCompressor chatContextCompressor,
                           TaskResponsePresentationOperations taskResponsePresentationOperations) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
-        this.taskRouterAgent = taskRouterAgent;
+        this.agentTaskOperations = agentTaskOperations;
         this.chatContextCompressor = chatContextCompressor;
         this.taskResponsePresentationOperations = taskResponsePresentationOperations;
     }
@@ -223,7 +223,7 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
 
     @Override
     public TaskResponse dispatch(TaskRequest request) {
-        return taskRouterAgent.dispatch(request);
+        return agentTaskOperations.dispatchTask(request.taskType(), request.payload(), request.context());
     }
 
     @Override

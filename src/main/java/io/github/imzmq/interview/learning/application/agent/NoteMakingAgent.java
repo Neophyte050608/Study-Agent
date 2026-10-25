@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.learning.application.agent;
 
 import io.github.imzmq.interview.agent.core.Agent;
-import io.github.imzmq.interview.mcp.application.McpGatewayService;
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.mcp.application.contract.McpCapabilityOperations;
+import io.github.imzmq.interview.learning.application.contract.extension.LearningPlanGenerator;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -18,16 +18,16 @@ import java.util.Map;
 
 @Component
 public class NoteMakingAgent implements Agent<Map<String, Object>, Map<String, Object>> {
-    private final RAGService ragService;
-    private final McpGatewayService mcpGatewayService;
+    private final LearningPlanGenerator learningPlanGenerator;
+    private final McpCapabilityOperations mcpGatewayService;
     private final Path notesDir;
 
     public NoteMakingAgent(
-            RAGService ragService,
-            McpGatewayService mcpGatewayService,
+            LearningPlanGenerator learningPlanGenerator,
+            McpCapabilityOperations mcpGatewayService,
             @Value("${app.learning.notes.dir:learning-notes}") String notesDir
     ) {
-        this.ragService = ragService;
+        this.learningPlanGenerator = learningPlanGenerator;
         this.mcpGatewayService = mcpGatewayService;
         this.notesDir = Paths.get(notesDir).toAbsolutePath().normalize();
     }
@@ -52,7 +52,7 @@ public class NoteMakingAgent implements Agent<Map<String, Object>, Map<String, O
         String userId = text(input, "userId");
         boolean useMcp = bool(input, "useMcp");
         String normalizedTopic = topic.isBlank() ? "后端基础" : topic;
-        String plan = ragService.generateLearningPlan(normalizedTopic, weakPoint, recentPerformance);
+        String plan = learningPlanGenerator.generateLearningPlan(normalizedTopic, weakPoint, recentPerformance);
         if (useMcp) {
             Map<String, Object> invokeResult = mcpGatewayService.invoke(
                     userId.isBlank() ? "anonymous" : userId,

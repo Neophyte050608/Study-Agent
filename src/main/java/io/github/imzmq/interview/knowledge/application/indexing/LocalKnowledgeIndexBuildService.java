@@ -1,10 +1,8 @@
 package io.github.imzmq.interview.knowledge.application.indexing;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.ingestion.application.NoteLoader;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.knowledge.application.contract.extension.LocalKnowledgeSourceSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -39,21 +37,18 @@ public class LocalKnowledgeIndexBuildService {
     private static final Pattern TAG_PATTERN = Pattern.compile("(^|\\s)#([\\p{L}\\p{N}_/-]{2,})");
     private static final Pattern WIKI_LINK_PATTERN = Pattern.compile("\\[\\[([^\\]|#]+)(?:#[^\\]|]+)?(?:\\|.*?)?\\]\\]");
 
-    private final NoteLoader noteLoader;
+    private final LocalKnowledgeSourceSupport sourceSupport;
     private final KnowledgeRetrievalProperties properties;
-    private final IngestConfigService ingestConfigService;
-    private final LocalKnowledgeScopeService localKnowledgeScopeService;
+        private final LocalKnowledgeScopeService localKnowledgeScopeService;
     private final ObjectMapper objectMapper;
 
-    public LocalKnowledgeIndexBuildService(NoteLoader noteLoader,
+    public LocalKnowledgeIndexBuildService(LocalKnowledgeSourceSupport sourceSupport,
                                            KnowledgeRetrievalProperties properties,
-                                           IngestConfigService ingestConfigService,
                                            LocalKnowledgeScopeService localKnowledgeScopeService,
                                            ObjectMapper objectMapper) {
-        this.noteLoader = noteLoader;
+        this.sourceSupport = sourceSupport;
         this.properties = properties;
-        this.ingestConfigService = ingestConfigService;
-        this.localKnowledgeScopeService = localKnowledgeScopeService;
+                this.localKnowledgeScopeService = localKnowledgeScopeService;
         this.objectMapper = objectMapper;
     }
 
@@ -65,9 +60,9 @@ public class LocalKnowledgeIndexBuildService {
         Path vaultRoot = Paths.get(vaultPath).toAbsolutePath().normalize();
         validateVaultRoot(vaultRoot);
 
-        List<Resource> resources = noteLoader.loadNotes(vaultRoot.toString(), includeDirs, ignoredDirs);
+        List<Path> resources = sourceSupport.loadNotePaths(vaultRoot.toString(), includeDirs, ignoredDirs);
         List<IndexedNode> nodes = new ArrayList<>();
-        for (Resource resource : resources) {
+        for (Path resource : resources) {
             IndexedNode node = buildNode(resource, vaultRoot);
             if (node != null) {
                 nodes.add(node);
@@ -89,7 +84,7 @@ public class LocalKnowledgeIndexBuildService {
 
         if (request.activate()) {
             properties.setIndexFilePath(outputPath.toString());
-            ingestConfigService.saveLocalKnowledgeIndexPath(outputPath.toString());
+            sourceSupport.saveLocalKnowledgeIndexPath(outputPath.toString());
         }
 
         return new IndexBuildResult(
@@ -105,7 +100,7 @@ public class LocalKnowledgeIndexBuildService {
 
     public IndexStatus currentStatus() {
         String configuredIndexPath = resolveConfiguredIndexPath();
-        Map<String, String> ingestConfig = ingestConfigService.getConfig();
+        Map<String, String> ingestConfig = sourceSupport.getConfig();
         String defaultVaultPath = firstConfiguredPath(ingestConfig.get("paths"));
         String defaultIgnoreDirs = ingestConfig.get("ignoreDirs");
         String scopePath = "";
@@ -172,9 +167,9 @@ public class LocalKnowledgeIndexBuildService {
         }
     }
 
-    private IndexedNode buildNode(Resource resource, Path vaultRoot) {
+    private IndexedNode buildNode(Path resource, Path vaultRoot) {
         try {
-            Path file = resource.getFile().toPath().toAbsolutePath().normalize();
+            Path file = resource;
             String markdown = Files.readString(file);
             if (markdown == null || markdown.isBlank()) {
                 return null;
@@ -205,7 +200,7 @@ public class LocalKnowledgeIndexBuildService {
                     wikiLinks
             );
         } catch (IOException e) {
-            throw new IllegalStateException("读取 Markdown 文件失败: " + resource.getFilename(), e);
+            throw new IllegalStateException("读取 Markdown 文件失败: " + resource.getFileName().toString(), e);
         }
     }
 
@@ -262,7 +257,7 @@ public class LocalKnowledgeIndexBuildService {
         if (configured != null && !configured.isBlank()) {
             return configured;
         }
-        String persisted = ingestConfigService.getLocalKnowledgeIndexPath();
+        String persisted = sourceSupport.getLocalKnowledgeIndexPath();
         if (persisted != null && !persisted.isBlank()) {
             properties.setIndexFilePath(persisted);
             return persisted;
@@ -314,7 +309,7 @@ public class LocalKnowledgeIndexBuildService {
         if (request.vaultPath() != null && !request.vaultPath().isBlank()) {
             return request.vaultPath().trim();
         }
-        String configured = firstConfiguredPath(ingestConfigService.getConfig().get("paths"));
+        String configured = firstConfiguredPath(sourceSupport.getConfig().get("paths"));
         if (configured.isBlank()) {
             throw new IllegalArgumentException("未提供 vaultPath，且 ingest config 中也没有可用路径");
         }
@@ -328,7 +323,7 @@ public class LocalKnowledgeIndexBuildService {
         if (request.ignoreDirs() != null && !request.ignoreDirs().isEmpty()) {
             return sanitizeList(request.ignoreDirs());
         }
-        String configured = ingestConfigService.getConfig().get("ignoreDirs");
+        String configured = sourceSupport.getConfig().get("ignoreDirs");
         if (configured == null || configured.isBlank()) {
             return List.of();
         }

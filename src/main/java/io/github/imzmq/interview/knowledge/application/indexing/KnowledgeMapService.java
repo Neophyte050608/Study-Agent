@@ -3,7 +3,7 @@ import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 
 import io.github.imzmq.interview.config.knowledge.KnowledgeRetrievalProperties;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.knowledge.application.contract.extension.LocalKnowledgeSourceSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -24,14 +24,14 @@ public class KnowledgeMapService {
 
     private final KnowledgeRetrievalProperties properties;
     private final ObjectMapper objectMapper;
-    private final IngestConfigService ingestConfigService;
+    private final LocalKnowledgeSourceSupport sourceSupport;
 
     public KnowledgeMapService(KnowledgeRetrievalProperties properties,
                                ObjectMapper objectMapper,
-                               IngestConfigService ingestConfigService) {
+                               LocalKnowledgeSourceSupport sourceSupport) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.ingestConfigService = ingestConfigService;
+        this.sourceSupport = sourceSupport;
     }
 
     public KnowledgeMapSnapshot loadValidatedIndex() {
@@ -111,7 +111,7 @@ public class KnowledgeMapService {
         if (configured != null && !configured.isBlank()) {
             return configured;
         }
-        String persisted = ingestConfigService.getLocalKnowledgeIndexPath();
+        String persisted = sourceSupport.getLocalKnowledgeIndexPath();
         if (persisted != null && !persisted.isBlank()) {
             properties.setIndexFilePath(persisted);
             return persisted;

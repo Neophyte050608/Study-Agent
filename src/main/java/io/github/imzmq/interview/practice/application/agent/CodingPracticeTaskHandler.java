@@ -3,7 +3,7 @@ package io.github.imzmq.interview.practice.application.agent;
 import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
 import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
+import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -13,10 +13,10 @@ import java.util.Map;
 public class CodingPracticeTaskHandler implements TaskHandler {
 
     private final CodingPracticeAgent codingPracticeAgent;
-    private final LearningProfileAgent learningProfileAgent;
+    private final LearningProfileOperations learningProfileAgent;
 
     public CodingPracticeTaskHandler(CodingPracticeAgent codingPracticeAgent,
-                                     LearningProfileAgent learningProfileAgent) {
+                                     LearningProfileOperations learningProfileAgent) {
         this.codingPracticeAgent = codingPracticeAgent;
         this.learningProfileAgent = learningProfileAgent;
     }

@@ -2,8 +2,8 @@ package io.github.imzmq.interview.ingestion.application;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
+import io.github.imzmq.interview.ingestion.application.contract.NoteLoadOperations;
+import io.github.imzmq.interview.ingestion.application.contract.result.LoadedNote;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -21,7 +21,7 @@ import java.util.stream.Stream;
  * 负责从本地文件系统中扫描并加载 Markdown 笔记文件。
  */
 @Component
-public class NoteLoader {
+public class NoteLoader implements NoteLoadOperations {
 
     private static final Logger logger = LoggerFactory.getLogger(NoteLoader.class);
     /** 默认忽略的目录，避免加载无关的元数据或临时文件 */
@@ -33,7 +33,7 @@ public class NoteLoader {
      * @param vaultPath 笔记库根路径
      * @return 资源列表
      */
-    public List<Resource> loadNotes(String vaultPath) {
+    public List<LoadedNote> loadNotes(String vaultPath) {
         return loadNotes(vaultPath, DEFAULT_IGNORED_DIRS);
     }
 
@@ -44,7 +44,7 @@ public class NoteLoader {
      * @param ignoredDirs 额外的忽略目录列表
      * @return 资源列表
      */
-    public List<Resource> loadNotes(String vaultPath, List<String> ignoredDirs) {
+    public List<LoadedNote> loadNotes(String vaultPath, List<String> ignoredDirs) {
         return loadNotes(vaultPath, null, ignoredDirs);
     }
 
@@ -56,7 +56,7 @@ public class NoteLoader {
      * @param ignoredDirs 额外忽略目录
      * @return 资源列表
      */
-    public List<Resource> loadNotes(String vaultPath, List<String> includeDirs, List<String> ignoredDirs) {
+    public List<LoadedNote> loadNotes(String vaultPath, List<String> includeDirs, List<String> ignoredDirs) {
         logger.info("Scanning for markdown files in: {}", vaultPath);
         Path root = Paths.get(vaultPath);
         Set<String> ignored = new HashSet<>();
@@ -82,7 +82,7 @@ public class NoteLoader {
                     .filter(path -> isIncluded(path, root, includes))
                     .filter(path -> !isIgnored(path, root, ignored))
                     .filter(path -> path.toString().endsWith(".md"))
-                    .map(FileSystemResource::new)
+                    .map(LoadedNote::new)
                     .collect(Collectors.toList());
         } catch (IOException e) {
             logger.error("Error reading notes from path: {}", vaultPath, e);

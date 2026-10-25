@@ -2,23 +2,28 @@ package io.github.imzmq.interview.ingestion.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.SyncIndexDO;
-import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
-import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionOperations;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionUpload;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionSyncSummary;
+import io.github.imzmq.interview.ingestion.application.contract.result.LoadedNote;
+import io.github.imzmq.interview.knowledge.application.contract.command.KnowledgeGraphIndexCommand;
+import io.github.imzmq.interview.knowledge.application.contract.command.KnowledgeGraphIndexCommand.KnowledgeGraphSourceDocument;
+import io.github.imzmq.interview.knowledge.application.contract.indexing.KnowledgeDocumentSplitOperations;
+import io.github.imzmq.interview.knowledge.application.contract.indexing.KnowledgeIndexDocument;
+import io.github.imzmq.interview.knowledge.application.contract.indexing.KnowledgeLexicalIndexOperations;
+import io.github.imzmq.interview.knowledge.application.contract.indexing.KnowledgeParentChildIndexOperations;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.SyncIndexMapper;
-import io.github.imzmq.interview.media.application.ImageService;
-import io.github.imzmq.interview.knowledge.application.indexing.DocumentSplitter;
+import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
+import io.github.imzmq.interview.media.application.contract.MediaDocument;
 import io.github.imzmq.interview.ingestion.application.NoteLoader;
 import io.github.imzmq.interview.ingestion.application.ObsidianKnowledgeExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 import org.springframework.util.StreamUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,26 +37,25 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-public class IngestionService {
+public class IngestionService implements IngestionOperations {
 
     private static final Logger logger = LoggerFactory.getLogger(IngestionService.class);
     private static final Path BROWSER_ASSET_ROOT = Path.of("uploads", "browser-assets");
 
     private final NoteLoader noteLoader;
-    private final DocumentSplitter documentSplitter;
+    private final KnowledgeDocumentSplitOperations documentSplitter;
     private final ObsidianKnowledgeExtractor knowledgeExtractor;
-    private final LexicalIndexService lexicalIndexService;
+    private final KnowledgeLexicalIndexOperations lexicalIndexService;
     private final VectorStore vectorStore;
     private final SyncIndexMapper syncIndexMapper;
-    private final ParentChildIndexService parentChildIndexService;
-    private final ImageService imageService;
-    // 注入图谱持久化组件
-    private final io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository;
+    private final KnowledgeParentChildIndexOperations parentChildIndexService;
+    private final MediaImageOperations imageService;
+    private final KnowledgeGraphIndexCommand knowledgeGraphIndexCommand;
 
-    private volatile SyncSummary lastSummary = new SyncSummary(0, 0, 0, 0, 0, 0, 0);
+    private volatile IngestionSyncSummary lastSummary = new IngestionSyncSummary(0, 0, 0, 0, 0, 0, 0);
     private volatile long lastSyncTime = 0L;
 
-    public IngestionService(NoteLoader noteLoader, DocumentSplitter documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, LexicalIndexService lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, ParentChildIndexService parentChildIndexService, ImageService imageService, io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository) {
+    public IngestionService(NoteLoader noteLoader, KnowledgeDocumentSplitOperations documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, KnowledgeLexicalIndexOperations lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, KnowledgeParentChildIndexOperations parentChildIndexService, MediaImageOperations imageService, KnowledgeGraphIndexCommand knowledgeGraphIndexCommand) {
         this.noteLoader = noteLoader;
         this.documentSplitter = documentSplitter;
         this.knowledgeExtractor = knowledgeExtractor;
@@ -60,16 +64,16 @@ public class IngestionService {
         this.syncIndexMapper = syncIndexMapper;
         this.parentChildIndexService = parentChildIndexService;
         this.imageService = imageService;
-        this.techConceptRepository = techConceptRepository;
+        this.knowledgeGraphIndexCommand = knowledgeGraphIndexCommand;
     }
 
-    public SyncSummary sync(String vaultPath) {
+    public IngestionSyncSummary sync(String vaultPath) {
         return sync(vaultPath, null);
     }
 
-    public SyncSummary sync(String vaultPath, List<String> ignoredDirs) {
+    public IngestionSyncSummary sync(String vaultPath, List<String> ignoredDirs) {
         logger.info("Starting sync for vault: {}", vaultPath);
-        List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        List<LoadedNote> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
         String normalizedVaultPath = normalizeLocalPath(vaultPath);
         Set<String> currentFiles = new HashSet<>();
         int newFileCount = 0;
@@ -78,9 +82,9 @@ public class IngestionService {
         int failedFileCount = 0;
         int skippedEmptyFileCount = 0;
 
-        for (Resource resource : resources) {
+        for (LoadedNote resource : resources) {
             try {
-                String filePath = resource.getFile().getAbsolutePath();
+                String filePath = resource.path().toString();
                 currentFiles.add(filePath);
                 String currentHash = calculateHash(resource);
 
@@ -115,7 +119,7 @@ public class IngestionService {
                 }
 
             } catch (IOException e) {
-                logger.error("Error processing file: {}", resource.getFilename(), e);
+                logger.error("Error processing file: {}", resource.path().getFileName().toString(), e);
                 failedFileCount++;
             }
         }
@@ -133,7 +137,7 @@ public class IngestionService {
             removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
         }
 
-        SyncSummary summary = new SyncSummary(
+        IngestionSyncSummary summary = new IngestionSyncSummary(
                 resources.size(),
                 newFileCount,
                 modifiedFileCount,
@@ -148,9 +152,9 @@ public class IngestionService {
         return summary;
     }
 
-    public SyncSummary forceReindexParentChild(String vaultPath, List<String> ignoredDirs) {
+    public IngestionSyncSummary forceReindexParentChild(String vaultPath, List<String> ignoredDirs) {
         logger.info("Starting force reindex for vault: {}", vaultPath);
-        List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        List<LoadedNote> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
         String normalizedVaultPath = normalizeLocalPath(vaultPath);
         Set<String> currentFiles = new HashSet<>();
         int newFileCount = 0;
@@ -159,9 +163,9 @@ public class IngestionService {
         int failedFileCount = 0;
         int skippedEmptyFileCount = 0;
 
-        for (Resource resource : resources) {
+        for (LoadedNote resource : resources) {
             try {
-                String filePath = resource.getFile().getAbsolutePath();
+                String filePath = resource.path().toString();
                 currentFiles.add(filePath);
                 String currentHash = calculateHash(resource);
                 SyncIndexDO existingIndex = syncIndexMapper.selectOne(
@@ -186,7 +190,7 @@ public class IngestionService {
                     }
                 }
             } catch (IOException e) {
-                logger.error("Error processing file during force reindex: {}", resource.getFilename(), e);
+                logger.error("Error processing file during force reindex: {}", resource.path().getFileName().toString(), e);
                 failedFileCount++;
             }
         }
@@ -201,7 +205,7 @@ public class IngestionService {
             removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
         }
 
-        SyncSummary summary = new SyncSummary(
+        IngestionSyncSummary summary = new IngestionSyncSummary(
                 resources.size(),
                 newFileCount,
                 modifiedFileCount,
@@ -216,9 +220,9 @@ public class IngestionService {
         return summary;
     }
 
-    public SyncSummary syncUploadedNotes(List<MultipartFile> files, List<String> relativePaths, String folderName, List<String> ignoredDirs) {
+    public IngestionSyncSummary syncUploadedNotes(List<IngestionUpload> files, List<String> relativePaths, String folderName, List<String> ignoredDirs) {
         if (files == null || files.isEmpty()) {
-            return new SyncSummary(0, 0, 0, 0, 0, 0, 0);
+            return new IngestionSyncSummary(0, 0, 0, 0, 0, 0, 0);
         }
         String folderKey = sanitizeFolderKey(folderName);
         persistUploadedAssets(files, relativePaths, folderKey);
@@ -236,10 +240,10 @@ public class IngestionService {
         int skippedEmptyFileCount = 0;
 
         for (int i = 0; i < files.size(); i++) {
-            MultipartFile file = files.get(i);
-            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.getOriginalFilename();
+            IngestionUpload file = files.get(i);
+            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.originalFilename();
             if (relativePath == null || relativePath.isBlank()) {
-                relativePath = file.getOriginalFilename();
+                relativePath = file.originalFilename();
             }
             if (relativePath == null || !relativePath.toLowerCase().endsWith(".md")) {
                 continue;
@@ -295,7 +299,7 @@ public class IngestionService {
             removeFile(deletedIndex.getFilePath(), deletedIndex.getDocIds());
         }
 
-        SyncSummary summary = new SyncSummary(
+        IngestionSyncSummary summary = new IngestionSyncSummary(
                 currentFiles.size(),
                 newFileCount,
                 modifiedFileCount,
@@ -355,7 +359,7 @@ public class IngestionService {
                 new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath).last("LIMIT 1")
         );
         try {
-            Resource resource = new FileSystemResource(file);
+            LoadedNote resource = new LoadedNote(file.toPath());
             String hash = calculateHash(resource);
             AddStatus status = updateFile(resource, filePath, hash, existing == null ? List.of() : existing.getDocIds());
             return status == AddStatus.ADDED || status == AddStatus.SKIPPED_EMPTY;
@@ -404,16 +408,16 @@ public class IngestionService {
         return false;
     }
 
-    private void persistUploadedAssets(List<MultipartFile> files, List<String> relativePaths, String folderKey) {
+    private void persistUploadedAssets(List<IngestionUpload> files, List<String> relativePaths, String folderKey) {
         if (files == null || files.isEmpty()) {
             return;
         }
         Path baseDir = BROWSER_ASSET_ROOT.resolve(folderKey).toAbsolutePath().normalize();
         for (int i = 0; i < files.size(); i++) {
-            MultipartFile file = files.get(i);
-            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.getOriginalFilename();
+            IngestionUpload file = files.get(i);
+            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.originalFilename();
             if (relativePath == null || relativePath.isBlank()) {
-                relativePath = file.getOriginalFilename();
+                relativePath = file.originalFilename();
             }
             if (relativePath == null || !isSupportedImage(relativePath)) {
                 continue;
@@ -425,7 +429,7 @@ public class IngestionService {
                     continue;
                 }
                 Files.createDirectories(target.getParent());
-                try (InputStream inputStream = file.getInputStream()) {
+                try (InputStream inputStream = file.inputStream()) {
                     Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (Exception e) {
@@ -446,9 +450,9 @@ public class IngestionService {
                 || lower.endsWith(".webp");
     }
 
-    private AddStatus addFile(Resource resource, String filePath, String hash) {
-        try {
-            String content = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+    private AddStatus addFile(LoadedNote resource, String filePath, String hash) {
+        try (InputStream inputStream = Files.newInputStream(resource.path())) {
+            String content = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
             if (content == null || content.trim().isEmpty()) {
                 logger.info("Skip empty file: {}", filePath);
                 return AddStatus.SKIPPED_EMPTY;
@@ -459,9 +463,9 @@ public class IngestionService {
                 return AddStatus.SKIPPED_EMPTY;
             }
             vectorStore.add(documents);
-            lexicalIndexService.upsertDocuments(documents);
-            parentChildIndexService.rebuildByChunks(filePath, documents);
-            imageService.indexImagesForDocument(filePath, content, documents);
+            lexicalIndexService.upsert(toIndexDocuments(documents));
+            parentChildIndexService.rebuild(filePath, toIndexDocuments(documents));
+            imageService.indexImagesForDocument(filePath, content, toMediaDocuments(documents));
             
             // GraphRAG: 提取双向链接并写入 Neo4j
             processGraphRelationships(documents);
@@ -475,14 +479,14 @@ public class IngestionService {
         }
     }
 
-    private AddStatus updateFile(Resource resource, String filePath, String hash, List<String> oldDocIds) {
+    private AddStatus updateFile(LoadedNote resource, String filePath, String hash, List<String> oldDocIds) {
         removeFile(filePath, oldDocIds); // Delete old vectors
         return addFile(resource, filePath, hash); // Add new vectors
     }
 
-    private AddStatus addFile(MultipartFile file, String filePath, String hash) {
+    private AddStatus addFile(IngestionUpload file, String filePath, String hash) {
         try {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            String content = new String(file.bytes(), StandardCharsets.UTF_8);
             if (content.trim().isEmpty()) {
                 return AddStatus.SKIPPED_EMPTY;
             }
@@ -491,9 +495,9 @@ public class IngestionService {
                 return AddStatus.SKIPPED_EMPTY;
             }
             vectorStore.add(documents);
-            lexicalIndexService.upsertDocuments(documents);
-            parentChildIndexService.rebuildByChunks(filePath, documents);
-            imageService.indexImagesForDocument(filePath, content, documents);
+            lexicalIndexService.upsert(toIndexDocuments(documents));
+            parentChildIndexService.rebuild(filePath, toIndexDocuments(documents));
+            imageService.indexImagesForDocument(filePath, content, toMediaDocuments(documents));
             
             // GraphRAG: 提取双向链接并写入 Neo4j
             processGraphRelationships(documents);
@@ -507,7 +511,7 @@ public class IngestionService {
         }
     }
 
-    private AddStatus updateFile(MultipartFile file, String filePath, String hash, List<String> oldDocIds) {
+    private AddStatus updateFile(IngestionUpload file, String filePath, String hash, List<String> oldDocIds) {
         removeFile(filePath, oldDocIds);
         return addFile(file, filePath, hash);
     }
@@ -535,7 +539,7 @@ public class IngestionService {
         if (extractionResult.isEmpty()) {
             return List.of();
         }
-        List<Document> chunks = documentSplitter.split(extractionResult.documents());
+        List<Document> chunks = toDocuments(documentSplitter.split(toIndexDocuments(extractionResult.documents())));
         return chunks.stream()
                 .filter(doc -> doc.getText() != null && !doc.getText().trim().isEmpty())
                 .peek(doc -> {
@@ -554,40 +558,36 @@ public class IngestionService {
                 .collect(Collectors.toList());
     }
 
+    private List<KnowledgeIndexDocument> toIndexDocuments(List<Document> documents) {
+        return documents.stream()
+                .map(document -> new KnowledgeIndexDocument(document.getId(), document.getText(), document.getMetadata()))
+                .toList();
+    }
+
+    private List<Document> toDocuments(List<KnowledgeIndexDocument> documents) {
+        return documents.stream()
+                .map(document -> new Document(document.id(), document.text(), document.metadata()))
+                .toList();
+    }
+
+    private List<MediaDocument> toMediaDocuments(List<Document> documents) {
+        return documents.stream()
+                .map(document -> new MediaDocument(document.getId(), document.getText(), document.getMetadata()))
+                .toList();
+    }
+
     private void processGraphRelationships(List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             return;
         }
         try {
-            for (Document doc : documents) {
-                String filePath = (String) doc.getMetadata().get("file_path");
-                if (filePath == null) continue;
-
-                String fileName = new File(filePath).getName();
-                int dotIndex = fileName.lastIndexOf('.');
-                String mainConceptName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
-
-                io.github.imzmq.interview.graph.domain.TechConcept mainConcept = techConceptRepository.findById(mainConceptName)
-                        .orElse(new io.github.imzmq.interview.graph.domain.TechConcept(mainConceptName));
-                
-                if (mainConcept.getDescription() == null) {
-                    mainConcept.setDescription(doc.getText().length() > 200 ? doc.getText().substring(0, 200) + "..." : doc.getText());
-                }
-
-                Object wikiLinksObj = doc.getMetadata().get("wiki_links");
-                if (wikiLinksObj != null && !wikiLinksObj.toString().isBlank()) {
-                    String[] links = wikiLinksObj.toString().split(",");
-                    for (String link : links) {
-                        String relatedName = link.trim();
-                        if (!relatedName.isBlank() && !relatedName.equals(mainConceptName)) {
-                            io.github.imzmq.interview.graph.domain.TechConcept relatedConcept = techConceptRepository.findById(relatedName)
-                                    .orElse(new io.github.imzmq.interview.graph.domain.TechConcept(relatedName));
-                            mainConcept.addRelatedConcept(relatedConcept);
-                            techConceptRepository.save(relatedConcept);
-                        }
-                    }
-                }
-                techConceptRepository.save(mainConcept);
+            for (Document document : documents) {
+                Object wikiLinks = document.getMetadata().get("wiki_links");
+                knowledgeGraphIndexCommand.index(new KnowledgeGraphSourceDocument(
+                        (String) document.getMetadata().get("file_path"),
+                        document.getText(),
+                        wikiLinks == null ? null : wikiLinks.toString()
+                ));
             }
             logger.info("GraphRAG: 成功处理并同步了文档的图谱关系至 Neo4j");
         } catch (Exception e) {
@@ -604,14 +604,14 @@ public class IngestionService {
         syncIndexMapper.delete(new LambdaQueryWrapper<SyncIndexDO>().eq(SyncIndexDO::getFilePath, filePath));
     }
 
-    private String calculateHash(Resource resource) throws IOException {
-        try (InputStream is = resource.getInputStream()) {
+    private String calculateHash(LoadedNote resource) throws IOException {
+        try (InputStream is = Files.newInputStream(resource.path())) {
             return DigestUtils.md5DigestAsHex(is);
         }
     }
 
-    private String calculateHash(MultipartFile file) throws IOException {
-        try (InputStream is = file.getInputStream()) {
+    private String calculateHash(IngestionUpload file) throws IOException {
+        try (InputStream is = file.inputStream()) {
             return DigestUtils.md5DigestAsHex(is);
         }
     }
@@ -640,31 +640,6 @@ public class IngestionService {
         }
         String prefix = normalizedVaultPath.endsWith(File.separator) ? normalizedVaultPath : normalizedVaultPath + File.separator;
         return normalizedFilePath.startsWith(prefix);
-    }
-
-    public static class SyncSummary {
-        public final int totalScanned;
-        public final int newFiles;
-        public final int modifiedFiles;
-        public final int unchangedFiles;
-        public final int deletedFiles;
-        public final int failedFiles;
-        public final int skippedEmptyFiles;
-
-        public SyncSummary(int totalScanned, int newFiles, int modifiedFiles, int unchangedFiles, int deletedFiles, int failedFiles, int skippedEmptyFiles) {
-            this.totalScanned = totalScanned;
-            this.newFiles = newFiles;
-            this.modifiedFiles = modifiedFiles;
-            this.unchangedFiles = unchangedFiles;
-            this.deletedFiles = deletedFiles;
-            this.failedFiles = failedFiles;
-            this.skippedEmptyFiles = skippedEmptyFiles;
-        }
-
-        public String toLogMessage() {
-            return String.format("total=%d, new=%d, modified=%d, unchanged=%d, deleted=%d, failed=%d, skippedEmpty=%d",
-                    totalScanned, newFiles, modifiedFiles, unchangedFiles, deletedFiles, failedFiles, skippedEmptyFiles);
-        }
     }
 
     private enum AddStatus {

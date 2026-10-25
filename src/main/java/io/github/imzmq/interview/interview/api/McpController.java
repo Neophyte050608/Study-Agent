@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import io.github.imzmq.interview.interview.api.support.RequestPayloadMapper;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,16 +16,16 @@ import java.util.UUID;
 public class McpController {
 
     private final InterviewService interviewService;
-    private final UserIdentityResolver userIdentityResolver;
+    private final UserIdentityQuery userIdentityQuery;
     private final RequestPayloadMapper requestPayloadMapper;
 
     public McpController(
             InterviewService interviewService,
-            UserIdentityResolver userIdentityResolver,
+            UserIdentityQuery userIdentityQuery,
             RequestPayloadMapper requestPayloadMapper
     ) {
         this.interviewService = interviewService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
         this.requestPayloadMapper = requestPayloadMapper;
     }
 
@@ -42,7 +42,7 @@ public class McpController {
             HttpServletRequest request
     ) {
         // 能力发现支持显式 traceId，便于将调用与后续 invoke 关联。
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         String resolvedTraceId = traceId == null || traceId.isBlank() ? UUID.randomUUID().toString() : traceId.trim();
         return ResponseEntity.ok(Map.of(
                 "userId", userId,
@@ -61,7 +61,7 @@ public class McpController {
     @PostMapping("/mcp/invoke")
     public ResponseEntity<?> invokeMcp(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
         // MCP 调用入口：capability 对应某个工具能力名；params 为工具入参；context 用于链路与身份透传。
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         String capability = payload.get("capability") == null ? "" : payload.get("capability").toString().trim();
         if (capability.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "capability 不能为空"));
@@ -73,5 +73,13 @@ public class McpController {
         );
         Map<String, Object> result = interviewService.invokeMcpCapability(userId, capability, params, context);
         return ResponseEntity.ok(result);
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }

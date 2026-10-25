@@ -1,5 +1,6 @@
 package io.github.imzmq.interview.agent.application;
 
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,7 +37,7 @@ import java.util.stream.Stream;
  * 3. 实时刷新：支持感知技能文件的物理变化（通过缓存与最后修改时间校验）。
  */
 @Service
-public class AgentSkillService {
+public class AgentSkillService implements AgentSkillInstructions {
 
     private static final Logger logger = LoggerFactory.getLogger(AgentSkillService.class);
     private static final Pattern NAME_PATTERN = Pattern.compile("^name:\\s*\"([^\"]+)\"\\s*$");

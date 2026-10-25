@@ -1,9 +1,7 @@
 package io.github.imzmq.interview.search.application;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import io.github.imzmq.interview.learning.application.contract.UserKnowledgeStateQuery;
 import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
-import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateDO;
-import io.github.imzmq.interview.learning.infrastructure.persistence.UserKnowledgeStateMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -16,10 +14,10 @@ import java.util.stream.Collectors;
 
 @Component
 public class PersonalRanker {
-    private final UserKnowledgeStateMapper knowledgeStateMapper;
+    private final UserKnowledgeStateQuery knowledgeStateQuery;
 
-    public PersonalRanker(UserKnowledgeStateMapper knowledgeStateMapper) {
-        this.knowledgeStateMapper = knowledgeStateMapper;
+    public PersonalRanker(UserKnowledgeStateQuery knowledgeStateQuery) {
+        this.knowledgeStateQuery = knowledgeStateQuery;
     }
 
     public List<AutocompleteItem> rerank(List<AutocompleteItem> items, String userId, String prefix, int limit) {
@@ -61,13 +59,12 @@ public class PersonalRanker {
         if (userId == null || userId.isBlank()) {
             return Map.of();
         }
-        return knowledgeStateMapper.selectList(new LambdaQueryWrapper<UserKnowledgeStateDO>()
-                        .eq(UserKnowledgeStateDO::getUserId, userId))
+        return knowledgeStateQuery.findByUserId(userId)
                 .stream()
-                .filter(item -> item.getTopic() != null && !item.getTopic().isBlank())
+                .filter(item -> item.topic() != null && !item.topic().isBlank())
                 .collect(Collectors.toMap(
-                        item -> item.getTopic().toLowerCase(Locale.ROOT),
-                        item -> item.getMasteryScore() == null ? 0.0 : item.getMasteryScore(),
+                        item -> item.topic().toLowerCase(Locale.ROOT),
+                        item -> item.masteryScore() == null ? 0.0 : item.masteryScore(),
                         (left, right) -> right
                 ));
     }

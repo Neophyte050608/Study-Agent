@@ -1,6 +1,11 @@
 package io.github.imzmq.interview.chat.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentTaskPromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+import io.github.imzmq.interview.routing.application.contract.extension.IntentRoutingPromptRenderer;
+import io.github.imzmq.interview.routing.application.contract.extension.IntentRoutingPromptRenderer.RenderedRoutingPrompt;
 import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateMapper;
 import com.hubspot.jinjava.Jinjava;
@@ -21,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 提示词管理器 (PromptManager)
  */
 @Service
-public class PromptManager {
+public class PromptManager implements PromptRenderer, AgentTaskPromptRenderer, IntentRoutingPromptRenderer {
 
     private static final Logger log = LoggerFactory.getLogger(PromptManager.class);
     private static final Set<String> REQUIRED_SYSTEM_TEMPLATES = Set.of(
@@ -62,11 +67,6 @@ public class PromptManager {
     private final Map<String, String> systemTemplateCache = new ConcurrentHashMap<>();
     private boolean isLoaded = false;
 
-    /**
-     * 系统提示词 + 用户提示词的结构化对。
-     */
-    public record PromptPair(String systemPrompt, String userPrompt) {}
-
     public PromptManager(PromptTemplateMapper templateMapper) {
         this.jinjava = new Jinjava();
         this.templateMapper = templateMapper;
@@ -87,6 +87,17 @@ public class PromptManager {
             throw new RuntimeException("找不到指定的提示词模板: " + templateName);
         }
         return jinjava.render(template, variables);
+    }
+
+    @Override
+    public String renderTaskRouterPrompt(Map<String, Object> variables) {
+        return render("task-router", variables);
+    }
+
+    @Override
+    public RenderedRoutingPrompt renderRoutingPrompt(String taskTemplateName, Map<String, Object> variables) {
+        RenderedPrompt prompt = renderSplit("router", taskTemplateName, variables);
+        return new RenderedRoutingPrompt(prompt.systemPrompt(), prompt.userPrompt());
     }
 
     /**
@@ -111,7 +122,7 @@ public class PromptManager {
      * 分别渲染系统模板和任务模板，返回结构化的 PromptPair。
      * 用于支持 API 级的 system/user 消息分离缓存。
      */
-    public PromptPair renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
+    public RenderedPrompt renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
         ensureLoaded();
         String systemTemplate = systemTemplateCache.get(systemTemplateName);
         String systemContent = "";
@@ -123,7 +134,7 @@ public class PromptManager {
             throw new RuntimeException("找不到指定的提示词模板: " + taskTemplateName);
         }
         String userContent = jinjava.render(taskTemplate, variables);
-        return new PromptPair(systemContent, userContent);
+        return new RenderedPrompt(systemContent, userContent);
     }
 
     /**

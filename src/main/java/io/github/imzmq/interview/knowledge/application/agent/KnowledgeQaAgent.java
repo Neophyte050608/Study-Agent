@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.application.agent;
 
-import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextOperations;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
 import io.github.imzmq.interview.agent.application.contract.context.AgentRuntimeContext;
@@ -11,9 +11,10 @@ import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeContextPacket;
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
-import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceService;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceService;
 import io.github.imzmq.interview.knowledge.application.context.ConversationTopicTracker;
 import io.github.imzmq.interview.knowledge.domain.DialogAct;
 import io.github.imzmq.interview.knowledge.application.context.DynamicKnowledgeContextBuilder;
@@ -37,27 +38,27 @@ public class KnowledgeQaAgent {
 
     private final KnowledgeRetrievalCoordinator knowledgeRetrievalCoordinator;
     private final RoutingChatService routingChatService;
-    private final PromptManager promptManager;
-    private final RAGObservabilityService ragObservabilityService;
+    private final PromptRenderer promptRenderer;
+    private final RagTraceOperations ragTraceOperations;
     private final TraceService traceService;
     private final ConversationTopicTracker topicTracker;
     private final DynamicKnowledgeContextBuilder dynamicContextBuilder;
-    private final AgentContextAssembler contextAssembler;
+    private final AgentContextOperations contextAssembler;
     private final Executor ragRetrieveExecutor;
 
     public KnowledgeQaAgent(KnowledgeRetrievalCoordinator knowledgeRetrievalCoordinator,
                             RoutingChatService routingChatService,
-                            PromptManager promptManager,
-                            RAGObservabilityService ragObservabilityService,
+                            PromptRenderer promptRenderer,
+                            RagTraceOperations ragTraceOperations,
                             TraceService traceService,
                             ConversationTopicTracker topicTracker,
                             DynamicKnowledgeContextBuilder dynamicContextBuilder,
-                            AgentContextAssembler contextAssembler,
+                            AgentContextOperations contextAssembler,
                             @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor) {
         this.knowledgeRetrievalCoordinator = knowledgeRetrievalCoordinator;
         this.routingChatService = routingChatService;
-        this.promptManager = promptManager;
-        this.ragObservabilityService = ragObservabilityService;
+        this.promptRenderer = promptRenderer;
+        this.ragTraceOperations = ragTraceOperations;
         this.traceService = traceService;
         this.topicTracker = topicTracker;
         this.dynamicContextBuilder = dynamicContextBuilder;
@@ -94,7 +95,7 @@ public class KnowledgeQaAgent {
         }
 
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A");
+        ragTraceOperations.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A");
 
         try {
             String currentTraceId = RAGTraceContext.getTraceId();
@@ -121,7 +122,7 @@ public class KnowledgeQaAgent {
                     packet,
                     precomputedTurnAnalysis
             );
-            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
+            RenderedPrompt pair = promptRenderer.renderSplit("knowledge-assistant", "knowledge-qa", vars);
             String answer = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "知识问答");
 
             if (sessionId != null && !sessionId.isBlank()) {
@@ -143,12 +144,12 @@ public class KnowledgeQaAgent {
             result.put("topicSwitch", analysis.topicSwitch());
             result.put("contextPolicy", contextPolicy);
 
-            ragObservabilityService.endNode(traceId, nodeId, question, answer, null);
+            ragTraceOperations.endNode(traceId, nodeId, question, answer, null);
             log.info("KnowledgeQA 完成, traceId={}, dialogAct={}, topicSwitch={}, contextPolicy={}",
                     traceId, analysis.dialogAct(), analysis.topicSwitch(), contextPolicy);
             return result;
         } catch (Exception e) {
-            ragObservabilityService.endNode(traceId, nodeId, question, null, e.getMessage());
+            ragTraceOperations.endNode(traceId, nodeId, question, null, e.getMessage());
             log.error("KnowledgeQA 失败, traceId={}", traceId, e);
             throw e;
         }
@@ -190,7 +191,7 @@ public class KnowledgeQaAgent {
         }
 
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A Streaming");
+        ragTraceOperations.startNode(traceId, nodeId, null, "KNOWLEDGE_QA", "Knowledge Q&A Streaming");
 
         try {
             String currentTraceId = RAGTraceContext.getTraceId();
@@ -217,7 +218,7 @@ public class KnowledgeQaAgent {
                     packet,
                     precomputedTurnAnalysis
             );
-            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-assistant", "knowledge-qa", vars);
+            RenderedPrompt pair = promptRenderer.renderSplit("knowledge-assistant", "knowledge-qa", vars);
             String answer = routingChatService.callStreamWithTrace(
                     pair.systemPrompt(),
                     pair.userPrompt(),
@@ -246,12 +247,12 @@ public class KnowledgeQaAgent {
             result.put("topicSwitch", analysis.topicSwitch());
             result.put("contextPolicy", contextPolicy);
 
-            ragObservabilityService.endNode(traceId, nodeId, question, answer, null);
+            ragTraceOperations.endNode(traceId, nodeId, question, answer, null);
             log.info("KnowledgeQA流式完成, traceId={}, dialogAct={}, topicSwitch={}, contextPolicy={}",
                     traceId, analysis.dialogAct(), analysis.topicSwitch(), contextPolicy);
             return result;
         } catch (Exception e) {
-            ragObservabilityService.endNode(traceId, nodeId, question, null, e.getMessage());
+            ragTraceOperations.endNode(traceId, nodeId, question, null, e.getMessage());
             log.error("KnowledgeQA流式失败, traceId={}", traceId, e);
             throw e;
         }

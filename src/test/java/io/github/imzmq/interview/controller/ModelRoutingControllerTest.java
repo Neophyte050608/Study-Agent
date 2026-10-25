@@ -2,13 +2,11 @@ package io.github.imzmq.interview.controller;
 
 import io.github.imzmq.interview.modelrouting.api.ModelCandidateDTO;
 import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
-import io.github.imzmq.interview.modelrouting.probe.ModelProbeAwaiter;
-import io.github.imzmq.interview.modelrouting.state.ModelHealthStore;
 import io.github.imzmq.interview.modelrouting.api.ModelRoutingController;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
 import io.github.imzmq.interview.modelrouting.application.OllamaHealthService;
+import io.github.imzmq.interview.modelrouting.application.ModelCandidateProbeService;
 import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -35,9 +33,7 @@ class ModelRoutingControllerTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
-        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
-        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
+        ModelCandidateProbeService modelCandidateProbeService = mock(ModelCandidateProbeService.class);
         when(ollamaHealthService.getHealthInfo()).thenReturn(Map.of("status", "UP", "serviceUp", true, "modelReady", true));
         properties.setEnabled(true);
         properties.setDefaultModel("deepseek-chat");
@@ -52,9 +48,7 @@ class ModelRoutingControllerTest {
                 properties,
                 ollamaHealthService,
                 modelCandidateService,
-                modelHealthStore,
-                dynamicModelFactory,
-                modelProbeAwaiter,
+                modelCandidateProbeService,
                 false
         );
         ResponseEntity<Map<String, Object>> response = controller.stats();
@@ -74,9 +68,7 @@ class ModelRoutingControllerTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
-        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
-        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
+        ModelCandidateProbeService modelCandidateProbeService = mock(ModelCandidateProbeService.class);
 
         ModelCandidateDO entity = new ModelCandidateDO();
         entity.setId(1L);
@@ -95,9 +87,7 @@ class ModelRoutingControllerTest {
                 properties,
                 ollamaHealthService,
                 modelCandidateService,
-                modelHealthStore,
-                dynamicModelFactory,
-                modelProbeAwaiter,
+                modelCandidateProbeService,
                 false
         );
 
@@ -115,18 +105,14 @@ class ModelRoutingControllerTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
-        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
-        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
+        ModelCandidateProbeService modelCandidateProbeService = mock(ModelCandidateProbeService.class);
 
         ModelRoutingController controller = new ModelRoutingController(
                 routingChatService,
                 properties,
                 ollamaHealthService,
                 modelCandidateService,
-                modelHealthStore,
-                dynamicModelFactory,
-                modelProbeAwaiter,
+                modelCandidateProbeService,
                 false
         );
 
@@ -142,9 +128,7 @@ class ModelRoutingControllerTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
-        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
-        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
+        ModelCandidateProbeService modelCandidateProbeService = mock(ModelCandidateProbeService.class);
         when(modelCandidateService.decryptApiKey(1L)).thenReturn("sk-live");
 
         ModelRoutingController controller = new ModelRoutingController(
@@ -152,9 +136,7 @@ class ModelRoutingControllerTest {
                 properties,
                 ollamaHealthService,
                 modelCandidateService,
-                modelHealthStore,
-                dynamicModelFactory,
-                modelProbeAwaiter,
+                modelCandidateProbeService,
                 true
         );
 
@@ -170,9 +152,7 @@ class ModelRoutingControllerTest {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         OllamaHealthService ollamaHealthService = mock(OllamaHealthService.class);
         ModelCandidateService modelCandidateService = mock(ModelCandidateService.class);
-        ModelHealthStore modelHealthStore = mock(ModelHealthStore.class);
-        DynamicModelFactory dynamicModelFactory = mock(DynamicModelFactory.class);
-        ModelProbeAwaiter modelProbeAwaiter = mock(ModelProbeAwaiter.class);
+        ModelCandidateProbeService modelCandidateProbeService = mock(ModelCandidateProbeService.class);
 
         ModelCandidateDO entity = new ModelCandidateDO();
         entity.setId(1L);
@@ -188,9 +168,7 @@ class ModelRoutingControllerTest {
                 properties,
                 ollamaHealthService,
                 modelCandidateService,
-                modelHealthStore,
-                dynamicModelFactory,
-                modelProbeAwaiter,
+                modelCandidateProbeService,
                 true
         );
 

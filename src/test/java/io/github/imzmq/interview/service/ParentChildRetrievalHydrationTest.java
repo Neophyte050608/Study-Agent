@@ -100,7 +100,7 @@ class ParentChildRetrievalHydrationTest {
     private PromptManager promptManager;
 
     @Mock
-    private io.github.imzmq.interview.graph.domain.TechConceptRepository techConceptRepository;
+    private io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptRepository techConceptRepository;
 
     @Mock
     private ObservabilitySwitchProperties observabilitySwitchProperties;

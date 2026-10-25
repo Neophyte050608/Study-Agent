@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.skill.client;
 
-import io.github.imzmq.interview.mcp.application.McpGatewayService;
+import io.github.imzmq.interview.mcp.application.contract.McpCapabilityOperations;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -13,9 +13,9 @@ import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 @Service
 public class SkillMcpClient {
 
-    private final McpGatewayService mcpGatewayService;
+    private final McpCapabilityOperations mcpGatewayService;
 
-    public SkillMcpClient(McpGatewayService mcpGatewayService) {
+    public SkillMcpClient(McpCapabilityOperations mcpGatewayService) {
         this.mcpGatewayService = mcpGatewayService;
     }
 

@@ -6,6 +6,8 @@ import io.github.imzmq.interview.agent.a2a.A2AMessage;
 import io.github.imzmq.interview.agent.a2a.A2AMetadata;
 import io.github.imzmq.interview.agent.a2a.A2AStatus;
 import io.github.imzmq.interview.agent.a2a.A2ATrace;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentTaskPromptRenderer;
 import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
 import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
 import io.github.imzmq.interview.agent.application.contract.task.ExecutionMode;
@@ -13,19 +15,17 @@ import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.routing.domain.IntentPreFilter;
-import io.github.imzmq.interview.routing.domain.IntentRoutingDecision;
-import io.github.imzmq.interview.routing.domain.PreFilterResult;
+import io.github.imzmq.interview.routing.application.contract.IntentPreFilterOperations;
+import io.github.imzmq.interview.routing.application.contract.result.IntentRoutingDecision;
+import io.github.imzmq.interview.routing.application.contract.result.PreFilterResult;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
-import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeHandle;
-import io.github.imzmq.interview.observability.application.trace.TraceService;
+import io.github.imzmq.interview.routing.application.contract.IntentRoutingOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -40,16 +40,16 @@ import java.util.UUID;
  * 任务路由智能体 (TaskRouterAgent)
  */
 @Component
-public class TaskRouterAgent {
+public class TaskRouterAgent implements AgentTaskOperations {
 
     private static final TraceService NOOP_TRACE_SERVICE = new TraceService() {
         @Override
-        public TraceNodeHandle startRoot(String traceId, io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
+        public TraceNodeHandle startRoot(String traceId, io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
             return new TraceNodeHandle(traceId, "", "", definition);
         }
 
         @Override
-        public TraceNodeHandle startChild(String traceId, String parentNodeId, io.github.imzmq.interview.observability.application.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
+        public TraceNodeHandle startChild(String traceId, String parentNodeId, io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
             return new TraceNodeHandle(traceId, "", parentNodeId, definition);
         }
 
@@ -62,55 +62,64 @@ public class TaskRouterAgent {
         }
     };
 
-    private final PromptManager promptManager;
-    private final IntentTreeRoutingService intentTreeRoutingService;
-    private final IntentPreFilter intentPreFilter;
+    private final AgentTaskPromptRenderer promptRenderer;
+    private final IntentRoutingOperations intentRoutingOperations;
+    private final IntentPreFilterOperations intentPreFilter;
     private final A2ABus a2aBus;
     private final RoutingChatService routingChatService;
-    private final RAGObservabilityService ragObservabilityService;
+    private final RagTraceOperations ragTraceOperations;
     private final TaskHandlerRegistry taskHandlerRegistry;
     private final TraceService traceService;
 
     @Autowired
     public TaskRouterAgent(
-            PromptManager promptManager,
-            IntentTreeRoutingService intentTreeRoutingService,
-            IntentPreFilter intentPreFilter,
+            AgentTaskPromptRenderer promptRenderer,
+            IntentRoutingOperations intentRoutingOperations,
+            IntentPreFilterOperations intentPreFilter,
             A2ABus a2aBus,
             RoutingChatService routingChatService,
-            RAGObservabilityService ragObservabilityService,
+            RagTraceOperations ragTraceOperations,
             TaskHandlerRegistry taskHandlerRegistry,
             TraceService traceService
     ) {
-        this.promptManager = promptManager;
-        this.intentTreeRoutingService = intentTreeRoutingService;
+        this.promptRenderer = promptRenderer;
+        this.intentRoutingOperations = intentRoutingOperations;
         this.intentPreFilter = intentPreFilter;
         this.a2aBus = a2aBus;
         this.routingChatService = routingChatService;
-        this.ragObservabilityService = ragObservabilityService;
+        this.ragTraceOperations = ragTraceOperations;
         this.taskHandlerRegistry = taskHandlerRegistry;
         this.traceService = traceService;
     }
 
     public TaskRouterAgent(
-            PromptManager promptManager,
-            IntentTreeRoutingService intentTreeRoutingService,
-            IntentPreFilter intentPreFilter,
+            AgentTaskPromptRenderer promptRenderer,
+            IntentRoutingOperations intentRoutingOperations,
+            IntentPreFilterOperations intentPreFilter,
             A2ABus a2aBus,
             RoutingChatService routingChatService,
-            RAGObservabilityService ragObservabilityService,
+            RagTraceOperations ragTraceOperations,
             TaskHandlerRegistry taskHandlerRegistry
     ) {
         this(
-                promptManager,
-                intentTreeRoutingService,
+                promptRenderer,
+                intentRoutingOperations,
                 intentPreFilter,
                 a2aBus,
                 routingChatService,
-                ragObservabilityService,
+                ragTraceOperations,
                 taskHandlerRegistry,
                 NOOP_TRACE_SERVICE
         );
+    }
+
+    @Override
+    public TaskResponse dispatchTask(TaskType taskType, Map<String, Object> payload, Map<String, Object> context) {
+        return dispatch(new TaskRequest(
+                taskType,
+                payload == null ? Map.of() : payload,
+                context == null ? Map.of() : context
+        ));
     }
 
     public TaskResponse dispatch(TaskRequest request) {
@@ -129,7 +138,7 @@ public class TaskRouterAgent {
 
         RAGTraceContext.setTraceId(traceId);
         String nodeId = UUID.randomUUID().toString();
-        ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + request.taskType());
+        ragTraceOperations.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + request.taskType());
 
         TaskHandler handler = null;
         TaskResponse response;
@@ -137,7 +146,7 @@ public class TaskRouterAgent {
             if (shouldDelegateKnowledgeQaStream(request)) {
                 response = TaskResponse.ok(buildKnowledgeQaStreamDelegation(request));
                 publishReply(response, request.taskType(), replyTo, correlationId, traceId);
-                ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), "delegated", null);
+                ragTraceOperations.endNode(traceId, nodeId, request.payload().toString(), "delegated", null);
                 return response;
             }
 
@@ -149,14 +158,14 @@ public class TaskRouterAgent {
 
             publish(request, handler.receiverName(), response.success() ? A2AStatus.DONE : A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             publishReply(response, request.taskType(), replyTo, correlationId, traceId);
-            ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), response.message(), null);
+            ragTraceOperations.endNode(traceId, nodeId, request.payload().toString(), response.message(), null);
             return response;
         } catch (Exception e) {
             if (handler != null) {
                 publish(request, handler.receiverName(), A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             }
             publishReply(TaskResponse.fail(e.getMessage()), request.taskType(), replyTo, correlationId, traceId);
-            ragObservabilityService.endNode(traceId, nodeId, request.payload().toString(), null, e.getMessage());
+            ragTraceOperations.endNode(traceId, nodeId, request.payload().toString(), null, e.getMessage());
             return TaskResponse.fail("任务路由失败: " + e.getMessage());
         } finally {
             RAGTraceContext.clear();
@@ -236,11 +245,11 @@ public class TaskRouterAgent {
 
     private TaskResponse routeByIntentTree(TaskRequest request, String naturalLanguageQuery,
                                            String history, String domain) {
-        if (intentTreeRoutingService == null || !intentTreeRoutingService.enabled()) {
+        if (intentRoutingOperations == null || !intentRoutingOperations.enabled()) {
             return reactDispatch(request);
         }
         long routeStartedAt = System.nanoTime();
-        IntentRoutingDecision decision = intentTreeRoutingService.route(naturalLanguageQuery, history, domain);
+        IntentRoutingDecision decision = intentRoutingOperations.route(naturalLanguageQuery, history, domain);
         long routeLatencyMs = Math.max(0L, (System.nanoTime() - routeStartedAt) / 1_000_000L);
         putContextValue(request.context(), "intentRouteLatencyMs", routeLatencyMs);
         if (decision.fallbackToLegacy()) {
@@ -282,7 +291,7 @@ public class TaskRouterAgent {
         }
 
         if (!"UNKNOWN".equalsIgnoreCase(decision.taskType()) && !decision.askClarification()) {
-            Map<String, Object> refinedSlots = intentTreeRoutingService.refineSlots(decision.taskType(), naturalLanguageQuery, history);
+            Map<String, Object> refinedSlots = intentRoutingOperations.refineSlots(decision.taskType(), naturalLanguageQuery, history);
             if (refinedSlots != null && !refinedSlots.isEmpty()) {
                 refinedSlots.forEach((k, v) -> {
                     if (v != null && !String.valueOf(v).isBlank()) {
@@ -316,7 +325,7 @@ public class TaskRouterAgent {
         Map<String, Object> vars = new HashMap<>();
         vars.put("query", naturalLanguageQuery);
         vars.put("history", history);
-        String prompt = promptManager.render("task-router", vars);
+        String prompt = promptRenderer.renderTaskRouterPrompt(vars);
 
         try {
             TraceNodeHandle reactRouteTrace = traceService.startChild(
@@ -560,9 +569,9 @@ public class TaskRouterAgent {
         RAGTraceContext.setTraceId(traceId);
         TaskResponse response = TaskResponse.ok(data);
         try {
-            ragObservabilityService.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + taskTypeName);
+            ragTraceOperations.startNode(traceId, nodeId, null, "ROOT", "Task Dispatch: " + taskTypeName);
             publishReply(response, taskTypeName, replyTo, correlationId, traceId);
-            ragObservabilityService.endNode(traceId, nodeId, request.payload() == null ? "{}" : request.payload().toString(), response.message(), null);
+            ragTraceOperations.endNode(traceId, nodeId, request.payload() == null ? "{}" : request.payload().toString(), response.message(), null);
             return response;
         } finally {
             RAGTraceContext.clear();

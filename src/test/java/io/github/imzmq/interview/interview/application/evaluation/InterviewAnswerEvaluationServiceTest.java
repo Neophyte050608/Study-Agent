@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.interview.application.evaluation;
 
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+
 import io.github.imzmq.interview.interview.application.context.InterviewAgentContextSchemaProvider;
 import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
 
@@ -32,7 +34,8 @@ import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.model.Generation;
 import reactor.core.publisher.Flux;
 
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
+import io.github.imzmq.interview.interview.application.evaluation.InterviewEvaluationOutput;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,10 +101,11 @@ class InterviewAnswerEvaluationServiceTest {
                         "feedback":"回答较好"}
                         """, 11, 7, 0L);
 
-        RAGService.KnowledgePacket packet = new RAGService.KnowledgePacket(
+        KnowledgePacket packet = new KnowledgePacket(
                 "事务隔离级别",
-                List.of(),
+                0,
                 "事务上下文",
+                "",
                 "1. [obsidian:tx.md] tags=技术栈 | 事务隔离级别包括读未提交、读已提交、可重复读和串行化。\n" +
                         "2. [obsidian:lock.md] tags=技术栈 | 锁机制用于并发控制。",
                 false
@@ -124,10 +128,11 @@ class InterviewAnswerEvaluationServiceTest {
                 "deductions":[],"citations":[],"conflicts":[],
                 "feedback":"ok","nextQuestion":"继续说说事务传播。"}
                 """, 10, 5, 0L);
-        RAGService.KnowledgePacket packet = new RAGService.KnowledgePacket(
+        KnowledgePacket packet = new KnowledgePacket(
                 "事务",
-                List.of(),
+                0,
                 "RAG上下文",
+                "",
                 "1. [ok] 事务证据",
                 false
         );
@@ -160,7 +165,7 @@ class InterviewAnswerEvaluationServiceTest {
     void shouldReturnFallbackEvaluationWhenModelFails() throws Exception {
         routingChatService.nextFailure = new ResourceAccessException("timeout");
 
-        RAGService.EvaluationResult result = service.evaluateWithKnowledge(
+        InterviewEvaluationOutput result = service.evaluateWithKnowledge(
                 "Java",
                 "什么是 JVM 内存模型",
                 "我的回答",
@@ -169,7 +174,7 @@ class InterviewAnswerEvaluationServiceTest {
                 70.0,
                 "画像",
                 "",
-                new RAGService.KnowledgePacket("query", List.of(), "", "[]", true)
+                new KnowledgePacket("query", 0, "", "", "[]", true)
         );
 
         JsonNode node = objectMapper.readTree(result.json());
@@ -215,9 +220,9 @@ class InterviewAnswerEvaluationServiceTest {
         }
 
         @Override
-        public PromptPair renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
+        public RenderedPrompt renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
             lastVariables = Map.copyOf(variables);
-            return new PromptPair("system", "user");
+            return new RenderedPrompt("system", "user");
         }
     }
 

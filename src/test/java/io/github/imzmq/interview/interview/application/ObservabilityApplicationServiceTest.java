@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.observability.application.ObservabilityQueryService;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.contract.ObservabilityQueryOperations;
+import io.github.imzmq.interview.observability.application.contract.query.RetrievalLatencyStats;
 import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
 import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
@@ -26,9 +26,9 @@ class ObservabilityApplicationServiceTest {
         properties.setRagTraceEnabled(true);
         properties.setRetrievalEvalEnabled(true);
 
-        RAGObservabilityService ragObservabilityService = mock(RAGObservabilityService.class);
-        when(ragObservabilityService.getRetrievalLatencyStats(200, null))
-                .thenReturn(new RAGObservabilityService.RetrievalLatencyStats(180L, 260L, 36, "limit", 200, null));
+        ObservabilityQueryOperations observabilityQueryOperations = mock(ObservabilityQueryOperations.class);
+        when(observabilityQueryOperations.getRetrievalLatencyStats(200, null))
+                .thenReturn(new RetrievalLatencyStats(180L, 260L, 36, "limit", 200, null));
 
         RetrievalEvaluationService retrievalEvaluationService = mock(RetrievalEvaluationService.class);
         when(retrievalEvaluationService.listRecentRuns(anyInt())).thenReturn(List.of(
@@ -50,12 +50,11 @@ class ObservabilityApplicationServiceTest {
         ));
 
         ObservabilityApplicationService service = new ObservabilityApplicationService(
-                ragObservabilityService,
                 retrievalEvaluationService,
                 mock(RAGQualityEvaluationService.class),
                 properties,
                 new SkillTelemetryRecorder(),
-                mock(ObservabilityQueryService.class)
+                observabilityQueryOperations
         );
 
         Map<String, Object> result = service.getRetrievalMetrics(200, null, null);
@@ -75,17 +74,16 @@ class ObservabilityApplicationServiceTest {
         properties.setRagTraceEnabled(true);
         properties.setRetrievalEvalEnabled(false);
 
-        RAGObservabilityService ragObservabilityService = mock(RAGObservabilityService.class);
-        when(ragObservabilityService.getRetrievalLatencyStats(100, 6))
-                .thenReturn(new RAGObservabilityService.RetrievalLatencyStats(90L, 120L, 12, "hours", null, 6));
+        ObservabilityQueryOperations observabilityQueryOperations = mock(ObservabilityQueryOperations.class);
+        when(observabilityQueryOperations.getRetrievalLatencyStats(100, 6))
+                .thenReturn(new RetrievalLatencyStats(90L, 120L, 12, "hours", null, 6));
 
         ObservabilityApplicationService service = new ObservabilityApplicationService(
-                ragObservabilityService,
                 mock(RetrievalEvaluationService.class),
                 mock(RAGQualityEvaluationService.class),
                 properties,
                 new SkillTelemetryRecorder(),
-                mock(ObservabilityQueryService.class)
+                observabilityQueryOperations
         );
 
         Map<String, Object> result = service.getRetrievalMetrics(100, 6, null);

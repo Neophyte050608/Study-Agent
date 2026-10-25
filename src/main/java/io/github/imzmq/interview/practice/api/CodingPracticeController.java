@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.practice.api;
 
-import io.github.imzmq.interview.practice.application.agent.CodingPracticeAgent;
+import io.github.imzmq.interview.practice.application.CodingPracticeApplicationService;
 import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
 import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -22,14 +22,14 @@ import java.util.Map;
 @RequestMapping("/api/coding")
 public class CodingPracticeController {
 
-    private final CodingPracticeAgent codingPracticeAgent;
+    private final CodingPracticeApplicationService codingPracticeApplicationService;
     private final ChatMessageOperations chatMessageOperations;
     private final ObjectMapper objectMapper;
 
-    public CodingPracticeController(CodingPracticeAgent codingPracticeAgent,
+    public CodingPracticeController(CodingPracticeApplicationService codingPracticeApplicationService,
                                     ChatMessageOperations chatMessageOperations,
                                     ObjectMapper objectMapper) {
-        this.codingPracticeAgent = codingPracticeAgent;
+        this.codingPracticeApplicationService = codingPracticeApplicationService;
         this.chatMessageOperations = chatMessageOperations;
         this.objectMapper = objectMapper;
     }
@@ -40,13 +40,13 @@ public class CodingPracticeController {
     @PostMapping("/batch-quiz/submit")
     public ResponseEntity<Map<String, Object>> submitBatchQuiz(@RequestBody Map<String, Object> body) {
         body.put("action", "batch-quiz-submit");
-        return ResponseEntity.ok(codingPracticeAgent.execute(body));
+        return ResponseEntity.ok(codingPracticeApplicationService.execute(body));
     }
 
     @PostMapping("/scenario-card/submit")
     public ResponseEntity<Map<String, Object>> submitScenarioCard(@RequestBody Map<String, Object> body) {
         body.put("action", "submit-scenario-card");
-        Map<String, Object> result = codingPracticeAgent.execute(body);
+        Map<String, Object> result = codingPracticeApplicationService.execute(body);
         if (!"scenario_evaluated".equals(result.get("status"))) {
             return ResponseEntity.ok(result);
         }
@@ -76,7 +76,7 @@ public class CodingPracticeController {
     @PostMapping("/fill-card/submit")
     public ResponseEntity<Map<String, Object>> submitFillCard(@RequestBody Map<String, Object> body) {
         body.put("action", "submit-fill-card");
-        Map<String, Object> result = codingPracticeAgent.execute(body);
+        Map<String, Object> result = codingPracticeApplicationService.execute(body);
         if (!"fill_evaluated".equals(result.get("status"))) {
             return ResponseEntity.ok(result);
         }
@@ -123,7 +123,7 @@ public class CodingPracticeController {
         request.put("sessionId", codingSessionId);
         request.put("userId", text(body, "userId"));
         request.put("cardId", cardId);
-        Map<String, Object> result = codingPracticeAgent.execute(request);
+        Map<String, Object> result = codingPracticeApplicationService.execute(request);
 
         if ("scenario_question_generated".equals(result.get("status"))) {
             Object currentPayload = parseCardPayload(existing);
@@ -180,7 +180,7 @@ public class CodingPracticeController {
         request.put("sessionId", codingSessionId);
         request.put("userId", text(body, "userId"));
         request.put("cardId", cardId);
-        Map<String, Object> result = codingPracticeAgent.execute(request);
+        Map<String, Object> result = codingPracticeApplicationService.execute(request);
 
         if ("fill_question_generated".equals(result.get("status"))) {
             Object currentPayload = parseCardPayload(existing);

@@ -3,9 +3,9 @@ package io.github.imzmq.interview.learning.application.agent.handler;
 import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
 import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
-import io.github.imzmq.interview.learning.application.LearningEvent;
+import io.github.imzmq.interview.learning.application.contract.LearningEvent;
 import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.learning.application.LearningSource;
+import io.github.imzmq.interview.learning.application.contract.LearningSource;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;

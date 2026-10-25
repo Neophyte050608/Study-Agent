@@ -3,7 +3,7 @@ package io.github.imzmq.interview.skill.builtin;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
-import io.github.imzmq.interview.agent.application.AgentSkillService;
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -31,9 +31,9 @@ public class QueryOptimizerSkill implements ExecutableSkill {
     );
 
     private final RoutingChatService routingChatService;
-    private final AgentSkillService agentSkillService;
+    private final AgentSkillInstructions agentSkillService;
 
-    public QueryOptimizerSkill(RoutingChatService routingChatService, AgentSkillService agentSkillService) {
+    public QueryOptimizerSkill(RoutingChatService routingChatService, AgentSkillInstructions agentSkillService) {
         this.routingChatService = routingChatService;
         this.agentSkillService = agentSkillService;
     }

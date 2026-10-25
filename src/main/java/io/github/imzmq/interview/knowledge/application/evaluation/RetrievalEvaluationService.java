@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.knowledge.application.evaluation;
 
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RetrievalEvaluationOperations;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RetrievalEvaluationOperations.*;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RetrievalEvalCaseDO;
@@ -39,7 +42,7 @@ import java.util.stream.Collectors;
  * <p>3. 自动持久化评测结果，提供历史查询、详情回放与 A/B 对比能力。</p>
  */
 @Service
-public class RetrievalEvaluationService {
+public class RetrievalEvaluationService implements RetrievalEvaluationOperations {
 
     private static final int MAX_REPORT_HISTORY = 100;
     private static final String DEFAULT_DATASET_FILE = "rag_ground_truth.json";
@@ -878,164 +881,4 @@ public class RetrievalEvaluationService {
      * @param mrr MRR
      * @param results 逐样本结果
      */
-    public record RetrievalEvalReport(
-            String runId,
-            String timestamp,
-            String datasetSource,
-            String runLabel,
-            String experimentTag,
-            Map<String, Object> parameterSnapshot,
-            String notes,
-            int totalCases,
-            int hitCases,
-            double recallAt1,
-            double recallAt3,
-            double recallAt5,
-            double mrr,
-            List<EvalResult> results
-    ) {
-    }
-
-    /**
-     * 评测运行摘要，供历史列表展示。
-     */
-    public record RetrievalEvalRunSummary(
-            String runId,
-            String timestamp,
-            String datasetSource,
-            String runLabel,
-            String experimentTag,
-            Map<String, Object> parameterSnapshot,
-            String notes,
-            int totalCases,
-            int hitCases,
-            double recallAt1,
-            double recallAt3,
-            double recallAt5,
-            double mrr
-    ) {
-    }
-
-    /**
-     * 单条评测结果。
-     */
-    public record EvalResult(
-            String query,
-            String tag,
-            List<String> expectedKeywords,
-            boolean hit,
-            int rank,
-            List<String> retrievedSnippets
-    ) {
-    }
-
-    /**
-     * 评测用例定义。
-     */
-    public record EvalCase(String query, List<String> expectedKeywords, String tag) {
-    }
-
-    /**
-     * 评测运行配置。
-     *
-     * @param datasetSource 数据集来源
-     * @param runLabel 运行标签
-     * @param experimentTag 实验标签
-     * @param parameterSnapshot 参数快照
-     * @param notes 备注说明
-     */
-    public record EvalRunOptions(
-            String datasetSource,
-            String runLabel,
-            String experimentTag,
-            Map<String, Object> parameterSnapshot,
-            String notes
-    ) {
-    }
-
-    /**
-     * 两次评测运行的对比结果。
-     */
-    public record RetrievalEvalComparison(
-            String baselineRunId,
-            String candidateRunId,
-            EvalMetricDelta recallAt1,
-            EvalMetricDelta recallAt3,
-            EvalMetricDelta recallAt5,
-            EvalMetricDelta mrr,
-            int improvedCaseCount,
-            int regressedCaseCount,
-            List<EvalCaseComparison> changedCases
-    ) {
-    }
-
-    /**
-     * 指标对比差值结构。
-     */
-    public record EvalMetricDelta(double baseline, double candidate, double delta) {
-    }
-
-    /**
-     * 单样本变化结构。
-     */
-    public record EvalCaseComparison(
-            String query,
-            boolean baselineHit,
-            boolean candidateHit,
-            int baselineRank,
-            int candidateRank,
-            int rankDelta
-    ) {
-    }
-
-    /**
-     * 评测趋势聚合结果。
-     */
-    public record RetrievalEvalTrend(
-            List<RetrievalEvalRunSummary> runs,
-            double avgRecallAt5,
-            double avgMrr,
-            double bestRecallAt5,
-            Map<String, Long> experimentDistribution
-    ) {
-    }
-
-    /**
-     * 失败样本聚类结果。
-     */
-    public record RetrievalEvalFailureCluster(
-            String tag,
-            int failedCaseCount,
-            List<String> sampleQueries,
-            List<String> representativeKeywords
-    ) {
-    }
-
-    /**
-     * 参数模板定义。
-     */
-    public record RetrievalEvalParameterTemplate(
-            String templateId,
-            String title,
-            String description,
-            Map<String, Object> parameterSnapshot
-    ) {
-    }
-
-    /**
-     * 内置数据集定义。
-     */
-    public record EvalDatasetDefinition(
-            String datasetId,
-            String fileName,
-            String title,
-            String description
-    ) {
-    }
 }
-
-
-
-
-
-

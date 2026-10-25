@@ -1,9 +1,12 @@
 package io.github.imzmq.interview.routing.application;
 
 import io.github.imzmq.interview.config.routing.IntentTreeProperties;
-import io.github.imzmq.interview.routing.domain.IntentCandidate;
-import io.github.imzmq.interview.routing.domain.IntentRoutingDecision;
-import io.github.imzmq.interview.routing.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.application.contract.IntentRoutingOperations;
+import io.github.imzmq.interview.routing.application.contract.extension.IntentRoutingPromptRenderer;
+import io.github.imzmq.interview.routing.application.contract.extension.IntentRoutingPromptRenderer.RenderedRoutingPrompt;
+import io.github.imzmq.interview.routing.application.contract.result.IntentCandidate;
+import io.github.imzmq.interview.routing.application.contract.result.IntentRoutingDecision;
+import io.github.imzmq.interview.routing.application.contract.result.IntentTreeNode;
 import io.github.imzmq.interview.observability.core.TraceNode;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
@@ -12,7 +15,6 @@ import io.github.imzmq.interview.modelrouting.application.contract.structuredout
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputSchema;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputRetry;
-import io.github.imzmq.interview.chat.application.PromptManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,12 +27,12 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class IntentTreeRoutingService {
+public class IntentTreeRoutingService implements IntentRoutingOperations {
 
     private static final Logger logger = LoggerFactory.getLogger(IntentTreeRoutingService.class);
     private static final int LOG_TEXT_LIMIT = 4000;
 
-    private final PromptManager promptManager;
+    private final IntentRoutingPromptRenderer promptRenderer;
     private final IntentTreeProperties properties;
     private final IntentTreeService intentTreeService;
     private final IntentSlotRefineCaseService intentSlotRefineCaseService;
@@ -46,7 +48,7 @@ public class IntentTreeRoutingService {
             .build();
 
     public IntentTreeRoutingService(
-            PromptManager promptManager,
+            IntentRoutingPromptRenderer promptRenderer,
             IntentTreeProperties properties,
             IntentTreeService intentTreeService,
             IntentSlotRefineCaseService intentSlotRefineCaseService,
@@ -54,7 +56,7 @@ public class IntentTreeRoutingService {
             RoutingChatService routingChatService,
             StructuredOutputParser structuredOutputParser
     ) {
-        this.promptManager = promptManager;
+        this.promptRenderer = promptRenderer;
         this.properties = properties;
         this.intentTreeService = intentTreeService;
         this.intentSlotRefineCaseService = intentSlotRefineCaseService;
@@ -103,7 +105,7 @@ public class IntentTreeRoutingService {
             vars.put("minGap", properties.getMinGap());
             vars.put("ambiguityRatio", properties.getAmbiguityRatio());
             vars.put("domainHint", domain == null ? "" : domain);
-            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-tree-classifier", vars);
+            RenderedRoutingPrompt pair = promptRenderer.renderRoutingPrompt("intent-tree-classifier", vars);
 
             logger.info("统一意图分类请求: preferredModel={}, domainHint={}, query={}, history={}, leafCount={}",
                     intentPreferredModel,
@@ -146,7 +148,7 @@ public class IntentTreeRoutingService {
             vars.put("query", query);
             vars.put("history", history == null ? "" : history);
             vars.put("cases", loadSlotRefineCases(taskType));
-            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-slot-refine", vars);
+            RenderedRoutingPrompt pair = promptRenderer.renderRoutingPrompt("intent-slot-refine", vars);
             String response = routingChatService.call(
                     pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, intentPreferredModel, "意图槽位精炼");
             if (response == null || response.isBlank()) {
@@ -376,7 +378,7 @@ public class IntentTreeRoutingService {
             vars.put("query", query);
             vars.put("history", history == null ? "" : history);
             vars.put("candidates", candidates.stream().limit(Math.max(1, properties.getMaxCandidates())).toList());
-            PromptManager.PromptPair pair = promptManager.renderSplit("router", "intent-clarification", vars);
+            RenderedRoutingPrompt pair = promptRenderer.renderRoutingPrompt("intent-clarification", vars);
             String response = routingChatService.call(
                     pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, intentPreferredModel, "意图澄清");
             if (response != null && !response.isBlank()) {

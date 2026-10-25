@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.application.agent;
 
-import io.github.imzmq.interview.agent.a2a.A2ABus;
-import io.github.imzmq.interview.agent.a2a.A2AMessage;
+import io.github.imzmq.interview.agent.application.contract.AgentMessagingOperations;
+import io.github.imzmq.interview.agent.application.contract.message.AgentMessage;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
 import io.github.imzmq.interview.interview.infrastructure.persistence.InterviewSessionMapper;
 import io.github.imzmq.interview.interview.infrastructure.persistence.SessionRepository;
@@ -36,16 +36,16 @@ public class RollingSummaryAgent {
 
     private static final Logger logger = LoggerFactory.getLogger(RollingSummaryAgent.class);
 
-    private final A2ABus a2aBus;
+    private final AgentMessagingOperations agentMessaging;
     private final SessionRepository sessionRepository;
     private final InterviewSessionMapper interviewSessionMapper;
     private final RoutingChatService routingChatService;
     private final ObjectMapper objectMapper;
 
-    public RollingSummaryAgent(A2ABus a2aBus, SessionRepository sessionRepository,
+    public RollingSummaryAgent(AgentMessagingOperations agentMessaging, SessionRepository sessionRepository,
                                InterviewSessionMapper interviewSessionMapper,
                                RoutingChatService routingChatService) {
-        this.a2aBus = a2aBus;
+        this.agentMessaging = agentMessaging;
         this.sessionRepository = sessionRepository;
         this.interviewSessionMapper = interviewSessionMapper;
         this.routingChatService = routingChatService;
@@ -53,15 +53,15 @@ public class RollingSummaryAgent {
     }
 
     /**
-     * 在系统启动时向 A2A 总线注册自己。
+     * 在系统启动时通过 Agent 消息公开契约注册自己。
      * 当有 intent 为 ROLLING_SUMMARY 或 receiver 为 RollingSummaryAgent 的消息时，会路由到这里。
      */
     @PostConstruct
     public void init() {
-        a2aBus.subscribe("RollingSummaryAgent", this::handleSummaryTask);
+        agentMessaging.subscribe("RollingSummaryAgent", this::handleSummaryTask);
     }
 
-    private void handleSummaryTask(A2AMessage message) {
+    private void handleSummaryTask(AgentMessage message) {
         try {
             Map<String, Object> payload = message.payload();
             String sessionId = (String) payload.get("sessionId");
@@ -110,7 +110,7 @@ public class RollingSummaryAgent {
 
         } catch (Exception e) {
             logger.error("处理滚动总结任务失败", e);
-            // 抛出异常，让 A2ABus/RocketMQ 进行死信队列(DLQ)处理或重试
+            // 抛出异常，让底层消息实现进行死信队列(DLQ)处理或重试
             throw new RuntimeException("Rolling Summary Failed", e);
         }
     }

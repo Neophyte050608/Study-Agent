@@ -3,7 +3,7 @@ package io.github.imzmq.interview.chat.api;
 import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
 import io.github.imzmq.interview.chat.application.contract.result.ChatSessionView;
 import io.github.imzmq.interview.chat.application.ChatStreamingService;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
 import io.github.imzmq.interview.chat.application.contract.ChatSessionOperations;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,16 +29,16 @@ public class ChatController {
     private final ChatSessionOperations chatSessionOperations;
     private final ChatMessageOperations chatMessageOperations;
     private final ChatStreamingService chatStreamingService;
-    private final UserIdentityResolver userIdentityResolver;
+    private final UserIdentityQuery userIdentityQuery;
 
     public ChatController(ChatSessionOperations chatSessionOperations,
                           ChatMessageOperations chatMessageOperations,
                           ChatStreamingService chatStreamingService,
-                          UserIdentityResolver userIdentityResolver) {
+                          UserIdentityQuery userIdentityQuery) {
         this.chatSessionOperations = chatSessionOperations;
         this.chatMessageOperations = chatMessageOperations;
         this.chatStreamingService = chatStreamingService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
     }
 
     @PostMapping("/sessions")
@@ -46,7 +46,7 @@ public class ChatController {
             @RequestBody(required = false) Map<String, String> body,
             HttpServletRequest request) {
         // 从请求上下文中解析当前用户身份（Web 端多会话隔离关键点）。
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         // 允许前端不传 title，此时默认“新对话”。
         String title = body != null ? body.getOrDefault("title", "新对话") : "新对话";
         return ResponseEntity.ok(chatSessionOperations.createSession(userId, title));
@@ -54,7 +54,7 @@ public class ChatController {
 
     @GetMapping("/sessions")
     public ResponseEntity<List<ChatSessionView>> listSessions(HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         return ResponseEntity.ok(chatSessionOperations.listSessions(userId));
     }
 
@@ -86,7 +86,7 @@ public class ChatController {
             @RequestBody Map<String, Object> body,
             HttpServletRequest request) {
         // 鉴权后拿到 userId，防止跨用户访问会话。
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         // 用户本次输入内容。
         String content = String.valueOf(body.getOrDefault("content", ""));
         // 可选检索模式（RAG_ONLY / 混合策略等），空值时由下游决定默认行为。
@@ -115,5 +115,13 @@ public class ChatController {
         String taskId = body.get("streamTaskId");
         boolean stopped = chatStreamingService.stopTask(taskId);
         return ResponseEntity.ok(Map.of("streamTaskId", taskId, "stopped", stopped));
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }

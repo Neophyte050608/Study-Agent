@@ -1,7 +1,8 @@
 package io.github.imzmq.interview.media.api;
 
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
+import io.github.imzmq.interview.media.application.contract.extension.MediaSourcePathSupport;
+import io.github.imzmq.interview.media.application.contract.extension.MediaSourcePathSupport.MediaSourcePaths;
 import io.github.imzmq.interview.media.application.ImageService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
@@ -36,11 +37,11 @@ import java.util.Map;
 public class ImageController {
 
     private final ImageService imageService;
-    private final IngestConfigService ingestConfigService;
+    private final MediaSourcePathSupport mediaSourcePathSupport;
 
-    public ImageController(ImageService imageService, IngestConfigService ingestConfigService) {
+    public ImageController(ImageService imageService, MediaSourcePathSupport mediaSourcePathSupport) {
         this.imageService = imageService;
-        this.ingestConfigService = ingestConfigService;
+        this.mediaSourcePathSupport = mediaSourcePathSupport;
     }
 
     @GetMapping("/{imageId}/file")
@@ -164,10 +165,10 @@ public class ImageController {
     }
 
     private List<Path> allowedBasePaths() throws IOException {
-        Map<String, String> config = ingestConfigService.getConfig();
+        MediaSourcePaths sourcePaths = mediaSourcePathSupport.currentSourcePaths();
         List<Path> allowed = new ArrayList<>();
-        appendConfiguredPaths(allowed, config.get("imagePath"));
-        appendConfiguredPaths(allowed, config.get("paths"));
+        appendConfiguredPaths(allowed, sourcePaths.imagePath());
+        appendConfiguredPaths(allowed, sourcePaths.vaultPaths());
         return allowed;
     }
 

@@ -2,11 +2,10 @@ package io.github.imzmq.interview.interview.application.chat;
 
 import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
 import io.github.imzmq.interview.interview.application.contract.result.InterviewFinalReport;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewSessionStarted;
 
-import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
 import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations.PresentationChannel;
 import io.github.imzmq.interview.chat.application.contract.extension.ChatTaskResultPresenter;
-import io.github.imzmq.interview.interview.domain.InterviewSession;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,15 +13,15 @@ public class InterviewTaskResultPresenter implements ChatTaskResultPresenter {
 
     @Override
     public boolean supports(Object result) {
-        return result instanceof InterviewSession
+        return result instanceof InterviewSessionStarted
                 || result instanceof InterviewAnswerResult
                 || result instanceof InterviewFinalReport;
     }
 
     @Override
     public String format(Object result, PresentationChannel channel) {
-        if (result instanceof InterviewSession session) {
-            return session.getCurrentQuestion();
+        if (result instanceof InterviewSessionStarted started) {
+            return started.currentQuestion();
         }
         if (result instanceof InterviewAnswerResult answer) {
             return formatAnswer(answer, channel);

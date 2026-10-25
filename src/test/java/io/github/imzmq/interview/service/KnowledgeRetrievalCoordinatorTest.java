@@ -1,4 +1,6 @@
 package io.github.imzmq.interview.service;
+
+import io.github.imzmq.interview.media.application.contract.result.ImageResult;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 
@@ -205,7 +207,7 @@ class KnowledgeRetrievalCoordinatorTest {
                     "rag context",
                     "[图1] Redis 架构图 - 来源: redis-arch.png",
                     "1. [obsidian:redis.md] Redis缓存\n2. [obsidian:java.md] Java集合",
-                    List.of(new ImageService.ImageResult(
+                    List.of(new ImageResult(
                             "img-2",
                             "redis-arch.png",
                             "/api/images/img-2/file",
@@ -260,7 +262,7 @@ class KnowledgeRetrievalCoordinatorTest {
                     "local context",
                     "[图1] Redis 持久化流程图 - 来源: redis.png",
                     "1. [local_graph:Redis/AOF] Redis AOF\n2. [local_graph_backlink:Redis/RDB] Redis RDB",
-                    List.of(new ImageService.ImageResult(
+                    List.of(new ImageResult(
                             "img-1",
                             "redis.png",
                             "/api/images/img-1/file",

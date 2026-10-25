@@ -3,7 +3,7 @@ package io.github.imzmq.interview.routing.application;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import io.github.imzmq.interview.routing.infrastructure.persistence.IntentNodeDO;
-import io.github.imzmq.interview.routing.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.application.contract.result.IntentTreeNode;
 import io.github.imzmq.interview.routing.infrastructure.persistence.IntentNodeMapper;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;

@@ -7,7 +7,8 @@ import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,19 +40,19 @@ public class ConversationTopicTracker {
 
     private final StringRedisTemplate redisTemplate;
     private final RoutingChatService routingChatService;
-    private final PromptManager promptManager;
+    private final PromptRenderer promptRenderer;
     private final ObjectMapper objectMapper;
     private final StructuredOutputParser structuredOutputParser;
     private final AtomicLong turnCounter = new AtomicLong(0);
 
     public ConversationTopicTracker(StringRedisTemplate redisTemplate,
                                     RoutingChatService routingChatService,
-                                    PromptManager promptManager,
+                                    PromptRenderer promptRenderer,
                                     ObjectMapper objectMapper,
                                     StructuredOutputParser structuredOutputParser) {
         this.redisTemplate = redisTemplate;
         this.routingChatService = routingChatService;
-        this.promptManager = promptManager;
+        this.promptRenderer = promptRenderer;
         this.objectMapper = objectMapper;
         this.structuredOutputParser = structuredOutputParser;
     }
@@ -83,7 +84,7 @@ public class ConversationTopicTracker {
             vars.put("previousTopic", previousTopic);
             vars.put("topicList", topicList.toString());
 
-            PromptManager.PromptPair pair = promptManager.renderSplit("turn-analyzer-system", "turn-analyzer-task", vars);
+            RenderedPrompt pair = promptRenderer.renderSplit("turn-analyzer-system", "turn-analyzer-task", vars);
             String raw = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "轮次分析");
             return parseTurnAnalysis(raw, previousTopic, currentQuestion);
         } catch (Exception ex) {
@@ -236,7 +237,7 @@ public class ConversationTopicTracker {
             vars.put("topic", analysis.currentTopic());
             vars.put("knowledgeContext", truncate(knowledgeContext, DIGEST_CONTEXT_LIMIT));
 
-            PromptManager.PromptPair pair = promptManager.renderSplit("knowledge-digest-system", "knowledge-digest-task", vars);
+            RenderedPrompt pair = promptRenderer.renderSplit("knowledge-digest-system", "knowledge-digest-task", vars);
             String digest = routingChatService.call(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.GENERAL, "知识摘要");
             if (digest != null && !digest.isBlank()) {
                 updateTopicState(sessionId, analysis, digest.trim());

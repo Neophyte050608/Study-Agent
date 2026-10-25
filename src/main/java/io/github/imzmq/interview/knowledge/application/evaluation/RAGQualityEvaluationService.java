@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.knowledge.application.evaluation;
 
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RagQualityEvaluationOperations;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RagQualityEvaluationOperations.*;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalCaseDO;
@@ -9,7 +12,6 @@ import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQuality
 import io.github.imzmq.interview.knowledge.infrastructure.persistence.RagQualityEvalRunMapper;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
-import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -42,7 +44,7 @@ import java.util.stream.Collectors;
  * RAG 生成质量评测服务。
  */
 @Service
-public class RAGQualityEvaluationService {
+public class RAGQualityEvaluationService implements RagQualityEvaluationOperations {
 
     private static final int MAX_REPORT_HISTORY = 100;
     private static final String DEFAULT_DATASET_FILE = "rag_quality_ground_truth.json";
@@ -817,116 +819,4 @@ public class RAGQualityEvaluationService {
 
     private record MetricScore(double score, String reason) {
     }
-
-    public record QualityEvalCase(String query, String groundTruthAnswer, List<String> groundTruthKeyConcepts, String tag) {
-    }
-
-    public record QualityEvalCaseResult(
-            String query,
-            String tag,
-            String groundTruthAnswer,
-            String generatedAnswer,
-            String retrievedContext,
-            double faithfulness,
-            double answerRelevancy,
-            double contextPrecision,
-            double contextRecall,
-            Map<String, String> rationales
-    ) {
-    }
-
-    public record QualityEvalReport(
-            String runId,
-            String timestamp,
-            String datasetSource,
-            String runLabel,
-            String experimentTag,
-            String engine,
-            Map<String, Object> parameterSnapshot,
-            String notes,
-            int totalCases,
-            double avgFaithfulness,
-            double avgAnswerRelevancy,
-            double avgContextPrecision,
-            double avgContextRecall,
-            List<QualityEvalCaseResult> results
-    ) {
-    }
-
-    public record QualityEvalRunSummary(
-            String runId,
-            String timestamp,
-            String datasetSource,
-            String runLabel,
-            String experimentTag,
-            String engine,
-            int totalCases,
-            double avgFaithfulness,
-            double avgAnswerRelevancy,
-            double avgContextPrecision,
-            double avgContextRecall
-    ) {
-    }
-
-    public record EvalRunOptions(
-            String datasetSource,
-            String runLabel,
-            String experimentTag,
-            Map<String, Object> parameterSnapshot,
-            String notes
-    ) {
-    }
-
-    public record QualityEvalComparison(
-            String baselineRunId,
-            String candidateRunId,
-            EvalMetricDelta faithfulness,
-            EvalMetricDelta answerRelevancy,
-            EvalMetricDelta contextPrecision,
-            EvalMetricDelta contextRecall,
-            List<QualityEvalCaseComparison> changedCases
-    ) {
-    }
-
-    public record EvalMetricDelta(double baseline, double candidate, double delta) {
-    }
-
-    public record QualityEvalCaseComparison(
-            String query,
-            double baselineFaithfulness,
-            double candidateFaithfulness,
-            double baselineAnswerRelevancy,
-            double candidateAnswerRelevancy,
-            double baselineContextPrecision,
-            double candidateContextPrecision,
-            double baselineContextRecall,
-            double candidateContextRecall
-    ) {
-    }
-
-    public record QualityEvalTrend(
-            List<QualityEvalRunSummary> runs,
-            double avgFaithfulness,
-            double avgAnswerRelevancy,
-            double avgContextPrecision,
-            double avgContextRecall,
-            double bestFaithfulness
-    ) {
-    }
-
-    public record EvalDatasetDefinition(
-            String datasetId,
-            String fileName,
-            String title,
-            String description
-    ) {
-    }
 }
-
-
-
-
-
-
-
-

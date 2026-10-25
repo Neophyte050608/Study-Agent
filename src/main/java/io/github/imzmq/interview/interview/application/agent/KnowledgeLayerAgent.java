@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.interview.application.agent;
 
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.KnowledgeRetrievalOperations;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,10 +14,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class KnowledgeLayerAgent {
 
-    private final RAGService ragService;
+    private final KnowledgeRetrievalOperations knowledgeRetrievalOperations;
 
-    public KnowledgeLayerAgent(RAGService ragService) {
-        this.ragService = ragService;
+    public KnowledgeLayerAgent(KnowledgeRetrievalOperations knowledgeRetrievalOperations) {
+        this.knowledgeRetrievalOperations = knowledgeRetrievalOperations;
     }
 
     /**
@@ -26,9 +27,9 @@ public class KnowledgeLayerAgent {
      * @param userAnswer 用户回答
      * @return 包含检索查询词、召回文档及引用证据的知识包
      */
-    public RAGService.KnowledgePacket gatherKnowledge(String question, String userAnswer) {
+    public KnowledgePacket gatherKnowledge(String question, String userAnswer) {
         // 委托给 RAGService 执行具体的关键词改写和向量/词法混合检索
-        return ragService.buildKnowledgePacket(question, userAnswer);
+        return knowledgeRetrievalOperations.buildKnowledgePacket(question, userAnswer);
     }
 }
 

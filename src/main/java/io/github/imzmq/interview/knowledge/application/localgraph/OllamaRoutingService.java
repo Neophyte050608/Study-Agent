@@ -8,7 +8,8 @@ import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
-import io.github.imzmq.interview.chat.application.PromptManager;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,18 +40,18 @@ public class OllamaRoutingService {
 
     private final KnowledgeRetrievalProperties properties;
     private final RestClient.Builder restClientBuilder;
-    private final PromptManager promptManager;
+    private final PromptRenderer promptRenderer;
     private final RoutingChatService routingChatService;
     private final StructuredOutputParser structuredOutputParser;
 
     public OllamaRoutingService(KnowledgeRetrievalProperties properties,
                                 RestClient.Builder restClientBuilder,
-                                PromptManager promptManager,
+                                PromptRenderer promptRenderer,
                                 RoutingChatService routingChatService,
                                 StructuredOutputParser structuredOutputParser) {
         this.properties = properties;
         this.restClientBuilder = restClientBuilder;
-        this.promptManager = promptManager;
+        this.promptRenderer = promptRenderer;
         this.routingChatService = routingChatService;
         this.structuredOutputParser = structuredOutputParser;
     }
@@ -166,7 +167,7 @@ public class OllamaRoutingService {
         variables.put("question", question == null ? "" : question.trim());
         variables.put("candidateList", candidateList.toString().trim());
         variables.put("maxMatches", properties.getMaxLocalMatches());
-        return promptManager.render(ROUTE_TEMPLATE_NAME, variables);
+        return promptRenderer.render(ROUTE_TEMPLATE_NAME, variables);
     }
 
     private String compactForLog(String value) {

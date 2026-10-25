@@ -1,10 +1,12 @@
 package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
-import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
-import io.github.imzmq.interview.observability.application.ObservabilityQueryService;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RagQualityEvaluationOperations;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RetrievalEvaluationOperations;
+import io.github.imzmq.interview.observability.application.contract.ObservabilityQueryOperations;
+import io.github.imzmq.interview.observability.application.contract.query.RetrievalLatencyStats;
+import io.github.imzmq.interview.observability.application.contract.query.TraceDetailView;
+import io.github.imzmq.interview.observability.application.contract.query.TraceSummary;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
@@ -19,43 +21,40 @@ import java.util.Map;
 public class ObservabilityApplicationService {
     private static final int RETRIEVAL_METRICS_EVAL_SCAN_LIMIT = 200;
 
-    private final RAGObservabilityService ragObservabilityService;
-    private final RetrievalEvaluationService retrievalEvaluationService;
-    private final RAGQualityEvaluationService ragQualityEvaluationService;
+    private final RetrievalEvaluationOperations retrievalEvaluationService;
+    private final RagQualityEvaluationOperations ragQualityEvaluationService;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final SkillTelemetryRecorder skillTelemetryRecorder;
-    private final ObservabilityQueryService observabilityQueryService;
+    private final ObservabilityQueryOperations observabilityQueryOperations;
 
-    public ObservabilityApplicationService(RAGObservabilityService ragObservabilityService,
-                                           RetrievalEvaluationService retrievalEvaluationService,
-                                           RAGQualityEvaluationService ragQualityEvaluationService,
+    public ObservabilityApplicationService(RetrievalEvaluationOperations retrievalEvaluationService,
+                                           RagQualityEvaluationOperations ragQualityEvaluationService,
                                            ObservabilitySwitchProperties observabilitySwitchProperties,
                                            SkillTelemetryRecorder skillTelemetryRecorder,
-                                           ObservabilityQueryService observabilityQueryService) {
-        this.ragObservabilityService = ragObservabilityService;
+                                           ObservabilityQueryOperations observabilityQueryOperations) {
         this.retrievalEvaluationService = retrievalEvaluationService;
         this.ragQualityEvaluationService = ragQualityEvaluationService;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.skillTelemetryRecorder = skillTelemetryRecorder;
-        this.observabilityQueryService = observabilityQueryService;
+        this.observabilityQueryOperations = observabilityQueryOperations;
     }
 
-    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
-        return observabilityQueryService.getRecentRagTraces(limit);
+    public List<TraceSummary> getRecentRagTraces(int limit) {
+        return observabilityQueryOperations.getRecentRagTraces(limit);
     }
 
-    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+    public List<TraceSummary> getRecentRagTraces(int limit,
                                                                          String status,
                                                                          boolean riskyOnly,
                                                                          boolean fallbackOnly,
                                                                          boolean emptyRetrievalOnly,
                                                                          boolean slowOnly,
                                                                          String query) {
-        return observabilityQueryService.getRecentRagTraces(
+        return observabilityQueryOperations.getRecentRagTraces(
                 limit, status, riskyOnly, fallbackOnly, emptyRetrievalOnly, slowOnly, query);
     }
 
-    public List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+    public List<TraceSummary> getRecentRagTraces(int limit,
                                                                          String status,
                                                                          boolean riskyOnly,
                                                                          boolean fallbackOnly,
@@ -64,27 +63,27 @@ public class ObservabilityApplicationService {
                                                                          String query,
                                                                          Instant startedAfter,
                                                                          Instant endedBefore) {
-        return observabilityQueryService.getRecentRagTraces(
+        return observabilityQueryOperations.getRecentRagTraces(
                 limit, status, riskyOnly, fallbackOnly, emptyRetrievalOnly, slowOnly,
                 query, startedAfter, endedBefore);
     }
 
-    public List<RAGObservabilityService.TraceSummary> getActiveRagTraces(int limit) {
-        return observabilityQueryService.getActiveRagTraces(limit);
+    public List<TraceSummary> getActiveRagTraces(int limit) {
+        return observabilityQueryOperations.getActiveRagTraces(limit);
     }
 
-    public RAGObservabilityService.TraceDetailView getRagTraceDetail(String traceId) {
-        return observabilityQueryService.getRagTraceDetail(traceId);
+    public TraceDetailView getRagTraceDetail(String traceId) {
+        return observabilityQueryOperations.getRagTraceDetail(traceId);
     }
 
     public Map<String, Object> getRagOverview() {
-        return observabilityQueryService.getRagOverview();
+        return observabilityQueryOperations.getRagOverview();
     }
 
     public Map<String, Object> getRetrievalMetrics(Integer limit, Integer hours, String dataset) {
-        RAGObservabilityService.RetrievalLatencyStats latencyStats =
-                ragObservabilityService.getRetrievalLatencyStats(limit, hours);
-        RetrievalEvaluationService.RetrievalEvalRunSummary latestEvalRun = resolveLatestEvalRun(dataset);
+        RetrievalLatencyStats latencyStats =
+                observabilityQueryOperations.getRetrievalLatencyStats(limit, hours);
+        RetrievalEvaluationOperations.RetrievalEvalRunSummary latestEvalRun = resolveLatestEvalRun(dataset);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("enabled", observabilitySwitchProperties.isRagTraceEnabled());
@@ -124,102 +123,102 @@ public class ObservabilityApplicationService {
         return response;
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalOfflineEval() {
         return runRetrievalOfflineEval(null);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval(String dataset) {
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalOfflineEval(String dataset) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.runEvalByDataset(dataset);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(List<RetrievalEvaluationService.EvalCase> cases) {
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalEvalWithCases(List<RetrievalEvaluationOperations.EvalCase> cases) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.runCustomEval(cases);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(
-            List<RetrievalEvaluationService.EvalCase> cases,
-            RetrievalEvaluationService.EvalRunOptions options
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalEvalWithCases(
+            List<RetrievalEvaluationOperations.EvalCase> cases,
+            RetrievalEvaluationOperations.EvalRunOptions options
     ) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.runCustomEval(cases, options);
     }
 
-    public List<RetrievalEvaluationService.RetrievalEvalRunSummary> listRecentRetrievalEvalRuns(int limit) {
+    public List<RetrievalEvaluationOperations.RetrievalEvalRunSummary> listRecentRetrievalEvalRuns(int limit) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.listRecentRuns(limit);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport getRetrievalEvalRunDetail(String runId) {
+    public RetrievalEvaluationOperations.RetrievalEvalReport getRetrievalEvalRunDetail(String runId) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.getRunDetail(runId);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalComparison compareRetrievalEvalRuns(String baselineRunId, String candidateRunId) {
+    public RetrievalEvaluationOperations.RetrievalEvalComparison compareRetrievalEvalRuns(String baselineRunId, String candidateRunId) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.compareRuns(baselineRunId, candidateRunId);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalTrend getRetrievalEvalTrend(int limit) {
+    public RetrievalEvaluationOperations.RetrievalEvalTrend getRetrievalEvalTrend(int limit) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.getTrend(limit);
     }
 
-    public List<RetrievalEvaluationService.RetrievalEvalFailureCluster> clusterRetrievalEvalFailures(String runId) {
+    public List<RetrievalEvaluationOperations.RetrievalEvalFailureCluster> clusterRetrievalEvalFailures(String runId) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.clusterFailures(runId);
     }
 
-    public List<RetrievalEvaluationService.RetrievalEvalParameterTemplate> listRetrievalEvalParameterTemplates() {
+    public List<RetrievalEvaluationOperations.RetrievalEvalParameterTemplate> listRetrievalEvalParameterTemplates() {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.listParameterTemplates();
     }
 
-    public List<RetrievalEvaluationService.EvalDatasetDefinition> listRetrievalEvalDatasets() {
+    public List<RetrievalEvaluationOperations.EvalDatasetDefinition> listRetrievalEvalDatasets() {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.listBuiltInDatasets();
     }
 
-    public List<RetrievalEvaluationService.EvalCase> parseRetrievalEvalCsv(String csvText) {
+    public List<RetrievalEvaluationOperations.EvalCase> parseRetrievalEvalCsv(String csvText) {
         ensureRetrievalEvalEnabled();
         return retrievalEvaluationService.parseCasesFromCsv(csvText);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRagQualityEval(String engine) {
+    public RagQualityEvaluationOperations.QualityEvalReport runRagQualityEval(String engine) {
         return runRagQualityEval(null, engine);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRagQualityEval(String dataset, String engine) {
+    public RagQualityEvaluationOperations.QualityEvalReport runRagQualityEval(String dataset, String engine) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.runEvalByDataset(dataset, engine);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRagQualityEvalWithCases(
-            List<RAGQualityEvaluationService.QualityEvalCase> cases,
-            RAGQualityEvaluationService.EvalRunOptions options,
+    public RagQualityEvaluationOperations.QualityEvalReport runRagQualityEvalWithCases(
+            List<RagQualityEvaluationOperations.QualityEvalCase> cases,
+            RagQualityEvaluationOperations.EvalRunOptions options,
             String engine
     ) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.runCustomEval(cases, options, engine);
     }
 
-    public List<RAGQualityEvaluationService.QualityEvalRunSummary> listRecentRagQualityEvalRuns(int limit) {
+    public List<RagQualityEvaluationOperations.QualityEvalRunSummary> listRecentRagQualityEvalRuns(int limit) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.listRecentRuns(limit);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport getRagQualityEvalRunDetail(String runId) {
+    public RagQualityEvaluationOperations.QualityEvalReport getRagQualityEvalRunDetail(String runId) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.getRunDetail(runId);
     }
 
-    public RAGQualityEvaluationService.QualityEvalComparison compareRagQualityEvalRuns(String baselineId, String candidateId) {
+    public RagQualityEvaluationOperations.QualityEvalComparison compareRagQualityEvalRuns(String baselineId, String candidateId) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.compareRuns(baselineId, candidateId);
     }
 
-    public RAGQualityEvaluationService.QualityEvalTrend getRagQualityEvalTrend(int limit) {
+    public RagQualityEvaluationOperations.QualityEvalTrend getRagQualityEvalTrend(int limit) {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.getTrend(limit);
     }
@@ -229,7 +228,7 @@ public class ObservabilityApplicationService {
         return ragQualityEvaluationService.getEngineStatus();
     }
 
-    public List<RAGQualityEvaluationService.EvalDatasetDefinition> listRagQualityEvalDatasets() {
+    public List<RagQualityEvaluationOperations.EvalDatasetDefinition> listRagQualityEvalDatasets() {
         ensureRagQualityEvalEnabled();
         return ragQualityEvaluationService.listBuiltInDatasets();
     }
@@ -274,11 +273,11 @@ public class ObservabilityApplicationService {
         return skillTelemetryRecorder.recentEvents(limit, skillId, status, traceId);
     }
 
-    private RetrievalEvaluationService.RetrievalEvalRunSummary resolveLatestEvalRun(String dataset) {
+    private RetrievalEvaluationOperations.RetrievalEvalRunSummary resolveLatestEvalRun(String dataset) {
         if (!observabilitySwitchProperties.isRetrievalEvalEnabled()) {
             return null;
         }
-        List<RetrievalEvaluationService.RetrievalEvalRunSummary> runs =
+        List<RetrievalEvaluationOperations.RetrievalEvalRunSummary> runs =
                 retrievalEvaluationService.listRecentRuns(RETRIEVAL_METRICS_EVAL_SCAN_LIMIT);
         if (runs.isEmpty()) {
             return null;
@@ -318,19 +317,19 @@ public class ObservabilityApplicationService {
 
 
     public Map<String, Object> getDashboard() {
-        return observabilityQueryService.getDashboard();
+        return observabilityQueryOperations.getDashboard();
     }
 
     public List<Map<String, Object>> getMetricsHistory(int hours, String metricsParam) {
-        return observabilityQueryService.getMetricsHistory(hours, metricsParam);
+        return observabilityQueryOperations.getMetricsHistory(hours, metricsParam);
     }
 
     public Map<String, Object> getMetricsSummary() {
-        return observabilityQueryService.getMetricsSummary();
+        return observabilityQueryOperations.getMetricsSummary();
     }
 
     public Map<String, Object> triggerSnapshot() {
-        return observabilityQueryService.triggerSnapshot();
+        return observabilityQueryOperations.triggerSnapshot();
     }
 }
 

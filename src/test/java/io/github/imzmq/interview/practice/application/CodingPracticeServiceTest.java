@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.practice.application;
 
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+
 import io.github.imzmq.interview.practice.application.context.CodingPracticeAgentContextSchemaProvider;
 import io.github.imzmq.interview.agent.application.contract.extension.AgentContextSource;
 
@@ -179,11 +181,11 @@ class CodingPracticeServiceTest {
         }
 
         @Override
-        public PromptPair renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
+        public RenderedPrompt renderSplit(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
             this.lastSystemTemplateName = systemTemplateName;
             this.lastTaskTemplateName = taskTemplateName;
             this.lastVariables = variables == null ? Map.of() : new HashMap<>(variables);
-            return new PromptPair("system", "user");
+            return new RenderedPrompt("system", "user");
         }
     }
 

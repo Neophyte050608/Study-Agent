@@ -2,6 +2,7 @@ package io.github.imzmq.interview.config.agent;
 
 import io.github.imzmq.interview.knowledge.application.retrieval.VectorSearchTool;
 import io.github.imzmq.interview.search.application.WebSearchTool;
+import io.github.imzmq.interview.search.application.contract.WebSearchQuery;
 import org.springframework.ai.document.Document;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,7 +28,7 @@ public class AgentFunctionConfig {
      */
     @Bean
     @Description("当用户的问题涉及到最新的技术动态，或者在上下文中找不到足够的信息时，使用此工具进行互联网搜索以获取最新知识。")
-    public Function<WebSearchTool.Query, List<String>> webSearchFunction(WebSearchTool webSearchTool) {
+    public Function<WebSearchQuery, List<String>> webSearchFunction(WebSearchTool webSearchTool) {
         return webSearchTool::run;
     }
 

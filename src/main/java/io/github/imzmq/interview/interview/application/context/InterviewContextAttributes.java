@@ -2,7 +2,7 @@ package io.github.imzmq.interview.interview.application.context;
 
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
 
-import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
 
 public final class InterviewContextAttributes {
     public static final String PROFILE_SNAPSHOT = "interview.profileSnapshot";
@@ -42,8 +42,8 @@ public final class InterviewContextAttributes {
         return defaultValue;
     }
 
-    public static RAGService.KnowledgePacket packet(AgentContextQuery query) {
+    public static KnowledgePacket packet(AgentContextQuery query) {
         Object value = query == null ? null : query.attribute(KNOWLEDGE_PACKET);
-        return value instanceof RAGService.KnowledgePacket packet ? packet : null;
+        return value instanceof KnowledgePacket packet ? packet : null;
     }
 }

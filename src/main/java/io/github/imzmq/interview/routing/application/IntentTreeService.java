@@ -2,14 +2,15 @@ package io.github.imzmq.interview.routing.application;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import io.github.imzmq.interview.routing.infrastructure.persistence.IntentNodeDO;
-import io.github.imzmq.interview.routing.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.application.contract.IntentCatalogQuery;
+import io.github.imzmq.interview.routing.application.contract.result.IntentTreeNode;
 
 import java.util.List;
 
 /**
  * 意图树服务接口
  */
-public interface IntentTreeService extends IService<IntentNodeDO> {
+public interface IntentTreeService extends IService<IntentNodeDO>, IntentCatalogQuery {
 
     /**
      * 加载全量叶子意图节点（带缓存）

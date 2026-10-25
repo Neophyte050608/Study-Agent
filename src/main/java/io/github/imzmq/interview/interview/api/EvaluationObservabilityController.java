@@ -2,8 +2,8 @@ package io.github.imzmq.interview.interview.api;
 
 import io.github.imzmq.interview.interview.api.support.ControllerHelper;
 import io.github.imzmq.interview.interview.application.InterviewService;
-import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
-import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RagQualityEvaluationOperations;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RetrievalEvaluationOperations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,11 +20,11 @@ import java.util.Objects;
 public class EvaluationObservabilityController {
 
     private final InterviewService interviewService;
-    private final RetrievalEvaluationService retrievalEvaluationService;
+    private final RetrievalEvaluationOperations retrievalEvaluationService;
 
     public EvaluationObservabilityController(
             InterviewService interviewService,
-            RetrievalEvaluationService retrievalEvaluationService
+            RetrievalEvaluationOperations retrievalEvaluationService
     ) {
         this.interviewService = interviewService;
         this.retrievalEvaluationService = retrievalEvaluationService;
@@ -82,7 +82,7 @@ public class EvaluationObservabilityController {
     @GetMapping("/observability/retrieval-eval/runs/{runId}")
     public ResponseEntity<?> getRetrievalEvalRunDetail(@PathVariable("runId") String runId) {
         try {
-            RetrievalEvaluationService.RetrievalEvalReport report = interviewService.getRetrievalEvalRunDetail(runId);
+            RetrievalEvaluationOperations.RetrievalEvalReport report = interviewService.getRetrievalEvalRunDetail(runId);
             if (report == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的检索评测运行"));
             }
@@ -101,7 +101,7 @@ public class EvaluationObservabilityController {
             @RequestParam("candidateRunId") String candidateRunId
     ) {
         try {
-            RetrievalEvaluationService.RetrievalEvalComparison comparison = interviewService.compareRetrievalEvalRuns(baselineRunId, candidateRunId);
+            RetrievalEvaluationOperations.RetrievalEvalComparison comparison = interviewService.compareRetrievalEvalRuns(baselineRunId, candidateRunId);
             if (comparison == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到可对比的检索评测运行"));
             }
@@ -132,7 +132,7 @@ public class EvaluationObservabilityController {
     @GetMapping("/observability/retrieval-eval/runs/{runId}/failure-clusters")
     public ResponseEntity<?> getRetrievalEvalFailureClusters(@PathVariable("runId") String runId) {
         try {
-            List<RetrievalEvaluationService.RetrievalEvalFailureCluster> clusters = interviewService.clusterRetrievalEvalFailures(runId);
+            List<RetrievalEvaluationOperations.RetrievalEvalFailureCluster> clusters = interviewService.clusterRetrievalEvalFailures(runId);
             if (clusters == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的检索评测运行"));
             }
@@ -179,11 +179,11 @@ public class EvaluationObservabilityController {
     @PostMapping("/observability/retrieval-eval/run")
     public ResponseEntity<?> runRetrievalEval(@RequestBody Map<String, Object> payload) {
         try {
-            List<RetrievalEvaluationService.EvalCase> cases = parseEvalCases(payload.get("cases"));
+            List<RetrievalEvaluationOperations.EvalCase> cases = parseEvalCases(payload.get("cases"));
             if (cases.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测用例为空，请提供 cases"));
             }
-            RetrievalEvaluationService.EvalRunOptions options = new RetrievalEvaluationService.EvalRunOptions(
+            RetrievalEvaluationOperations.EvalRunOptions options = new RetrievalEvaluationOperations.EvalRunOptions(
                     ControllerHelper.stringifyValue(payload.get("datasetSource")),
                     ControllerHelper.stringifyValue(payload.get("runLabel")),
                     ControllerHelper.stringifyValue(payload.get("experimentTag")),
@@ -206,10 +206,10 @@ public class EvaluationObservabilityController {
         }
         try {
             String text = new String(file.getBytes(), StandardCharsets.UTF_8);
-            List<RetrievalEvaluationService.EvalCase> cases = retrievalEvaluationService.parseCasesFromCsv(text);
+            List<RetrievalEvaluationOperations.EvalCase> cases = retrievalEvaluationService.parseCasesFromCsv(text);
             return ResponseEntity.ok(retrievalEvaluationService.runCustomEval(
                     cases,
-                    new RetrievalEvaluationService.EvalRunOptions("csv", "csv-upload", "", Map.of(), "CSV 上传评测")
+                    new RetrievalEvaluationOperations.EvalRunOptions("csv", "csv-upload", "", Map.of(), "CSV 上传评测")
             ));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", e.getMessage()));
@@ -255,7 +255,7 @@ public class EvaluationObservabilityController {
     @PostMapping("/observability/rag-quality-eval/run")
     public ResponseEntity<?> runRagQualityEvalWithCases(@RequestBody Map<String, Object> payload) {
         try {
-            List<RAGQualityEvaluationService.QualityEvalCase> cases = parseQualityEvalCases(payload.get("cases"));
+            List<RagQualityEvaluationOperations.QualityEvalCase> cases = parseQualityEvalCases(payload.get("cases"));
             if (cases.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "评测用例为空，请提供 cases"));
             }
@@ -274,7 +274,7 @@ public class EvaluationObservabilityController {
                 notes = ControllerHelper.stringifyValue(map.get("notes"));
             }
 
-            RAGQualityEvaluationService.EvalRunOptions options = new RAGQualityEvaluationService.EvalRunOptions(
+            RagQualityEvaluationOperations.EvalRunOptions options = new RagQualityEvaluationOperations.EvalRunOptions(
                     datasetSource,
                     runLabel,
                     experimentTag,
@@ -312,7 +312,7 @@ public class EvaluationObservabilityController {
     @GetMapping("/observability/rag-quality-eval/runs/{runId}")
     public ResponseEntity<?> getRagQualityEvalRunDetail(@PathVariable("runId") String runId) {
         try {
-            RAGQualityEvaluationService.QualityEvalReport report = interviewService.getRAGQualityEvalRunDetail(runId);
+            RagQualityEvaluationOperations.QualityEvalReport report = interviewService.getRAGQualityEvalRunDetail(runId);
             if (report == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到对应的RAG生成质量评测运行"));
             }
@@ -331,7 +331,7 @@ public class EvaluationObservabilityController {
             @RequestParam("candidateRunId") String candidateRunId
     ) {
         try {
-            RAGQualityEvaluationService.QualityEvalComparison comparison =
+            RagQualityEvaluationOperations.QualityEvalComparison comparison =
                     interviewService.compareRAGQualityEvalRuns(baselineRunId, candidateRunId);
             if (comparison == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "未找到可对比的RAG生成质量评测运行"));
@@ -372,7 +372,7 @@ public class EvaluationObservabilityController {
     /**
      * 解析评测用例对象。
      */
-    private List<RetrievalEvaluationService.EvalCase> parseEvalCases(Object rawCases) {
+    private List<RetrievalEvaluationOperations.EvalCase> parseEvalCases(Object rawCases) {
         if (!(rawCases instanceof List<?> list)) {
             return List.of();
         }
@@ -398,7 +398,7 @@ public class EvaluationObservabilityController {
                         keywords = List.of();
                     }
                     String tag = map.get("tag") == null ? "manual" : String.valueOf(map.get("tag")).trim();
-                    return new RetrievalEvaluationService.EvalCase(query, keywords, tag.isBlank() ? "manual" : tag);
+                    return new RetrievalEvaluationOperations.EvalCase(query, keywords, tag.isBlank() ? "manual" : tag);
                 })
                 .filter(item -> item != null)
                 .toList();
@@ -407,7 +407,7 @@ public class EvaluationObservabilityController {
     /**
      * 解析 RAG 生成质量评测用例对象。
      */
-    private List<RAGQualityEvaluationService.QualityEvalCase> parseQualityEvalCases(Object rawCases) {
+    private List<RagQualityEvaluationOperations.QualityEvalCase> parseQualityEvalCases(Object rawCases) {
         if (!(rawCases instanceof List<?> list)) {
             return List.of();
         }
@@ -433,7 +433,7 @@ public class EvaluationObservabilityController {
                         concepts = List.of();
                     }
                     String tag = ControllerHelper.stringifyValue(map.get("tag"));
-                    return new RAGQualityEvaluationService.QualityEvalCase(
+                    return new RagQualityEvaluationOperations.QualityEvalCase(
                             query.trim(),
                             groundTruthAnswer == null ? "" : groundTruthAnswer,
                             concepts,

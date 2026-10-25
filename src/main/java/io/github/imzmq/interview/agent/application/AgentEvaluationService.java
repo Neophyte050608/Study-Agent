@@ -1,8 +1,10 @@
 package io.github.imzmq.interview.agent.application;
 
+import io.github.imzmq.interview.agent.application.contract.AgentEvaluationOperations;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
-import io.github.imzmq.interview.interview.application.InterviewService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.client.ChatClient;
@@ -35,7 +37,7 @@ import java.util.regex.Pattern;
  * 4. 链路追踪 (Transcript)：记录完整的对话链路，便于排障和效果分析。
  */
 @Service
-public class AgentEvaluationService {
+public class AgentEvaluationService implements AgentEvaluationOperations {
 
     private static final Pattern TOKEN_SPLITTER = Pattern.compile("[^\\p{IsAlphabetic}\\p{IsDigit}\\u4e00-\\u9fa5]+");
     /** 试验记录存储，Key 为 trialId */
@@ -43,18 +45,18 @@ public class AgentEvaluationService {
     /** 试验记录排序列表，用于分页展示 */
     private final List<String> trialOrder = new CopyOnWriteArrayList<>();
     private final ChatModel evaluatorChatModel;
-    private final ObjectProvider<InterviewService> interviewServiceProvider;
-    private final AgentSkillService agentSkillService;
+    private final ObjectProvider<AgentTaskOperations> interviewServiceProvider;
+    private final AgentSkillInstructions agentSkillInstructions;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AgentEvaluationService(
             ObjectProvider<ChatModel> evaluatorChatModelProvider,
-            ObjectProvider<InterviewService> interviewServiceProvider,
-            AgentSkillService agentSkillService
+            ObjectProvider<AgentTaskOperations> interviewServiceProvider,
+            AgentSkillInstructions agentSkillInstructions
     ) {
         this.evaluatorChatModel = evaluatorChatModelProvider.getIfAvailable();
         this.interviewServiceProvider = interviewServiceProvider;
-        this.agentSkillService = agentSkillService;
+        this.agentSkillInstructions = agentSkillInstructions;
     }
 
     /**
@@ -260,8 +262,8 @@ public class AgentEvaluationService {
             Map<String, Object> context,
             String taskTypeName
     ) {
-        InterviewService interviewService = interviewServiceProvider.getIfAvailable();
-        if (interviewService == null) {
+        AgentTaskOperations agentTaskOperations = interviewServiceProvider.getIfAvailable();
+        if (agentTaskOperations == null) {
             return new ExecutionResult("real mode unavailable: InterviewService not found", "");
         }
         TaskType taskType = parseTaskType(taskTypeName);
@@ -276,7 +278,7 @@ public class AgentEvaluationService {
         mergedContext.putIfAbsent("source", "agent-eval-trial");
         mergedContext.putIfAbsent("task", task);
         try {
-            TaskResponse response = interviewService.dispatchTask(taskType, input, mergedContext);
+            TaskResponse response = agentTaskOperations.dispatchTask(taskType, input, mergedContext);
             if (!response.success()) {
                 return new ExecutionResult("task failed: " + response.message(), taskType.name());
             }

@@ -3,6 +3,7 @@ package io.github.imzmq.interview.agent;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
 import io.github.imzmq.interview.agent.a2a.A2ABus;
 import io.github.imzmq.interview.agent.a2a.A2AMessage;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentTaskPromptRenderer;
 import io.github.imzmq.interview.agent.application.contract.extension.TaskHandler;
 import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
 import io.github.imzmq.interview.agent.application.contract.task.ExecutionMode;
@@ -10,13 +11,12 @@ import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.routing.domain.IntentPreFilter;
-import io.github.imzmq.interview.routing.domain.IntentRoutingDecision;
-import io.github.imzmq.interview.routing.domain.PreFilterResult;
+import io.github.imzmq.interview.routing.application.contract.result.IntentRoutingDecision;
+import io.github.imzmq.interview.routing.application.contract.result.PreFilterResult;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
-import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +56,7 @@ class TaskRouterAgentTest {
         };
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class),
                 mock(IntentPreFilter.class),
                 mock(A2ABus.class),
@@ -96,7 +96,7 @@ class TaskRouterAgentTest {
         };
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class),
                 mock(IntentPreFilter.class),
                 mock(A2ABus.class),
@@ -137,7 +137,7 @@ class TaskRouterAgentTest {
         ));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 intentTreeRoutingService,
                 intentPreFilter,
                 mock(A2ABus.class),
@@ -168,7 +168,7 @@ class TaskRouterAgentTest {
         when(intentPreFilter.filter("/help")).thenReturn(Optional.of(PreFilterResult.directReply("help text")));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class),
                 intentPreFilter,
                 a2aBus,
@@ -196,7 +196,7 @@ class TaskRouterAgentTest {
         IntentPreFilter intentPreFilter = new IntentPreFilter();
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class),
                 intentPreFilter,
                 mock(A2ABus.class),
@@ -222,9 +222,9 @@ class TaskRouterAgentTest {
         IntentPreFilter intentPreFilter = new IntentPreFilter();
         IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
         RoutingChatService routingChatService = mock(RoutingChatService.class);
-        PromptManager promptManager = mock(PromptManager.class);
+        AgentTaskPromptRenderer promptRenderer = mock(AgentTaskPromptRenderer.class);
         when(intentTreeRoutingService.enabled()).thenReturn(false);
-        when(promptManager.render(eq("task-router"), any())).thenReturn("prompt");
+        when(promptRenderer.renderTaskRouterPrompt(any())).thenReturn("prompt");
         when(routingChatService.callWithFirstPacketProbeSupplier(
                 any(),
                 eq("prompt"),
@@ -235,7 +235,7 @@ class TaskRouterAgentTest {
                 .thenReturn("{\"taskType\":\"UNKNOWN\"}");
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                promptManager,
+                promptRenderer,
                 intentTreeRoutingService,
                 intentPreFilter,
                 mock(A2ABus.class),
@@ -266,9 +266,9 @@ class TaskRouterAgentTest {
         IntentPreFilter intentPreFilter = new IntentPreFilter();
         IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
         RoutingChatService routingChatService = mock(RoutingChatService.class);
-        PromptManager promptManager = mock(PromptManager.class);
+        AgentTaskPromptRenderer promptRenderer = mock(AgentTaskPromptRenderer.class);
         when(intentTreeRoutingService.enabled()).thenReturn(false);
-        when(promptManager.render(eq("task-router"), any())).thenReturn("prompt");
+        when(promptRenderer.renderTaskRouterPrompt(any())).thenReturn("prompt");
         when(routingChatService.callWithFirstPacketProbeSupplier(
                 any(),
                 eq("prompt"),
@@ -279,7 +279,7 @@ class TaskRouterAgentTest {
                 .thenReturn("{\"taskType\":\"UNKNOWN\"}");
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                promptManager,
+                promptRenderer,
                 intentTreeRoutingService,
                 intentPreFilter,
                 mock(A2ABus.class),
@@ -311,7 +311,7 @@ class TaskRouterAgentTest {
         Map<String, Object> context = new java.util.HashMap<>(Map.of("traceId", "trace-clear", "sessionId", "session-1"));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class),
                 intentPreFilter,
                 mock(A2ABus.class),
@@ -339,7 +339,7 @@ class TaskRouterAgentTest {
         when(handler.taskType()).thenReturn(TaskType.KNOWLEDGE_QA);
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class),
                 mock(IntentPreFilter.class),
                 mock(A2ABus.class),
@@ -422,7 +422,7 @@ class TaskRouterAgentTest {
         };
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 intentTreeRoutingService,
                 intentPreFilter,
                 mock(A2ABus.class),
@@ -477,7 +477,7 @@ class TaskRouterAgentTest {
                 .thenReturn(Map.of());
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                mock(PromptManager.class),
+                mock(AgentTaskPromptRenderer.class),
                 intentTreeRoutingService,
                 mock(IntentPreFilter.class),
                 mock(A2ABus.class),
@@ -510,11 +510,11 @@ class TaskRouterAgentTest {
     void shouldNotInjectRoutingHintsWhenIntentDecisionFallbackToLegacy() {
         IntentTreeRoutingService intentTreeRoutingService = mock(IntentTreeRoutingService.class);
         RoutingChatService routingChatService = mock(RoutingChatService.class);
-        PromptManager promptManager = mock(PromptManager.class);
+        AgentTaskPromptRenderer promptRenderer = mock(AgentTaskPromptRenderer.class);
         when(intentTreeRoutingService.enabled()).thenReturn(true);
         when(intentTreeRoutingService.route("讲讲Redis", "history", null))
                 .thenReturn(IntentRoutingDecision.fallback());
-        when(promptManager.render(eq("task-router"), any())).thenReturn("prompt");
+        when(promptRenderer.renderTaskRouterPrompt(any())).thenReturn("prompt");
         when(routingChatService.callWithFirstPacketProbeSupplier(
                 any(),
                 eq("prompt"),
@@ -529,7 +529,7 @@ class TaskRouterAgentTest {
         ));
 
         TaskRouterAgent taskRouterAgent = new TaskRouterAgent(
-                promptManager,
+                promptRenderer,
                 intentTreeRoutingService,
                 mock(IntentPreFilter.class),
                 mock(A2ABus.class),

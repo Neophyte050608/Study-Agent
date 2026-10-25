@@ -36,7 +36,7 @@ public class InterviewReportGeneratorSkill implements ExecutableSkill {
         String topic = context == null ? "" : context.text("topic");
         String targetedSuggestion = context == null ? "" : context.text("targetedSuggestion");
         String rollingSummary = context == null ? "" : context.text("rollingSummary");
-        List<Question> history = extractHistory(context);
+        List<ReportEntry> history = extractHistory(context);
         String reportSummary = buildReportSummary(topic, history, targetedSuggestion, rollingSummary);
         return SkillExecutionResult.success(
                 DEFINITION.id(),
@@ -50,18 +50,38 @@ public class InterviewReportGeneratorSkill implements ExecutableSkill {
         );
     }
 
-    private List<Question> extractHistory(SkillExecutionContext context) {
+    private List<ReportEntry> extractHistory(SkillExecutionContext context) {
         if (context == null) {
             return List.of();
         }
         return context.list("history").stream()
-                .filter(Question.class::isInstance)
-                .map(Question.class::cast)
+                .map(this::toReportEntry)
+                .filter(java.util.Objects::nonNull)
                 .toList();
     }
 
+    private ReportEntry toReportEntry(Object item) {
+        if (item instanceof Question question) {
+            return new ReportEntry(
+                    question.getQuestionText(),
+                    question.getUserAnswer(),
+                    question.getScore(),
+                    question.getFeedback()
+            );
+        }
+        if (item instanceof Map<?, ?> values) {
+            return new ReportEntry(
+                    textValue(values.get("question")),
+                    textValue(values.get("answer")),
+                    intValue(values.get("score")),
+                    textValue(values.get("feedback"))
+            );
+        }
+        return null;
+    }
+
     private String buildReportSummary(String topic,
-                                      List<Question> history,
+                                      List<ReportEntry> history,
                                       String targetedSuggestion,
                                       String rollingSummary) {
         String normalizedTopic = topic == null || topic.isBlank() ? "后端基础" : topic.trim();
@@ -72,18 +92,18 @@ public class InterviewReportGeneratorSkill implements ExecutableSkill {
                 ? "整体表现中等，复盘重点应放在回答完整度、结构化表达和边界补齐。"
                 : "整体表现偏弱，复盘重点应放在低分题纠错、基础原理补齐和重复薄弱点收敛。";
         String lowScoreQuestions = history.stream()
-                .filter(item -> item.getScore() < 60)
-                .sorted(Comparator.comparingInt(Question::getScore))
+                .filter(item -> item.score() < 60)
+                .sorted(Comparator.comparingInt(ReportEntry::score))
                 .limit(3)
-                .map(item -> safeQuestion(item) + "(" + item.getScore() + ")")
+                .map(item -> safeQuestion(item) + "(" + item.score() + ")")
                 .collect(Collectors.joining("、"));
         String incompleteQuestions = history.stream()
-                .filter(item -> item.getScore() >= 60 && item.getScore() < 80)
+                .filter(item -> item.score() >= 60 && item.score() < 80)
                 .limit(3)
                 .map(InterviewReportGeneratorSkill::safeQuestion)
                 .collect(Collectors.joining("、"));
         String strongQuestions = history.stream()
-                .filter(item -> item.getScore() >= 80)
+                .filter(item -> item.score() >= 80)
                 .limit(2)
                 .map(InterviewReportGeneratorSkill::safeQuestion)
                 .collect(Collectors.joining("、"));
@@ -104,30 +124,53 @@ public class InterviewReportGeneratorSkill implements ExecutableSkill {
                 + " | rollingSummary=" + (rollingSummary == null || rollingSummary.isBlank() ? "无" : "有历史基线，需与本轮结果保持一致");
     }
 
-    private int averageScore(List<Question> history) {
+    private int averageScore(List<ReportEntry> history) {
         if (history == null || history.isEmpty()) {
             return 0;
         }
-        return (int) Math.round(history.stream().mapToInt(Question::getScore).average().orElse(0D));
+        return (int) Math.round(history.stream().mapToInt(ReportEntry::score).average().orElse(0D));
     }
 
-    private int weakQuestionCount(List<Question> history) {
+    private int weakQuestionCount(List<ReportEntry> history) {
         if (history == null || history.isEmpty()) {
             return 0;
         }
-        return (int) history.stream().filter(item -> item.getScore() < 60).count();
+        return (int) history.stream().filter(item -> item.score() < 60).count();
     }
 
-    private static String safeQuestion(Question question) {
-        if (question == null || question.getQuestionText() == null || question.getQuestionText().isBlank()) {
+    private static String safeQuestion(ReportEntry question) {
+        if (question == null || question.question().isBlank()) {
             return "未命名问题";
         }
-        String text = question.getQuestionText().trim().replaceAll("\\s+", " ");
+        String text = question.question().trim().replaceAll("\\s+", " ");
         return text.length() > 24 ? text.substring(0, 24) + "..." : text;
+    }
+
+    private String textValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private int intValue(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return value == null ? 0 : Integer.parseInt(String.valueOf(value).trim());
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private String fallbackText(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private record ReportEntry(String question, String answer, int score, String feedback) {
+        private ReportEntry {
+            question = question == null ? "" : question;
+            answer = answer == null ? "" : answer;
+            feedback = feedback == null ? "" : feedback;
+        }
     }
 }
 

@@ -3,7 +3,7 @@ package io.github.imzmq.interview.im.application.runtime;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.config.routing.IntentTreeProperties;
-import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
+import io.github.imzmq.interview.routing.application.contract.IntentRoutingOperations;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -16,14 +16,14 @@ import java.util.Map;
 public class ClarificationResolver {
 
     private final IntentTreeProperties intentTreeProperties;
-    private final IntentTreeRoutingService intentTreeRoutingService;
+    private final IntentRoutingOperations intentRoutingOperations;
     private final ObjectMapper objectMapper;
 
     public ClarificationResolver(IntentTreeProperties intentTreeProperties,
-                                 IntentTreeRoutingService intentTreeRoutingService,
+                                 IntentRoutingOperations intentRoutingOperations,
                                  ObjectMapper objectMapper) {
         this.intentTreeProperties = intentTreeProperties;
-        this.intentTreeRoutingService = intentTreeRoutingService;
+        this.intentRoutingOperations = intentRoutingOperations;
         this.objectMapper = objectMapper;
     }
 
@@ -108,8 +108,8 @@ public class ClarificationResolver {
             }
         }
         String mergedQuery = String.valueOf(payload.getOrDefault("query", normalizedReply));
-        Map<String, Object> refinedSlots = intentTreeRoutingService == null ? Map.of()
-                : intentTreeRoutingService.refineSlots(clarifiedTaskType.name(), mergedQuery, "");
+        Map<String, Object> refinedSlots = intentRoutingOperations == null ? Map.of()
+                : intentRoutingOperations.refineSlots(clarifiedTaskType.name(), mergedQuery, "");
         mergeMissingPayload(payload, refinedSlots);
         return payload;
     }

@@ -2,7 +2,7 @@ package io.github.imzmq.interview.practice.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.imzmq.interview.chat.application.contract.ChatMessageOperations;
-import io.github.imzmq.interview.practice.application.agent.CodingPracticeAgent;
+import io.github.imzmq.interview.practice.application.CodingPracticeApplicationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,13 +45,13 @@ class CodingPracticeControllerContractTest {
 
     @Test
     void batchQuizSubmitPreservesActionAndAgentResult() {
-        CodingPracticeAgent agent = mock(CodingPracticeAgent.class);
+        CodingPracticeApplicationService service = mock(CodingPracticeApplicationService.class);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sessionId", "coding-1");
         Map<String, Object> result = Map.of("status", "evaluated", "score", 88);
-        when(agent.execute(body)).thenReturn(result);
+        when(service.execute(body)).thenReturn(result);
         CodingPracticeController controller = new CodingPracticeController(
-                agent,
+                service,
                 mock(ChatMessageOperations.class),
                 new ObjectMapper()
         );
@@ -60,6 +60,6 @@ class CodingPracticeControllerContractTest {
 
         assertThat(response.getBody()).isSameAs(result);
         assertThat(body).containsEntry("action", "batch-quiz-submit");
-        verify(agent).execute(body);
+        verify(service).execute(body);
     }
 }

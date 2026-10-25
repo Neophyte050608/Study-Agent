@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.interview.application.evaluation;
 
-import io.github.imzmq.interview.agent.application.context.AgentContextAssembler;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextOperations;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
 import io.github.imzmq.interview.agent.application.contract.context.AgentRuntimeContext;
@@ -9,15 +9,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.imzmq.interview.agent.application.AgentSkillService;
+import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
-import io.github.imzmq.interview.chat.application.PromptManager;
-import io.github.imzmq.interview.chat.application.PromptTemplateService;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+import io.github.imzmq.interview.chat.application.contract.PromptExampleQuery;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.knowledge.application.RAGService;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.observability.application.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgePacket;
+import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
@@ -47,7 +48,7 @@ import java.util.stream.Collectors;
 /**
  * 面试回答评估服务。
  *
- * <p>负责基于已构建的 {@link RAGService.KnowledgePacket} 生成结构化评估、执行证据引用校验，
+ * <p>负责基于已构建的 {@link KnowledgePacket} 生成结构化评估、执行证据引用校验，
  * 并在模型异常时返回可继续前端流程的降级 JSON。</p>
  */
 @Service
@@ -61,30 +62,30 @@ public class InterviewAnswerEvaluationService {
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
 
     private final RoutingChatService routingChatService;
-    private final RAGObservabilityService observabilityService;
-    private final AgentSkillService agentSkillService;
-    private final PromptTemplateService promptTemplateService;
-    private final PromptManager promptManager;
+    private final RagTraceOperations ragTraceOperations;
+    private final AgentSkillInstructions agentSkillService;
+    private final PromptExampleQuery promptExampleQuery;
+    private final PromptRenderer promptRenderer;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final SkillOrchestrator skillOrchestrator;
     private final StructuredOutputParser structuredOutputParser;
-    private final AgentContextAssembler contextAssembler;
+    private final AgentContextOperations contextAssembler;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public InterviewAnswerEvaluationService(RoutingChatService routingChatService,
-                                            RAGObservabilityService observabilityService,
-                                            AgentSkillService agentSkillService,
-                                            PromptTemplateService promptTemplateService,
-                                            PromptManager promptManager,
+                                            RagTraceOperations ragTraceOperations,
+                                            AgentSkillInstructions agentSkillService,
+                                            PromptExampleQuery promptExampleQuery,
+                                            PromptRenderer promptRenderer,
                                             ObservabilitySwitchProperties observabilitySwitchProperties,
                                             SkillOrchestrator skillOrchestrator,
                                             StructuredOutputParser structuredOutputParser,
-                                            AgentContextAssembler contextAssembler) {
+                                            AgentContextOperations contextAssembler) {
         this.routingChatService = routingChatService;
-        this.observabilityService = observabilityService;
+        this.ragTraceOperations = ragTraceOperations;
         this.agentSkillService = agentSkillService;
-        this.promptTemplateService = promptTemplateService;
-        this.promptManager = promptManager;
+        this.promptExampleQuery = promptExampleQuery;
+        this.promptRenderer = promptRenderer;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.skillOrchestrator = skillOrchestrator;
         this.structuredOutputParser = structuredOutputParser;
@@ -102,9 +103,9 @@ public class InterviewAnswerEvaluationService {
                                       double topicMastery,
                                       String profileSnapshot,
                                       String strategyHint,
-                                      RAGService.KnowledgePacket packet) {
+                                      KnowledgePacket packet) {
         try {
-            RAGService.EvaluationResult result = evaluateWithKnowledge(
+            InterviewEvaluationOutput result = evaluateWithKnowledge(
                     topic,
                     question,
                     userAnswer,
@@ -126,7 +127,7 @@ public class InterviewAnswerEvaluationService {
     /**
      * 基于检索上下文执行回答评估（LLM 生成）。
      */
-    public RAGService.EvaluationResult evaluateWithKnowledge(String topic,
+    public InterviewEvaluationOutput evaluateWithKnowledge(String topic,
                                                              String question,
                                                              String userAnswer,
                                                              String difficultyLevel,
@@ -134,7 +135,7 @@ public class InterviewAnswerEvaluationService {
                                                              double topicMastery,
                                                              String profileSnapshot,
                                                              String strategyHint,
-                                                             RAGService.KnowledgePacket packet) {
+                                                             KnowledgePacket packet) {
         return executeWithinTraceRoot("KNOWLEDGE_EVAL", "Knowledge Evaluation", "Q: " + question, () -> {
             String originalContext = packet == null ? "" : packet.context();
             String originalImageContext = packet == null ? "" : packet.imageContext();
@@ -187,7 +188,7 @@ public class InterviewAnswerEvaluationService {
                         safeLength(finalEvidence),
                         safeLength(originalEvidence),
                         parseEvidenceCatalog(originalEvidence).size(),
-                        packet == null || packet.retrievedDocs() == null ? 0 : packet.retrievedDocs().size(),
+                        packet == null ? 0 : packet.retrievedDocumentCount(),
                         packet != null && packet.webFallbackUsed(),
                         safeLength(assembledContext)
                 );
@@ -199,10 +200,10 @@ public class InterviewAnswerEvaluationService {
                         2,
                         "回答评估"
                 );
-                return new RAGService.EvaluationResult(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
+                return new InterviewEvaluationOutput(routingResult.content(), routingResult.inputTokens(), routingResult.outputTokens());
             } catch (RuntimeException e) {
                 logger.warn("回答评估失败，返回降级结果。原因: {}", summarizeError(e));
-                return new RAGService.EvaluationResult(buildFallbackEvaluation(question, e), 0, 0);
+                return new InterviewEvaluationOutput(buildFallbackEvaluation(question, e), 0, 0);
             }
         });
     }
@@ -215,7 +216,7 @@ public class InterviewAnswerEvaluationService {
                                             double topicMastery,
                                             String profileSnapshot,
                                             String strategyHint,
-                                            RAGService.KnowledgePacket packet,
+                                            KnowledgePacket packet,
                                             String fallbackContext) {
         Map<String, Object> attributes = new HashMap<>();
         attributes.put(InterviewContextAttributes.TOPIC, topic == null ? "" : topic);
@@ -251,7 +252,7 @@ public class InterviewAnswerEvaluationService {
                                                                       String strategyHint) {
         String traceId = RAGTraceContext.getTraceId();
         String nodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(
+        ragTraceOperations.startNode(
                 traceId,
                 nodeId,
                 RAGTraceContext.getCurrentNodeId(),
@@ -262,7 +263,7 @@ public class InterviewAnswerEvaluationService {
         try {
             String skillBlock = safeSkillText(agentSkillService.resolveSkillBlock("evidence-evaluator", "question-strategy"));
             String difficultyGuide = normalizeDifficultyGuide(difficultyLevel);
-            List<Map<String, Object>> cases = promptTemplateService.loadFewShotCases("prompts/evaluation_cases.json");
+            List<Map<String, Object>> cases = promptExampleQuery.loadFewShotCases("prompts/evaluation_cases.json");
 
             Map<String, Object> contextMap = new HashMap<>();
             contextMap.put("skillBlock", skillBlock);
@@ -279,17 +280,17 @@ public class InterviewAnswerEvaluationService {
             contextMap.put("question", question);
             contextMap.put("userAnswer", userAnswer);
 
-            PromptManager.PromptPair pair = promptManager.renderSplit("interviewer", "evaluation", contextMap);
+            RenderedPrompt pair = promptRenderer.renderSplit("interviewer", "evaluation", contextMap);
             RoutingChatService.RoutingResult result = callWithRetryResult(
                     () -> routingChatService.callWithMetadata(pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "回答评估"),
                     1,
                     "回答评估"
             );
 
-            observabilityService.endNode(traceId, nodeId, "Q: " + question, "Score: " + result.content().substring(0, Math.min(20, result.content().length())), null);
+            ragTraceOperations.endNode(traceId, nodeId, "Q: " + question, "Score: " + result.content().substring(0, Math.min(20, result.content().length())), null);
             return result;
         } catch (Exception e) {
-            observabilityService.endNode(traceId, nodeId, "Q: " + question, null, e.getMessage());
+            ragTraceOperations.endNode(traceId, nodeId, "Q: " + question, null, e.getMessage());
             throw e;
         }
     }
@@ -348,13 +349,13 @@ public class InterviewAnswerEvaluationService {
         }
         String traceId = RAGTraceContext.getTraceId();
         String rootNodeId = UUID.randomUUID().toString();
-        observabilityService.startNode(traceId, rootNodeId, null, nodeType, nodeName);
+        ragTraceOperations.startNode(traceId, rootNodeId, null, nodeType, nodeName);
         try {
             T result = action.get();
-            observabilityService.endNode(traceId, rootNodeId, inputSummary, nodeName + " completed", null);
+            ragTraceOperations.endNode(traceId, rootNodeId, inputSummary, nodeName + " completed", null);
             return result;
         } catch (RuntimeException e) {
-            observabilityService.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
+            ragTraceOperations.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
             throw e;
         }
     }

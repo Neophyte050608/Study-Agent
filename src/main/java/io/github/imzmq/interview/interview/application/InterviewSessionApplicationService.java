@@ -2,10 +2,10 @@ package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.interview.application.contract.result.InterviewAnswerResult;
 import io.github.imzmq.interview.interview.application.contract.result.InterviewFinalReport;
+import io.github.imzmq.interview.interview.application.contract.result.InterviewSessionStarted;
 
 import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
-import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
@@ -18,12 +18,12 @@ import java.util.Map;
 @Service
 public class InterviewSessionApplicationService {
 
-    private final TaskRouterAgent taskRouterAgent;
+    private final AgentTaskOperations agentTaskOperations;
     private final InterviewOrchestratorAgent orchestratorAgent;
 
-    public InterviewSessionApplicationService(TaskRouterAgent taskRouterAgent,
+    public InterviewSessionApplicationService(AgentTaskOperations agentTaskOperations,
                                               InterviewOrchestratorAgent orchestratorAgent) {
-        this.taskRouterAgent = taskRouterAgent;
+        this.agentTaskOperations = agentTaskOperations;
         this.orchestratorAgent = orchestratorAgent;
     }
 
@@ -38,9 +38,13 @@ public class InterviewSessionApplicationService {
         context.put("source", "InterviewService.startSession");
         context.put("traceId", RAGTraceContext.getTraceId());
 
-        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(TaskType.INTERVIEW_START, payload, context));
-        if (!response.success() || !(response.data() instanceof InterviewSession session)) {
+        TaskResponse response = agentTaskOperations.dispatchTask(TaskType.INTERVIEW_START, payload, context);
+        if (!response.success() || !(response.data() instanceof InterviewSessionStarted started)) {
             throw new IllegalStateException(response.message());
+        }
+        InterviewSession session = orchestratorAgent.getSession(started.sessionId());
+        if (session == null) {
+            throw new IllegalStateException("面试会话创建后无法读取: " + started.sessionId());
         }
         return session;
     }
@@ -50,11 +54,11 @@ public class InterviewSessionApplicationService {
         context.put("source", "InterviewService.submitAnswer");
         context.put("traceId", RAGTraceContext.getTraceId());
 
-        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
+        TaskResponse response = agentTaskOperations.dispatchTask(
                 TaskType.INTERVIEW_ANSWER,
                 Map.of("sessionId", sessionId == null ? "" : sessionId, "userAnswer", userAnswer == null ? "" : userAnswer),
                 context
-        ));
+        );
         if (!response.success() || !(response.data() instanceof InterviewAnswerResult result)) {
             throw new IllegalStateException(response.message());
         }
@@ -75,11 +79,11 @@ public class InterviewSessionApplicationService {
         context.put("source", "InterviewService.generateFinalReport");
         context.put("traceId", RAGTraceContext.getTraceId());
 
-        TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
+        TaskResponse response = agentTaskOperations.dispatchTask(
                 TaskType.INTERVIEW_REPORT,
                 Map.of("sessionId", sessionId == null ? "" : sessionId, "userId", userId == null ? "" : userId),
                 context
-        ));
+        );
         if (!response.success() || !(response.data() instanceof InterviewFinalReport report)) {
             throw new IllegalStateException(response.message());
         }

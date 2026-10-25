@@ -1,14 +1,13 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.agent.a2a.A2ABus;
-import io.github.imzmq.interview.agent.a2a.A2AIdempotencyStore;
-import io.github.imzmq.interview.agent.a2a.RocketMqA2ABus;
-import io.github.imzmq.interview.agent.application.AgentEvaluationService;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
-import io.github.imzmq.interview.ingestion.application.IngestionService;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
+import io.github.imzmq.interview.agent.application.contract.AgentA2AOperations;
+import io.github.imzmq.interview.agent.application.contract.result.A2ABatchReplayResult;
+import io.github.imzmq.interview.agent.application.contract.AgentEvaluationOperations;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionOperations;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionTaskOperations;
 import io.github.imzmq.interview.interview.application.InterviewService;
-import io.github.imzmq.interview.mcp.application.OpsAuditService;
+import io.github.imzmq.interview.mcp.application.contract.OpsAuditOperations;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,30 +23,27 @@ import java.util.Map;
 public class InfraObservabilityController {
 
     private final InterviewService interviewService;
-    private final UserIdentityResolver userIdentityResolver;
-    private final OpsAuditService opsAuditService;
-    private final AgentEvaluationService agentEvaluationService;
-    private final A2ABus a2aBus;
-    private final A2AIdempotencyStore a2AIdempotencyStore;
-    private final IngestionService ingestionService;
-    private final IngestionTaskService ingestionTaskService;
+    private final UserIdentityQuery userIdentityQuery;
+    private final OpsAuditOperations opsAuditService;
+    private final AgentEvaluationOperations agentEvaluationService;
+    private final AgentA2AOperations agentA2AOperations;
+    private final IngestionOperations ingestionService;
+    private final IngestionTaskOperations ingestionTaskService;
 
     public InfraObservabilityController(
             InterviewService interviewService,
-            UserIdentityResolver userIdentityResolver,
-            OpsAuditService opsAuditService,
-            AgentEvaluationService agentEvaluationService,
-            A2ABus a2aBus,
-            A2AIdempotencyStore a2AIdempotencyStore,
-            IngestionService ingestionService,
-            IngestionTaskService ingestionTaskService
+            UserIdentityQuery userIdentityQuery,
+            OpsAuditOperations opsAuditService,
+            AgentEvaluationOperations agentEvaluationService,
+            AgentA2AOperations agentA2AOperations,
+            IngestionOperations ingestionService,
+            IngestionTaskOperations ingestionTaskService
     ) {
         this.interviewService = interviewService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
         this.opsAuditService = opsAuditService;
         this.agentEvaluationService = agentEvaluationService;
-        this.a2aBus = a2aBus;
-        this.a2AIdempotencyStore = a2AIdempotencyStore;
+        this.agentA2AOperations = agentA2AOperations;
         this.ingestionService = ingestionService;
         this.ingestionTaskService = ingestionTaskService;
     }
@@ -57,7 +53,7 @@ public class InfraObservabilityController {
      */
     @GetMapping("/observability/a2a/idempotency")
     public ResponseEntity<?> a2aIdempotency() {
-        return ResponseEntity.ok(a2AIdempotencyStore.snapshot());
+        return ResponseEntity.ok(agentA2AOperations.idempotencySnapshot());
     }
 
     /**
@@ -119,7 +115,7 @@ public class InfraObservabilityController {
             @RequestParam(value = "limit", required = false, defaultValue = "20") Integer limit,
             HttpServletRequest request
     ) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         int normalizedLimit = limit == null ? 20 : limit;
         return ResponseEntity.ok(Map.of(
                 "userId", userId,
@@ -133,7 +129,7 @@ public class InfraObservabilityController {
      */
     @PostMapping("/observability/agent-eval/trials")
     public ResponseEntity<?> runAgentTrial(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
-        String operator = userIdentityResolver.resolve(request);
+        String operator = resolveUserIdentity(request);
         Map<String, Object> result = agentEvaluationService.runTrial(operator, payload == null ? Map.of() : payload);
         opsAuditService.record(
                 operator,
@@ -207,17 +203,17 @@ public class InfraObservabilityController {
     @PostMapping("/observability/a2a/dlq/replay")
     public ResponseEntity<?> replayDlq(@RequestBody Map<String, String> payload, HttpServletRequest request) {
         // 仅用于排障：把 DLQ 中的一条原始 JSON 消息反序列化后重新投递进 A2A 总线。
-        String operator = userIdentityResolver.resolve(request);
+        String operator = resolveUserIdentity(request);
         String rawMessage = payload.get("message");
         if (rawMessage == null || rawMessage.isBlank()) {
             opsAuditService.record(operator, "A2A_DLQ_REPLAY", Map.of("messagePresent", false), false, "message 不能为空");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "message 不能为空"));
         }
-        if (!(a2aBus instanceof RocketMqA2ABus rocketMqA2ABus)) {
+        if (!agentA2AOperations.supportsDlqReplay()) {
             opsAuditService.record(operator, "A2A_DLQ_REPLAY", Map.of("messagePresent", true), false, "当前非 rocketmq 总线");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "当前非 rocketmq 总线，无法重放 DLQ"));
         }
-        boolean ok = rocketMqA2ABus.dispatchInbound(rawMessage);
+        boolean ok = agentA2AOperations.replayDlqMessage(rawMessage);
         if (!ok) {
             opsAuditService.record(operator, "A2A_DLQ_REPLAY", Map.of("messagePresent", true), false, "DLQ 消息格式无效或解析失败");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "DLQ 消息格式无效或解析失败"));
@@ -232,8 +228,8 @@ public class InfraObservabilityController {
     @PostMapping("/observability/a2a/dlq/replay/batch")
     public ResponseEntity<?> replayDlqBatch(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
         // 批量重放：返回失败索引，便于定位哪条消息格式有问题。
-        String operator = userIdentityResolver.resolve(request);
-        if (!(a2aBus instanceof RocketMqA2ABus rocketMqA2ABus)) {
+        String operator = resolveUserIdentity(request);
+        if (!agentA2AOperations.supportsDlqReplay()) {
             opsAuditService.record(operator, "A2A_DLQ_REPLAY_BATCH", Map.of("count", 0), false, "当前非 rocketmq 总线");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "当前非 rocketmq 总线，无法重放 DLQ"));
         }
@@ -241,27 +237,19 @@ public class InfraObservabilityController {
             opsAuditService.record(operator, "A2A_DLQ_REPLAY_BATCH", Map.of("count", 0), false, "messages 不能为空");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "messages 不能为空"));
         }
-        int success = 0;
-        List<Integer> failedIndexes = new ArrayList<>();
-        for (int i = 0; i < list.size(); i++) {
-            Object item = list.get(i);
-            String raw = item == null ? "" : item.toString();
-            boolean ok = rocketMqA2ABus.dispatchInbound(raw);
-            if (ok) {
-                success++;
-            } else {
-                failedIndexes.add(i);
-            }
-        }
+        List<String> messages = list.stream()
+                .map(item -> item == null ? "" : item.toString())
+                .toList();
+        A2ABatchReplayResult replayResult = agentA2AOperations.replayDlqMessages(messages);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", list.size());
-        result.put("success", success);
-        result.put("failed", list.size() - success);
-        result.put("failedIndexes", failedIndexes);
+        result.put("total", replayResult.total());
+        result.put("success", replayResult.success());
+        result.put("failed", replayResult.failed());
+        result.put("failedIndexes", replayResult.failedIndexes());
         opsAuditService.record(
                 operator,
                 "A2A_DLQ_REPLAY_BATCH",
-                Map.of("count", list.size(), "failed", failedIndexes.size()),
+                Map.of("count", list.size(), "failed", replayResult.failedIndexes().size()),
                 true,
                 "batch_replayed"
         );
@@ -276,7 +264,7 @@ public class InfraObservabilityController {
     @PostMapping("/observability/a2a/idempotency/clear")
     public ResponseEntity<?> clearA2AIdempotency(@RequestBody Map<String, String> payload, HttpServletRequest request) {
         // 运维接口：清理幂等键（memory/redis/all），仅建议在排障或测试环境使用。
-        String operator = userIdentityResolver.resolve(request);
+        String operator = resolveUserIdentity(request);
         String scope = payload.get("scope");
         if (scope != null && !scope.isBlank()) {
             String normalized = scope.trim().toLowerCase();
@@ -286,7 +274,7 @@ public class InfraObservabilityController {
             }
         }
         String keyContains = payload.get("keyContains");
-        Map<String, Object> result = a2AIdempotencyStore.clear(scope, keyContains);
+        Map<String, Object> result = agentA2AOperations.clearIdempotency(scope, keyContains);
         opsAuditService.record(
                 operator,
                 "A2A_IDEMPOTENCY_CLEAR",
@@ -331,5 +319,13 @@ public class InfraObservabilityController {
             base.put("recentReports", reports);
         }
         return base;
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }

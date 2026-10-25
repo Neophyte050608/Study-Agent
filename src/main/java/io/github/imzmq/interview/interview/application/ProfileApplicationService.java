@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.interview.application;
 
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
+import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
+import io.github.imzmq.interview.learning.application.contract.result.TopicCapabilityCurve;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -9,13 +10,13 @@ import java.util.Map;
 @Service
 public class ProfileApplicationService {
 
-    private final LearningProfileAgent learningProfileAgent;
+    private final LearningProfileOperations learningProfileAgent;
 
-    public ProfileApplicationService(LearningProfileAgent learningProfileAgent) {
+    public ProfileApplicationService(LearningProfileOperations learningProfileAgent) {
         this.learningProfileAgent = learningProfileAgent;
     }
 
-    public LearningProfileAgent.TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
+    public TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
         return learningProfileAgent.getTopicCapabilityCurve(userId, topic);
     }
 

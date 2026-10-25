@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.search.application;
 
+import io.github.imzmq.interview.search.application.contract.WebSearchOperations;
+import io.github.imzmq.interview.search.application.contract.WebSearchQuery;
+import io.github.imzmq.interview.search.application.contract.ToolGateway;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputParser;
 import io.github.imzmq.interview.modelrouting.application.contract.structuredoutput.StructuredOutputResult;
@@ -21,7 +24,7 @@ import java.util.List;
  * 2. 结果解析：解析 DDG 的 API 响应，提取摘要 (Abstract) 和相关话题 (RelatedTopics) 作为检索分块。
  */
 @Component
-public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<String>> {
+public class WebSearchTool implements WebSearchOperations, ToolGateway<WebSearchQuery, List<String>> {
 
     private static final Logger logger = LoggerFactory.getLogger(WebSearchTool.class);
     private final RestTemplate restTemplate = new RestTemplate();
@@ -32,7 +35,12 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
     }
 
     @Override
-    public List<String> run(Query input) {
+    public List<String> search(WebSearchQuery input) {
+        return run(input);
+    }
+
+    @Override
+    public List<String> run(WebSearchQuery input) {
         if (input == null || input.query() == null || input.query().isBlank()) {
             return List.of();
         }
@@ -90,7 +98,5 @@ public class WebSearchTool implements ToolGateway<WebSearchTool.Query, List<Stri
         }
     }
 
-    public record Query(String query, Integer topK) {
-    }
 }
 

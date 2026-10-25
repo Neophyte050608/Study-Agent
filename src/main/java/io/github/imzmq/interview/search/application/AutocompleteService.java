@@ -3,9 +3,9 @@ package io.github.imzmq.interview.search.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.search.application.dto.AutocompleteItem;
 import io.github.imzmq.interview.search.infrastructure.persistence.AutocompleteDictDO;
-import io.github.imzmq.interview.routing.domain.IntentTreeNode;
+import io.github.imzmq.interview.routing.application.contract.result.IntentTreeNode;
 import io.github.imzmq.interview.search.infrastructure.persistence.AutocompleteDictMapper;
-import io.github.imzmq.interview.routing.application.IntentTreeService;
+import io.github.imzmq.interview.routing.application.contract.IntentCatalogQuery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -29,7 +29,7 @@ public class AutocompleteService {
     private final AutocompleteDictMapper dictMapper;
     private final HeatTracker heatTracker;
     private final PersonalRanker personalRanker;
-    private final IntentTreeService intentTreeService;
+    private final IntentCatalogQuery intentCatalogQuery;
 
     private volatile RadixTreeEngine tree = new RadixTreeEngine();
     private volatile boolean ready = false;
@@ -38,11 +38,11 @@ public class AutocompleteService {
     public AutocompleteService(AutocompleteDictMapper dictMapper,
                                HeatTracker heatTracker,
                                PersonalRanker personalRanker,
-                               IntentTreeService intentTreeService) {
+                               IntentCatalogQuery intentCatalogQuery) {
         this.dictMapper = dictMapper;
         this.heatTracker = heatTracker;
         this.personalRanker = personalRanker;
-        this.intentTreeService = intentTreeService;
+        this.intentCatalogQuery = intentCatalogQuery;
     }
 
     @Async("profileUpdateExecutor")
@@ -98,7 +98,7 @@ public class AutocompleteService {
     }
 
     private void syncIntentExamples() {
-        List<IntentTreeNode> leafIntents = intentTreeService.loadAllLeafIntents();
+        List<IntentTreeNode> leafIntents = intentCatalogQuery.loadAllLeafIntents();
 
         List<AutocompleteDictDO> existingEntries = dictMapper.selectList(
                 new LambdaQueryWrapper<AutocompleteDictDO>()

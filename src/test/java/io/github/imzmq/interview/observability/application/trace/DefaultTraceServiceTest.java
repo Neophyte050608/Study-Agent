@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.observability.application.trace;
 
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinitions;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
+
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.observability.application.AiObservationEvent;
 import io.github.imzmq.interview.observability.application.AiObservationPublisher;

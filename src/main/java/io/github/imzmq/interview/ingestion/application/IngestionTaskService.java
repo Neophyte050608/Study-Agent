@@ -1,5 +1,12 @@
 package io.github.imzmq.interview.ingestion.application;
 
+import io.github.imzmq.interview.ingestion.application.contract.IngestionTaskOperations;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionUpload;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionSyncSummary;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionTaskExecutionResult;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionTaskStatus;
+import io.github.imzmq.interview.ingestion.application.contract.result.LoadedNote;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestionTaskHistoryDO;
@@ -15,16 +22,15 @@ import io.github.imzmq.interview.ingestion.pipeline.IngestionStageResult;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
 import io.github.imzmq.interview.ingestion.infrastructure.persistence.IngestionTaskHistoryMapper;
-import io.github.imzmq.interview.knowledge.application.indexing.DocumentSplitter;
+import io.github.imzmq.interview.knowledge.application.contract.indexing.KnowledgeDocumentSplitOperations;
+import io.github.imzmq.interview.knowledge.application.contract.indexing.KnowledgeIndexDocument;
 import io.github.imzmq.interview.ingestion.application.NoteLoader;
 import io.github.imzmq.interview.ingestion.application.ObsidianKnowledgeExtractor;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StreamUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -56,7 +62,7 @@ import java.util.stream.Collectors;
  * {@link IngestionService} 的同步方法在提交阶段统一执行。</p>
  */
 @Service
-public class IngestionTaskService {
+public class IngestionTaskService implements IngestionTaskOperations {
 
     /**
      * 内存中保留的最大历史任务数，超出后按最旧优先淘汰。
@@ -76,7 +82,7 @@ public class IngestionTaskService {
     private final IngestionStageNodeRegistry stageNodeRegistry;
     private final NoteLoader noteLoader;
     private final ObsidianKnowledgeExtractor knowledgeExtractor;
-    private final DocumentSplitter documentSplitter;
+    private final KnowledgeDocumentSplitOperations documentSplitter;
     private final IngestionTaskHistoryMapper ingestionTaskHistoryMapper;
     /**
      * 任务历史顺序队列：最近任务在前（addFirst），用于 listTasks 按时间倒序返回。
@@ -93,7 +99,7 @@ public class IngestionTaskService {
             IngestionStageNodeRegistry stageNodeRegistry,
             NoteLoader noteLoader,
             ObsidianKnowledgeExtractor knowledgeExtractor,
-            DocumentSplitter documentSplitter,
+            KnowledgeDocumentSplitOperations documentSplitter,
             IngestionTaskHistoryMapper ingestionTaskHistoryMapper
     ) {
         this.ingestionService = ingestionService;
@@ -120,7 +126,7 @@ public class IngestionTaskService {
         long startedAt = System.currentTimeMillis();
         List<IngestionNodeLog> nodeLogs = new ArrayList<>();
         try {
-            IngestionService.SyncSummary summary = runPipeline(
+            IngestionSyncSummary summary = runPipeline(
                     pipeline,
                     nodeLogs,
                     () -> ingestionService.sync(vaultPath, ignoredDirs),
@@ -175,13 +181,13 @@ public class IngestionTaskService {
      * @param ignoredDirs   需要忽略的目录名列表（按路径片段匹配）
      * @return 任务执行结果（包含 taskId、任务状态与同步摘要）
      */
-    public IngestionTaskExecutionResult executeUpload(List<MultipartFile> files, List<String> relativePaths, String folderName, List<String> ignoredDirs) {
+    public IngestionTaskExecutionResult executeUpload(List<IngestionUpload> files, List<String> relativePaths, String folderName, List<String> ignoredDirs) {
         IngestionPipelineDefinition pipeline = resolveEnabledPipeline(SOURCE_TYPE_UPLOAD);
         String taskId = UUID.randomUUID().toString();
         long startedAt = System.currentTimeMillis();
         List<IngestionNodeLog> nodeLogs = new ArrayList<>();
         try {
-            IngestionService.SyncSummary summary = runPipeline(
+            IngestionSyncSummary summary = runPipeline(
                     pipeline,
                     nodeLogs,
                     () -> ingestionService.syncUploadedNotes(files, relativePaths, folderName, ignoredDirs),
@@ -338,6 +344,20 @@ public class IngestionTaskService {
      */
     public List<IngestionPipelineDefinition> listPipelines() {
         return pipelineRegistry.listPipelines();
+    }
+
+    @Override
+    public List<Map<String, Object>> listPipelineViews() {
+        return listPipelines().stream()
+                .map(pipeline -> {
+                    Map<String, Object> view = new LinkedHashMap<>();
+                    view.put("name", pipeline.name());
+                    view.put("sourceType", pipeline.sourceType());
+                    view.put("enabled", pipeline.enabled());
+                    view.put("stages", pipeline.stages());
+                    return view;
+                })
+                .toList();
     }
 
     /**
@@ -603,7 +623,7 @@ public class IngestionTaskService {
      * <p>当前规则较简单：只要存在 failedFiles，就认为是 PARTIAL_SUCCESS；否则 SUCCESS。
      * 真正的“任务失败”由 executeLocal/executeUpload 捕获异常并设置 FAILED。</p>
      */
-    private IngestionTaskStatus resolveTaskStatus(IngestionService.SyncSummary summary) {
+    private IngestionTaskStatus resolveTaskStatus(IngestionSyncSummary summary) {
         if (summary.failedFiles > 0) {
             return IngestionTaskStatus.PARTIAL_SUCCESS;
         }
@@ -613,7 +633,7 @@ public class IngestionTaskService {
     /**
      * 将同步摘要转换为可序列化的 Map（用于快照/接口回包）。
      */
-    private Map<String, Object> buildSummaryMap(IngestionService.SyncSummary summary) {
+    private Map<String, Object> buildSummaryMap(IngestionSyncSummary summary) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalScanned", summary.totalScanned);
         result.put("newFiles", summary.newFiles);
@@ -658,13 +678,13 @@ public class IngestionTaskService {
      *
      * <p>该方法是任务化入库的核心：为每个阶段记录开始/结束时间，捕获异常并写入失败节点日志。</p>
      *
-     * <p>执行完成后必须产生 {@link IngestionService.SyncSummary}；如果缺少提交阶段导致 summary 为空，
+     * <p>执行完成后必须产生 {@link IngestionSyncSummary}；如果缺少提交阶段导致 summary 为空，
      * 会抛出异常提示管道配置缺失。</p>
      */
-    private IngestionService.SyncSummary runPipeline(
+    private IngestionSyncSummary runPipeline(
             IngestionPipelineDefinition pipeline,
             List<IngestionNodeLog> nodeLogs,
-            Supplier<IngestionService.SyncSummary> syncSupplier,
+            Supplier<IngestionSyncSummary> syncSupplier,
             Supplier<Integer> sourceCountSupplier,
             Supplier<Integer> parsedCountSupplier,
             Supplier<Integer> enhancedCountSupplier,
@@ -694,7 +714,7 @@ public class IngestionTaskService {
                 throw e;
             }
         }
-        IngestionService.SyncSummary summary = context.getSummary();
+        IngestionSyncSummary summary = context.getSummary();
         if (summary == null) {
             throw new BusinessException(ErrorCode.INGESTION_PIPELINE_MISSING_STAGE, pipeline.name());
         }
@@ -714,15 +734,15 @@ public class IngestionTaskService {
      * 统计本地目录的 PARSE 阶段输出数量（解析后的文档数）。
      */
     private int countParsedLocal(String vaultPath, List<String> ignoredDirs) {
-        List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        List<LoadedNote> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
         int count = 0;
-        for (Resource resource : resources) {
+        for (LoadedNote resource : resources) {
             try {
-                String content = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-                String filePath = resource.getFile().getAbsolutePath();
+                String content = Files.readString(resource.path(), StandardCharsets.UTF_8);
+                String filePath = resource.path().toString();
                 count += knowledgeExtractor.extract(content, filePath).documents().size();
             } catch (IOException e) {
-                throw new BusinessException(ErrorCode.INGESTION_PARSE_FAILED, resource.getFilename(), e);
+                throw new BusinessException(ErrorCode.INGESTION_PARSE_FAILED, resource.path().getFileName().toString(), e);
             }
         }
         return count;
@@ -734,18 +754,18 @@ public class IngestionTaskService {
      * <p>该统计会执行解析 + 切块，因此相对较重，建议只在任务一次执行中懒加载一次。</p>
      */
     private int countChunkLocal(String vaultPath, List<String> ignoredDirs) {
-        List<Resource> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
+        List<LoadedNote> resources = noteLoader.loadNotes(vaultPath, ignoredDirs);
         int count = 0;
-        for (Resource resource : resources) {
+        for (LoadedNote resource : resources) {
             try {
-                String content = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-                String filePath = resource.getFile().getAbsolutePath();
+                String content = Files.readString(resource.path(), StandardCharsets.UTF_8);
+                String filePath = resource.path().toString();
                 var extraction = knowledgeExtractor.extract(content, filePath);
                 if (!extraction.isEmpty()) {
-                    count += documentSplitter.split(extraction.documents()).size();
+                    count += documentSplitter.split(toIndexDocuments(extraction.documents())).size();
                 }
             } catch (IOException e) {
-                throw new BusinessException(ErrorCode.INGESTION_CHUNK_FAILED, resource.getFilename(), e);
+                throw new BusinessException(ErrorCode.INGESTION_CHUNK_FAILED, resource.path().getFileName().toString(), e);
             }
         }
         return count;
@@ -763,7 +783,7 @@ public class IngestionTaskService {
     /**
      * 统计上传入库的源文件数量（过滤 .md + ignoredDirs + 空内容）。
      */
-    private int countUploadSource(List<MultipartFile> files, List<String> relativePaths, List<String> ignoredDirs) {
+    private int countUploadSource(List<IngestionUpload> files, List<String> relativePaths, List<String> ignoredDirs) {
         Set<String> ignoredSet = toIgnoredSet(ignoredDirs);
         return collectUploadCandidates(files, relativePaths, ignoredSet).size();
     }
@@ -771,7 +791,7 @@ public class IngestionTaskService {
     /**
      * 统计上传入库的 PARSE 阶段输出数量（解析后的文档数）。
      */
-    private int countParsedUpload(List<MultipartFile> files, List<String> relativePaths, List<String> ignoredDirs) {
+    private int countParsedUpload(List<IngestionUpload> files, List<String> relativePaths, List<String> ignoredDirs) {
         Set<String> ignoredSet = toIgnoredSet(ignoredDirs);
         List<UploadCandidate> candidates = collectUploadCandidates(files, relativePaths, ignoredSet);
         int count = 0;
@@ -784,14 +804,14 @@ public class IngestionTaskService {
     /**
      * 统计上传入库的 CHUNK 阶段输出数量（切块数）。
      */
-    private int countChunkUpload(List<MultipartFile> files, List<String> relativePaths, List<String> ignoredDirs) {
+    private int countChunkUpload(List<IngestionUpload> files, List<String> relativePaths, List<String> ignoredDirs) {
         Set<String> ignoredSet = toIgnoredSet(ignoredDirs);
         List<UploadCandidate> candidates = collectUploadCandidates(files, relativePaths, ignoredSet);
         int count = 0;
         for (UploadCandidate candidate : candidates) {
             var extraction = knowledgeExtractor.extract(candidate.content(), candidate.path());
             if (!extraction.isEmpty()) {
-                count += documentSplitter.split(extraction.documents()).size();
+                count += documentSplitter.split(toIndexDocuments(extraction.documents())).size();
             }
         }
         return count;
@@ -802,7 +822,7 @@ public class IngestionTaskService {
      *
      * <p>当前实现与 PARSE 相同（增强不改变条数）。</p>
      */
-    private int countEnhancedUpload(List<MultipartFile> files, List<String> relativePaths, List<String> ignoredDirs) {
+    private int countEnhancedUpload(List<IngestionUpload> files, List<String> relativePaths, List<String> ignoredDirs) {
         return countParsedUpload(files, relativePaths, ignoredDirs);
     }
 
@@ -818,16 +838,16 @@ public class IngestionTaskService {
      *
      * <p>返回的 path 会统一为使用 "/" 的相对路径，便于后续入库链路处理。</p>
      */
-    private List<UploadCandidate> collectUploadCandidates(List<MultipartFile> files, List<String> relativePaths, Set<String> ignoredSet) {
+    private List<UploadCandidate> collectUploadCandidates(List<IngestionUpload> files, List<String> relativePaths, Set<String> ignoredSet) {
         List<UploadCandidate> candidates = new ArrayList<>();
         if (files == null || files.isEmpty()) {
             return candidates;
         }
         for (int i = 0; i < files.size(); i++) {
-            MultipartFile file = files.get(i);
-            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.getOriginalFilename();
+            IngestionUpload file = files.get(i);
+            String relativePath = relativePaths != null && i < relativePaths.size() ? relativePaths.get(i) : file.originalFilename();
             if (relativePath == null || relativePath.isBlank()) {
-                relativePath = file.getOriginalFilename();
+                relativePath = file.originalFilename();
             }
             if (relativePath == null) {
                 continue;
@@ -840,7 +860,7 @@ public class IngestionTaskService {
                 continue;
             }
             try {
-                String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+                String content = new String(file.bytes(), StandardCharsets.UTF_8);
                 if (content.trim().isEmpty()) {
                     continue;
                 }
@@ -850,6 +870,12 @@ public class IngestionTaskService {
             }
         }
         return candidates;
+    }
+
+    private List<KnowledgeIndexDocument> toIndexDocuments(List<org.springframework.ai.document.Document> documents) {
+        return documents.stream()
+                .map(document -> new KnowledgeIndexDocument(document.getId(), document.getText(), document.getMetadata()))
+                .toList();
     }
 
     /**

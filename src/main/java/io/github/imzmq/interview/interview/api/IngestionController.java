@@ -1,9 +1,11 @@
 package io.github.imzmq.interview.interview.api;
 
-import io.github.imzmq.interview.ingestion.application.IngestConfigService;
-import io.github.imzmq.interview.ingestion.application.IngestionService;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskExecutionResult;
-import io.github.imzmq.interview.ingestion.application.IngestionTaskService;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionConfigOperations;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionOperations;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionTaskOperations;
+import io.github.imzmq.interview.ingestion.application.contract.IngestionUpload;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionSyncSummary;
+import io.github.imzmq.interview.ingestion.application.contract.result.IngestionTaskExecutionResult;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,14 +21,14 @@ import java.util.stream.Collectors;
 @RequestMapping("/api")
 public class IngestionController {
 
-    private final IngestionService ingestionService;
-    private final IngestionTaskService ingestionTaskService;
-    private final IngestConfigService ingestConfigService;
+    private final IngestionOperations ingestionService;
+    private final IngestionTaskOperations ingestionTaskService;
+    private final IngestionConfigOperations ingestConfigService;
 
     public IngestionController(
-            IngestionService ingestionService,
-            IngestionTaskService ingestionTaskService,
-            IngestConfigService ingestConfigService
+            IngestionOperations ingestionService,
+            IngestionTaskOperations ingestionTaskService,
+            IngestionConfigOperations ingestConfigService
     ) {
         this.ingestionService = ingestionService;
         this.ingestionTaskService = ingestionTaskService;
@@ -46,7 +48,7 @@ public class IngestionController {
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
         IngestionTaskExecutionResult executionResult = ingestionTaskService.executeLocal(path, ignoredList);
-        IngestionService.SyncSummary summary = executionResult.summary();
+        IngestionSyncSummary summary = executionResult.summary();
         String message = String.format(
                 "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
                 summary.totalScanned,
@@ -69,7 +71,7 @@ public class IngestionController {
         String path = payload.get("path");
         String ignoreDirs = payload.get("ignoreDirs");
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        IngestionService.SyncSummary summary = ingestionService.forceReindexParentChild(path, ignoredList);
+        IngestionSyncSummary summary = ingestionService.forceReindexParentChild(path, ignoredList);
         Map<String, Object> report = ingestionService.getParentChildReport();
         String message = String.format(
                 "Parent-Child 重建完成：共扫描 %d 个文件，新增 %d，重建 %d，删除 %d，失败 %d，空内容跳过 %d",
@@ -109,8 +111,8 @@ public class IngestionController {
             @RequestParam(value = "ignoreDirs", required = false) String ignoreDirs) {
         // 上传笔记文件后同步：支持保留相对路径（relativePaths）以恢复目录结构。
         List<String> ignoredList = parseIgnoreDirs(ignoreDirs);
-        IngestionTaskExecutionResult executionResult = ingestionTaskService.executeUpload(files, relativePaths, folderName, ignoredList);
-        IngestionService.SyncSummary summary = executionResult.summary();
+        IngestionTaskExecutionResult executionResult = ingestionTaskService.executeUpload(files.stream().map(MultipartUpload::new).map(IngestionUpload.class::cast).toList(), relativePaths, folderName, ignoredList);
+        IngestionSyncSummary summary = executionResult.summary();
         String message = String.format(
                 "同步完成：共扫描 %d 个文件，新增 %d，修改 %d，未变化 %d，删除 %d，失败 %d，空内容跳过 %d",
                 summary.totalScanned,
@@ -155,7 +157,7 @@ public class IngestionController {
 
     @GetMapping("/ingestion/pipelines")
     public ResponseEntity<?> listIngestionPipelines() {
-        return ResponseEntity.ok(ingestionTaskService.listPipelines());
+        return ResponseEntity.ok(ingestionTaskService.listPipelineViews());
     }
 
     @GetMapping("/ingestion/tasks/{taskId}")
@@ -188,5 +190,22 @@ public class IngestionController {
                 "imagePath", saved.get("imagePath"),
                 "ignoreDirs", saved.get("ignoreDirs")
         ));
+    }
+
+    private record MultipartUpload(MultipartFile file) implements IngestionUpload {
+        @Override
+        public String originalFilename() {
+            return file.getOriginalFilename();
+        }
+
+        @Override
+        public byte[] bytes() throws java.io.IOException {
+            return file.getBytes();
+        }
+
+        @Override
+        public java.io.InputStream inputStream() throws java.io.IOException {
+            return file.getInputStream();
+        }
     }
 }

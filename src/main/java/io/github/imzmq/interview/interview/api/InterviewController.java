@@ -3,11 +3,11 @@ package io.github.imzmq.interview.interview.api;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import io.github.imzmq.interview.interview.api.support.RequestPayloadMapper;
 import io.github.imzmq.interview.interview.application.InterviewService;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.mcp.application.OpsAuditService;
+import io.github.imzmq.interview.mcp.application.contract.OpsAuditOperations;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,18 +31,18 @@ import java.util.UUID;
 public class InterviewController {
 
     private final InterviewService interviewService;
-    private final UserIdentityResolver userIdentityResolver;
-    private final OpsAuditService opsAuditService;
+    private final UserIdentityQuery userIdentityQuery;
+    private final OpsAuditOperations opsAuditService;
     private final RequestPayloadMapper requestPayloadMapper;
 
     public InterviewController(
             InterviewService interviewService,
-            UserIdentityResolver userIdentityResolver,
-            OpsAuditService opsAuditService,
+            UserIdentityQuery userIdentityQuery,
+            OpsAuditOperations opsAuditService,
             RequestPayloadMapper requestPayloadMapper
     ) {
         this.interviewService = interviewService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
         this.opsAuditService = opsAuditService;
         this.requestPayloadMapper = requestPayloadMapper;
     }
@@ -56,7 +56,7 @@ public class InterviewController {
      */
     @PostMapping("/start")
     public InterviewSession startSession(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         String topic = payload.get("topic") == null ? "" : payload.get("topic").toString();
         String resumePath = payload.get("resumePath") == null ? "" : payload.get("resumePath").toString();
         String traceId = payload.get("traceId") == null ? UUID.randomUUID().toString() : payload.get("traceId").toString();
@@ -113,7 +113,7 @@ public class InterviewController {
     @PostMapping("/report")
     public InterviewService.FinalReport report(@RequestBody Map<String, String> payload, HttpServletRequest request) {
         String sessionId = payload.get("sessionId");
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         String traceId = payload.getOrDefault("traceId", UUID.randomUUID().toString());
 
         RAGTraceContext.setTraceId(traceId);
@@ -135,7 +135,7 @@ public class InterviewController {
     @PostMapping("/task/dispatch")
     public ResponseEntity<?> dispatchTask(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
         // operator 表示"本次调用的操作者"，用于审计；context.userId 表示"业务主体用户"，可与 operator 不同。
-        String operator = userIdentityResolver.resolve(request);
+        String operator = resolveUserIdentity(request);
         String taskTypeRaw = payload.get("taskType") == null ? "" : payload.get("taskType").toString();
         if (taskTypeRaw.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "taskType 不能为空"));
@@ -170,5 +170,13 @@ public class InterviewController {
         } finally {
             RAGTraceContext.clear();
         }
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }

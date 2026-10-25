@@ -1,10 +1,11 @@
 package io.github.imzmq.interview.practice.application.agent;
 
 import io.github.imzmq.interview.agent.core.Agent;
-import io.github.imzmq.interview.modelrouting.application.DynamicModelFactory;
-import io.github.imzmq.interview.learning.application.LearningEvent;
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.learning.application.LearningSource;
+import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+import io.github.imzmq.interview.learning.application.contract.LearningEvent;
+import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
+import io.github.imzmq.interview.learning.application.contract.LearningSource;
 import io.github.imzmq.interview.practice.application.CodingPracticeService;
 import io.github.imzmq.interview.practice.application.dto.CodingAssessment;
 import io.github.imzmq.interview.practice.application.dto.FillPayload;
@@ -39,11 +40,9 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     /** RAG 服务，用于生成题目和评估回答 */
     private final CodingPracticeService codingPracticeService;
     /** 学习画像智能体，用于获取用户背景和记录练习结果 */
-    private final LearningProfileAgent learningProfileAgent;
-    /** 动态模型工厂 */
-    private final DynamicModelFactory dynamicModelFactory;
+    private final LearningProfileOperations learningProfileAgent;
     /** Prompt 模板服务 */
-    private final io.github.imzmq.interview.chat.application.PromptManager promptManager;
+    private final PromptRenderer promptRenderer;
     /** JSON 处理 */
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** 内存中的编程练习会话缓存 */
@@ -53,11 +52,10 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
     /** 路由服务 */
     private final RoutingChatService routingChatService;
 
-    public CodingPracticeAgent(CodingPracticeService codingPracticeService, LearningProfileAgent learningProfileAgent, DynamicModelFactory dynamicModelFactory, io.github.imzmq.interview.chat.application.PromptManager promptManager, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor, RoutingChatService routingChatService) {
+    public CodingPracticeAgent(CodingPracticeService codingPracticeService, LearningProfileOperations learningProfileAgent, PromptRenderer promptRenderer, @org.springframework.beans.factory.annotation.Qualifier("profileUpdateExecutor") java.util.concurrent.Executor profileUpdateExecutor, RoutingChatService routingChatService) {
         this.codingPracticeService = codingPracticeService;
         this.learningProfileAgent = learningProfileAgent;
-        this.dynamicModelFactory = dynamicModelFactory;
-        this.promptManager = promptManager;
+        this.promptRenderer = promptRenderer;
         this.profileUpdateExecutor = profileUpdateExecutor;
         this.routingChatService = routingChatService;
     }
@@ -141,7 +139,7 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
             logger.debug("加载 intent_cases.json 失败: {}", e.getMessage());
         }
 
-        io.github.imzmq.interview.chat.application.PromptManager.PromptPair pair = promptManager.renderSplit(
+        RenderedPrompt pair = promptRenderer.renderSplit(
                 "coding-coach", "coding-intent", Map.of("message", message, "cases", cases));
         logger.debug("[CodingPracticeAgent - Intent] Prompt length={}", pair.userPrompt().length());
         String jsonStr = routingChatService.call(
@@ -311,10 +309,10 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         final int finalTotalCorrect = totalCorrect;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                learningProfileAgent.upsertEvent(new io.github.imzmq.interview.learning.application.LearningEvent(
+                learningProfileAgent.upsertEvent(new io.github.imzmq.interview.learning.application.contract.LearningEvent(
                     "batch-quiz-" + sessionId,
                     session.userId(),
-                    io.github.imzmq.interview.learning.application.LearningSource.CODING,
+                    io.github.imzmq.interview.learning.application.contract.LearningSource.CODING,
                     session.topic(),
                     finalScore,
                     finalScore < 60 ? List.of("选择题正确率偏低", "需加强" + session.topic()) : List.of(),

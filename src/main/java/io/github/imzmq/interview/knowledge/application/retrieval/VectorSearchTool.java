@@ -6,7 +6,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import io.github.imzmq.interview.search.application.ToolGateway;
+import io.github.imzmq.interview.search.application.contract.ToolGateway;
 
 /**
  * 向量检索工具。

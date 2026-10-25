@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.mcp.application;
 
+import io.github.imzmq.interview.mcp.application.contract.OpsAuditOperations;
+import io.github.imzmq.interview.mcp.application.contract.OpsAuditRecord;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -22,7 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * </ul>
  */
 @Service
-public class OpsAuditService {
+public class OpsAuditService implements OpsAuditOperations {
 
     private static final int MAX_RECORDS = 2000;
     // 当前采用进程内审计缓冲，后续可迁移到持久化存储。
@@ -117,16 +119,6 @@ public class OpsAuditService {
         return safe;
     }
 
-    public record OpsAuditRecord(
-            String operator,
-            String action,
-            Map<String, Object> payload,
-            boolean success,
-            String message,
-            String traceId,
-            String timestamp
-    ) {
-    }
 }
 
 

@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.agent.application.context;
 
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextMode;
+import io.github.imzmq.interview.agent.application.contract.context.AgentContextOperations;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextQuery;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextSchema;
 import io.github.imzmq.interview.agent.application.contract.context.AgentContextSlot;
@@ -19,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class AgentContextAssembler {
+public class AgentContextAssembler implements AgentContextOperations {
 
     private static final int DEFAULT_GLOBAL_CHAR_BUDGET = 3600;
 

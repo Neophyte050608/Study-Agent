@@ -5,6 +5,7 @@ import io.github.imzmq.interview.mcp.infrastructure.FastMcpCapabilityGateway;
 import io.github.imzmq.interview.mcp.infrastructure.McpBridgeCapabilityGateway;
 import io.github.imzmq.interview.common.api.BusinessException;
 import io.github.imzmq.interview.common.api.ErrorCode;
+import io.github.imzmq.interview.mcp.application.contract.McpCapabilityOperations;
 
 import io.github.imzmq.interview.mcp.infrastructure.McpSseCapabilityGateway;
 import io.github.imzmq.interview.mcp.infrastructure.McpStdioCapabilityGateway;
@@ -24,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Service
-public class McpGatewayService {
+public class McpGatewayService implements McpCapabilityOperations {
 
     private final McpCapabilityGateway stubGateway;
     private final GatewaySelectionStrategy gatewaySelectionStrategy;

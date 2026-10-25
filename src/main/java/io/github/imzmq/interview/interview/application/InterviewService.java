@@ -1,16 +1,16 @@
 package io.github.imzmq.interview.interview.application;
 
 import io.github.imzmq.interview.interview.application.agent.InterviewOrchestratorAgent;
-import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
-import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.AgentTaskOperations;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
 import io.github.imzmq.interview.interview.domain.InterviewSession;
-import io.github.imzmq.interview.learning.application.LearningProfileAgent;
-import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
-import io.github.imzmq.interview.knowledge.application.evaluation.RAGQualityEvaluationService;
-import io.github.imzmq.interview.knowledge.application.evaluation.RetrievalEvaluationService;
+import io.github.imzmq.interview.learning.application.contract.result.TopicCapabilityCurve;
+import io.github.imzmq.interview.observability.application.contract.query.TraceDetailView;
+import io.github.imzmq.interview.observability.application.contract.query.TraceSummary;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RagQualityEvaluationOperations;
+import io.github.imzmq.interview.knowledge.application.contract.evaluation.RetrievalEvaluationOperations;
 import io.github.imzmq.interview.skill.runtime.SkillTelemetryRecorder;
 import org.springframework.stereotype.Service;
 
@@ -24,20 +24,20 @@ import java.util.Map;
 @Service
 public class InterviewService {
 
-    private final TaskRouterAgent taskRouterAgent;
+    private final AgentTaskOperations agentTaskOperations;
     private final InterviewSessionApplicationService interviewSessionApplicationService;
     private final ProfileApplicationService profileApplicationService;
     private final McpApplicationService mcpApplicationService;
     private final ObservabilityApplicationService observabilityApplicationService;
 
     public InterviewService(
-            TaskRouterAgent taskRouterAgent,
+            AgentTaskOperations agentTaskOperations,
             InterviewSessionApplicationService interviewSessionApplicationService,
             ProfileApplicationService profileApplicationService,
             McpApplicationService mcpApplicationService,
             ObservabilityApplicationService observabilityApplicationService
     ) {
-        this.taskRouterAgent = taskRouterAgent;
+        this.agentTaskOperations = agentTaskOperations;
         this.interviewSessionApplicationService = interviewSessionApplicationService;
         this.profileApplicationService = profileApplicationService;
         this.mcpApplicationService = mcpApplicationService;
@@ -65,7 +65,7 @@ public class InterviewService {
         return interviewSessionApplicationService.generateFinalReport(sessionId, userId);
     }
 
-    public LearningProfileAgent.TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
+    public TopicCapabilityCurve getTopicCapabilityCurve(String userId, String topic) {
         return profileApplicationService.getTopicCapabilityCurve(userId, topic);
     }
 
@@ -89,11 +89,11 @@ public class InterviewService {
         return mcpApplicationService.invokeCapability(userId, capability, params, context);
     }
 
-    public java.util.List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit) {
+    public java.util.List<TraceSummary> getRecentRagTraces(int limit) {
         return observabilityApplicationService.getRecentRagTraces(limit);
     }
 
-    public java.util.List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+    public java.util.List<TraceSummary> getRecentRagTraces(int limit,
                                                                                    String status,
                                                                                    boolean riskyOnly,
                                                                                    boolean fallbackOnly,
@@ -103,7 +103,7 @@ public class InterviewService {
         return getRecentRagTraces(limit, status, riskyOnly, fallbackOnly, emptyRetrievalOnly, slowOnly, query, null, null);
     }
 
-    public java.util.List<RAGObservabilityService.TraceSummary> getRecentRagTraces(int limit,
+    public java.util.List<TraceSummary> getRecentRagTraces(int limit,
                                                                                    String status,
                                                                                    boolean riskyOnly,
                                                                                    boolean fallbackOnly,
@@ -131,7 +131,7 @@ public class InterviewService {
      * @param limit 返回条数上限
      * @return 活动态 Trace 列表
      */
-    public java.util.List<RAGObservabilityService.TraceSummary> getActiveRagTraces(int limit) {
+    public java.util.List<TraceSummary> getActiveRagTraces(int limit) {
         return observabilityApplicationService.getActiveRagTraces(limit);
     }
 
@@ -141,7 +141,7 @@ public class InterviewService {
      * @param traceId Trace ID
      * @return Trace 详情；不存在时返回 null
      */
-    public RAGObservabilityService.TraceDetailView getRagTraceDetail(String traceId) {
+    public TraceDetailView getRagTraceDetail(String traceId) {
         return observabilityApplicationService.getRagTraceDetail(traceId);
     }
 
@@ -169,15 +169,15 @@ public class InterviewService {
         return observabilityApplicationService.getRetrievalMetrics(limit, hours, dataset);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval() {
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalOfflineEval() {
         return runRetrievalOfflineEval(null);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalOfflineEval(String dataset) {
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalOfflineEval(String dataset) {
         return observabilityApplicationService.runRetrievalOfflineEval(dataset);
     }
 
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(java.util.List<RetrievalEvaluationService.EvalCase> cases) {
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalEvalWithCases(java.util.List<RetrievalEvaluationOperations.EvalCase> cases) {
         return observabilityApplicationService.runRetrievalEvalWithCases(cases);
     }
 
@@ -188,9 +188,9 @@ public class InterviewService {
      * @param options 评测运行配置
      * @return 评测报告
      */
-    public RetrievalEvaluationService.RetrievalEvalReport runRetrievalEvalWithCases(
-            java.util.List<RetrievalEvaluationService.EvalCase> cases,
-            RetrievalEvaluationService.EvalRunOptions options
+    public RetrievalEvaluationOperations.RetrievalEvalReport runRetrievalEvalWithCases(
+            java.util.List<RetrievalEvaluationOperations.EvalCase> cases,
+            RetrievalEvaluationOperations.EvalRunOptions options
     ) {
         return observabilityApplicationService.runRetrievalEvalWithCases(cases, options);
     }
@@ -201,7 +201,7 @@ public class InterviewService {
      * @param limit 返回条数上限
      * @return 评测运行摘要列表
      */
-    public java.util.List<RetrievalEvaluationService.RetrievalEvalRunSummary> listRecentRetrievalEvalRuns(int limit) {
+    public java.util.List<RetrievalEvaluationOperations.RetrievalEvalRunSummary> listRecentRetrievalEvalRuns(int limit) {
         return observabilityApplicationService.listRecentRetrievalEvalRuns(limit);
     }
 
@@ -211,7 +211,7 @@ public class InterviewService {
      * @param runId 运行 ID
      * @return 评测详情；不存在时返回 null
      */
-    public RetrievalEvaluationService.RetrievalEvalReport getRetrievalEvalRunDetail(String runId) {
+    public RetrievalEvaluationOperations.RetrievalEvalReport getRetrievalEvalRunDetail(String runId) {
         return observabilityApplicationService.getRetrievalEvalRunDetail(runId);
     }
 
@@ -222,7 +222,7 @@ public class InterviewService {
      * @param candidateRunId 候选运行 ID
      * @return 对比结果；任一运行不存在时返回 null
      */
-    public RetrievalEvaluationService.RetrievalEvalComparison compareRetrievalEvalRuns(String baselineRunId, String candidateRunId) {
+    public RetrievalEvaluationOperations.RetrievalEvalComparison compareRetrievalEvalRuns(String baselineRunId, String candidateRunId) {
         return observabilityApplicationService.compareRetrievalEvalRuns(baselineRunId, candidateRunId);
     }
 
@@ -232,7 +232,7 @@ public class InterviewService {
      * @param limit 历史窗口大小
      * @return 趋势结果
      */
-    public RetrievalEvaluationService.RetrievalEvalTrend getRetrievalEvalTrend(int limit) {
+    public RetrievalEvaluationOperations.RetrievalEvalTrend getRetrievalEvalTrend(int limit) {
         return observabilityApplicationService.getRetrievalEvalTrend(limit);
     }
 
@@ -242,7 +242,7 @@ public class InterviewService {
      * @param runId 运行 ID
      * @return 聚类结果；运行不存在时返回 null
      */
-    public java.util.List<RetrievalEvaluationService.RetrievalEvalFailureCluster> clusterRetrievalEvalFailures(String runId) {
+    public java.util.List<RetrievalEvaluationOperations.RetrievalEvalFailureCluster> clusterRetrievalEvalFailures(String runId) {
         return observabilityApplicationService.clusterRetrievalEvalFailures(runId);
     }
 
@@ -251,71 +251,67 @@ public class InterviewService {
      *
      * @return 参数模板列表
      */
-    public java.util.List<RetrievalEvaluationService.RetrievalEvalParameterTemplate> listRetrievalEvalParameterTemplates() {
+    public java.util.List<RetrievalEvaluationOperations.RetrievalEvalParameterTemplate> listRetrievalEvalParameterTemplates() {
         return observabilityApplicationService.listRetrievalEvalParameterTemplates();
     }
 
-    public java.util.List<RetrievalEvaluationService.EvalDatasetDefinition> listRetrievalEvalDatasets() {
+    public java.util.List<RetrievalEvaluationOperations.EvalDatasetDefinition> listRetrievalEvalDatasets() {
         return observabilityApplicationService.listRetrievalEvalDatasets();
     }
 
     public TaskResponse dispatchTask(TaskType taskType, Map<String, Object> payload, Map<String, Object> context) {
         // 通用任务分发入口：供 /task/dispatch 与其他内部调用复用。
-        return taskRouterAgent.dispatch(new TaskRequest(
-                taskType,
-                payload == null ? Map.of() : payload,
-                context == null ? Map.of() : context
-        ));
+        return agentTaskOperations.dispatchTask(taskType, payload, context);
     }
 
-    public java.util.List<RetrievalEvaluationService.EvalCase> parseRetrievalEvalCsv(String csvText) {
+    public java.util.List<RetrievalEvaluationOperations.EvalCase> parseRetrievalEvalCsv(String csvText) {
         return observabilityApplicationService.parseRetrievalEvalCsv(csvText);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval() {
+    public RagQualityEvaluationOperations.QualityEvalReport runRAGQualityEval() {
         return runRAGQualityEval(null, null);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval(String engine) {
+    public RagQualityEvaluationOperations.QualityEvalReport runRAGQualityEval(String engine) {
         return runRAGQualityEval(null, engine);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEval(String dataset, String engine) {
+    public RagQualityEvaluationOperations.QualityEvalReport runRAGQualityEval(String dataset, String engine) {
         return observabilityApplicationService.runRagQualityEval(dataset, engine);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
-            List<RAGQualityEvaluationService.QualityEvalCase> cases,
-            RAGQualityEvaluationService.EvalRunOptions options
+    public RagQualityEvaluationOperations.QualityEvalReport runRAGQualityEvalWithCases(
+            List<RagQualityEvaluationOperations.QualityEvalCase> cases,
+            RagQualityEvaluationOperations.EvalRunOptions options
     ) {
         return runRAGQualityEvalWithCases(cases, options, null);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport runRAGQualityEvalWithCases(
-            List<RAGQualityEvaluationService.QualityEvalCase> cases,
-            RAGQualityEvaluationService.EvalRunOptions options,
+    public RagQualityEvaluationOperations.QualityEvalReport runRAGQualityEvalWithCases(
+            List<RagQualityEvaluationOperations.QualityEvalCase> cases,
+            RagQualityEvaluationOperations.EvalRunOptions options,
             String engine
     ) {
         return observabilityApplicationService.runRagQualityEvalWithCases(cases, options, engine);
     }
 
-    public List<RAGQualityEvaluationService.QualityEvalRunSummary> listRecentRAGQualityEvalRuns(int limit) {
+    public List<RagQualityEvaluationOperations.QualityEvalRunSummary> listRecentRAGQualityEvalRuns(int limit) {
         return observabilityApplicationService.listRecentRagQualityEvalRuns(limit);
     }
 
-    public RAGQualityEvaluationService.QualityEvalReport getRAGQualityEvalRunDetail(String runId) {
+    public RagQualityEvaluationOperations.QualityEvalReport getRAGQualityEvalRunDetail(String runId) {
         return observabilityApplicationService.getRagQualityEvalRunDetail(runId);
     }
 
-    public RAGQualityEvaluationService.QualityEvalComparison compareRAGQualityEvalRuns(String baselineId, String candidateId) {
+    public RagQualityEvaluationOperations.QualityEvalComparison compareRAGQualityEvalRuns(String baselineId, String candidateId) {
         return observabilityApplicationService.compareRagQualityEvalRuns(baselineId, candidateId);
     }
 
-    public RAGQualityEvaluationService.QualityEvalTrend getRAGQualityEvalTrend(int limit) {
+    public RagQualityEvaluationOperations.QualityEvalTrend getRAGQualityEvalTrend(int limit) {
         return observabilityApplicationService.getRagQualityEvalTrend(limit);
     }
 
-    public java.util.List<RAGQualityEvaluationService.EvalDatasetDefinition> listRAGQualityEvalDatasets() {
+    public java.util.List<RagQualityEvaluationOperations.EvalDatasetDefinition> listRAGQualityEvalDatasets() {
         return observabilityApplicationService.listRagQualityEvalDatasets();
     }
 

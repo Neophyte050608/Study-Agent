@@ -1,13 +1,13 @@
 package io.github.imzmq.interview.chat.application;
 
+import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import io.github.imzmq.interview.agent.a2a.A2ABus;
-import io.github.imzmq.interview.agent.a2a.A2AIntent;
-import io.github.imzmq.interview.agent.a2a.A2AMessage;
-import io.github.imzmq.interview.agent.a2a.A2AMetadata;
-import io.github.imzmq.interview.agent.a2a.A2AStatus;
-import io.github.imzmq.interview.agent.a2a.A2ATrace;
+import io.github.imzmq.interview.agent.application.contract.AgentMessagingOperations;
+import io.github.imzmq.interview.agent.application.contract.command.AgentMessageCommand;
+import io.github.imzmq.interview.agent.application.contract.message.AgentMessage;
+import io.github.imzmq.interview.agent.application.contract.message.AgentMessageIntent;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryDO;
@@ -21,7 +21,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -41,20 +40,20 @@ public class ChatContextCompressor {
     private final UserChatMemoryMapper userMemoryMapper;
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
-    private final A2ABus a2aBus;
+    private final AgentMessagingOperations agentMessaging;
 
     public ChatContextCompressor(ChatMessageMapper messageMapper,
                                  ChatSessionMapper sessionMapper,
                                  UserChatMemoryMapper userMemoryMapper,
                                  RoutingChatService routingChatService,
                                  PromptManager promptManager,
-                                 A2ABus a2aBus) {
+                                 AgentMessagingOperations agentMessaging) {
         this.messageMapper = messageMapper;
         this.sessionMapper = sessionMapper;
         this.userMemoryMapper = userMemoryMapper;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
-        this.a2aBus = a2aBus;
+        this.agentMessaging = agentMessaging;
     }
 
     public String buildCompressedContext(String sessionId) {
@@ -126,7 +125,7 @@ public class ChatContextCompressor {
 
     @PostConstruct
     public void init() {
-        a2aBus.subscribe("ChatContextCompressor", this::handleCompression);
+        agentMessaging.subscribe("ChatContextCompressor", this::handleCompression);
     }
 
     private String buildVerbatimHistory(String sessionId) {
@@ -167,27 +166,21 @@ public class ChatContextCompressor {
     }
 
     private void triggerAsyncCompression(String sessionId) {
-        A2AMessage msg = new A2AMessage(
-                "1.0",
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
+        agentMessaging.publish(new AgentMessageCommand(
                 "ChatContextCompressor",
                 "ChatContextCompressor",
-                "",
-                A2AIntent.CHAT_CONTEXT_COMPRESS,
+                AgentMessageIntent.CHAT_CONTEXT_COMPRESS,
                 Map.of("sessionId", sessionId),
+                "chat-context-compress",
+                "ChatContextCompressor",
                 Map.of(),
-                A2AStatus.PENDING,
-                null,
-                new A2AMetadata("chat-context-compress", "ChatContextCompressor", Map.of()),
-                new A2ATrace(UUID.randomUUID().toString(), null),
-                Instant.now()
-        );
-        a2aBus.publish(msg);
+                UUID.randomUUID().toString(),
+                null
+        ));
     }
 
-    private void handleCompression(A2AMessage message) {
-        if (message.intent() != A2AIntent.CHAT_CONTEXT_COMPRESS) {
+    private void handleCompression(AgentMessage message) {
+        if (message.intent() != AgentMessageIntent.CHAT_CONTEXT_COMPRESS) {
             return;
         }
         try {
@@ -238,7 +231,7 @@ public class ChatContextCompressor {
             Map<String, Object> vars = new HashMap<>();
             vars.put("existingSummary", session.getContextSummary() == null ? "" : session.getContextSummary());
             vars.put("newMessages", formatMessages(toCompress));
-            PromptManager.PromptPair pair = promptManager.renderSplit("context-compressor", "chat-context-compress", vars);
+            RenderedPrompt pair = promptManager.renderSplit("context-compressor", "chat-context-compress", vars);
             String newSummary = routingChatService.call(
                     pair.systemPrompt(), pair.userPrompt(), ModelRouteType.THINKING, "上下文压缩");
 
@@ -251,23 +244,17 @@ public class ChatContextCompressor {
             );
 
             try {
-                A2AMessage memorizeMsg = new A2AMessage(
-                        "1.0",
-                        UUID.randomUUID().toString(),
-                        UUID.randomUUID().toString(),
+                agentMessaging.publish(new AgentMessageCommand(
                         "ChatContextCompressor",
                         "ChatMemoryExtractorAgent",
-                        "",
-                        A2AIntent.CROSS_SESSION_MEMORIZE,
+                        AgentMessageIntent.CROSS_SESSION_MEMORIZE,
                         Map.of("sessionId", sessionId),
+                        "cross-session-memorize",
+                        "ChatContextCompressor",
                         Map.of(),
-                        A2AStatus.PENDING,
-                        null,
-                        new A2AMetadata("cross-session-memorize", "ChatContextCompressor", Map.of()),
-                        new A2ATrace(UUID.randomUUID().toString(), null),
-                        Instant.now()
-                );
-                a2aBus.publish(memorizeMsg);
+                        UUID.randomUUID().toString(),
+                        null
+                ));
             } catch (Exception e) {
                 log.warn("触发跨会话记忆提取失败，不影响主流程: sessionId={}", sessionId, e);
             }

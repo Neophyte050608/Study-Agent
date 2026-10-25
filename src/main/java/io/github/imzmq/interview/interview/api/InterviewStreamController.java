@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.interview.api;
 
 import io.github.imzmq.interview.interview.application.InterviewStreamingService;
-import io.github.imzmq.interview.identity.application.UserIdentityResolver;
+import io.github.imzmq.interview.identity.application.contract.UserIdentityQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,19 +16,19 @@ import java.util.Map;
 @RequestMapping("/api/interview/stream")
 public class InterviewStreamController {
     private final InterviewStreamingService interviewStreamingService;
-    private final UserIdentityResolver userIdentityResolver;
+    private final UserIdentityQuery userIdentityQuery;
 
     public InterviewStreamController(
             InterviewStreamingService interviewStreamingService,
-            UserIdentityResolver userIdentityResolver
+            UserIdentityQuery userIdentityQuery
     ) {
         this.interviewStreamingService = interviewStreamingService;
-        this.userIdentityResolver = userIdentityResolver;
+        this.userIdentityQuery = userIdentityQuery;
     }
 
     @PostMapping(value = "/start", produces = "text/event-stream;charset=UTF-8")
     public SseEmitter streamStart(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         return interviewStreamingService.streamStart(payload, userId);
     }
 
@@ -39,7 +39,7 @@ public class InterviewStreamController {
 
     @PostMapping(value = "/report", produces = "text/event-stream;charset=UTF-8")
     public SseEmitter streamReport(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
-        String userId = userIdentityResolver.resolve(request);
+        String userId = resolveUserIdentity(request);
         return interviewStreamingService.streamReport(payload, userId);
     }
 
@@ -54,6 +54,14 @@ public class InterviewStreamController {
                 "streamTaskId", streamTaskId.trim(),
                 "stopped", stopped
         ));
+    }
+
+    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
+        return userIdentityQuery.resolve(
+                request.getHeader("Authorization"),
+                request.getHeader("X-User-Id"),
+                () -> request.getSession(true).getId()
+        );
     }
 }
 
