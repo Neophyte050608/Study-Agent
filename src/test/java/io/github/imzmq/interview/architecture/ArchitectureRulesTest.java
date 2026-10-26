@@ -485,15 +485,56 @@ class ArchitectureRulesTest {
                     .resideInAnyPackage("io.github.imzmq.interview.practice..");
 
     @ArchTest
+    static final ArchRule chat_memory_domain_should_be_framework_and_adapter_free =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat.domain.memory..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.chat.api..",
+                            "io.github.imzmq.interview.chat.infrastructure..",
+                            "org.springframework..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "io.milvus..");
+
+    @ArchTest
+    static final ArchRule chat_api_should_not_access_persistence_or_milvus =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat.api..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.chat.infrastructure.persistence..",
+                            "io.github.imzmq.interview.chat.infrastructure.milvus..",
+                            "io.milvus..");
+
+    @ArchTest
     static final ArchRule chat_contracts_should_not_expose_technical_or_persistence_types =
             noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat.application.contract..")
                     .should().dependOnClassesThat().resideInAnyPackage(
-                            "io.github.imzmq.interview.chat.infrastructure..",
+                            "..infrastructure.persistence..",
+                            "io.github.imzmq.interview.chat.infrastructure.milvus..",
                             "org.springframework.web..",
+                            "org.springframework.ai..",
                             "com.baomidou.mybatisplus..",
                             "org.apache.ibatis..",
+                            "io.milvus..",
                             "dev.langchain4j..",
                             "com.volcengine..");
+
+    @ArchTest
+    static final ArchRule knowledge_should_not_access_chat_memory_persistence =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.knowledge..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.chat.infrastructure.persistence.memory..");
+
+    @ArchTest
+    static final ArchRule only_chat_milvus_adapter_should_import_milvus_sdk =
+            noClasses().that().resideInAnyPackage("io.github.imzmq.interview.chat..")
+                    .and().resideOutsideOfPackage("io.github.imzmq.interview.chat.infrastructure.milvus..")
+                    .should().dependOnClassesThat().resideInAnyPackage("io.milvus..");
+
+    @ArchTest
+    static final ArchRule legacy_memory_text_writers_should_not_exist =
+            noClasses().that().haveSimpleName("ChatMemoryExtractorAgent")
+                    .or().haveSimpleName("AutoDreamService")
+                    .should(exist())
+                    .allowEmptyShould(true);
 
     @ArchTest
     static final ArchRule modelrouting_should_not_depend_on_chat =

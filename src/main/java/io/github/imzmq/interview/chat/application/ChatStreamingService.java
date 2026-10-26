@@ -10,6 +10,8 @@ import io.github.imzmq.interview.observability.application.contract.trace.TraceN
 import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
 import io.github.imzmq.interview.observability.application.contract.trace.TraceService;
 import io.github.imzmq.interview.chat.application.contract.extension.StreamingChatContext;
+import io.github.imzmq.interview.chat.application.memory.ChatMemoryContextFormatter;
+import io.github.imzmq.interview.chat.application.memory.ChatMemoryRecallService;
 import io.github.imzmq.interview.common.stream.StreamEventEmitter;
 import io.github.imzmq.interview.common.stream.SseStreamEventEmitter;
 import io.github.imzmq.interview.common.stream.StreamEventType;
@@ -38,6 +40,8 @@ public class ChatStreamingService {
     private final ChatScenarioHandlerRegistry chatScenarioHandlerRegistry;
     private final TraceService traceService;
     private final IntentShadowObserver intentShadowObserver;
+    private final ChatMemoryRecallService chatMemoryRecallService;
+    private final ChatMemoryContextFormatter chatMemoryContextFormatter;
     private final long timeoutMillis;
 
     public ChatStreamingService(
@@ -48,6 +52,8 @@ public class ChatStreamingService {
             ChatScenarioHandlerRegistry chatScenarioHandlerRegistry,
             TraceService traceService,
             IntentShadowObserver intentShadowObserver,
+            ChatMemoryRecallService chatMemoryRecallService,
+            ChatMemoryContextFormatter chatMemoryContextFormatter,
             @Qualifier("interviewStreamingExecutor") Executor streamingExecutor,
             @Value("${app.chat.streaming.timeout-millis:180000}") long timeoutMillis) {
         this.webChatService = webChatService;
@@ -57,6 +63,8 @@ public class ChatStreamingService {
         this.chatScenarioHandlerRegistry = chatScenarioHandlerRegistry;
         this.traceService = traceService;
         this.intentShadowObserver = intentShadowObserver;
+        this.chatMemoryRecallService = chatMemoryRecallService;
+        this.chatMemoryContextFormatter = chatMemoryContextFormatter;
         this.streamingExecutor = streamingExecutor;
         this.timeoutMillis = timeoutMillis;
     }
@@ -69,6 +77,8 @@ public class ChatStreamingService {
                                  String userId,
                                  String content,
                                  String retrievalMode) {
+        // 请求线程先校验所有权，避免为越权请求注册异步任务或发送首帧。
+        webChatService.requireOwnedSession(userId, sessionId);
         // 先做输入清洗，降低提示注入/脏数据风险。
         String sanitizedContent = inputSanitizer.sanitize(content);
         // 每次流式请求独立 traceId，便于全链路观测。
@@ -111,6 +121,12 @@ public class ChatStreamingService {
         return stopped;
     }
 
+    String appendMemoryContext(String userId, String query, String history) {
+        String memoryContext = chatMemoryContextFormatter.format(
+                chatMemoryRecallService.recall(userId, query));
+        return chatMemoryContextFormatter.appendToHistory(history, memoryContext);
+    }
+
     private void runChat(String sessionId, String userId, String content,
                          String retrievalMode,
                          String traceId, String taskId, StreamEventEmitter emitter) {
@@ -139,7 +155,7 @@ public class ChatStreamingService {
             }
 
             // 1) 先落用户消息。
-            webChatService.saveUserMessage(sessionId, content);
+            webChatService.saveUserMessage(userId, sessionId, content);
             // 2) 再创建助手占位消息，后续把流式结果回填到该消息。
             assistantMessageId = chatStreamingSupport.createRunningAssistantPlaceholder(sessionId, traceId, taskId).messageId();
             taskManager.attachMessage(taskId, assistantMessageId);
@@ -154,6 +170,7 @@ public class ChatStreamingService {
 
             // 构建两类上下文：生成上下文 + 路由上下文。
             String history = webChatService.buildHistoryContext(sessionId);
+            history = appendMemoryContext(userId, content, history);
             String intentRoutingHistory = webChatService.buildIntentRoutingContext(sessionId);
             StreamingChatContext chatContext = new StreamingChatContext(
                     sessionId,

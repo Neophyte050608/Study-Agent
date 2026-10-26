@@ -61,13 +61,16 @@ public class ChatController {
     @PutMapping("/sessions/{sessionId}")
     public ResponseEntity<ChatSessionView> renameSession(
             @PathVariable String sessionId,
-            @RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(chatSessionOperations.renameSession(sessionId, body.get("title")));
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request) {
+        String userId = resolveUserIdentity(request);
+        return ResponseEntity.ok(chatSessionOperations.renameSession(userId, sessionId, body.get("title")));
     }
 
     @DeleteMapping("/sessions/{sessionId}")
-    public ResponseEntity<Void> deleteSession(@PathVariable String sessionId) {
-        chatSessionOperations.deleteSession(sessionId);
+    public ResponseEntity<Void> deleteSession(@PathVariable String sessionId, HttpServletRequest request) {
+        String userId = resolveUserIdentity(request);
+        chatSessionOperations.deleteSession(userId, sessionId);
         return ResponseEntity.ok().build();
     }
 
@@ -75,8 +78,10 @@ public class ChatController {
     public ResponseEntity<List<ChatMessageView>> listMessages(
             @PathVariable String sessionId,
             @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(required = false) Long beforeId) {
-        return ResponseEntity.ok(chatMessageOperations.listMessages(sessionId, limit, beforeId));
+            @RequestParam(required = false) Long beforeId,
+            HttpServletRequest request) {
+        String userId = resolveUserIdentity(request);
+        return ResponseEntity.ok(chatMessageOperations.listMessages(userId, sessionId, limit, beforeId));
     }
 
     @PostMapping(value = "/sessions/{sessionId}/stream",
@@ -117,10 +122,12 @@ public class ChatController {
         return ResponseEntity.ok(Map.of("streamTaskId", taskId, "stopped", stopped));
     }
 
-    private String resolveUserIdentity(jakarta.servlet.http.HttpServletRequest request) {
-        return userIdentityQuery.resolve(
-                request.getHeader("Authorization"),
-                request.getHeader("X-User-Id"),
+    private String resolveUserIdentity(HttpServletRequest request) {
+        String authenticatedPrincipal = request.getUserPrincipal() == null
+                ? ""
+                : request.getUserPrincipal().getName();
+        return userIdentityQuery.resolveTrusted(
+                authenticatedPrincipal,
                 () -> request.getSession(true).getId()
         );
     }

@@ -3,6 +3,7 @@ package io.github.imzmq.interview.chat.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.imzmq.interview.chat.application.contract.PromptExampleQuery;
+import io.github.imzmq.interview.chat.application.dto.PromptTemplateView;
 import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -32,7 +33,7 @@ public class PromptTemplateService implements PromptExampleQuery {
         this.resourceLoader = resourceLoader;
     }
 
-    public List<PromptTemplateDO> listAll(String category, String type) {
+    public List<PromptTemplateView> listAll(String category, String type) {
         LambdaQueryWrapper<PromptTemplateDO> wrapper = new LambdaQueryWrapper<>();
         if (category != null && !category.isBlank()) {
             wrapper.eq(PromptTemplateDO::getCategory, category);
@@ -41,10 +42,16 @@ public class PromptTemplateService implements PromptExampleQuery {
             wrapper.eq(PromptTemplateDO::getType, type);
         }
         wrapper.orderByAsc(PromptTemplateDO::getCategory, PromptTemplateDO::getName);
-        return templateMapper.selectList(wrapper);
+        return templateMapper.selectList(wrapper).stream()
+                .map(this::toView)
+                .toList();
     }
 
-    public PromptTemplateDO getByName(String name) {
+    public PromptTemplateView getByName(String name) {
+        return toView(findByName(name));
+    }
+
+    private PromptTemplateDO findByName(String name) {
         return templateMapper.selectOne(
                 new LambdaQueryWrapper<PromptTemplateDO>()
                         .eq(PromptTemplateDO::getName, name)
@@ -53,7 +60,7 @@ public class PromptTemplateService implements PromptExampleQuery {
 
     public void update(String name, String content, String title,
                        String description, String category) {
-        PromptTemplateDO existing = getByName(name);
+        PromptTemplateDO existing = findByName(name);
         if (existing == null) {
             throw new RuntimeException("模板不存在: " + name);
         }
@@ -67,9 +74,9 @@ public class PromptTemplateService implements PromptExampleQuery {
         promptManager.reloadCache();
     }
 
-    public PromptTemplateDO create(String name, String category, String type,
+    public PromptTemplateView create(String name, String category, String type,
                                    String title, String description, String content) {
-        PromptTemplateDO existing = getByName(name);
+        PromptTemplateDO existing = findByName(name);
         if (existing != null) {
             throw new RuntimeException("模板名称已存在: " + name);
         }
@@ -83,11 +90,11 @@ public class PromptTemplateService implements PromptExampleQuery {
         entity.setIsBuiltin(false);
         templateMapper.insert(entity);
         promptManager.reloadCache();
-        return entity;
+        return toView(entity);
     }
 
     public void delete(String name) {
-        PromptTemplateDO existing = getByName(name);
+        PromptTemplateDO existing = findByName(name);
         if (existing == null) {
             throw new RuntimeException("模板不存在: " + name);
         }
@@ -100,6 +107,24 @@ public class PromptTemplateService implements PromptExampleQuery {
 
     public String preview(String name, Map<String, Object> variables) {
         return promptManager.render(name, variables != null ? variables : Map.of());
+    }
+
+    private PromptTemplateView toView(PromptTemplateDO source) {
+        if (source == null) {
+            return null;
+        }
+        return new PromptTemplateView(
+                source.getId(),
+                source.getName(),
+                source.getCategory(),
+                source.getType(),
+                source.getTitle(),
+                source.getDescription(),
+                source.getContent(),
+                source.getIsBuiltin(),
+                source.getCreatedAt(),
+                source.getUpdatedAt()
+        );
     }
 
     /**

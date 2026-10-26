@@ -65,10 +65,29 @@ class FlywayDatabaseMigrationTest {
         assertThat(properties.getProperty("spring.flyway.hikari.maximum-pool-size")).isNull();
     }
 
+
+    @Test
+    void chatMemoryIsBoundedAndDisabledByDefaultAndInLocalLite() throws IOException {
+        PropertySource<?> defaults = new YamlPropertySourceLoader()
+                .load("application", new ClassPathResource("application.yml"))
+                .getFirst();
+        PropertySource<?> localLite = new YamlPropertySourceLoader()
+                .load("application-local-lite", new ClassPathResource("application-local-lite.yml"))
+                .getFirst();
+
+        assertThat(defaults.getProperty("app.chat.memory.enabled")).isEqualTo(false);
+        assertThat(defaults.getProperty("app.chat.memory.extraction-batch-size")).isEqualTo(8);
+        assertThat(defaults.getProperty("app.chat.memory.collection-name")).isEqualTo("chat_memories");
+        assertThat(defaults.getProperty("app.chat.memory.recall-limit")).isEqualTo(6);
+        assertThat(localLite.getProperty("app.chat.memory.enabled")).isEqualTo(false);
+    }
+
     @Test
     void versionedMigrationsCreateSchemaAndSeedEveryStartupRequiredPrompt() throws IOException {
         String schemaMigration = readResource("db/migration/V1__create_application_schema.sql");
         String referenceDataMigration = readResource("db/migration/V2__seed_reference_data.sql");
+        String chatMemorySchema = readResource("db/migration/V3__create_chat_memory_schema.sql");
+        String chatMemoryPrompts = readResource("db/migration/V4__seed_chat_memory_prompts.sql");
 
         assertThat(schemaMigration)
                 .contains("CREATE TABLE IF NOT EXISTS `t_prompt_template`")
@@ -92,6 +111,29 @@ class FlywayDatabaseMigrationTest {
                 .doesNotContainPattern("(?m)^UPDATE\\s")
                 .contains("INSERT IGNORE INTO `t_prompt_template`")
                 .containsOnlyOnce("('CHAT',");
+
+
+        assertThat(chatMemorySchema)
+                .contains("t_chat_memory_item")
+                .contains("t_chat_memory_source")
+                .contains("t_chat_memory_extraction_task")
+                .contains("t_chat_memory_outbox")
+                .contains("COLLATE utf8mb4_bin")
+                .contains("uk_chat_memory_content")
+                .contains("uk_chat_memory_source")
+                .contains("uk_chat_memory_task_message")
+                .contains("uk_chat_memory_outbox_event")
+                .contains("`user_id` VARCHAR(191)")
+                .doesNotContain("t_user_chat_memory")
+                .doesNotContain("ON DELETE CASCADE");
+
+        assertThat(chatMemoryPrompts)
+                .contains("chat-memory-extract-system")
+                .contains("chat-memory-extract-task")
+                .contains("INSERT IGNORE")
+                .contains("sourceMessageId")
+                .contains("quote")
+                .doesNotContain("ON DUPLICATE KEY UPDATE");
     }
 
     private String readResource(String path) throws IOException {

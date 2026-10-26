@@ -34,6 +34,15 @@ public class UserIdentityResolver implements UserIdentityQuery {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
+    public String resolveTrusted(String authenticatedPrincipal, Supplier<String> sessionIdSupplier) {
+        if ("open".equalsIgnoreCase(securityMode)) {
+            return "default-user";
+        }
+        String principal = sanitizePrincipal(authenticatedPrincipal);
+        return principal.isBlank() ? "" : "subject:" + principal;
+    }
+
+    @Override
     public String resolve(String authorization, String userIdHeader, Supplier<String> sessionIdSupplier) {
         if ("open".equalsIgnoreCase(securityMode)) {
             return "default-user";

@@ -19,6 +19,9 @@ logging:
 app:
   startup:
     model-preheat-enabled: false
+  chat:
+    memory:
+      enabled: false
   model-routing:
     probe:
       enabled: false

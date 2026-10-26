@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.chat.api;
 
-import io.github.imzmq.interview.chat.infrastructure.persistence.PromptTemplateDO;
+import io.github.imzmq.interview.chat.application.dto.PromptTemplateView;
 import io.github.imzmq.interview.chat.application.PromptManager;
 import io.github.imzmq.interview.chat.application.PromptTemplateService;
 import org.springframework.http.HttpStatus;
@@ -23,15 +23,15 @@ public class PromptTemplateController {
     }
 
     @GetMapping
-    public List<PromptTemplateDO> listAll(
+    public List<PromptTemplateView> listAll(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String type) {
         return promptTemplateService.listAll(category, type);
     }
 
     @GetMapping("/{name}")
-    public PromptTemplateDO getByName(@PathVariable String name) {
-        PromptTemplateDO template = promptTemplateService.getByName(name);
+    public PromptTemplateView getByName(@PathVariable String name) {
+        PromptTemplateView template = promptTemplateService.getByName(name);
         if (template == null) {
             throw new RuntimeException("模板不存在: " + name);
         }
@@ -39,7 +39,7 @@ public class PromptTemplateController {
     }
 
     @PostMapping
-    public PromptTemplateDO create(@RequestBody Map<String, String> body) {
+    public PromptTemplateView create(@RequestBody Map<String, String> body) {
         return promptTemplateService.create(
                 body.get("name"),
                 body.get("category"),

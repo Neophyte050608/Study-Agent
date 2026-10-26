@@ -12,6 +12,7 @@ import io.github.imzmq.interview.chat.application.contract.ChatTaskOperations;
 import io.github.imzmq.interview.chat.application.contract.TaskResponsePresentationOperations;
 import io.github.imzmq.interview.chat.application.contract.result.ChatMessageView;
 import io.github.imzmq.interview.chat.application.contract.result.ChatSessionView;
+import io.github.imzmq.interview.chat.application.memory.ChatMemoryMessageTransactionService;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
@@ -35,17 +36,23 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
     private final ChatContextCompressor chatContextCompressor;
     private final AgentTaskOperations agentTaskOperations;
     private final TaskResponsePresentationOperations taskResponsePresentationOperations;
+    private final ChatMemoryMessageTransactionService chatMemoryMessageTransactionService;
+    private final ChatSessionDeletionService chatSessionDeletionService;
 
     public WebChatService(ChatSessionMapper sessionMapper,
                           ChatMessageMapper messageMapper,
                           AgentTaskOperations agentTaskOperations,
                           ChatContextCompressor chatContextCompressor,
-                          TaskResponsePresentationOperations taskResponsePresentationOperations) {
+                          TaskResponsePresentationOperations taskResponsePresentationOperations,
+                          ChatMemoryMessageTransactionService chatMemoryMessageTransactionService,
+                          ChatSessionDeletionService chatSessionDeletionService) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.agentTaskOperations = agentTaskOperations;
         this.chatContextCompressor = chatContextCompressor;
         this.taskResponsePresentationOperations = taskResponsePresentationOperations;
+        this.chatMemoryMessageTransactionService = chatMemoryMessageTransactionService;
+        this.chatSessionDeletionService = chatSessionDeletionService;
     }
 
     // ======== Session CRUD ========
@@ -83,11 +90,44 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
         ));
     }
 
-    // 删除会话（当前实现为直接删除记录）。
+    public ChatSessionView renameSession(String userId, String sessionId, String newTitle) {
+        requireOwnedSession(userId, sessionId);
+        sessionMapper.update(null,
+                new LambdaUpdateWrapper<ChatSessionDO>()
+                        .eq(ChatSessionDO::getSessionId, sessionId)
+                        .eq(ChatSessionDO::getUserId, userId)
+                        .set(ChatSessionDO::getTitle, newTitle)
+        );
+        return toView(findOwnedSession(userId, sessionId));
+    }
+
+    // 受信内部入口同样进入完整删除传播，避免绕过长期记忆清理。
     public void deleteSession(String sessionId) {
-        sessionMapper.delete(
+        ChatSessionDO session = sessionMapper.selectOne(
                 new LambdaQueryWrapper<ChatSessionDO>()
                         .eq(ChatSessionDO::getSessionId, sessionId)
+                        .last("LIMIT 1"));
+        if (session != null) {
+            chatSessionDeletionService.delete(session.getUserId(), sessionId);
+        }
+    }
+
+    public void deleteSession(String userId, String sessionId) {
+        chatSessionDeletionService.delete(userId, sessionId);
+    }
+
+    public void requireOwnedSession(String userId, String sessionId) {
+        if (findOwnedSession(userId, sessionId) == null) {
+            throw new ChatSessionAccessException();
+        }
+    }
+
+    private ChatSessionDO findOwnedSession(String userId, String sessionId) {
+        return sessionMapper.selectOne(
+                new LambdaQueryWrapper<ChatSessionDO>()
+                        .eq(ChatSessionDO::getSessionId, sessionId)
+                        .eq(ChatSessionDO::getUserId, userId)
+                        .last("LIMIT 1")
         );
     }
 
@@ -131,6 +171,11 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
         return messageMapper.selectList(wrapper).stream().map(WebChatService::toView).toList();
     }
 
+    public List<ChatMessageView> listMessages(String userId, String sessionId, int limit, Long beforeId) {
+        requireOwnedSession(userId, sessionId);
+        return listMessages(sessionId, limit, beforeId);
+    }
+
     // 保存用户消息（用户发言落库）。
     public ChatMessageView saveUserMessage(String sessionId, String content) {
         ChatMessageDO msg = new ChatMessageDO();
@@ -143,6 +188,10 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
         messageMapper.insert(msg);
         touchSession(sessionId);
         return toView(msg);
+    }
+
+    public ChatMessageView saveUserMessage(String userId, String sessionId, String content) {
+        return chatMemoryMessageTransactionService.saveUserMessage(userId, sessionId, content);
     }
 
     // 保存助手消息（默认 contentType=text）。

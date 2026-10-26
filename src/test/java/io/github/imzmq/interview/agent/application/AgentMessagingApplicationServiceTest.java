@@ -46,14 +46,14 @@ class AgentMessagingApplicationServiceTest {
         CapturingBus bus = new CapturingBus();
         AgentMessagingApplicationService service = new AgentMessagingApplicationService(bus);
         final Object[] received = new Object[1];
-        service.subscribe("ChatMemoryExtractorAgent", message -> received[0] = message);
+        service.subscribe("RollingSummaryAgent", message -> received[0] = message);
 
         bus.handler.accept(AgentMessagingApplicationService.toInternalMessage(new AgentMessageCommand(
                 "ChatContextCompressor",
-                "ChatMemoryExtractorAgent",
-                AgentMessageIntent.CROSS_SESSION_MEMORIZE,
+                "RollingSummaryAgent",
+                AgentMessageIntent.ROLLING_SUMMARY,
                 Map.of("sessionId", "s-2"),
-                "cross-session-memory",
+                "rolling-summary",
                 "ChatContextCompressor",
                 Map.of(),
                 "trace-2",
@@ -61,7 +61,7 @@ class AgentMessagingApplicationServiceTest {
         )));
 
         assertThat(received[0]).isEqualTo(new io.github.imzmq.interview.agent.application.contract.message.AgentMessage(
-                AgentMessageIntent.CROSS_SESSION_MEMORIZE,
+                AgentMessageIntent.ROLLING_SUMMARY,
                 Map.of("sessionId", "s-2")
         ));
     }

@@ -116,6 +116,120 @@ IM_FEISHU_USE_WS=true IM_QQ_USE_WS=true APP_STARTUP_MODEL_PREHEAT_ENABLED=true A
 
 启动完成后，后端日志会输出 `Study-Agent startup`，用于确认当前 profile 和关键模块启停状态。
 
+### 结构化聊天长期记忆
+
+#### 启用条件与数据范围
+
+`local-lite` 和默认配置都关闭结构化聊天长期记忆。Flyway 必须先成功应用 V3/V4；启用后复用现有 MySQL、Milvus 和 Embedding 配置：
+
+```bash
+APP_CHAT_MEMORY_ENABLED=true bash scripts/dev-start.sh
+```
+
+该开关只为**启用之后新保存的 user 消息**创建提取任务。系统不读取、不导入、不清空旧 `t_user_chat_memory.memory_text`，也不存在历史消息扫描或 backfill 命令。V1/V2、旧表和旧行保持原样；新任务、记忆、来源和 Outbox 分别写入 V3 创建的 `t_chat_memory_*` 表。
+
+关闭功能或重启进程不会删除已经提交的提取任务或 Outbox 行。重新启用后，worker 会继续领取仍处于 `PENDING` / `RETRY` 或租约过期 `PROCESSING` 状态的记录；达到上限的 `DEAD` 记录必须在排除根因后按单个 ID 显式重置。
+
+#### 真相源、降级与边界
+
+MySQL 是唯一真相源；Milvus collection `chat_memories` 只是不可变版本投影。向量候选在注入上下文前必须回到 MySQL 复核 user、状态、版本、content hash、分类和有效 session/message 来源。
+
+- Milvus、Embedding 或向量查询不可用/超时时，召回降级为 MySQL 最近有效记忆的有界词法排序，默认最多扫描 50 条。
+- MySQL 查询或候选复核失败时，不注入长期记忆；不能绕过 MySQL 直接信任 Milvus。
+- 外部观测发布失败只丢弃观测事件，不改变提取、投影、召回、repair 或重试结果。
+- 关闭开关后不创建新任务、不运行 memory worker/repair，也不召回记忆；持久化数据保留。
+
+当前用户可通过 `GET /api/chat/memories?limit=20&beforeId=...` 查看结构化记忆及仍可访问的来源消息，通过 `DELETE /api/chat/memories/{memoryId}` 幂等删除。接口只信任安全链 principal，不接受 `X-User-Id` 覆盖身份，也不返回 content hash 或向量字段。删除会立即更新 MySQL 真相源并写入 DELETE Outbox；Milvus 的物理清理由投影 worker 最终完成。
+
+删除聊天会话会在同一数据库事务中逻辑删除 session/messages、取消未完成提取任务、失效该会话来源，并按剩余有效来源决定删除记忆或推进版本。`clearSessionContext` 只重置会话压缩边界，不删除长期记忆。
+
+#### 默认运行上限
+
+所有上限都位于 `app.chat.memory.*`，当前默认值如下：
+
+| 能力 | 默认值 |
+| --- | --- |
+| 提取延迟 / 单批消息数 / 输入上限 | `15s` / `8` / `10,000` Unicode code point |
+| 提取最大尝试次数 | `5` |
+| worker 轮询 / 单批事件数 / 租约 | `1s` / `50` / `60s` |
+| Milvus RPC timeout / 投影最大尝试次数 | `10s` / `10` |
+| repair 周期 / 单页真相行数 | `30m` / `200` |
+| 向量召回预算 / 候选数 / 最终条数 | `2s` / `20` / `6` |
+| 单条正文 / 总记忆上下文 | `500` / `2,000` Unicode code point |
+| MySQL fallback 扫描数 | `50` |
+
+collection 名称默认为 `chat_memories`，embedding dimension/model 必须与当前 EmbeddingModel 输出一致。已有 collection schema 不兼容时投影保持禁用，不得自动破坏或重建线上 collection。
+
+#### 可选真实 Milvus 联调
+
+真实 adapter 联调默认跳过，只有显式提供 Milvus 地址和真实 Embedding provider 配置时才运行。API key 优先放在环境变量中，不要写入仓库或命令参数：
+
+```bash
+TEST_EMBEDDING_API_KEY='<temporary-test-key>' \
+  mvn -q -Dtest=ChatMemoryMilvusAdapterIntegrationTest \
+  -Dtest.milvus.host=localhost \
+  -Dtest.milvus.port=19530 \
+  -Dtest.embedding.provider=zhipuai \
+  -Dtest.embedding.model=embedding-3 \
+  -Dtest.embedding.dimension=2048 test
+```
+
+`test.embedding.provider` 支持 `zhipuai` 或 `openai`；兼容代理可额外设置 `-Dtest.embedding.base-url=...`。测试会创建 `chat_memory_it_<uuid>` 独立 collection，验证真实 schema 初始化、upsert、flush、search 和 delete，并且只清理由本次测试确认不存在后创建的 collection；不会访问 `interview_notes` 或正式 `chat_memories`。缺少任一显式配置时，JUnit 报告 skipped，不能将其表述为真实 Milvus 已验证。
+
+#### 观测与安全日志
+
+运行时发布四类无内容事件：`chat.memory.extract`、`chat.memory.project`、`chat.memory.recall`、`chat.memory.repair`。重点观察受控状态 `COMPLETED`、`RETRY`、`DEAD`、`HIT`、`FALLBACK`、`EMPTY`、`FAILED`，以及 `taskCount`、`pendingCount`、`deadCount`、`resultCount`、`queuedCount`、`latencyMs`、`lagMs`、`fallback`、`errorCode` 等聚合字段。
+
+日志和外部观测不得包含用户原文、source quote、prompt/completion、raw JSON、embedding、content hash、密钥或原始异常文本。日志可以记录用于运维定位的 opaque task/event ID 与受控错误码；外部 attributes 不允许 user/session/memory/task 等业务 ID。详细白名单见 `docs/development/observability-guidelines.md`。
+
+#### 单条 DEAD 记录重试
+
+先修复模型、MySQL、Milvus、schema 或配置问题，再用 MySQL 客户端执行以下**按精确 ID 限定**的语句。先查询确认目标属于 V3 新系统且状态为 `DEAD`；不要删除记录、批量更新整表或操作旧 `t_user_chat_memory`。
+
+重新排队一个提取任务：
+
+```sql
+SELECT task_id, status, attempt_count, error_code
+FROM t_chat_memory_extraction_task
+WHERE task_id = '<task-id>';
+
+UPDATE t_chat_memory_extraction_task
+SET status = 'PENDING',
+    attempt_count = 0,
+    next_attempt_at = CURRENT_TIMESTAMP(6),
+    lease_token = NULL,
+    lease_until = NULL,
+    error_code = NULL,
+    updated_at = CURRENT_TIMESTAMP(6)
+WHERE task_id = '<task-id>'
+  AND status = 'DEAD';
+```
+
+重新排队一个投影 Outbox 事件：
+
+```sql
+SELECT event_id, memory_id, memory_version, operation, status, attempt_count, error_code
+FROM t_chat_memory_outbox
+WHERE event_id = '<event-id>';
+
+UPDATE t_chat_memory_outbox
+SET status = 'PENDING',
+    attempt_count = 0,
+    next_attempt_at = CURRENT_TIMESTAMP(6),
+    lease_token = NULL,
+    lease_until = NULL,
+    error_code = NULL,
+    updated_at = CURRENT_TIMESTAMP(6)
+WHERE event_id = '<event-id>'
+  AND status = 'DEAD';
+```
+
+每次应确认 `ROW_COUNT() = 1`；为 0 时停止操作并重新核对 ID/状态。功能必须处于启用状态，worker 才会消费重置后的记录。
+
+#### 回滚
+
+应用层回滚只需设置 `app.chat.memory.enabled=false`（环境变量为 `APP_CHAT_MEMORY_ENABLED=false`）并重启。保留 V3/V4 表、任务、Outbox、prompt seed 和 `chat_memories` collection，不执行 down migration，也不清理旧 `memory_text`。确认回滚期间没有新提取/召回后，再针对根因修复并重新启用；持久化的非终态工作会继续处理。
+
 ## 手动启动方式
 
 如果不使用脚本，可以手动执行：

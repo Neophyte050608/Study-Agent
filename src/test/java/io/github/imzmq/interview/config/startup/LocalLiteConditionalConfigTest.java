@@ -1,6 +1,8 @@
 package io.github.imzmq.interview.config.startup;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.imzmq.interview.chat.application.memory.ChatMemoryProjectionWorker;
+import io.github.imzmq.interview.chat.infrastructure.milvus.ChatMemoryMilvusSchemaInitializer;
 import io.github.imzmq.interview.config.media.ImageVectorStoreConfig;
 import io.github.imzmq.interview.im.application.config.QqProperties;
 import io.github.imzmq.interview.im.application.service.ImWebhookService;
@@ -26,6 +28,20 @@ class LocalLiteConditionalConfigTest {
                 .withBean(QqAuthTokenProvider.class, LocalLiteConditionalConfigTest::noopQqAuthTokenProvider)
                 .withBean(ObjectMapper.class, ObjectMapper::new)
                 .run(context -> assertThat(context).doesNotHaveBean(QqWsService.class));
+    }
+
+    @Test
+    void shouldNotCreateMemoryProjectionComponentsWhenMemoryDisabled() {
+        new ApplicationContextRunner()
+                .withPropertyValues("app.chat.memory.enabled=false")
+                .withUserConfiguration(
+                        ChatMemoryProjectionWorker.class,
+                        ChatMemoryMilvusSchemaInitializer.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(ChatMemoryProjectionWorker.class);
+                    assertThat(context).doesNotHaveBean(ChatMemoryMilvusSchemaInitializer.class);
+                });
     }
 
     @Test

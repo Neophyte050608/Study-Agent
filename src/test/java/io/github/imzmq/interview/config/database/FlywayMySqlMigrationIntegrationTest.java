@@ -29,7 +29,7 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(2);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(4);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
@@ -39,7 +39,7 @@ class FlywayMySqlMigrationIntegrationTest {
                     .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(2);
+                    .isEqualTo(4);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM t_prompt_template WHERE deleted = 0 AND name IN ("
                             + quoted(REQUIRED_PROMPTS) + ")"))
@@ -80,13 +80,13 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(adoptingFlyway.migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(adoptingFlyway.migrate().migrationsExecuted).isEqualTo(3);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(2);
+                    .isEqualTo(4);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history "
                             + "WHERE type = 'BASELINE' AND version = '1' AND success = 1"))
@@ -127,6 +127,7 @@ class FlywayMySqlMigrationIntegrationTest {
             "intent-clarification", "intent-slot-refine", "first-question", "evaluation", "final-report",
             "coding-intent", "coding-question", "coding-evaluation", "coding-next-question", "learning-plan",
             "knowledge-qa", "turn-analyzer-task", "knowledge-digest-task", "batch-quiz-question",
-            "ollama-local-route", "chat-context-compress", "cross-session-memorize", "auto-dream"
+            "ollama-local-route", "chat-context-compress", "cross-session-memorize", "auto-dream",
+            "chat-memory-extract-system", "chat-memory-extract-task"
     );
 }

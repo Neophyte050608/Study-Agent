@@ -46,6 +46,13 @@ public class TraceAttributeSanitizer {
             "standaloneQueryLength",
             "taskIds",
             "taskCount",
+            "stage",
+            "pendingCount",
+            "deadCount",
+            "resultCount",
+            "queuedCount",
+            "lagMs",
+            "errorCode",
             "confidence",
             "source"
     );
@@ -74,7 +81,15 @@ public class TraceAttributeSanitizer {
             "routeType",
             "candidatePriority",
             "circuitState",
-            "nodeType"
+            "nodeType",
+            "stage",
+            "taskCount",
+            "pendingCount",
+            "deadCount",
+            "resultCount",
+            "queuedCount",
+            "lagMs",
+            "errorCode"
     );
 
     public Map<String, Object> sanitize(Map<String, Object> source) {

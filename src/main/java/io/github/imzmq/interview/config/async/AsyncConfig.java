@@ -6,7 +6,10 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 统一异步线程池配置。
@@ -87,6 +90,39 @@ public class AsyncConfig {
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.initialize();
         return executor;
+    }
+
+    /**
+     * 聊天长期记忆提取专用线程池。
+     * 队列饱和时必须拒绝，由任务租约协议重新排队，不能反压请求或调度线程。
+     */
+    @Bean(name = "chatMemoryWorkerExecutor")
+    public Executor chatMemoryWorkerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("ChatMemory-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(15);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 聊天长期记忆召回专用有界执行器，用于给向量检索施加应用层总等待预算。
+     */
+    @Bean(name = "chatMemoryRecallExecutor", destroyMethod = "shutdownNow")
+    public ExecutorService chatMemoryRecallExecutor() {
+        return new ThreadPoolExecutor(
+                2,
+                2,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(20),
+                Thread.ofPlatform().name("ChatMemoryRecall-", 0).factory(),
+                new ThreadPoolExecutor.AbortPolicy());
     }
 
     @Bean(name = "imageIngestionExecutor")

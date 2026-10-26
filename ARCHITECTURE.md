@@ -56,13 +56,15 @@ The `command`, `query`, and `result` subpackages are optional. Public contracts 
 
 Generic web chat is owned by `chat`: `chat.api.ChatController` is the unchanged `/api/chat` HTTP/SSE entry, and session/message/stream orchestration stays under `chat.application`.
 
-- Cross-module session, message, context, task, and presentation capabilities are exposed from `chat.application.contract`; session/message results are immutable records under `chat.application.contract.result` and do not expose persistence DOs.
+- Cross-module session, message, context, task, presentation, and structured-memory management capabilities are exposed from `chat.application.contract`; session/message/memory results are immutable records under `chat.application.contract.result` and do not expose persistence DOs, hashes, or vector SDK types.
 - Business-owned scenario handlers implement the chat-owned SPI in `chat.application.contract.extension`. The chat registry discovers `List<ChatScenarioHandler>` through Spring ordering and never imports a concrete interview or knowledge handler.
 - Interview result formatting is supplied by the interview-owned `InterviewTaskResultPresenter`; chat's generic presenter no longer imports interview domain/runtime result types.
 - Interview, knowledge, and practice handlers may depend on chat contracts only. They cannot access `chat.application` implementations or `chat.infrastructure`.
 - Practice supplies `ActiveCodingChatScenarioHandler`, `CodingPracticeCardChatScenarioHandler`, and `CodingPracticeTaskResultPresenter` through the chat-owned extension SPI. Generic chat does not import these concrete implementations.
 
 M3 removed every chat persistence allowlist entry. It also removed the former M4 `CodingPracticeController -> ChatMessageDO` edge early because that controller now uses `ChatMessageOperations`.
+
+Structured Chat memory remains Chat-owned: `ChatMemoryOperations` is the SDK-neutral management boundary, while MySQL mappers and the Milvus adapter remain internal. Session deletion is coordinated transactionally inside Chat so logical session/message deletion, unfinished extraction cancellation, source invalidation, memory versioning, and projection Outbox creation cannot diverge.
 
 ### Practice ownership after M4
 

@@ -155,7 +155,7 @@ RAG 检索不是单一路径，而是混合检索流水线：
 
 - `ChatContextCompressor` 在消息数量超过阈值后触发异步压缩。
 - 保留最近若干轮原文对话，同时将更早内容总结成 `contextSummary`。
-- 压缩完成后再触发跨会话记忆提取，把稳定用户偏好、能力特点沉淀到 `t_user_chat_memory`。
+- 可选的结构化长期记忆在保存新 user 消息时同事务创建提取任务，以 MySQL `t_chat_memory_*` 为真相源，并通过 Outbox 投影到独立 Milvus collection；默认关闭，且不读取或迁移旧 `t_user_chat_memory.memory_text`。
 
 用于路由和生成的上下文通常是三段式：
 

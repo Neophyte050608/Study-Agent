@@ -11,7 +11,13 @@ public interface ChatSessionOperations {
 
     ChatSessionView renameSession(String sessionId, String newTitle);
 
+    ChatSessionView renameSession(String userId, String sessionId, String newTitle);
+
     void deleteSession(String sessionId);
+
+    void deleteSession(String userId, String sessionId);
+
+    void requireOwnedSession(String userId, String sessionId);
 
     void clearSessionContext(String sessionId, String boundaryMessageId);
 

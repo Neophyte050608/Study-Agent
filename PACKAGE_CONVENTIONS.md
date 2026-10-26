@@ -47,13 +47,25 @@ The current shadow caller is `chat.application.IntentShadowObserver`. It observe
 
 ## 4.3 Chat public surface after M3
 
-- Stable cross-module entries: `chat.application.contract.ChatSessionOperations`, `ChatMessageOperations`, `ChatContextOperations`, `ChatTaskOperations`, and `TaskResponsePresentationOperations`.
-- Stable output records: `chat.application.contract.result.ChatSessionView` and `ChatMessageView`.
+- Stable cross-module entries: `chat.application.contract.ChatSessionOperations`, `ChatMessageOperations`, `ChatContextOperations`, `ChatTaskOperations`, `TaskResponsePresentationOperations`, and `ChatMemoryOperations`.
+- Stable output records: `chat.application.contract.result.ChatSessionView`, `ChatMessageView`, and `ChatMemoryView`.
 - Scenario extension SPI: `chat.application.contract.extension.ChatScenarioHandler`, `StreamingChatContext`, `ChatStreamingOperations`, `ChatIntentPolicy`, and `ChatTaskResultPresenter`.
 - Generic registry and streaming implementations stay internal to `chat.application`; external handlers must not inject `WebChatService`, `ChatStreamingSupport`, or other chat implementation classes.
 - Concrete interview/default handlers belong to `interview.application.chat`; knowledge QA belongs to `knowledge.application.chat`.
 - Coding chat handlers and result presentation belong to `practice.application.chat` and implement only chat-owned extension contracts.
 - `knowledge.application.chatstream` is retired and must not be recreated.
+
+
+### Chat structured-memory ownership
+
+Structured cross-session memory remains part of the Chat domain; it is not a top-level module and does not justify a separate Maven module:
+
+- `chat.domain.memory`: framework-neutral categories, states, candidate/source values, normalization, and quote-validation rules. It must not depend on Spring, MyBatis, Milvus, Chat API, or infrastructure types.
+- `chat.application.memory`: extraction-task submission, candidate validation/commit, recall, projection/outbox workers, repair, management, configuration, and orchestration. It owns the use-case flow but does not expose persistence or Milvus SDK types through Chat's public contracts.
+- `chat.infrastructure.persistence.memory`: MySQL truth-source DOs and MyBatis mappers for memory items, sources, extraction tasks, and outbox events. Other modules must not import this package.
+- `chat.infrastructure.milvus`: versioned vector projection, query/delete/scan adapter, and schema initialization. This is the only Chat package allowed to import the Milvus SDK; Milvus is a derived projection, never the memory truth source.
+
+Cross-module callers use `chat.application.contract.ChatMemoryOperations` and stable JDK-only result records. Chat memory publishes operational events only through `observability.application.contract.OperationalObservationPublisher`; it must not import Observability's internal application implementation, local persistence, or an external telemetry SDK. The legacy `t_user_chat_memory.memory_text` path is not an active writer or reader for structured memory; existing schema, rows, and V1/V2 seed data remain untouched.
 
 ## 4.4 Modelrouting structured-output public surface after M2
 

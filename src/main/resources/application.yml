@@ -175,6 +175,29 @@ app:
     streaming:
       timeout-millis: 180000
       message-chunk-size: 48
+    memory:
+      enabled: false
+      extraction-delay: 15s
+      extraction-batch-size: 8
+      extraction-input-code-points: 10000
+      extraction-max-attempts: 5
+      collection-name: chat_memories
+      embedding-dimension: ${SPRING_AI_VECTORSTORE_MILVUS_EMBEDDING_DIMENSION:2048}
+      embedding-model-id: ${SPRING_AI_ZHIPUAI_EMBEDDING_MODEL:embedding-3}
+      initialize-schema: true
+      worker-poll: 1s
+      worker-batch-size: 50
+      worker-lease: 60s
+      rpc-timeout: 10s
+      projection-max-attempts: 10
+      repair-delay: 30m
+      repair-page-size: 200
+      recall-timeout: 2s
+      recall-candidates: 20
+      recall-limit: 6
+      recall-entry-code-points: 500
+      recall-context-code-points: 2000
+      fallback-scan-limit: 50
 
   routing:
     understanding:

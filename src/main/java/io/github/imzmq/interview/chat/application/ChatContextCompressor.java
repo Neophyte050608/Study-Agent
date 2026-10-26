@@ -10,10 +10,8 @@ import io.github.imzmq.interview.agent.application.contract.message.AgentMessage
 import io.github.imzmq.interview.agent.application.contract.message.AgentMessageIntent;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
-import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
-import io.github.imzmq.interview.chat.infrastructure.persistence.UserChatMemoryMapper;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import jakarta.annotation.PostConstruct;
@@ -37,20 +35,17 @@ public class ChatContextCompressor {
 
     private final ChatMessageMapper messageMapper;
     private final ChatSessionMapper sessionMapper;
-    private final UserChatMemoryMapper userMemoryMapper;
     private final RoutingChatService routingChatService;
     private final PromptManager promptManager;
     private final AgentMessagingOperations agentMessaging;
 
     public ChatContextCompressor(ChatMessageMapper messageMapper,
                                  ChatSessionMapper sessionMapper,
-                                 UserChatMemoryMapper userMemoryMapper,
                                  RoutingChatService routingChatService,
                                  PromptManager promptManager,
                                  AgentMessagingOperations agentMessaging) {
         this.messageMapper = messageMapper;
         this.sessionMapper = sessionMapper;
-        this.userMemoryMapper = userMemoryMapper;
         this.routingChatService = routingChatService;
         this.promptManager = promptManager;
         this.agentMessaging = agentMessaging;
@@ -68,7 +63,7 @@ public class ChatContextCompressor {
                         .gt(contextStartMsgId != null, ChatMessageDO::getId, contextStartMsgId)
         );
         if (total == null || total <= COMPRESS_TRIGGER_THRESHOLD) {
-            return prependUserMemory(sessionId, buildVerbatimHistory(sessionId, 0, contextStartMsgId));
+            return buildVerbatimHistory(sessionId, 0, contextStartMsgId);
         }
 
         List<ChatMessageDO> recent = messageMapper.selectList(
@@ -88,13 +83,13 @@ public class ChatContextCompressor {
 
         // 首次还没有摘要时，降级为取更多消息（避免上下文断崖）
         if (!hasSummary) {
-            return prependUserMemory(sessionId,
-                    buildVerbatimHistory(sessionId, COMPRESS_TRIGGER_THRESHOLD + RECENT_VERBATIM_COUNT, contextStartMsgId));
+            return buildVerbatimHistory(
+                    sessionId, COMPRESS_TRIGGER_THRESHOLD + RECENT_VERBATIM_COUNT, contextStartMsgId);
         }
 
         String recentText = formatMessages(recent);
         String sessionContext = "【会话摘要】\n" + existingSummary + "\n\n【近期对话】\n" + recentText;
-        return prependUserMemory(sessionId, sessionContext);
+        return sessionContext;
     }
 
     public String buildIntentRoutingContext(String sessionId) {
@@ -243,49 +238,10 @@ public class ChatContextCompressor {
                             .set(ChatSessionDO::getSummaryUpToMsgId, newUpToMsgId)
             );
 
-            try {
-                agentMessaging.publish(new AgentMessageCommand(
-                        "ChatContextCompressor",
-                        "ChatMemoryExtractorAgent",
-                        AgentMessageIntent.CROSS_SESSION_MEMORIZE,
-                        Map.of("sessionId", sessionId),
-                        "cross-session-memorize",
-                        "ChatContextCompressor",
-                        Map.of(),
-                        UUID.randomUUID().toString(),
-                        null
-                ));
-            } catch (Exception e) {
-                log.warn("触发跨会话记忆提取失败，不影响主流程: sessionId={}", sessionId, e);
-            }
             log.info("上下文压缩完成: sessionId={}, summaryUpToMsgId={}", sessionId, newUpToMsgId);
         } catch (Exception e) {
             log.error("处理上下文压缩任务失败", e);
             throw new RuntimeException("Chat context compression failed", e);
-        }
-    }
-
-    private String prependUserMemory(String sessionId, String sessionContext) {
-        try {
-            ChatSessionDO session = sessionMapper.selectOne(
-                    new LambdaQueryWrapper<ChatSessionDO>()
-                            .eq(ChatSessionDO::getSessionId, sessionId)
-                            .select(ChatSessionDO::getUserId)
-            );
-            if (session == null || session.getUserId() == null) {
-                return sessionContext;
-            }
-            UserChatMemoryDO memory = userMemoryMapper.selectOne(
-                    new LambdaQueryWrapper<UserChatMemoryDO>()
-                            .eq(UserChatMemoryDO::getUserId, session.getUserId())
-            );
-            if (memory == null || memory.getMemoryText() == null || memory.getMemoryText().isBlank()) {
-                return sessionContext;
-            }
-            return "【用户画像】\n" + memory.getMemoryText() + "\n\n" + sessionContext;
-        } catch (Exception e) {
-            log.warn("加载跨会话记忆失败，降级为不注入: sessionId={}", sessionId, e);
-            return sessionContext;
         }
     }
 

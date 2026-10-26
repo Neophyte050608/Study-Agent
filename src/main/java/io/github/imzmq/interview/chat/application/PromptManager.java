@@ -56,9 +56,7 @@ public class PromptManager implements PromptRenderer, AgentTaskPromptRenderer, I
             "knowledge-digest-task",
             "batch-quiz-question",
             "ollama-local-route",
-            "chat-context-compress",
-            "cross-session-memorize",
-            "auto-dream"
+            "chat-context-compress"
     );
 
     private final Jinjava jinjava;
