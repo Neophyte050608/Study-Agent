@@ -167,6 +167,29 @@ M9 closes the highest-risk implementation leaks that remained after ownership an
 
 Focused ArchUnit rules enforce the Agent runtime/A2A isolation and the Interview domain boundary in addition to the generic contract-purity, persistence, controller, and cycle rules.
 
+## RAG retrieval kernel after simplification
+
+The conceptual RAG lifecycle can be understood as catalog, ingestion, indexing, retrieval, grounding and evaluation. These are responsibility boundaries, not six deployment units or six new frameworks. This slice only changes the retrieval kernel.
+
+```text
+KnowledgeRetrievalOperations -> KnowledgeApplicationContractAdapter -> RAGService
+                                                                     | root trace
+                                                                     v
+                                                            KnowledgePacketBuilder
+                                                            | rewrite / images / quality / Web fallback / child traces
+                                                            +-> HybridEvidenceRetriever
+                                                            |   +-> lexical / vector / graph (existing executor)
+                                                            |   +-> EvidenceFusionService (RRF)
+                                                            |   +-> GroundingContextAssembler (parent-child hydration)
+                                                            |   +-> EvidenceFusionService (rerank)
+                                                            +-> EvidenceFusionService (best quality score)
+                                                            +-> GroundingContextAssembler (context / evidence / image selection)
+```
+
+`KnowledgeRetrievalCoordinator` continues to select RAG/local-graph/hybrid modes; `RagKnowledgeService` continues to adapt the RAG packet for that coordinator. Evaluation continues to reuse `RAGService.buildKnowledgePacket(..., false)` rather than creating a second retrieval algorithm. The old Builder-to-RAGService `RetrievalDelegate` is removed, not wrapped by another engine. Only internal constructor/delegate surfaces change; public contracts, fallback semantics, citation formats, ranking and trace schema remain unchanged.
+
+ArchUnit prevents the facade from accessing retrieval adapters, the Builder from regaining the delegate, fusion from accessing retrieval adapters/external services, and grounding from performing vector/graph/Web recall. Catalog/Ingestion consistency, Outbox/projections, unified evidence types and retirement of remaining compatibility entry points are separate future decisions.
+
 ## Layering Rules
 - API layer: controllers and controller-facing DTO/input-output types.
 - Application layer: orchestration, use-case flow, and application-internal DTOs.

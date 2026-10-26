@@ -14,6 +14,10 @@ import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluat
 import io.github.imzmq.interview.knowledge.application.retrieval.KnowledgeRetrievalCoordinator;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
+import io.github.imzmq.interview.knowledge.application.retrieval.HybridEvidenceRetriever;
+import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceFusionService;
+import io.github.imzmq.interview.knowledge.application.retrieval.GroundingContextAssembler;
+import java.util.UUID;
 import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
 import io.github.imzmq.interview.knowledge.domain.KnowledgeRetrievalMode;
 import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
@@ -28,8 +32,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
+/** 组合现有改写、召回、Grounding、质量判断和 Web fallback；不再回调兼容门面。 */
 @Service
 public class KnowledgePacketBuilder {
 
@@ -41,46 +45,53 @@ public class KnowledgePacketBuilder {
     private final SkillOrchestrator skillOrchestrator;
     private final ObservabilitySwitchProperties observabilitySwitchProperties;
     private final MediaImageOperations imageService;
+    private final HybridEvidenceRetriever retriever;
+    private final EvidenceFusionService fusion;
+    private final GroundingContextAssembler grounding;
+    private final RagTraceOperations ragTraceOperations;
 
     public KnowledgePacketBuilder(QueryRewriteService queryRewriteService,
                                   EvidenceEvaluationService evidenceEvaluationService,
                                   WebFallbackService webFallbackService,
                                   SkillOrchestrator skillOrchestrator,
                                   ObservabilitySwitchProperties observabilitySwitchProperties,
-                                  @org.springframework.lang.Nullable MediaImageOperations imageService) {
+                                  @org.springframework.lang.Nullable MediaImageOperations imageService,
+                                  HybridEvidenceRetriever retriever, EvidenceFusionService fusion,
+                                  GroundingContextAssembler grounding, RagTraceOperations ragTraceOperations) {
         this.queryRewriteService = queryRewriteService;
         this.evidenceEvaluationService = evidenceEvaluationService;
         this.webFallbackService = webFallbackService;
         this.skillOrchestrator = skillOrchestrator;
         this.observabilitySwitchProperties = observabilitySwitchProperties;
         this.imageService = imageService;
+        this.retriever = retriever;
+        this.fusion = fusion;
+        this.grounding = grounding;
+        this.ragTraceOperations = ragTraceOperations;
     }
 
     public RAGService.KnowledgePacket build(String question,
                                             String userAnswer,
-                                            boolean allowWebFallback,
-                                            RetrievalDelegate delegate) {
+                                            boolean allowWebFallback) {
         String traceId = RAGTraceContext.getTraceId();
         String parentNodeId = RAGTraceContext.getCurrentNodeId();
         SkillExecutionBudget skillBudget = skillOrchestrator.newBudget();
-        TraceNodeHandle rewriteTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.QUERY_REWRITE, Map.of("status", "RUNNING"));
+        TraceNodeHandle rewriteTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.QUERY_REWRITE, Map.of("status", "RUNNING"));
         RewrittenQuery rewrittenQuery = queryRewriteService.buildRewrittenQuery(question, userAnswer, skillBudget);
-        delegate.completeTraceSuccess(rewriteTrace, Map.of("status", "COMPLETED"));
+        completeTraceSuccess(rewriteTrace, Map.of("status", "COMPLETED"));
         if (observabilitySwitchProperties.isRagTraceEnabled()) {
             logger.info("Rewritten Query: CORE=[{}] EXPAND=[{}]", rewrittenQuery.coreTerms(), rewrittenQuery.expandTerms());
         }
 
-        TraceNodeHandle docRetrieveTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.DOC_RETRIEVE, Map.of("status", "RUNNING"));
-        List<Document> retrievedDocs = delegate.retrieveHybridDocuments(rewrittenQuery, 5);
-        String context = retrievedDocs.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n\n"));
-        double bestRetrievalScore = delegate.bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
-        delegate.completeTraceSuccess(
+        TraceNodeHandle docRetrieveTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.DOC_RETRIEVE, Map.of("status", "RUNNING"));
+        List<Document> retrievedDocs = retriever.retrieveHybridDocuments(rewrittenQuery, 5);
+        String context = grounding.buildContext(retrievedDocs);
+        double bestRetrievalScore = fusion.bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
+        completeTraceSuccess(
                 docRetrieveTrace,
                 Map.of(
                         "docCount", retrievedDocs.size(),
-                        "docRefs", delegate.summarizeRetrievedDocuments(retrievedDocs),
+                        "docRefs", grounding.summarizeRetrievedDocuments(retrievedDocs),
                         "status", "COMPLETED"
                 ),
                 new TraceNodeMetrics(retrievedDocs.size(), false),
@@ -90,7 +101,7 @@ public class KnowledgePacketBuilder {
                         null,
                         false,
                         retrievedDocs.size(),
-                        delegate.summarizeRetrievedDocuments(retrievedDocs),
+                        grounding.summarizeRetrievedDocuments(retrievedDocs),
                         null,
                         null,
                         null,
@@ -100,11 +111,11 @@ public class KnowledgePacketBuilder {
                 )
         );
 
-        TraceNodeHandle associatedImageTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_ASSOC_RETRIEVE, Map.of("status", "RUNNING"));
+        TraceNodeHandle associatedImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_ASSOC_RETRIEVE, Map.of("status", "RUNNING"));
         List<ImageResult> associatedImages = imageService == null
                 ? List.of()
                 : imageService.findImagesForDocuments(toMediaDocuments(retrievedDocs));
-        delegate.completeTraceSuccess(associatedImageTrace, Map.of(
+        completeTraceSuccess(associatedImageTrace, Map.of(
                 "imageCount", associatedImages.size(),
                 "status", "COMPLETED"
         ), null, new TraceNodeDetails(
@@ -122,9 +133,9 @@ public class KnowledgePacketBuilder {
                 null
         ));
 
-        TraceNodeHandle semanticImageTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_SEMANTIC_RETRIEVE, Map.of("status", "RUNNING"));
-        List<ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), delegate.containsVisualIntent(rewrittenQuery.fullQuery()));
-        delegate.completeTraceSuccess(semanticImageTrace, Map.of(
+        TraceNodeHandle semanticImageTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.IMAGE_SEMANTIC_RETRIEVE, Map.of("status", "RUNNING"));
+        List<ImageResult> semanticImages = imageService == null ? List.of() : imageService.searchRelevantImages(rewrittenQuery.fullQuery(), grounding.containsVisualIntent(rewrittenQuery.fullQuery()));
+        completeTraceSuccess(semanticImageTrace, Map.of(
                 "imageCount", semanticImages.size(),
                 "status", "COMPLETED"
         ), null, new TraceNodeDetails(
@@ -142,9 +153,9 @@ public class KnowledgePacketBuilder {
                 null
         ));
 
-        List<ImageResult> retrievedImages = delegate.mergeImageResults(associatedImages, semanticImages);
+        List<ImageResult> retrievedImages = grounding.mergeImageResults(associatedImages, semanticImages);
         String imageContext = KnowledgeRetrievalCoordinator.buildImageContext(retrievedImages);
-        String retrievalEvidence = delegate.buildRetrievalEvidence(retrievedDocs);
+        String retrievalEvidence = grounding.buildRetrievalEvidence(retrievedDocs);
         boolean webFallbackUsed = false;
         EvidenceEvaluationService.EvidenceDecision evidenceDecision = evidenceEvaluationService.decide(
                 rewrittenQuery,
@@ -156,12 +167,12 @@ public class KnowledgePacketBuilder {
                 skillBudget
         );
         if (evidenceDecision.allowExternalLookup()) {
-            TraceNodeHandle webFallbackTrace = delegate.startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
+            TraceNodeHandle webFallbackTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.WEB_FALLBACK, Map.of("fallback", true, "status", "RUNNING"));
             List<String> webContext = webFallbackService.search(rewrittenQuery.fullQuery(), traceId, evidenceDecision.reason(), skillBudget);
-            context = webContext.stream().collect(Collectors.joining("\n\n"));
-            retrievalEvidence = delegate.buildWebEvidence(webContext);
+            context = grounding.buildWebContext(webContext);
+            retrievalEvidence = grounding.buildWebEvidence(webContext);
             webFallbackUsed = true;
-            delegate.completeTraceSuccess(
+            completeTraceSuccess(
                     webFallbackTrace,
                     Map.of(
                             "fallback", true,
@@ -190,30 +201,33 @@ public class KnowledgePacketBuilder {
         return new RAGService.KnowledgePacket(rewrittenQuery.fullQuery(), retrievedDocs, retrievedImages, context, imageContext, retrievalEvidence, webFallbackUsed);
     }
 
-    public interface RetrievalDelegate {
-        List<Document> retrieveHybridDocuments(RewrittenQuery query, int topK);
+    private TraceNodeHandle startTraceChild(String traceId,
+                                            String parentNodeId,
+                                            TraceNodeDefinition definition,
+                                            Map<String, Object> attributes) {
+        String safeParentNodeId = parentNodeId == null ? RAGTraceContext.getCurrentNodeId() : parentNodeId;
+        String nodeId = UUID.randomUUID().toString();
+        ragTraceOperations.startNode(traceId, nodeId, safeParentNodeId, definition.nodeType(), definition.nodeName());
+        return new TraceNodeHandle(traceId, nodeId, safeParentNodeId, definition);
+    }
 
-        double bestRetrievalScore(String query, List<Document> docs);
+    private void completeTraceSuccess(TraceNodeHandle handle, Map<String, Object> result) {
+        completeTraceSuccess(handle, result, null, null);
+    }
 
-        String buildRetrievalEvidence(List<Document> docs);
-
-        String buildWebEvidence(List<String> webContext);
-
-        List<ImageResult> mergeImageResults(List<ImageResult> associatedImages,
-                                                         List<ImageResult> semanticImages);
-
-        boolean containsVisualIntent(String query);
-
-        List<String> summarizeRetrievedDocuments(List<Document> retrievedDocs);
-
-        TraceNodeHandle startTraceChild(String traceId, String parentNodeId, TraceNodeDefinition definition, Map<String, Object> attributes);
-
-        void completeTraceSuccess(TraceNodeHandle handle, Map<String, Object> attributes);
-
-        void completeTraceSuccess(TraceNodeHandle handle,
-                                  Map<String, Object> attributes,
-                                  TraceNodeMetrics metrics,
-                                  TraceNodeDetails details);
+    private void completeTraceSuccess(TraceNodeHandle handle,
+                                     Map<String, Object> result,
+                                     TraceNodeMetrics metrics,
+                                     TraceNodeDetails details) {
+        ragTraceOperations.endNode(
+                handle.traceId(),
+                handle.nodeId(),
+                "",
+                result == null ? "" : result.toString(),
+                null,
+                metrics,
+                details
+        );
     }
 
     private List<MediaDocument> toMediaDocuments(List<Document> documents) {

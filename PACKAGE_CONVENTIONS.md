@@ -192,6 +192,15 @@ Knowledge package ownership for new code:
 - `knowledge.infrastructure.persistence`: knowledge-owned MyBatis DOs and Mappers.
 - `knowledge.infrastructure.graph`: Neo4j/Spring Data graph adapters and repositories.
 
+Current retrieval implementation (no additional module or plugin framework):
+
+- `KnowledgePacketBuilder` remains the knowledge-packet workflow coordinator: rewrite, retrieve, images, evidence decision and Web fallback. It directly composes the retrieval services and records child traces; the former `RetrievalDelegate` callback into `RAGService` is removed.
+- `knowledge.application.retrieval.HybridEvidenceRetriever` owns the three fixed lexical/vector/graph recall channels and calls fusion, parent-child hydration, then reranking in the existing order. It uses the existing executor and Knowledge adapters.
+- `knowledge.application.retrieval.EvidenceFusionService` owns RRF deduplication, source/channel weights, overlap reranking and quality scores. It does not access vector/graph/persistence adapters or external services.
+- `knowledge.application.retrieval.GroundingContextAssembler` owns parent-child context windows, evidence numbering, document summaries and image filtering. Parent lookup reuses `ParentChildIndexService`; it does not perform vector/graph/Web recall.
+- `RAGService` retains the knowledge-packet compatibility entry/record and existing interview/learning generation methods. It no longer owns retrieval adapters or algorithms; root trace lifecycle stays here.
+- Public `KnowledgeRetrievalOperations` and its SDK-neutral result are unchanged. Internal Spring AI `Document` remains internal; do not expose it in application contracts. No `RetrievedEvidence`, generic channel interface, registry or engine wrapper is needed for this slice.
+
 Historical packages are migration-only:
 
 - Do not add generic chat code to `knowledge.application.chatstream` or `knowledge.application.context`.

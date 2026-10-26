@@ -46,6 +46,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ArchitectureRulesTest {
 
     @ArchTest
+    static final ArchRule rag_facade_should_not_own_retrieval_adapters =
+            noClasses().that().haveFullyQualifiedName("io.github.imzmq.interview.knowledge.application.RAGService")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework.ai.vectorstore..", "..knowledge.infrastructure..", "..knowledge.application.indexing..");
+
+    @ArchTest
+    static final ArchRule packet_builder_should_not_call_back_into_rag_delegate =
+            noClasses().that().haveFullyQualifiedName("io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder")
+                    .should().dependOnClassesThat().haveSimpleName("RetrievalDelegate");
+
+    @ArchTest
+    static final ArchRule evidence_fusion_should_not_access_retrieval_adapters =
+            noClasses().that().haveSimpleName("EvidenceFusionService")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..knowledge.infrastructure..", "org.springframework.ai.vectorstore..", "..media..", "..search..");
+
+    @ArchTest
+    static final ArchRule grounding_should_not_recall_or_search_externally =
+            noClasses().that().haveSimpleName("GroundingContextAssembler")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework.ai.vectorstore..", "..knowledge.infrastructure.graph..", "..search..");
+
+    @ArchTest
     static final ArchRule controller_should_not_access_mapper_directly =
             noClasses().that().resideInAnyPackage("..controller..", "..api..")
                     .should().dependOnClassesThat(areMyBatisMappers());

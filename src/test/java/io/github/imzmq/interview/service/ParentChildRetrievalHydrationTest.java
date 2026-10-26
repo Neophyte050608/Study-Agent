@@ -25,6 +25,10 @@ import io.github.imzmq.interview.observability.application.trace.RAGObservabilit
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
 import io.github.imzmq.interview.interview.application.evaluation.InterviewAnswerEvaluationService;
 import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceFusionService;
+import io.github.imzmq.interview.knowledge.application.retrieval.GroundingContextAssembler;
+import io.github.imzmq.interview.knowledge.application.retrieval.HybridEvidenceRetriever;
+
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
 import io.github.imzmq.interview.knowledge.application.retrieval.WebFallbackService;
@@ -155,34 +159,23 @@ class ParentChildRetrievalHydrationTest {
                 skillMcpClient,
                 webSearchTool
         );
+        Executor executor = Runnable::run;
+        EvidenceFusionService fusion = new EvidenceFusionService(lexicalIndexService, retrievalTokenizerService);
+        GroundingContextAssembler grounding = new GroundingContextAssembler(parentChildRetrievalProperties, parentChildIndexService);
+        HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vectorStore, lexicalIndexService,
+                executor, techConceptRepository, fusion, grounding);
         KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder(
                 queryRewriteService,
                 evidenceEvaluationService,
                 webFallbackService,
                 skillOrchestrator,
                 observabilitySwitchProperties,
-                imageService
+                imageService, retriever, fusion, grounding, observabilityService
         );
-        Executor executor = Runnable::run;
         StructuredOutputParser structuredOutputParser = new DefaultStructuredOutputParser(new ObjectMapper());
-        ragService = new RAGService(
-                routingChatService,
-                vectorStore,
-                lexicalIndexService,
-                observabilityService,
-                agentSkillService,
-                promptManager,
-                executor,
-                techConceptRepository,
-                observabilitySwitchProperties,
-                retrievalTokenizerService,
-                parentChildRetrievalProperties,
-                parentChildIndexService,
-                skillOrchestrator,
-                knowledgePacketBuilder,
-                structuredOutputParser
-
-        );
+        ragService = new RAGService(routingChatService, observabilityService, agentSkillService,
+                promptManager, skillOrchestrator, knowledgePacketBuilder,
+                structuredOutputParser);
     }
 
     /**
