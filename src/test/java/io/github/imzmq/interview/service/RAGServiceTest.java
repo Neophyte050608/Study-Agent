@@ -14,6 +14,10 @@ import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndex
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
 import io.github.imzmq.interview.knowledge.application.KnowledgePacketBuilder;
 import io.github.imzmq.interview.knowledge.application.RAGService;
+import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceFusionService;
+import io.github.imzmq.interview.knowledge.application.retrieval.GroundingContextAssembler;
+import io.github.imzmq.interview.knowledge.application.retrieval.HybridEvidenceRetriever;
+
 import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgeInterviewReportEntry;
 import io.github.imzmq.interview.knowledge.application.retrieval.EvidenceEvaluationService;
 import io.github.imzmq.interview.knowledge.application.retrieval.QueryRewriteService;
@@ -158,33 +162,22 @@ class RAGServiceTest {
                 skillMcpClient,
                 webSearchTool
         );
+        EvidenceFusionService fusion = new EvidenceFusionService(lexicalIndexService, retrievalTokenizerService);
+        GroundingContextAssembler grounding = new GroundingContextAssembler(parentChildRetrievalProperties, parentChildIndexService);
+        HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vectorStore, lexicalIndexService,
+                ragRetrieveExecutor, techConceptRepository, fusion, grounding);
         KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder(
                 queryRewriteService,
                 evidenceEvaluationService,
                 webFallbackService,
                 skillOrchestrator,
                 observabilitySwitchProperties,
-                imageService
+                imageService, retriever, fusion, grounding, observabilityService
         );
         StructuredOutputParser structuredOutputParser = new DefaultStructuredOutputParser(new ObjectMapper());
-        ragService = new RAGService(
-                routingChatService,
-                vectorStore,
-                lexicalIndexService,
-                observabilityService,
-                agentSkillService,
-                promptManager,
-                ragRetrieveExecutor,
-                techConceptRepository,
-                observabilitySwitchProperties,
-                retrievalTokenizerService,
-                parentChildRetrievalProperties,
-                parentChildIndexService,
-                skillOrchestrator,
-                knowledgePacketBuilder,
-                structuredOutputParser
-
-        );
+        ragService = new RAGService(routingChatService, observabilityService, agentSkillService,
+                promptManager, skillOrchestrator, knowledgePacketBuilder,
+                structuredOutputParser);
         when(promptManager.renderSplit(anyString(), anyString(), anyMap()))
                 .thenReturn(new RenderedPrompt("system", "user"));
         when(routingChatService.callWithMetadata(anyString(), anyString(), any(ModelRouteType.class), anyString()))
@@ -520,6 +513,59 @@ class RAGServiceTest {
         assertTrue(skillBlock.contains("Interview Report Strategy"));
         assertTrue(skillBlock.contains("Redis 为什么快"));
         assertTrue(skillBlock.contains("targetedSuggestion"));
+    }
+
+    @Test
+    void shouldDeduplicateChannelsAndRetainIntentDocument() {
+        when(observabilitySwitchProperties.isRagTraceEnabled()).thenReturn(false);
+        when(lexicalIndexService.tokenize(anyString())).thenReturn(List.of("redis"));
+        Document intent = new Document("redis cache", Map.of("file_path", "cache.md"));
+        Document vector = new Document("redis cache", Map.of("file_path", "cache.md"));
+        when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of(intent));
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of(vector));
+        when(techConceptRepository.findRelatedConceptSnippetsBatch(any())).thenReturn(List.of());
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("redis", "", false);
+
+        assertEquals(List.of(intent), packet.retrievedDocs());
+        assertEquals("intent_directed", packet.retrievedDocs().getFirst().getMetadata().get("retrieve_channel"));
+        assertFalse(packet.webFallbackUsed());
+        verify(webSearchTool, never()).search(any());
+    }
+
+    @Test
+    void shouldKeepOtherChannelsWhenVectorAndGraphFail() {
+        when(lexicalIndexService.tokenize(anyString())).thenReturn(List.of("redis"));
+        Document intent = new Document("redis cache", Map.of("file_path", "cache.md"));
+        when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of(intent));
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
+                .thenThrow(new IllegalStateException("vector unavailable"));
+        when(techConceptRepository.findRelatedConceptSnippetsBatch(any()))
+                .thenThrow(new IllegalStateException("graph unavailable"));
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("redis", "", false);
+
+        assertEquals(List.of(intent), packet.retrievedDocs());
+        assertEquals("redis cache", packet.context());
+    }
+
+    @Test
+    void shouldReplaceLocalGroundingEvenWhenWebFallbackIsEmpty() {
+        when(lexicalIndexService.tokenize(anyString())).thenReturn(List.of("redis"));
+        when(lexicalIndexService.searchIntentDirected(anyString(), any(), anyInt())).thenReturn(List.of());
+        when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of());
+        when(techConceptRepository.findRelatedConceptSnippetsBatch(any())).thenReturn(List.of(
+                batchGraphConcept("redis", "graph hint", "only related concept", "Concept")));
+        when(mcpGatewayService.invoke(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of(
+                "status", "fallback_stub", "result", Map.of()));
+        when(webSearchTool.search(any())).thenReturn(List.of());
+
+        RAGService.KnowledgePacket packet = ragService.buildKnowledgePacket("redis", "");
+
+        assertTrue(packet.webFallbackUsed());
+        assertFalse(packet.retrievedDocs().isEmpty());
+        assertEquals("", packet.context());
+        assertEquals("[]", packet.retrievalEvidence());
     }
 
     /**

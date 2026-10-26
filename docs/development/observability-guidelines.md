@@ -167,3 +167,7 @@ OpenTelemetry 不替代 Langfuse 的 LLM/RAG 细节追踪。两者可以并存�
 - `sanitizeForExternalObservation(...)` 外部导出字段变化。
 - 新增或替换外部观测 adapter。
 - Langfuse/OpenTelemetry 配置、启用方式或失败降级策略变化。
+
+## RAG 检索内核职责（2026-10-26）
+
+本次重构不新增事件、trace 字段、节点类型或导出 adapter。`RAGService` 保留 `KNOWLEDGE_PACKET` root 生命周期和已有父节点复用规则；`KnowledgePacketBuilder` 直接调用 `RagTraceOperations` 记录 QUERY_REWRITE、DOC_RETRIEVE、IMAGE_ASSOC_RETRIEVE、IMAGE_SEMANTIC_RETRIEVE、WEB_FALLBACK child，替代旧 RetrievalDelegate 回调。三路召回继续复用 `ragRetrieveExecutor`，不新建线程池或单独通道 span。docRefs、docCount、imageCount、fallback 及 metrics/details 内容保持既有口径。

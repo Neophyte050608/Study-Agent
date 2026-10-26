@@ -2,10 +2,6 @@ package io.github.imzmq.interview.knowledge.application;
 
 import io.github.imzmq.interview.media.application.contract.result.ImageResult;
 
-import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDetails;
-import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeMetrics;
-import io.github.imzmq.interview.config.observability.ObservabilitySwitchProperties;
-import io.github.imzmq.interview.config.knowledge.ParentChildRetrievalProperties;
 import io.github.imzmq.interview.knowledge.application.contract.result.KnowledgeInterviewReportEntry;
 import io.github.imzmq.interview.observability.core.RAGTraceContext;
 import io.github.imzmq.interview.modelrouting.core.ModelRouteType;
@@ -14,14 +10,7 @@ import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.agent.application.contract.AgentSkillInstructions;
 import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
 import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
-import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
-import io.github.imzmq.interview.knowledge.application.indexing.ParentChildIndexService;
-import io.github.imzmq.interview.knowledge.application.indexing.RetrievalTokenizerService;
 import io.github.imzmq.interview.observability.application.contract.trace.RagTraceOperations;
-import io.github.imzmq.interview.knowledge.application.retrieval.RewrittenQuery;
-import io.github.imzmq.interview.knowledge.application.support.UpstreamErrorSanitizer;
-import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition;
-import io.github.imzmq.interview.observability.application.contract.trace.TraceNodeHandle;
 import io.github.imzmq.interview.skill.core.SkillExecutionBudget;
 import io.github.imzmq.interview.skill.core.SkillExecutionContext;
 import io.github.imzmq.interview.skill.core.SkillExecutionResult;
@@ -32,22 +21,17 @@ import io.github.imzmq.interview.modelrouting.application.contract.structuredout
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
- * RAG 核心服务。
- * 负责检索查询改写、混合召回、证据整理、回答评估与可观测追踪。
+ * RAG 兼容门面：委托 KnowledgePacketBuilder 构建知识包，保留既有面试/学习生成入口。
+ * 召回、融合与上下文装配由 knowledge.application.retrieval 中的专职实现承担。
  *
  * <p>关键约定：</p>
  * <ul>
@@ -57,53 +41,29 @@ import java.util.stream.Stream;
  * </ul>
  */
 @Service
-public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
+public class RAGService {
 
     private static final Logger logger = LoggerFactory.getLogger(RAGService.class);
     // 用于日志脱敏：尽量在调试时保留“字段存在”信息，但不暴露实际密钥/令牌。
     private static final Pattern RAW_API_KEY_PATTERN = Pattern.compile("(?i)(\"?api[-_ ]?key\"?\\s*[:=]\\s*\"?)([^\",\\s]+)");
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*bearer\\s+)([A-Za-z0-9._-]{8,})");
     private static final Pattern LONG_TOKEN_PATTERN = Pattern.compile("\\b[A-Za-z0-9._-]{32,}\\b");
-    private static final double FINAL_IMAGE_MIN_SCORE = 0.55d;
-    private static final double SECOND_IMAGE_MIN_SCORE = 0.68d;
-    private static final double ADDITIONAL_IMAGE_SCORE_GAP = 0.18d;
-    private static final Set<String> VISUAL_INTENT_KEYWORDS = Set.of(
-            "图", "截图", "架构", "流程图", "拓扑", "示意图", "类图", "时序图",
-            "部署图", "结构图", "原理图", "对比图", "配置图", "界面", "效果图",
-            "看看", "展示", "图解", "diagram", "topology", "layout", "screenshot"
-    );
     private final RoutingChatService routingChatService;
-    private final VectorStore vectorStore;
-    private final LexicalIndexService lexicalIndexService;
     private final RagTraceOperations ragTraceOperations;
     private final AgentSkillInstructions agentSkillService;
     private final PromptRenderer promptRenderer;
     private final StructuredOutputParser structuredOutputParser;
-    // 注入自定义检索线程池
-    private final java.util.concurrent.Executor ragRetrieveExecutor;
-    // 注入图谱持久化组件
-    private final io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptRepository techConceptRepository;
-    // 可观测开关配置
-    private final ObservabilitySwitchProperties observabilitySwitchProperties;
-    private final RetrievalTokenizerService retrievalTokenizerService;
-    private final ParentChildRetrievalProperties parentChildRetrievalProperties;
-    private final ParentChildIndexService parentChildIndexService;
     private final SkillOrchestrator skillOrchestrator;
     private final KnowledgePacketBuilder knowledgePacketBuilder;
 
-    public RAGService(RoutingChatService routingChatService, VectorStore vectorStore, LexicalIndexService lexicalIndexService, RagTraceOperations ragTraceOperations, AgentSkillInstructions agentSkillService, PromptRenderer promptRenderer, @org.springframework.beans.factory.annotation.Qualifier("ragRetrieveExecutor") java.util.concurrent.Executor ragRetrieveExecutor, io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptRepository techConceptRepository, ObservabilitySwitchProperties observabilitySwitchProperties, RetrievalTokenizerService retrievalTokenizerService, ParentChildRetrievalProperties parentChildRetrievalProperties, ParentChildIndexService parentChildIndexService, SkillOrchestrator skillOrchestrator, KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser) {
+    public RAGService(RoutingChatService routingChatService, RagTraceOperations ragTraceOperations,
+                      AgentSkillInstructions agentSkillService, PromptRenderer promptRenderer,
+                      SkillOrchestrator skillOrchestrator,
+                      KnowledgePacketBuilder knowledgePacketBuilder, StructuredOutputParser structuredOutputParser) {
         this.agentSkillService = agentSkillService;
         this.promptRenderer = promptRenderer;
-        this.ragRetrieveExecutor = ragRetrieveExecutor;
-        this.techConceptRepository = techConceptRepository;
         this.routingChatService = routingChatService;
-        this.vectorStore = vectorStore;
-        this.lexicalIndexService = lexicalIndexService;
         this.ragTraceOperations = ragTraceOperations;
-        this.observabilitySwitchProperties = observabilitySwitchProperties;
-        this.retrievalTokenizerService = retrievalTokenizerService;
-        this.parentChildRetrievalProperties = parentChildRetrievalProperties;
-        this.parentChildIndexService = parentChildIndexService;
         this.skillOrchestrator = skillOrchestrator;
         this.knowledgePacketBuilder = knowledgePacketBuilder;
         this.structuredOutputParser = structuredOutputParser;
@@ -129,7 +89,7 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
      */
     public KnowledgePacket buildKnowledgePacket(String question, String userAnswer, boolean allowWebFallback) {
         return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question,
-                () -> knowledgePacketBuilder.build(question, userAnswer, allowWebFallback, this));
+                () -> knowledgePacketBuilder.build(question, userAnswer, allowWebFallback));
     }
 
     private <T> T executeWithinTraceRoot(String nodeType, String nodeName, String inputSummary, Supplier<T> action) {
@@ -148,586 +108,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             ragTraceOperations.endNode(traceId, rootNodeId, inputSummary, null, summarizeError(e));
             throw e;
         }
-    }
-
-    @Override
-    public TraceNodeHandle startTraceChild(String traceId,
-                                            String parentNodeId,
-                                            TraceNodeDefinition definition,
-                                            Map<String, Object> attributes) {
-        String safeParentNodeId = parentNodeId == null ? RAGTraceContext.getCurrentNodeId() : parentNodeId;
-        String nodeId = UUID.randomUUID().toString();
-        ragTraceOperations.startNode(traceId, nodeId, safeParentNodeId, definition.nodeType(), definition.nodeName());
-        return new TraceNodeHandle(traceId, nodeId, safeParentNodeId, definition);
-    }
-
-    @Override
-    public void completeTraceSuccess(TraceNodeHandle handle, Map<String, Object> result) {
-        completeTraceSuccess(handle, result, null, null);
-    }
-
-    private void completeTraceSuccess(TraceNodeHandle handle,
-                                      Map<String, Object> result,
-                                      TraceNodeMetrics metrics) {
-        completeTraceSuccess(handle, result, metrics, null);
-    }
-
-    @Override
-    public void completeTraceSuccess(TraceNodeHandle handle,
-                                     Map<String, Object> result,
-                                     TraceNodeMetrics metrics,
-                                     TraceNodeDetails details) {
-        ragTraceOperations.endNode(
-                handle.traceId(),
-                handle.nodeId(),
-                "",
-                result == null ? "" : result.toString(),
-                null,
-                metrics,
-                details
-        );
-    }
-
-    /**
-     * 核心多路召回引擎。
-     * 
-     * 【技术演进与设计思考】
-     * 1. 痛点：原来的单一向量检索（Vector Search）会因为“语义漂移”导致实体边界模糊。比如搜“Redis 缓存击穿”，它会召回大量“MySQL 缓存”的八股文。
-     * 2. 优化：引入基于倒排/词法匹配的“意图定向通道”，结合 `knowledge_tags` 权重，确保精准命中专业术语；再保留全局向量作为兜底，提高泛化能力。
-     * 3. 并发：通过自定义线程池 `ragRetrieveExecutor` 让三路通道并发执行，整体耗时取决于最慢的一路，不增加接口 RT。
-     * 
-     * 实现：意图定向检索 + 全局向量检索 + 图谱关联检索 并行执行。
-     */
-    @Override
-    public List<Document> retrieveHybridDocuments(RewrittenQuery query, int topK) {
-        List<String> intentFocusTerms = buildIntentFocusTerms(query.coreTerms());
-        // 通道 A：意图定向检索（利用词法索引服务进行高精度标签/路径匹配）
-        java.util.concurrent.CompletableFuture<List<Document>> intentDirectedFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            try {
-                List<Document> docs = lexicalIndexService.searchIntentDirected(query.coreTerms(), intentFocusTerms, Math.max(topK + 3, 8));
-                return markRetrieveChannel(docs, "intent_directed");
-            } catch (RuntimeException e) {
-                logger.warn("意图定向检索失败，返回空列表。原因: {}", summarizeError(e));
-                return List.<Document>of();
-            }
-        }, ragRetrieveExecutor);
-
-        // 通道 B：全局向量检索（纯语义兜底）
-        java.util.concurrent.CompletableFuture<List<Document>> vectorFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            try {
-                List<Document> docs = vectorStore.similaritySearch(
-                        SearchRequest.builder().query(query.fullQuery()).topK(Math.max(topK + 3, 8)).build()
-                );
-                return markRetrieveChannel(docs, "global_vector");
-            } catch (RuntimeException e) {
-                logger.warn("向量检索失败，返回空列表。原因: {}", summarizeError(e));
-                return List.<Document>of();
-            }
-        }, ragRetrieveExecutor);
-
-        // 通道 C：GraphRAG 检索分支（图谱实体扩展）
-        java.util.concurrent.CompletableFuture<List<Document>> graphFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            try {
-                List<Document> graphDocs = new ArrayList<>();
-                List<String> queryTokens = intentFocusTerms.isEmpty() ? lexicalIndexService.tokenize(query.coreTerms()) : intentFocusTerms;
-                if (queryTokens.isEmpty()) {
-                    return graphDocs;
-                }
-
-                List<io.github.imzmq.interview.knowledge.infrastructure.graph.BatchedConceptSnippetView> batchResults =
-                        techConceptRepository.findRelatedConceptSnippetsBatch(queryTokens);
-                if (batchResults == null || batchResults.isEmpty()) {
-                    return graphDocs;
-                }
-
-                Map<String, List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView>> grouped = batchResults.stream()
-                        .collect(Collectors.groupingBy(
-                                io.github.imzmq.interview.knowledge.infrastructure.graph.BatchedConceptSnippetView::getAnchor,
-                                LinkedHashMap::new,
-                                Collectors.mapping(item -> (io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView) item, Collectors.toList())
-                        ));
-
-                for (Map.Entry<String, List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView>> entry : grouped.entrySet()) {
-                    String token = entry.getKey();
-                    List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView> relatedConcepts = entry.getValue();
-                    String graphContext = buildGraphConceptContext(token, relatedConcepts);
-                    if (graphContext.isBlank()) {
-                        continue;
-                    }
-                    Document doc = new Document(graphContext);
-                    doc.getMetadata().put("source_type", "graph_rag");
-                    doc.getMetadata().put("retrieve_channel", "graph_rag");
-                    doc.getMetadata().put("graph_anchor", token);
-                    doc.getMetadata().put("evidence_snippet", truncate(graphContext, 90));
-                    graphDocs.add(doc);
-                }
-                return graphDocs;
-            } catch (Exception e) {
-                logger.warn("图谱检索失败，返回空列表。原因: {}", summarizeError(e));
-                return List.<Document>of();
-            }
-        }, ragRetrieveExecutor);
-
-        List<Document> intentDocs = intentDirectedFuture.join();
-        List<Document> vectorDocs = vectorFuture.join();
-        List<Document> graphDocs = graphFuture.join();
-
-        // RRF 融合去重与重排流水线
-        List<Document> fused = reciprocalRankFuse(intentDocs, vectorDocs);
-        fused.addAll(graphDocs);
-        List<Document> hydrated = maybeHydrateParentDocuments(fused, topK);
-        return rerankByQueryOverlap(query, hydrated, topK);
-    }
-
-    /**
-     * 计算本地检索结果中最佳的一条重排分数，用作低质量 fallback 的判定依据。
-     *
-     * @param query 查询文本
-     * @param docs 本地检索结果
-     * @return 最高分；若没有结果则返回 0
-     */
-    @Override
-    public double bestRetrievalScore(String query, List<Document> docs) {
-        if (docs == null || docs.isEmpty()) {
-            return 0.0D;
-        }
-        List<String> queryTokens = retrievalTokenizerService.tokenize(query);
-        if (queryTokens.isEmpty()) {
-            return 0.0D;
-        }
-        double bestScore = 0.0D;
-        for (int i = 0; i < docs.size(); i++) {
-            Document doc = docs.get(i);
-            List<String> docTokens = retrievalTokenizerService.tokenize(doc.getText());
-            long overlap = queryTokens.stream().filter(docTokens::contains).count();
-            double overlapRatio = docTokens.isEmpty()
-                    ? 0.0D
-                    : (double) overlap / (double) Math.min(queryTokens.size(), Math.max(1, docTokens.size()));
-            double score = (overlapRatio * 0.7D + (1.0D / (i + 1)) * 0.3D) * sourceTypeBoost(doc);
-            bestScore = Math.max(bestScore, score);
-        }
-        return bestScore;
-    }
-
-    /**
-     * 针对 Parent-Child 检索结果做“父文上下文 + 子块命中片段”回填。
-     *
-     * <p>这里不再直接用整段 parent 覆盖 child，而是保留局部命中片段，
-     * 再补上一段围绕命中位置的 parent 上下文，避免语义被整段长文稀释。</p>
-     *
-     * @param docs 融合后的候选文档
-     * @param topK 当前链路期望返回的结果条数
-     * @return 完成拼接回填后的候选文档
-     */
-    private List<Document> maybeHydrateParentDocuments(List<Document> docs, int topK) {
-        if (docs == null || docs.isEmpty()) {
-            return List.of();
-        }
-        if (!parentChildRetrievalProperties.isEnabled()) {
-            return docs;
-        }
-        int hydrateLimit = Math.max(1, Math.min(parentChildRetrievalProperties.getHydrateParentTopN(), Math.max(1, topK)));
-        List<Document> candidates = docs.stream().limit(hydrateLimit).collect(Collectors.toList());
-        Set<String> parentIds = candidates.stream()
-                .map(doc -> String.valueOf(doc.getMetadata().getOrDefault("parent_id", "")))
-                .filter(item -> item != null && !item.isBlank() && !"null".equalsIgnoreCase(item))
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (parentIds.isEmpty()) {
-            return docs;
-        }
-        Map<String, io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO> parentMap = parentChildIndexService.queryParentsByIds(parentIds);
-        if (parentMap.isEmpty()) {
-            return docs;
-        }
-        List<Document> result = new ArrayList<>();
-        for (int i = 0; i < docs.size(); i++) {
-            Document doc = docs.get(i);
-            if (i >= hydrateLimit) {
-                result.add(doc);
-                continue;
-            }
-            String parentId = String.valueOf(doc.getMetadata().getOrDefault("parent_id", ""));
-            io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO parent = parentMap.get(parentId);
-            if (parent == null || parent.getParentText() == null || parent.getParentText().isBlank()) {
-                result.add(doc);
-                continue;
-            }
-            ParentChildHydrationPayload payload = buildParentChildHydrationPayload(doc, parent);
-            Document hydrated = new Document(payload.hydratedText());
-            hydrated.getMetadata().putAll(doc.getMetadata());
-            hydrated.getMetadata().put("parent_id", parent.getParentId());
-            hydrated.getMetadata().put("parent_source", parent.getFilePath());
-            hydrated.getMetadata().put("file_path", parent.getFilePath());
-            hydrated.getMetadata().put("section_path", parent.getSectionPath());
-            hydrated.getMetadata().put("knowledge_tags", parent.getKnowledgeTags());
-            hydrated.getMetadata().put("source_type", parent.getSourceType());
-            hydrated.getMetadata().put("hydration_mode", "parent_child_concat");
-            hydrated.getMetadata().put("parent_context_excerpt", payload.parentContextExcerpt());
-            hydrated.getMetadata().put("child_match_excerpt", payload.childMatchExcerpt());
-            hydrated.getMetadata().put("evidence_snippet", payload.evidenceSnippet());
-            result.add(hydrated);
-        }
-        return result;
-    }
-
-    /**
-     * 构建 parent-child 回填载荷，统一生成最终上下文与证据摘要。
-     *
-     * @param doc 原始 child 文档
-     * @param parent parent 文档信息
-     * @return 结构化回填结果
-     */
-    private ParentChildHydrationPayload buildParentChildHydrationPayload(Document doc, io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO parent) {
-        String childMatchExcerpt = extractChildMatchExcerpt(doc == null ? "" : doc.getText());
-        String parentContextExcerpt = extractParentContextExcerpt(parent == null ? "" : parent.getParentText(), childMatchExcerpt);
-        String hydratedText = composeHydratedText(parent, parentContextExcerpt, childMatchExcerpt);
-        String evidenceSnippet = buildHydratedEvidenceSnippet(parentContextExcerpt, childMatchExcerpt);
-        return new ParentChildHydrationPayload(hydratedText, parentContextExcerpt, childMatchExcerpt, evidenceSnippet);
-    }
-
-    /**
-     * 从 child 文本中抽取真正命中的正文片段。
-     *
-     * <p>chunk 文本前面可能带有文档名、章节名、标签等前缀，
-     * 这里优先剥离这类元数据，避免 evidence 被装饰性信息占满。</p>
-     *
-     * @param childText 原始 child 文本
-     * @return 归一化后的命中片段
-     */
-    private String extractChildMatchExcerpt(String childText) {
-        if (childText == null || childText.isBlank()) {
-            return "";
-        }
-        String normalized = childText.replace("\r\n", "\n").trim();
-        String[] parts = normalized.split("\\n", 2);
-        String candidate = parts.length >= 2 ? parts[1] : normalized;
-        candidate = candidate.replaceFirst("^(\\[[^\\]]+\\]\\s*)+", "");
-        candidate = normalizeSnippet(candidate);
-        return truncate(candidate, Math.max(60, parentChildRetrievalProperties.getHydrateChildMatchChars()));
-    }
-
-    /**
-     * 截取围绕命中片段的 parent 上下文窗口。
-     *
-     * <p>如果能在 parent 中定位到 child 片段，就按锚点附近截取；
-     * 如果定位失败，则退化为 parent 头部摘要，保证链路稳定。</p>
-     *
-     * @param parentText parent 全量文本
-     * @param childMatchExcerpt child 命中片段
-     * @return parent 上下文摘要
-     */
-    private String extractParentContextExcerpt(String parentText, String childMatchExcerpt) {
-        String normalizedParent = normalizeSnippet(parentText);
-        if (normalizedParent.isBlank()) {
-            return "";
-        }
-        int maxChars = Math.max(160, parentChildRetrievalProperties.getHydrateParentContextChars());
-        String anchor = resolveParentAnchor(normalizedParent, childMatchExcerpt);
-        if (anchor.isBlank()) {
-            return truncate(normalizedParent, maxChars);
-        }
-        int anchorStart = normalizedParent.indexOf(anchor);
-        if (anchorStart < 0) {
-            return truncate(normalizedParent, maxChars);
-        }
-        return excerptAroundRange(normalizedParent, anchorStart, anchorStart + anchor.length(), maxChars);
-    }
-
-    /**
-     * 通过 child 前缀递减匹配的方式，为 parent 文本找到可定位的锚点。
-     *
-     * @param parentText 归一化后的 parent 文本
-     * @param childMatchExcerpt child 命中片段
-     * @return 可定位锚点；若未找到则返回空字符串
-     */
-    private String resolveParentAnchor(String parentText, String childMatchExcerpt) {
-        String normalizedChild = normalizeSnippet(childMatchExcerpt);
-        if (normalizedChild.isBlank()) {
-            return "";
-        }
-        int maxLength = Math.min(80, normalizedChild.length());
-        for (int length = maxLength; length >= 18; length -= 10) {
-            String candidate = normalizedChild.substring(0, length);
-            if (parentText.contains(candidate)) {
-                return candidate;
-            }
-        }
-        return "";
-    }
-
-    /**
-     * 围绕命中位置截取固定大小的上下文窗口，并用省略号提示裁剪边界。
-     *
-     * @param text 原始文本
-     * @param start 命中起始位置
-     * @param end 命中结束位置
-     * @param maxChars 最长保留字符数
-     * @return 裁剪后的上下文摘要
-     */
-    private String excerptAroundRange(String text, int start, int end, int maxChars) {
-        if (text == null || text.isBlank() || text.length() <= maxChars) {
-            return text == null ? "" : text;
-        }
-        int safeStart = Math.max(0, start - maxChars / 3);
-        int safeEnd = Math.min(text.length(), safeStart + maxChars);
-        if (safeEnd < end) {
-            safeEnd = Math.min(text.length(), end + maxChars / 3);
-            safeStart = Math.max(0, safeEnd - maxChars);
-        }
-        String excerpt = text.substring(safeStart, safeEnd).trim();
-        if (safeStart > 0) {
-            excerpt = "..." + excerpt;
-        }
-        if (safeEnd < text.length()) {
-            excerpt = excerpt + "...";
-        }
-        return excerpt;
-    }
-
-    /**
-     * 将 parent 上下文与 child 命中片段拼成最终写回 RAG 的文本。
-     *
-     * @param parent parent 元数据
-     * @param parentContextExcerpt parent 摘要
-     * @param childMatchExcerpt child 摘要
-     * @return 拼接后的文本
-     */
-    private String composeHydratedText(io.github.imzmq.interview.knowledge.infrastructure.persistence.RagParentDO parent, String parentContextExcerpt, String childMatchExcerpt) {
-        StringBuilder builder = new StringBuilder();
-        if (parent != null && parent.getSectionPath() != null && !parent.getSectionPath().isBlank()) {
-            builder.append("\u3010\u7AE0\u8282\u8DEF\u5F84\u3011").append(parent.getSectionPath().trim()).append("\n");
-        }
-        if (parentContextExcerpt != null && !parentContextExcerpt.isBlank()) {
-            builder.append("\u3010\u7236\u6587\u4E0A\u4E0B\u6587\u3011").append(parentContextExcerpt.trim());
-        }
-        if (childMatchExcerpt != null && !childMatchExcerpt.isBlank()) {
-            if (builder.length() > 0) {
-                builder.append("\n\n");
-            }
-            builder.append("\u3010\u547D\u4E2D\u7247\u6BB5\u3011").append(childMatchExcerpt.trim());
-        }
-        return builder.toString().trim();
-    }
-
-    /**
-     * 生成证据目录优先展示的摘要文本。
-     *
-     * @param parentContextExcerpt parent 摘要
-     * @param childMatchExcerpt child 摘要
-     * @return 便于 citations 复用的单行摘要
-     */
-    private String buildHydratedEvidenceSnippet(String parentContextExcerpt, String childMatchExcerpt) {
-        String contextPart = truncate(normalizeSnippet(parentContextExcerpt), 48);
-        String matchPart = truncate(normalizeSnippet(childMatchExcerpt), 36);
-        if (!matchPart.isBlank() && !contextPart.isBlank()) {
-            return "\u547D\u4E2D=" + matchPart + " | \u4E0A\u6587=" + contextPart;
-        }
-        if (!matchPart.isBlank()) {
-            return "\u547D\u4E2D=" + matchPart;
-        }
-        return contextPart;
-    }
-
-    /**
-     * 统一做空白字符归一化，减少换行噪音对重排和 evidence 的影响。
-     *
-     * @param text 原始文本
-     * @return 单行化后的文本
-     */
-    private String normalizeSnippet(String text) {
-        if (text == null || text.isBlank()) {
-            return "";
-        }
-        return text.replaceAll("\\s+", " ").trim();
-    }
-
-    /**
-     * 将图谱关联概念摘要拼装成更适合 RAG 消费的自然语言证据。
-     *
-     * @param anchorConcept 当前查询命中的锚点概念
-     * @param relatedConcepts 图谱返回的关联概念摘要
-     * @return 描述性图谱上下文；若无有效内容则返回空字符串
-     */
-    private String buildGraphConceptContext(String anchorConcept, List<io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView> relatedConcepts) {
-        if (relatedConcepts == null || relatedConcepts.isEmpty()) {
-            return "";
-        }
-        String relatedSummary = relatedConcepts.stream()
-                .filter(Objects::nonNull)
-                .map(this::formatGraphConceptSnippet)
-                .filter(item -> item != null && !item.isBlank())
-                .limit(5)
-                .collect(Collectors.joining("；"));
-        if (relatedSummary.isBlank()) {
-            return "";
-        }
-        return "知识图谱关联提示：围绕「" + anchorConcept + "」可继续延展的概念包括：" + relatedSummary;
-    }
-
-    /**
-     * 将单个图谱概念整理为“名称 + 类型 + 描述”的紧凑片段。
-     *
-     * @param concept 图谱概念摘要
-     * @return 单个概念的可读文本
-     */
-    private String formatGraphConceptSnippet(io.github.imzmq.interview.knowledge.infrastructure.graph.TechConceptSnippetView concept) {
-        if (concept == null) {
-            return "";
-        }
-        String name = concept.getName() == null ? "" : concept.getName().trim();
-        String type = concept.getType() == null ? "" : concept.getType().trim();
-        String description = truncate(normalizeSnippet(concept.getDescription()), 60);
-        if (name.isBlank() && description.isBlank()) {
-            return "";
-        }
-        if (!name.isBlank() && !type.isBlank() && !description.isBlank()) {
-            return name + "（" + type + "）: " + description;
-        }
-        if (!name.isBlank() && !description.isBlank()) {
-            return name + ": " + description;
-        }
-        if (!name.isBlank() && !type.isBlank()) {
-            return name + "（" + type + "）";
-        }
-        return name.isBlank() ? description : name;
-    }
-
-    /**
-     * RRF (Reciprocal Rank Fusion) 倒数排名融合算法。
-     * 
-     * 【为什么要用 RRF？】
-     * 1. 分数量纲不一致：向量检索返回的是余弦相似度（通常在 0.7~1.0），而词法检索（TF-IDF）返回的是绝对分数（可能 > 10）。
-     * 2. 无法直接相加或简单归一化：强行归一化会被极端离群值带偏。
-     * 3. 解决思路：抛弃绝对分数，只看“排名”。公式：Score = 1 / (k + rank)。
-     *    文档在两个通道中排名越靠前，倒数和就越大，有效抹平了不同检索引擎的尺度差异。
-     * 
-     * 同时，在融合时针对 `intent_directed` 意图定向通道的文档给予 `1.12` 的提权（Channel Boost）。
-     */
-    private List<Document> reciprocalRankFuse(List<Document> intentDirectedDocs, List<Document> globalVectorDocs) {
-        Map<String, FusedCandidate> fused = new LinkedHashMap<>();
-        for (int i = 0; i < intentDirectedDocs.size(); i++) {
-            Document doc = intentDirectedDocs.get(i);
-            String key = candidateKey(doc);
-            FusedCandidate candidate = fused.computeIfAbsent(key, k -> new FusedCandidate(doc));
-            double sourceBoost = sourceTypeBoost(doc);
-            candidate.score += (1.0 / (60 + i + 1)) * sourceBoost * channelBoost(doc);
-        }
-        for (int i = 0; i < globalVectorDocs.size(); i++) {
-            Document doc = globalVectorDocs.get(i);
-            String key = candidateKey(doc);
-            FusedCandidate candidate = fused.computeIfAbsent(key, k -> new FusedCandidate(doc));
-            double sourceBoost = sourceTypeBoost(doc);
-            candidate.score += (1.0 / (60 + i + 1)) * sourceBoost * channelBoost(doc);
-            Object lexicalScore = doc.getMetadata().get("lexical_score");
-            if (lexicalScore instanceof Number number) {
-                candidate.score += number.doubleValue() * 0.01 * sourceBoost;
-            }
-        }
-        return fused.values().stream()
-                .sorted(Comparator.comparingDouble(FusedCandidate::score).reversed())
-                .map(FusedCandidate::document)
-                .collect(Collectors.toList());
-    }
-
-    private List<String> buildIntentFocusTerms(String retrievalQuery) {
-        if (retrievalQuery == null || retrievalQuery.isBlank()) {
-            return List.of();
-        }
-        return lexicalIndexService.tokenize(retrievalQuery).stream()
-                .filter(token -> token.length() >= 2)
-                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new))
-                .stream()
-                .limit(8)
-                .collect(Collectors.toList());
-    }
-
-    private List<Document> markRetrieveChannel(List<Document> docs, String channel) {
-        if (docs == null || docs.isEmpty()) {
-            return List.of();
-        }
-        for (Document doc : docs) {
-            if (doc != null) {
-                doc.getMetadata().put("retrieve_channel", channel);
-            }
-        }
-        return docs;
-    }
-
-    private double channelBoost(Document doc) {
-        if (doc == null || doc.getMetadata() == null) {
-            return 1.0;
-        }
-        String channel = String.valueOf(doc.getMetadata().getOrDefault("retrieve_channel", "")).toLowerCase(Locale.ROOT);
-        if ("intent_directed".equals(channel)) {
-            return 1.12;
-        }
-        return 1.0;
-    }
-
-    private List<Document> rerankByQueryOverlap(RewrittenQuery query, List<Document> docs, int topK) {
-        if (docs == null || docs.isEmpty()) {
-            return List.of();
-        }
-        List<String> coreTokens = lexicalIndexService.tokenize(query.coreTerms());
-        List<String> expandTokens = query.expandTerms().isBlank()
-                ? List.of()
-                : lexicalIndexService.tokenize(query.expandTerms());
-        if (coreTokens.isEmpty() && expandTokens.isEmpty()) {
-            return docs.stream().limit(topK).collect(Collectors.toList());
-        }
-        int totalTokens = coreTokens.size() + expandTokens.size();
-        Map<Document, Double> scoreMap = new HashMap<>();
-        for (int i = 0; i < docs.size(); i++) {
-            Document doc = docs.get(i);
-            List<String> docTokens = lexicalIndexService.tokenize(doc.getText());
-            long coreHits = coreTokens.stream().filter(docTokens::contains).count();
-            long expandHits = expandTokens.stream().filter(docTokens::contains).count();
-            double weightedOverlap = totalTokens == 0 ? 0.0
-                    : (coreHits * 1.0 + expandHits * 0.4) / totalTokens;
-            double score = (weightedOverlap * 0.7 + (1.0 / (i + 1)) * 0.3) * sourceTypeBoost(doc);
-            doc.getMetadata().put("retrieval_score", score);
-            scoreMap.put(doc, score);
-        }
-        return docs.stream()
-                .sorted((a, b) -> Double.compare(scoreMap.getOrDefault(b, 0.0), scoreMap.getOrDefault(a, 0.0)))
-                .limit(topK)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public boolean containsVisualIntent(String query) {
-        if (query == null || query.isBlank()) {
-            return false;
-        }
-        String normalized = query.toLowerCase(Locale.ROOT);
-        return VISUAL_INTENT_KEYWORDS.stream().anyMatch(normalized::contains);
-    }
-
-    private List<String> tokenize(String text) {
-        if (text == null || text.isBlank()) {
-            return List.of();
-        }
-        // 为了和 LexicalIndexService 保持一致，同样引入分词逻辑（或者直接复用），这里简单优化为更好的正则分词
-        // 因为这段代码仅用于 Query Overlap 的简单计算，不需要像全文索引那样精准，但之前的逻辑也偏弱
-        return List.of(text.toLowerCase(Locale.ROOT)
-                        .replaceAll("[^\\p{L}\\p{N}\\s_#-]", " ")
-                        .replaceAll("\\s+", " ")
-                        .trim()
-                        .split(" "))
-                .stream()
-                .map(String::trim)
-                .filter(token -> token.length() >= 2)
-                .collect(Collectors.toList());
-    }
-
-    private String candidateKey(Document doc) {
-        if (doc == null) {
-            return "null";
-        }
-        String path = String.valueOf(doc.getMetadata().getOrDefault("file_path", "unknown"));
-        String text = doc.getText() == null ? "" : doc.getText().trim();
-        String head = text.length() > 80 ? text.substring(0, 80) : text;
-        return path + "::" + head;
     }
 
     private <T> T callWithRetry(Supplier<T> action, int maxAttempts, String stage) {
@@ -749,90 +129,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
             }
         }
         throw last == null ? new IllegalStateException(stage + "失败") : last;
-    }
-
-    @Override
-    public String buildRetrievalEvidence(List<Document> docs) {
-        if (docs == null || docs.isEmpty()) {
-            return "[]";
-        }
-        // 证据目录格式："{index}. [source_type:file_path] tags=... | snippet"
-        // 该格式会被 parseEvidenceCatalog 与 validateEvidenceReferences 使用，以约束 citations/conflicts 的可引用范围。
-        List<String> lines = new ArrayList<>();
-        for (int i = 0; i < docs.size(); i++) {
-            Document doc = docs.get(i);
-            Map<String, Object> metadata = doc.getMetadata();
-            String path = metadata == null ? "" : String.valueOf(metadata.getOrDefault("file_path", "unknown"));
-            String sourceType = metadata == null ? "" : String.valueOf(metadata.getOrDefault("source_type", "obsidian"));
-            String parentId = metadata == null ? "" : String.valueOf(metadata.getOrDefault("parent_id", ""));
-            String childIndex = metadata == null ? "" : String.valueOf(metadata.getOrDefault("child_index", ""));
-            String tags = metadata == null ? "" : String.valueOf(metadata.getOrDefault("knowledge_tags", ""));
-            String text = metadata != null
-                    && metadata.get("evidence_snippet") != null
-                    && !String.valueOf(metadata.get("evidence_snippet")).isBlank()
-                    ? String.valueOf(metadata.get("evidence_snippet"))
-                    : normalizeSnippet(doc.getText());
-            text = truncate(text, 90);
-            String parentPart = (parentId == null || parentId.isBlank() || "null".equalsIgnoreCase(parentId)) ? "" : " parent=" + parentId;
-            String childPart = (childIndex == null || childIndex.isBlank() || "null".equalsIgnoreCase(childIndex)) ? "" : " child=" + childIndex;
-            lines.add((i + 1) + ". [" + sourceType + ":" + path + "] tags=" + tags + parentPart + childPart + " | " + text);
-        }
-        return String.join("\n", lines);
-    }
-
-    @Override
-    public String buildWebEvidence(List<String> webContext) {
-        if (webContext == null || webContext.isEmpty()) {
-            return "[]";
-        }
-        // Web 证据没有稳定的 file_path/source_type，统一标记为 [web] 并做摘要截断。
-        List<String> lines = new ArrayList<>();
-        for (int i = 0; i < webContext.size(); i++) {
-            String text = webContext.get(i);
-            if (text == null) {
-                continue;
-            }
-            String normalized = text.replaceAll("\\s+", " ").trim();
-            if (normalized.length() > 90) {
-                normalized = normalized.substring(0, 90);
-            }
-            lines.add((i + 1) + ". [web] " + normalized);
-        }
-        return lines.isEmpty() ? "[]" : String.join("\n", lines);
-    }
-
-    private static class FusedCandidate {
-        private final Document document;
-        private double score;
-
-        private FusedCandidate(Document document) {
-            this.document = document;
-            this.score = 0.0;
-        }
-
-        public Document document() {
-            return document;
-        }
-
-        public double score() {
-            return score;
-        }
-    }
-
-    /**
-     * Parent-Child 回填后的结构化载荷。
-     *
-     * @param hydratedText 最终写回文档正文的拼接文本
-     * @param parentContextExcerpt parent 上下文摘要
-     * @param childMatchExcerpt child 命中片段摘要
-     * @param evidenceSnippet 证据目录优先展示的单行摘要
-     */
-    private record ParentChildHydrationPayload(
-            String hydratedText,
-            String parentContextExcerpt,
-            String childMatchExcerpt,
-            String evidenceSnippet
-    ) {
     }
 
     private String compactMessage(Throwable throwable) {
@@ -1269,20 +565,6 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
                 .toList();
     }
 
-    private double sourceTypeBoost(Document doc) {
-        if (doc == null || doc.getMetadata() == null) {
-            return 1.0;
-        }
-        String sourceType = String.valueOf(doc.getMetadata().getOrDefault("source_type", "obsidian")).toLowerCase(Locale.ROOT);
-        if ("interview_experience".equals(sourceType)) {
-            return 1.18;
-        }
-        if ("web".equals(sourceType)) {
-            return 0.92;
-        }
-        return 1.0;
-    }
-
     /**
      * 检索知识包（RAG 中的“证据载体”）。
      *
@@ -1313,71 +595,4 @@ public class RAGService implements KnowledgePacketBuilder.RetrievalDelegate {
         }
     }
 
-    @Override
-    public List<String> summarizeRetrievedDocuments(List<Document> retrievedDocs) {
-        if (retrievedDocs == null || retrievedDocs.isEmpty()) {
-            return List.of();
-        }
-        return retrievedDocs.stream()
-                .limit(5)
-                .map(document -> {
-                    String source = String.valueOf(document.getMetadata().getOrDefault("source", ""));
-                    String title = String.valueOf(document.getMetadata().getOrDefault("title", ""));
-                    String snippet = document.getText() == null ? "" : document.getText().replaceAll("\\s+", " ").trim();
-                    if (snippet.length() > 80) {
-                        snippet = snippet.substring(0, 80) + "...";
-                    }
-                    return Stream.of(source, title, snippet)
-                            .filter(item -> item != null && !item.isBlank() && !"null".equalsIgnoreCase(item))
-                            .collect(Collectors.joining(" | "));
-                })
-                .filter(item -> item != null && !item.isBlank())
-                .toList();
-    }
-
-    @Override
-    public List<ImageResult> mergeImageResults(List<ImageResult> associatedImages,
-                                                             List<ImageResult> semanticImages) {
-        Map<String, ImageResult> merged = new LinkedHashMap<>();
-        if (semanticImages != null) {
-            for (ImageResult image : semanticImages) {
-                merged.put(image.imageId(), image);
-            }
-        }
-        if (associatedImages != null) {
-            for (ImageResult image : associatedImages) {
-                merged.compute(image.imageId(), (key, existing) ->
-                        existing == null || image.relevanceScore() > existing.relevanceScore() ? image : existing);
-            }
-        }
-        List<ImageResult> ranked = merged.values().stream()
-                .sorted((a, b) -> Double.compare(b.relevanceScore(), a.relevanceScore()))
-                .limit(3)
-                .toList();
-        if (ranked.isEmpty()) {
-            return ranked;
-        }
-        double topScore = ranked.getFirst().relevanceScore();
-        if (topScore < FINAL_IMAGE_MIN_SCORE) {
-            return List.of();
-        }
-        List<ImageResult> filtered = new ArrayList<>();
-        for (int i = 0; i < ranked.size(); i++) {
-            ImageResult image = ranked.get(i);
-            if (i == 0) {
-                filtered.add(image);
-                continue;
-            }
-            if (image.relevanceScore() < SECOND_IMAGE_MIN_SCORE) {
-                continue;
-            }
-            if (topScore - image.relevanceScore() > ADDITIONAL_IMAGE_SCORE_GAP) {
-                continue;
-            }
-            filtered.add(image);
-        }
-        return filtered;
-    }
-
 }
-
