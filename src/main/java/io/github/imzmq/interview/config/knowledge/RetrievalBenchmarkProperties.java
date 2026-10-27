@@ -79,6 +79,10 @@ public class RetrievalBenchmarkProperties {
         return requirePath(corpusFile, "corpus-file");
     }
 
+    public Path requireCheckpointPath() {
+        return requirePath(checkpointFile, "checkpoint-file");
+    }
+
     public Path requireOutputPath() {
         return requirePath(outputFile, "output-file");
     }
