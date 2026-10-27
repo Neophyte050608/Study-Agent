@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Validates gold-set identities and references before a benchmark invokes retrieval. */
+/** Validates chunk-level benchmark identities, content, and references before retrieval. */
 public final class GoldSetDatasetValidator {
 
     public void validate(List<GoldSetCase> cases, List<GoldSetChunk> chunks) {
@@ -32,6 +32,9 @@ public final class GoldSetDatasetValidator {
         for (GoldSetChunk chunk : safeChunks) {
             if (!chunkIds.add(chunk.chunkId()) && reportedChunkIds.add(chunk.chunkId())) {
                 violations.add("duplicate chunk_id: " + chunk.chunkId());
+            }
+            if (chunk.content() == null || chunk.content().isBlank()) {
+                violations.add("blank content for chunk_id: " + chunk.chunkId());
             }
         }
 

@@ -46,7 +46,7 @@ public final class GoldSetDataLoader {
     }
 
     /**
-     * 解析 gold.txt 风格的黄金用例集。
+     * 解析查询集 JSONL。
      *
      * @param reader JSONL 文本读取器
      * @return 黄金用例列表，顺序与文件一致
@@ -60,7 +60,7 @@ public final class GoldSetDataLoader {
     }
 
     /**
-     * 解析 test.txt 风格的语料库 chunk 集。
+     * 解析语料集 JSONL。
      *
      * @param reader JSONL 文本读取器
      * @return chunk 列表，顺序与文件一致

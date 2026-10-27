@@ -16,7 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-/** File adapter that loads Saber-style JSONL and persists a Markdown comparison report. */
+/** File adapter that loads chunk-level benchmark JSONL and persists a Markdown comparison report. */
 @Service
 public final class GoldSetBenchmarkFileService {
 

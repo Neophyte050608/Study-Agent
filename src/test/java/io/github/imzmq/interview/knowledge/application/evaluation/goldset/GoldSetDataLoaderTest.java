@@ -64,6 +64,16 @@ class GoldSetDataLoaderTest {
     }
 
     @Test
+    void ignoresUnknownFieldsInGenericCorpusRows() throws Exception {
+        List<GoldSetChunk> chunks = loader.loadChunks(new StringReader(
+                "{\"chunk_id\":\"c1\",\"content\":\"Redis\",\"vendor_field\":42}\n"));
+
+        assertThat(chunks).singleElement()
+                .extracting(GoldSetChunk::chunkId)
+                .isEqualTo("c1");
+    }
+
+    @Test
     void skipsBlankLinesButRejectsMalformedJsonWithPhysicalLineNumber() {
         String jsonl = "\n"
                 + "{\"query_id\":\"q001\",\"question\":\"Q\",\"ground_truth\":[\"a\"]}\n"

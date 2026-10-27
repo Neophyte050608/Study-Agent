@@ -44,6 +44,16 @@ class GoldSetDatasetValidatorTest {
     }
 
     @Test
+    void rejectsChunkWithoutContent() {
+        List<GoldSetCase> cases = List.of(goldCase("q1", "Redis", List.of("c1")));
+        GoldSetChunk blank = new GoldSetChunk("c1", "doc", 0, "  ", "", "", "");
+
+        assertThatThrownBy(() -> validator.validate(cases, List.of(blank)))
+                .isInstanceOf(GoldSetDatasetValidationException.class)
+                .hasMessageContaining("blank content for chunk_id: c1");
+    }
+
+    @Test
     void rejectsCaseWithoutGroundTruth() {
         List<GoldSetCase> cases = List.of(goldCase("q1", "Redis persistence", List.of()));
 
