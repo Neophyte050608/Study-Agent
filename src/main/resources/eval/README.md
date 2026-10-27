@@ -31,3 +31,15 @@
 - 做架构优化或提示词优化时跑 `advanced`
 - 做项目问答、面试模拟、知识库贴合度验证时跑 `project`
 
+
+## Chunk 级检索对比
+
+`knowledge.application.evaluation.goldset` 提供 Saber 风格 JSONL 数据加载、生产检索评测、
+本地 Okapi BM25 基线和结构化对比报告：
+
+- 使用相同 `query_id`、ground truth、relevance 与 Top-K 比较两次运行。
+- 汇总 Recall@5/10/20、HitRate@5/10/20、MRR、NDCG@10 及其差值。
+- 逐题按 NDCG@10、Recall@20、MRR 的顺序判定胜负，并可渲染为 Markdown。
+- BM25 基线不依赖数据库、向量库、模型服务或 API Key；生产检索仍依赖项目已配置的本地检索基础设施。
+
+比较器会拒绝重复或不一致的 `query_id`、不同 Top-K、不同 ground truth，避免输出口径不公平的报告。
