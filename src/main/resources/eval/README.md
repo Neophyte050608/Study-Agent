@@ -58,7 +58,8 @@ APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OUTPUT_FILE=/absolute/path/retrieval-compariso
 mvn spring-boot:run
 ```
 
-三条路径必须显式填写；输入使用 UTF-8 JSONL，输出目录会自动创建。运行器会在调用任何检索器前
-校验重复 `query_id`、重复 `chunk_id`、空问题、空 `ground_truth` 以及不存在于语料库的 chunk 引用，
-并一次汇总所有诊断；校验失败时不会写出报告。生产检索需要项目原有 MySQL/Milvus/Neo4j 等已启用
-检索后端，但不需要额外的评测 API Key；BM25 本身仍完全本地运行。
+三条路径必须显式填写；输入使用 UTF-8 JSONL，输出目录会自动创建。纯空行允许跳过；其他行必须是
+JSON 对象，并分别提供非空 `query_id` 或 `chunk_id`。格式错误会报告物理行号，不会静默丢弃样本。
+运行器还会在调用任何检索器前校验重复 `query_id`、重复 `chunk_id`、空问题、空 `ground_truth` 以及
+不存在于语料库的 chunk 引用，并一次汇总所有诊断；解析或校验失败时不会写出报告。生产检索需要项目
+原有 MySQL/Milvus/Neo4j 等已启用检索后端，但不需要额外的评测 API Key；BM25 本身仍完全本地运行。

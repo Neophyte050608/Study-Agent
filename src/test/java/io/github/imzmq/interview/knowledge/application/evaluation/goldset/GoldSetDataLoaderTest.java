@@ -6,6 +6,7 @@ import java.io.StringReader;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GoldSetDataLoaderTest {
 
@@ -63,27 +64,30 @@ class GoldSetDataLoaderTest {
     }
 
     @Test
-    void skipsBlankAndMalformedLinesGracefully() throws Exception {
+    void skipsBlankLinesButRejectsMalformedJsonWithPhysicalLineNumber() {
         String jsonl = "\n"
-                + "{\"query_id\":\"q001\",\"question\":\"Q\",\"ground_truth\":[\"a\"],\"relevance\":{\"a\":3}}\n"
-                + "this-is-not-json\n"
-                + "   \n"
-                + "{\"query_id\":\"q002\",\"question\":\"Q2\",\"ground_truth\":[],\"relevance\":{}}\n";
+                + "{\"query_id\":\"q001\",\"question\":\"Q\",\"ground_truth\":[\"a\"]}\n"
+                + "this-is-not-json\n";
 
-        List<GoldSetCase> cases = loader.loadGoldCases(new StringReader(jsonl));
-
-        assertThat(cases).hasSize(2);
-        assertThat(cases.get(0).queryId()).isEqualTo("q001");
-        assertThat(cases.get(1).groundTruth()).isEmpty();
-        assertThat(cases.get(1).relevanceOf("x")).isZero();
+        assertThatThrownBy(() -> loader.loadGoldCases(new StringReader(jsonl)))
+                .isInstanceOf(GoldSetDataFormatException.class)
+                .hasMessageContaining("line 3")
+                .hasMessageContaining("invalid JSON");
     }
 
     @Test
-    void ignoresLinesMissingRequiredIdentifiers() throws Exception {
-        String goldJsonl = "{\"question\":\"no id\",\"ground_truth\":[\"a\"]}\n";
-        String chunkJsonl = "{\"document_id\":\"doc\",\"content\":\"no chunk id\"}\n";
+    void rejectsMissingOrBlankRequiredIdentifiersWithPhysicalLineNumber() {
+        String goldJsonl = "\n{\"question\":\"no id\",\"ground_truth\":[\"a\"]}\n";
+        String chunkJsonl = "{\"chunk_id\":\"   \",\"document_id\":\"doc\"}\n";
 
-        assertThat(loader.loadGoldCases(new StringReader(goldJsonl))).isEmpty();
-        assertThat(loader.loadChunks(new StringReader(chunkJsonl))).isEmpty();
+        assertThatThrownBy(() -> loader.loadGoldCases(new StringReader(goldJsonl)))
+                .isInstanceOf(GoldSetDataFormatException.class)
+                .hasMessageContaining("line 2")
+                .hasMessageContaining("query_id");
+        assertThatThrownBy(() -> loader.loadChunks(new StringReader(chunkJsonl)))
+                .isInstanceOf(GoldSetDataFormatException.class)
+                .hasMessageContaining("line 1")
+                .hasMessageContaining("chunk_id");
     }
+
 }

@@ -22,8 +22,8 @@ import java.util.Map;
  * </ul>
  *
  * <p>本类只做纯解析，不触达向量库/数据库/网络，可在无任何 API Key 的环境下运行，
- * 作为 chunk 级检索评测的数据入口。解析具备容错性：空行跳过，单行解析失败时跳过该行，
- * 避免个别脏数据导致整份数据集不可用。</p>
+ * 作为 chunk 级检索评测的数据入口。纯空行会被跳过；任何非空坏行都会携带物理行号失败，
+ * 避免静默丢失样本后生成误导性的评测报告。</p>
  */
 public final class GoldSetDataLoader {
 
@@ -54,12 +54,8 @@ public final class GoldSetDataLoader {
      */
     public List<GoldSetCase> loadGoldCases(Reader reader) throws IOException {
         List<GoldSetCase> cases = new ArrayList<>();
-        forEachJsonLine(reader, node -> {
-            GoldSetCase parsed = parseGoldCase(node);
-            if (parsed != null) {
-                cases.add(parsed);
-            }
-        });
+        forEachJsonLine(reader, (node, lineNumber) ->
+                cases.add(parseGoldCase(node, lineNumber)));
         return cases;
     }
 
@@ -72,19 +68,15 @@ public final class GoldSetDataLoader {
      */
     public List<GoldSetChunk> loadChunks(Reader reader) throws IOException {
         List<GoldSetChunk> chunks = new ArrayList<>();
-        forEachJsonLine(reader, node -> {
-            GoldSetChunk parsed = parseChunk(node);
-            if (parsed != null) {
-                chunks.add(parsed);
-            }
-        });
+        forEachJsonLine(reader, (node, lineNumber) ->
+                chunks.add(parseChunk(node, lineNumber)));
         return chunks;
     }
 
-    private GoldSetCase parseGoldCase(JsonNode node) {
-        if (node == null || !node.hasNonNull("query_id")) {
-            return null;
-        }
+    private GoldSetCase parseGoldCase(JsonNode node, int lineNumber)
+            throws GoldSetDataFormatException {
+        requireObject(node, lineNumber);
+        String queryId = requireIdentifier(node, "query_id", lineNumber);
         List<String> groundTruth = new ArrayList<>();
         JsonNode gt = node.get("ground_truth");
         if (gt != null && gt.isArray()) {
@@ -104,7 +96,7 @@ public final class GoldSetDataLoader {
             }
         }
         return new GoldSetCase(
-                node.path("query_id").asText(),
+                queryId,
                 node.path("question").asText(""),
                 List.copyOf(groundTruth),
                 Map.copyOf(relevance),
@@ -114,12 +106,12 @@ public final class GoldSetDataLoader {
         );
     }
 
-    private GoldSetChunk parseChunk(JsonNode node) {
-        if (node == null || !node.hasNonNull("chunk_id")) {
-            return null;
-        }
+    private GoldSetChunk parseChunk(JsonNode node, int lineNumber)
+            throws GoldSetDataFormatException {
+        requireObject(node, lineNumber);
+        String chunkId = requireIdentifier(node, "chunk_id", lineNumber);
         return new GoldSetChunk(
-                node.path("chunk_id").asText(),
+                chunkId,
                 node.path("document_id").asText(""),
                 node.path("chunk_index").asInt(0),
                 node.path("content").asText(""),
@@ -129,10 +121,30 @@ public final class GoldSetDataLoader {
         );
     }
 
+    private void requireObject(JsonNode node, int lineNumber) throws GoldSetDataFormatException {
+        if (node == null || !node.isObject()) {
+            throw new GoldSetDataFormatException(lineNumber, "expected a JSON object");
+        }
+    }
+
+    private String requireIdentifier(JsonNode node, String field, int lineNumber)
+            throws GoldSetDataFormatException {
+        String value = node.path(field).asText("").trim();
+        if (value.isEmpty()) {
+            throw new GoldSetDataFormatException(
+                    lineNumber,
+                    "required field '" + field + "' must be non-blank"
+            );
+        }
+        return value;
+    }
+
     private void forEachJsonLine(Reader reader, LineConsumer consumer) throws IOException {
         try (BufferedReader bufferedReader = new BufferedReader(reader)) {
             String line;
+            int lineNumber = 0;
             while ((line = bufferedReader.readLine()) != null) {
+                lineNumber++;
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) {
                     continue;
@@ -141,16 +153,15 @@ public final class GoldSetDataLoader {
                 try {
                     node = objectMapper.readTree(trimmed);
                 } catch (IOException ex) {
-                    // 跳过单行脏数据，保证整份数据集仍可解析。
-                    continue;
+                    throw new GoldSetDataFormatException(lineNumber, "invalid JSON", ex);
                 }
-                consumer.accept(node);
+                consumer.accept(node, lineNumber);
             }
         }
     }
 
     @FunctionalInterface
     private interface LineConsumer {
-        void accept(JsonNode node);
+        void accept(JsonNode node, int lineNumber) throws IOException;
     }
 }
