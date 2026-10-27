@@ -8,10 +8,11 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static io.github.imzmq.interview.learning.application.planning.LearningPlanPreviewTestFixtures.fixedService;
 class LearningPlanWorkflowTest {
     @Test void fixedVersionCodecsRoundtripOnlyAllowedOutputsAndRejectWrongShape() {
         try(var executor=new FixedDagExecutor()) {
-            var service=new LearningPlanPreviewService(executor,mock(LearningProfileOperations.class),t->List.of(),i->"plan");
+            var service=fixedService(executor,mock(LearningProfileOperations.class),t->List.of(),i->"plan");
             var operations=new LearningPlanNodeOperations(mock(LearningProfileOperations.class),t->List.of(),i->"plan");
             var factory=new LearningPlanFixedNodeFactory(operations);
             var workflow=new LearningPlanWorkflow(factory,service,new ObjectMapper());

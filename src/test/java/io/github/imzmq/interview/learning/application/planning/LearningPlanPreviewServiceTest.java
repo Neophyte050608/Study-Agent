@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static io.github.imzmq.interview.learning.application.planning.LearningPlanPreviewTestFixtures.fixedService;
 
 class LearningPlanPreviewServiceTest {
     private TrainingProfileSnapshot profile() {
@@ -26,7 +27,7 @@ class LearningPlanPreviewServiceTest {
         var materials = List.of(new LearningPlanEvidence("doc-1", "Java notes", "excerpt"));
         AtomicReference<LearningPlanPreviewInput> captured = new AtomicReference<>();
         try (var executor = new FixedDagExecutor()) {
-            var service = new LearningPlanPreviewService(executor, profiles, topic -> materials,
+            var service = fixedService(executor, profiles, topic -> materials,
                     input -> { captured.set(input); return "plan"; });
             var result = service.preview("owner", "Java", "prepare interview");
             assertEquals("COMPLETED", result.status()); assertEquals("plan", result.plan());
@@ -47,7 +48,7 @@ class LearningPlanPreviewServiceTest {
             if ((mask & 1) != 0) when(profiles.snapshot("owner")).thenThrow(new IllegalStateException("private"));
             else when(profiles.snapshot("owner")).thenReturn(profile());
             try (var executor = new FixedDagExecutor()) {
-                var service = new LearningPlanPreviewService(executor, profiles, topic -> {
+                var service = fixedService(executor, profiles, topic -> {
                     if ((failures & 2) != 0) throw new IllegalStateException("private");
                     return List.of(new LearningPlanEvidence("doc", "title", "text"));
                 }, input -> "plan");
@@ -68,7 +69,7 @@ class LearningPlanPreviewServiceTest {
         var profiles = mock(LearningProfileOperations.class);
         when(profiles.snapshot("owner")).thenReturn(new TrainingProfileSnapshot(List.of(), List.of(), "", List.of(), List.of(), 0, ""));
         try (var executor = new FixedDagExecutor()) {
-            var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> "generic plan");
+            var service = fixedService(executor, profiles, topic -> List.of(), input -> "generic plan");
             var result = service.preview("owner", "Java", "");
             assertEquals(List.of("PROFILE_EMPTY", "EVIDENCE_EMPTY"), result.degradations());
             assertFalse(result.personalized()); assertFalse(result.evidenceAvailable());
@@ -81,7 +82,7 @@ class LearningPlanPreviewServiceTest {
             var profiles = mock(LearningProfileOperations.class);
             when(profiles.snapshot("owner")).thenReturn(profile());
             try (var executor = new FixedDagExecutor()) {
-                var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> {
+                var service = fixedService(executor, profiles, topic -> List.of(), input -> {
                     if (empty) return " "; throw new IllegalStateException("secret upstream");
                 });
                 var result = service.preview("owner", "Java", "");
@@ -96,7 +97,7 @@ class LearningPlanPreviewServiceTest {
     void presentationDoesNotReportAnUnselectedSourceAsUnavailable() {
         var profiles = mock(LearningProfileOperations.class);
         try (var executor = new FixedDagExecutor()) {
-            var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> "unused");
+            var service = fixedService(executor, profiles, topic -> List.of(), input -> "unused");
             var evidence = List.of(new LearningPlanEvidence("doc", "title", "excerpt"));
             var result = new io.github.imzmq.interview.agent.application.contract.execution.DagExecutionResult(
                     "COMPLETED", Map.of(
@@ -120,7 +121,7 @@ class LearningPlanPreviewServiceTest {
     void presentationAcceptsTypedDynamicAndLegacyFixedOutputsWithoutReflection() {
         var profiles = mock(LearningProfileOperations.class);
         try (var executor = new FixedDagExecutor()) {
-            var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> "unused");
+            var service = fixedService(executor, profiles, topic -> List.of(), input -> "unused");
             var evidence = List.of(new LearningPlanEvidence("doc", "title", "excerpt"));
             var typed = new io.github.imzmq.interview.agent.application.contract.execution.DagExecutionResult(
                     "COMPLETED", Map.of(
@@ -150,7 +151,7 @@ class LearningPlanPreviewServiceTest {
         var profiles = mock(LearningProfileOperations.class);
         when(profiles.snapshot("owner")).thenReturn(profile());
         try (var executor = new FixedDagExecutor()) {
-            var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> "plan");
+            var service = fixedService(executor, profiles, topic -> List.of(), input -> "plan");
             var handler = new LearningPlanPreviewTaskHandler(service);
             var response = (TaskResponse) handler.handle(new TaskRequest(TaskType.LEARNING_PLAN_PREVIEW,
                     Map.of("topic", "Java", "userId", "attacker", "useMcp", true), Map.of("userId", "owner")));

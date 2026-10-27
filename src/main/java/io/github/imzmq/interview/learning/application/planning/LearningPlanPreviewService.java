@@ -5,9 +5,7 @@ import io.github.imzmq.interview.agent.application.contract.execution.DagExecuti
 import io.github.imzmq.interview.agent.application.contract.execution.DagNode;
 import io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult;
 import io.github.imzmq.interview.agent.application.contract.execution.DagNodeStatus;
-import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
-import io.github.imzmq.interview.learning.application.contract.extension.LearningPlanEvidenceReader;
-import io.github.imzmq.interview.learning.application.contract.extension.LearningPlanPreviewGenerator;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicExecutionContext;
 import io.github.imzmq.interview.learning.application.contract.result.LearningPlanEvidence;
 import io.github.imzmq.interview.learning.application.contract.result.LearningPlanPreview;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,23 +20,14 @@ import java.util.Map;
 @Service
 public final class LearningPlanPreviewService {
     private final DagExecutionOperations executor;
-    private final LearningPlanFixedNodeFactory fixedNodeFactory;
+    private final LearningPlanDynamicPlanningService dynamicPlanning;
 
     @Autowired
     public LearningPlanPreviewService(
             DagExecutionOperations executor,
-            LearningPlanFixedNodeFactory fixedNodeFactory) {
+            LearningPlanDynamicPlanningService dynamicPlanning) {
         this.executor = executor;
-        this.fixedNodeFactory = fixedNodeFactory;
-    }
-
-    LearningPlanPreviewService(
-            DagExecutionOperations executor,
-            LearningProfileOperations profiles,
-            LearningPlanEvidenceReader evidenceReader,
-            LearningPlanPreviewGenerator generator) {
-        this(executor, new LearningPlanFixedNodeFactory(
-                new LearningPlanNodeOperations(profiles, evidenceReader, generator)));
+        this.dynamicPlanning = dynamicPlanning;
     }
 
     public LearningPlanPreview preview(String userId, String topic, String request) {
@@ -48,17 +37,9 @@ public final class LearningPlanPreviewService {
         if (instruction.length() > 2000) {
             throw new IllegalArgumentException("Request exceeds 2000 characters");
         }
+        DynamicExecutionContext context = new DynamicExecutionContext(owner, subject, instruction);
         return present(executor.execute(
-                fixedNodeFactory.nodes(owner, subject, instruction), Duration.ofSeconds(75)));
-    }
-
-    List<DagNode> nodes(String owner, String subject, String instruction) {
-        required(owner, 200, "Execution user");
-        required(subject, 200, "Topic");
-        if (instruction == null || instruction.length() > 2000) {
-            throw new IllegalArgumentException("Invalid request");
-        }
-        return fixedNodeFactory.nodes(owner, subject, instruction);
+                dynamicPlanning.nodes(context), Duration.ofSeconds(75)));
     }
 
     LearningPlanPreview present(DagExecutionResult result) {

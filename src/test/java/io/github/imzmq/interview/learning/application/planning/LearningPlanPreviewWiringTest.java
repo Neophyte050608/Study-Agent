@@ -6,6 +6,7 @@ import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
 import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.agent.application.execution.FixedDagExecutor;
+import io.github.imzmq.interview.agent.application.execution.dynamic.DefaultDynamicPlanningOperations;
 import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
@@ -45,7 +46,12 @@ class LearningPlanPreviewWiringTest {
             context.registerBean(LearningProfileOperations.class, () -> profiles);
             context.registerBean(LexicalIndexService.class, () -> lexical);
             context.registerBean(RoutingChatService.class, () -> routing);
-            context.register(FixedDagExecutor.class, LearningPlanNodeOperations.class, LearningPlanFixedNodeFactory.class, LearningPlanPreviewService.class,
+            context.register(FixedDagExecutor.class, LearningPlanNodeOperations.class,
+                    LearningPlanFixedNodeFactory.class, LearningPlanDynamicPlanningProperties.class,
+                    RuleBasedLearningPlanPlanner.class, LearningPlanProfileCapability.class,
+                    LearningPlanEvidenceCapability.class, LearningPlanComposeCapability.class,
+                    DefaultDynamicPlanningOperations.class,
+                    LearningPlanDynamicPlanningService.class, LearningPlanPreviewService.class,
                     LearningPlanPreviewTaskHandler.class, LexicalLearningPlanEvidenceReader.class,
                     ModelLearningPlanPreviewGenerator.class, TaskHandlerRegistry.class);
             context.refresh();

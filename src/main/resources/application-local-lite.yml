@@ -17,6 +17,10 @@ logging:
     org.springframework.ai: INFO
 
 app:
+  learning:
+    plan-preview:
+      dynamic-planning:
+        mode: FIXED
   startup:
     model-preheat-enabled: false
   chat:
