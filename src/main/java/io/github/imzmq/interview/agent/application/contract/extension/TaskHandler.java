@@ -9,5 +9,6 @@ public interface TaskHandler {
 
     String receiverName();
 
+    /** Returns legacy business data, or an explicit TaskResponse to preserve failure state and partial results. */
     Object handle(TaskRequest request);
 }

@@ -132,4 +132,23 @@ Milvus Hybrid Search -> MLflow -> vLLM / TGI
 6. vLLM / TGI：稳定本地模型推理服务化
 ```
 
-短期最值得做的是 Langfuse/OpenTelemetry 的 adapter 设计；Mastra 和 Temporal 应先保留架构边界，不急于一次性迁移。
+短期不再以引入新工作流框架为前提：2026-10-27 先落地内置 Java 固定 DAG 的只读学习计划预览，验证有界并行、依赖终止与失败降级。随后单独设计 Agent-owned MySQL 任务状态、节点尝试、租约/fencing 和局部重试；未落地前不宣称 durable execution。该短期顺序优先于上面的长期候选框架顺序。
+
+Langfuse/OpenTelemetry adapter 可继续独立演进。Mastra、Temporal 是长期候选，不作为当前预览的启动依赖；届时依据恢复、调度与运维成本再决定采用何者，不同时迁入多个 runtime，也不为未来框架创建空 port。
+
+### 固定 DAG 第二步（持久只读预览）
+
+在第一步上新增 MySQL task/node/attempt、版本化 workflow SPI、DB 时间租约与 epoch fencing、成功结果恢复和 revision 局部重试。后台默认关闭，复用同一个有界节点执行器。该切片不等于通用 durable Agent runtime：不支持工具幂等/业务副作用、动态图或竞速，不引入 Temporal，也不承诺 exactly-once。后续只有复杂长任务确有需求时再评估框架。详见 `docs/development/learning-plan-preview.md`。
+
+### 固定 DAG 第三步（HTTP闭环）
+
+先提供Learning-owned安全提交/查询/局部重试/终态删除接口；不在这一步扩大动态图、工具、副作用或引入新框架。后台默认关闭，HTTP不开新服务、不加新基础设施，仍需可用MySQL与已配置模型。前端和复杂Agent能力留作后续独立切片。
+
+
+### 固定 DAG 第四步（最小前端闭环）
+
+增加独立学习计划预览页与能力画像入口，复用第三步提交/查询/局部重试/终态删除协议。
+API/composable/页面展示分工，内存幂等键、受控串行轮询、显式 revision 重试和二次确认删除；
+查询失败暂停，任务切换/离开只中止客户端请求，不取消后台执行。
+不引入新框架、依赖服务、动态规划、竞速、工具、安全沙箱、任务列表或自动重试。
+动态图与受限执行仍需后续单独设计，不能把这一小步描述为通用 durable Agent runtime 已完成。

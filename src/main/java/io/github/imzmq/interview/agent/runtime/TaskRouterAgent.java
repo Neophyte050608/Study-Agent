@@ -154,7 +154,8 @@ public class TaskRouterAgent implements AgentTaskOperations {
             publish(request, handler.receiverName(), A2AStatus.PENDING, correlationId, traceId, parentMessageId);
             publish(request, handler.receiverName(), A2AStatus.PROCESSING, correlationId, traceId, parentMessageId);
 
-            response = TaskResponse.ok(handler.handle(request));
+            Object handled = handler.handle(request);
+            response = handled instanceof TaskResponse explicit ? explicit : TaskResponse.ok(handled);
 
             publish(request, handler.receiverName(), response.success() ? A2AStatus.DONE : A2AStatus.FAILED, correlationId, traceId, parentMessageId);
             publishReply(response, request.taskType(), replyTo, correlationId, traceId);

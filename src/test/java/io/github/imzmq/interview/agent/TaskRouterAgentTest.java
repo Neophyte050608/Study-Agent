@@ -37,6 +37,23 @@ import static org.mockito.Mockito.when;
 class TaskRouterAgentTest {
 
     @Test
+    void shouldPreserveExplicitHandlerResponseIncludingFailedPreviewState() {
+        TaskResponse expected = new TaskResponse(false, "FAILED", Map.of("status", "FAILED", "plan", ""));
+        TaskHandler handler = new TaskHandler() {
+            @Override public TaskType taskType() { return TaskType.LEARNING_PLAN_PREVIEW; }
+            @Override public String receiverName() { return "LearningPlanPreview"; }
+            @Override public Object handle(TaskRequest request) { return expected; }
+        };
+        TaskRouterAgent router = new TaskRouterAgent(mock(AgentTaskPromptRenderer.class),
+                mock(IntentTreeRoutingService.class), mock(IntentPreFilter.class), mock(A2ABus.class),
+                mock(RoutingChatService.class), mock(RAGObservabilityService.class), new TaskHandlerRegistry(List.of(handler)));
+        TaskResponse actual = router.dispatch(new TaskRequest(TaskType.LEARNING_PLAN_PREVIEW,
+                Map.of("topic", "Java"), Map.of("userId", "owner")));
+        assertEquals(expected, actual);
+        assertFalse(actual.success());
+    }
+
+    @Test
     void shouldDispatchExplicitTaskTypeThroughRegistryHandler() {
         TaskHandler handler = new TaskHandler() {
             @Override

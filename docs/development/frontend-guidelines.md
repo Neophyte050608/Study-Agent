@@ -78,10 +78,16 @@ frontend/src/shell/                  # 应用壳层布局
 
 ## 验证
 
-当前前端没有统一测试脚本。改前端后至少运行：
+前端使用 Node 内置测试运行器，不额外引入测试框架。改前端后运行：
 
 ```bash
-cd frontend && npm run build
+cd frontend && npm test && npm run build
 ```
 
 如果新增前端测试框架或 lint 命令，需要同步更新 `package.json`、本文档和 `docs/development/verification.md`。
+
+测试位于 `frontend/test/`，目前覆盖学习计划 API、composable 状态机/轮询以及纯展示映射。
+可注入 API、时钟与幂等键生成器测试并发、超时和迟到响应；不要把这些单元测试描述为全站组件覆盖。
+浏览器交互检查应使用隔离 mock 身份和数据，并明确与真实模型/数据库联调的区别。
+学习计划预览使用独立路由与画像页入口，不需要新增后台菜单；轮询、幂等与重试状态归 composable，
+模型文本/证据直接以 Vue 插值转义，不注入 HTML。

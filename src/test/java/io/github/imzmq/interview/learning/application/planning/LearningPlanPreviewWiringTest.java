@@ -1,0 +1,80 @@
+package io.github.imzmq.interview.learning.application.planning;
+
+import io.github.imzmq.interview.agent.a2a.A2ABus;
+import io.github.imzmq.interview.agent.application.contract.extension.AgentTaskPromptRenderer;
+import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
+import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
+import io.github.imzmq.interview.agent.application.contract.task.TaskType;
+import io.github.imzmq.interview.agent.application.execution.FixedDagExecutor;
+import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
+import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
+import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
+import io.github.imzmq.interview.knowledge.application.planning.LexicalLearningPlanEvidenceReader;
+import io.github.imzmq.interview.knowledge.application.planning.ModelLearningPlanPreviewGenerator;
+import io.github.imzmq.interview.learning.application.agent.handler.LearningPlanPreviewTaskHandler;
+import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
+import io.github.imzmq.interview.learning.application.contract.result.LearningPlanPreview;
+import io.github.imzmq.interview.learning.application.contract.result.TrainingProfileSnapshot;
+import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
+import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.routing.domain.IntentPreFilter;
+import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
+import org.junit.jupiter.api.Test;
+import org.springframework.ai.document.Document;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class LearningPlanPreviewWiringTest {
+    @Test
+    void springDiscoversPreviewHandlerAndDispatchKeepsRealSuccessDegradationAndFailure() {
+        LearningProfileOperations profiles = mock(LearningProfileOperations.class);
+        LexicalIndexService lexical = mock(LexicalIndexService.class);
+        RoutingChatService routing = mock(RoutingChatService.class);
+        when(profiles.snapshot("owner")).thenReturn(new TrainingProfileSnapshot(List.of(), List.of(),
+                "UP", List.of("Java"), List.of(), 1, "now"));
+        when(lexical.search("Java", 4)).thenReturn(List.of(new Document("doc", "Java evidence", Map.of())));
+        when(routing.callWithFirstPacketProbeSupplier(any(), anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn("learning plan");
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(LearningProfileOperations.class, () -> profiles);
+            context.registerBean(LexicalIndexService.class, () -> lexical);
+            context.registerBean(RoutingChatService.class, () -> routing);
+            context.register(FixedDagExecutor.class, LearningPlanPreviewService.class,
+                    LearningPlanPreviewTaskHandler.class, LexicalLearningPlanEvidenceReader.class,
+                    ModelLearningPlanPreviewGenerator.class, TaskHandlerRegistry.class);
+            context.refresh();
+            TaskRouterAgent router = new TaskRouterAgent(mock(AgentTaskPromptRenderer.class),
+                    mock(IntentTreeRoutingService.class), mock(IntentPreFilter.class), mock(A2ABus.class),
+                    routing, mock(RAGObservabilityService.class), context.getBean(TaskHandlerRegistry.class));
+            TaskRequest request = new TaskRequest(TaskType.LEARNING_PLAN_PREVIEW,
+                    Map.of("topic", "Java", "userId", "untrusted-user"), Map.of("userId", "owner"));
+            TaskResponse complete = router.dispatch(request);
+            assertTrue(complete.success());
+            assertEquals("COMPLETED", complete.message());
+            assertEquals("learning plan", ((LearningPlanPreview) complete.data()).plan());
+
+            when(lexical.search("Java", 4)).thenThrow(new IllegalStateException("private detail"));
+            TaskResponse degraded = router.dispatch(request);
+            assertTrue(degraded.success());
+            assertEquals("DEGRADED", degraded.message());
+            assertEquals(List.of("EVIDENCE_UNAVAILABLE"), ((LearningPlanPreview) degraded.data()).degradations());
+            assertTrue(((LearningPlanPreview) degraded.data()).evidence().isEmpty());
+
+            when(routing.callWithFirstPacketProbeSupplier(any(), anyString(), anyString(), any(), any(), anyString()))
+                    .thenThrow(new IllegalStateException("private detail"));
+            TaskResponse failed = router.dispatch(request);
+            assertFalse(failed.success());
+            assertEquals("FAILED", failed.message());
+            assertEquals("", ((LearningPlanPreview) failed.data()).plan());
+            assertFalse(failed.toString().contains("private detail"));
+            verify(profiles, times(3)).snapshot("owner");
+            verifyNoMoreInteractions(profiles);
+        }
+    }
+}

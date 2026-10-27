@@ -18,6 +18,7 @@
           <p class="text-content-secondary text-sm mt-1">基于最近 30 天的练习数据生成的深度分析</p>
         </div>
         <div class="flex items-center space-x-3">
+          <RouterLink to="/learning/plan-preview" class="px-4 py-2.5 bg-brand text-white rounded-xl text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">学习计划预览</RouterLink>
           <button @click="reload" :disabled="loading" class="flex items-center justify-center p-2.5 bg-surface-raised text-content-secondary rounded-xl hover:bg-surface-field transition-colors active:scale-95 shadow-sm disabled:opacity-60">
             <span class="material-symbols-outlined" :class="loading ? 'animate-spin' : ''">refresh</span>
           </button>

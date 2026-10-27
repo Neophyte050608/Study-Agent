@@ -327,6 +327,12 @@ app:
       capability-symbol-search: ${APP_MCP_FILESCOPE_CAP_SYMBOL_SEARCH:filescope.symbol.search}
   
   agent:
+    execution:
+      enabled: false
+      coordinators: 2
+      poll-seconds: 1
+      lease-seconds: 30
+      heartbeat-seconds: 5
     skills:
       paths: ${APP_AGENT_SKILLS_PATHS:skills}
 

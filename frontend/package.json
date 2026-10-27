@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --test test/*.test.js",
     "build": "vite build",
     "build:spring": "vite build --outDir ../src/main/resources/static/spa --emptyOutDir",
     "preview": "vite preview"

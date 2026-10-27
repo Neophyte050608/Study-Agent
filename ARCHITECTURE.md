@@ -272,3 +272,56 @@ M2 moves generic LLM structured-output parsing out of chat and into modelrouting
 - `modelrouting.application.structuredoutput.DefaultStructuredOutputParser` is the only Spring default implementation and remains internal to modelrouting.
 - The migration preserves JSON extraction, repair, schema warning/failure, retry, and fallback behavior; chat no longer owns or wraps these types.
 - `modelrouting` has no dependency on `chat`, and external production modules cannot import the implementation package.
+
+## Fixed learning-plan preview: first DAG slice (2026-10-27)
+
+The new explicit `LEARNING_PLAN_PREVIEW` task is a request-scoped, read-only business preview:
+
+```text
+                     profile (read learning snapshot)
+                    /                                \
+explicit topic ----                                    compose (model content only)
+                    \                                /
+                     evidence (read lexical knowledge)
+```
+
+Agent validates the DAG and controls readiness/concurrency; Learning defines business nodes and degradation. Knowledge implements Learning-owned evidence/generation extensions, not the reverse dependency. Both read nodes must terminate before compose; read failures permit honestly labeled generic output, whereas generation failure is not success. References report supplied evidence, not verified model citation correctness.
+
+Execution limits are currently code defaults: 1–64 nodes, 4 dedicated workers, an 8-slot queue, 4 active scheduler requests, and at most 2 outstanding nodes per graph. The preview waits at most 75 seconds. Cancellation removes queued work and requests interruption; a task ignoring interruption continues occupying its physical worker. It cannot free worker capacity to admit unbounded background work.
+
+No task-state tables, retries, restart recovery, dynamic planning, racing, or execution sandbox are introduced. Preview nodes neither save notes nor invoke tools/Skill/MCP nor update profiles. Existing router trace/A2A bookkeeping remains; this is not a promise of zero technical writes. Evidence is deliberately lexical-only (up to 4 × 1200-character excerpts), not the full hybrid/graph RAG pipeline. Profile context is capped at 2400 characters. No new infrastructure is required and no automatic chat routing or frontend entry is added.
+
+Usage and limitations: `docs/development/learning-plan-preview.md`. Durable Agent task state and node attempts remain the next design step, separate from Chat long-term facts.
+
+### Durable fixed learning-plan preview
+
+The optional background slice extends the fixed read-only DAG, not the general agent loop. Learning implements the Agent-owned `DurableWorkflow` SPI and exposes `DurableLearningPlanOperations`; Agent never imports Learning implementations. MySQL task/node/attempt tables (Flyway V5) own execution truth. The registry uses workflow type/version and persisted canonical node definitions, never serialized actions.
+
+Short task-row transactions enforce DB-time leases and epoch fencing at node start, attempt/node checkpoint, and task completion. A committed checkpoint precedes dependent scheduling. Recovery reuses successful outputs and abandons interrupted attempts; partial retry invalidates failed roots and descendants with revision compare-and-set, retaining attempt budgets. Model invocation is at-least-once, not exactly-once.
+
+Background submission defaults off; synchronous previews are unchanged. At most two coordinators share the existing four physical node workers with synchronous callers. The second slice added no HTTP endpoint, new infrastructure, business writes, dynamic graph, racing, or Temporal; the HTTP entry is added in the third slice below. Owner-scoped terminal deletion cascades; automatic retention/TTL is not implemented. Details: `docs/development/learning-plan-preview.md`.
+
+
+## Durable preview HTTP entry (2026-10-27, third slice)
+
+`learning.api.LearningPlanPreviewController` exposes owner-scoped submit/query/retry/terminal-delete at `/api/learning/plan-previews`. It consumes Learning/Identity application contracts, not Agent runtime or stored JSON. Learning's durable contract returns `DurableLearningPlanView` with typed `LearningPlanPreview`; the application presenter checks workflow type/version, strict persisted-output fields, budgets and committed node states. The controller maps the validated application view into API-owned `LearningPlanTaskResponse`, including HTTP-owned plan/evidence/node records. Generic Agent task views carry workflow metadata, but no new migration is required.
+
+Submission/retry return 202 plus Location; repeated submission with the same normalized input/key returns the current task. Query is 200; terminal deletion is 204 and is not cancellation. Stable scoped errors distinguish input (400), authentication (401), absent/foreign task (404), conflicts (409), disabled/unavailable durable execution (503) and invalid persisted output/internal failure (500). Raw SDK/SQL messages never reach this API.
+
+Ownership uses `resolveTrusted` with the SecurityFilterChain principal, never self-reported owner, X-User-Id or unsigned bearer parsing. Open mode remains one local default-user, not multi-user authorization. JWT mode verifies signatures; new routes reject lossy subject sanitization/truncation and create no session. No frontend, list endpoint, dynamic graph or tool execution is added.
+
+
+## Durable preview frontend entry (2026-10-27, fourth slice)
+
+A minimal Vue page at `/learning/plan-preview?taskId=<UUID>` is linked from the ability profile.
+`api/learningPlans.js` wraps the existing four Learning HTTP endpoints; the composable owns
+in-memory idempotency, single-flight requests, completion-based polling and stale-response suppression.
+The page owns URL and explicit user actions; local components render escaped plan/evidence and node summaries.
+No backend menu, protocol, migration, list endpoint or execution framework is added.
+
+Polling only follows QUEUED/RUNNING, 2 seconds after each completed query. A 15-second client deadline
+or HTTP failure pauses it; unmount/switch aborts requests, not durable execution. Retries carry the latest
+revision and selected failed roots; conflicts refresh once without repeating mutations. Terminal deletion
+requires confirmation. Unknown submission freezes input and retains its key in memory only: refreshing
+before receiving an ID cannot recover that key. The URL stores only the task ID. Existing bearer auth is
+reused; this is not a new login service. Unit tests and mocked browser checks do not prove real model/DB integration.

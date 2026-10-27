@@ -236,3 +236,29 @@ Historical packages are migration-only:
 - `observability` must not depend on `knowledge`; business modules record telemetry through observability contracts.
 - Generic `agent` runtime must not import concrete interview, practice, learning, or knowledge Agent/Handler implementations.
 - Existing M0 exceptions are listed in `docs/architecture/module-boundary-baseline.md`; do not add new exceptions.
+
+## Fixed learning-plan preview DAG (2026-10-27)
+
+- Generic execution contract: `agent.application.contract.execution` (`DagNode`, `DagNodeResult`, `DagExecutionResult`, `DagExecutionOperations`). Dependency edges express waiting; successful-input requirements are explicit. Do not expose executors, futures, persistence types, or business implementations.
+- Pure graph validation: `agent.domain.execution.DagStructure`; bounded request-scoped scheduling: `agent.application.execution.FixedDagExecutor`. Neither owns Learning/Knowledge business nodes.
+- Learning owns `learning.application.planning.LearningPlanPreviewService`, the three-node graph, profile summarization, and degradation semantics. The explicit `LEARNING_PLAN_PREVIEW` handler lives in `learning.application.agent.handler`; it is distinct from the existing note-writing `LEARNING_PLAN` handler.
+- Learning-owned SPIs: `learning.application.contract.extension.LearningPlanEvidenceReader` and `LearningPlanPreviewGenerator`; immutable inputs/results/references live in `learning.application.contract.result`.
+- Knowledge supplies both SPIs from `knowledge.application.planning`: a bounded lexical-only evidence reader and content-only model generator. Learning imports no Knowledge implementation or contract, preserving the existing dependency direction.
+- This preview must not invoke NoteMakingAgent, legacy LearningPlanGenerator, Skill, MCP, tools, profile writes, or full RAG/KnowledgePacketBuilder. Evidence reading only calls lexical `search`; generation consumes supplied materials without additional retrieval.
+- TaskHandler may return an explicit `TaskResponse` to preserve failure/degradation semantics; legacy handlers returning ordinary data remain wrapped as successful data.
+
+### 持久固定图预览补充
+
+- Agent durable 公开能力和 workflow SPI：`agent.application.contract.execution.durable`。Learning 实现 Agent-owned SPI，不允许 Agent 引用 Learning 具体类。
+- JSON 预算、registry、短事务、后台控制器：`agent.application.execution`；节点依赖闭包/图结构：`agent.domain.execution`（纯 Java）。
+- 任务/节点 DO、三表 MyBatis SQL：`agent.infrastructure.persistence.execution`，迁移 V5；attempt 只经内部 mapper 操作，不向公开结果暴露。
+- Learning 固定图与版本化 codec/提交服务：`learning.application.planning`，公开 `learning.application.contract.DurableLearningPlanOperations`。Knowledge 继续实现原来的只读窄 SPI，不访问 Agent 存储。
+- 数据库持久失败不得降级成未检查点计算；技术任务状态不并入 Chat 长期记忆。
+
+
+### 持久预览 HTTP 归属（第三步）
+
+- `learning.api`：四路由 Controller、提交/重试 DTO、API-owned `LearningPlanTaskResponse`（含计划/证据/节点响应）、局部最高优先级错误 advice；只做参数/可信身份/HTTP 转换，不访问 Agent、DO/Mapper、Learning planning 实现或执行 JSON ObjectMapper。
+- `learning.application.contract.DurableLearningPlanOperations` 返回 Learning-owned `result.DurableLearningPlanView`，最终结果为类型化 `LearningPlanPreview`；固定错误原因由 `LearningPlanAccessException` 暴露，不携带原始异常 cause/message。
+- `learning.application.planning.LearningPlanTaskPresenter` 严格校验 v1 结果字段、预算及节点状态；提交服务负责工作流类型/版本隔离和底层错误翻译。Agent `DurableTaskView` 的 workflow 元数据仅给 application 验证，不对 HTTP 返回。
+- 可信身份仍经 Identity 公开契约 `resolveTrusted`；不自行解析 JWT、不信任请求 owner/userId/context。此入口拒绝会被清理/截断的 principal，open 明确为单用户。
