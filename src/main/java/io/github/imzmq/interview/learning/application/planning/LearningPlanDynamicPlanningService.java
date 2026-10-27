@@ -7,8 +7,10 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Dy
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanIssue;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanValidationResult;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningOperations;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningShadowOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskPlan;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,6 +25,7 @@ public final class LearningPlanDynamicPlanningService {
     private final DynamicPlanningOperations dynamicPlanning;
     private final DynamicPlanObservationOperations observations;
     private final LearningPlanScenarioPolicy policy;
+    private final DynamicPlanningShadowOperations shadowPlanning;
 
     private static final String PLANNER_TYPE = "rules";
     private static final String PLANNER_VERSION = "v1";
@@ -41,9 +44,20 @@ public final class LearningPlanDynamicPlanningService {
             LearningPlanFixedNodeFactory fixedNodeFactory,
             RuleBasedLearningPlanPlanner planner,
             DynamicPlanningOperations dynamicPlanning,
+            DynamicPlanObservationOperations observations,
+            ObjectProvider<DynamicPlanningShadowOperations> shadowPlanning) {
+        this(properties, fixedNodeFactory, planner, dynamicPlanning, observations,
+                new LearningPlanScenarioPolicy(), shadowPlanning.getIfAvailable());
+    }
+
+    LearningPlanDynamicPlanningService(
+            LearningPlanDynamicPlanningProperties properties,
+            LearningPlanFixedNodeFactory fixedNodeFactory,
+            RuleBasedLearningPlanPlanner planner,
+            DynamicPlanningOperations dynamicPlanning,
             DynamicPlanObservationOperations observations) {
         this(properties, fixedNodeFactory, planner, dynamicPlanning, observations,
-                new LearningPlanScenarioPolicy());
+                new LearningPlanScenarioPolicy(), null);
     }
 
     LearningPlanDynamicPlanningService(
@@ -53,12 +67,24 @@ public final class LearningPlanDynamicPlanningService {
             DynamicPlanningOperations dynamicPlanning,
             DynamicPlanObservationOperations observations,
             LearningPlanScenarioPolicy policy) {
+        this(properties, fixedNodeFactory, planner, dynamicPlanning, observations, policy, null);
+    }
+
+    LearningPlanDynamicPlanningService(
+            LearningPlanDynamicPlanningProperties properties,
+            LearningPlanFixedNodeFactory fixedNodeFactory,
+            RuleBasedLearningPlanPlanner planner,
+            DynamicPlanningOperations dynamicPlanning,
+            DynamicPlanObservationOperations observations,
+            LearningPlanScenarioPolicy policy,
+            DynamicPlanningShadowOperations shadowPlanning) {
         this.properties = Objects.requireNonNull(properties);
         this.fixedNodeFactory = Objects.requireNonNull(fixedNodeFactory);
         this.planner = Objects.requireNonNull(planner);
         this.dynamicPlanning = Objects.requireNonNull(dynamicPlanning);
         this.observations = Objects.requireNonNull(observations);
         this.policy = Objects.requireNonNull(policy);
+        this.shadowPlanning = shadowPlanning;
     }
 
     public List<DagNode> nodes(DynamicExecutionContext context) {
@@ -86,6 +112,7 @@ public final class LearningPlanDynamicPlanningService {
             List<DagNode> nodes = dynamicPlanning.compile(plan, context);
             observations.compiled(PLANNER_TYPE, PLANNER_VERSION,
                     plan, digest, elapsedMillis(startedAt));
+            submitShadowIfEnabled(context, plan);
             return nodes;
         } catch (RuntimeException exception) {
             String errorCode = stableExceptionCode(exception);
@@ -93,6 +120,25 @@ public final class LearningPlanDynamicPlanningService {
                     errorCode, elapsedMillis(startedAt));
             observations.fallback(PLANNER_TYPE, PLANNER_VERSION, errorCode);
             return fixedNodes(context);
+        }
+    }
+
+    private void submitShadowIfEnabled(
+            DynamicExecutionContext context,
+            ValidatedDynamicTaskPlan rulePlan) {
+        if (properties.getMode() != LearningPlanDynamicPlanningProperties.Mode.SHADOW
+                || shadowPlanning == null) {
+            return;
+        }
+        try {
+            shadowPlanning.submit(
+                    context,
+                    rulePlan,
+                    policy,
+                    dynamicPlanning.descriptors(),
+                    properties.toLimits());
+        } catch (RuntimeException ignored) {
+            // Shadow comparison must never affect the validated rule-plan result.
         }
     }
 

@@ -71,6 +71,18 @@ class DynamicPlanObservationPublisherTest {
     }
 
     @Test
+    void preservesStableShadowTimeoutAndOverloadCodes() {
+        RecordingPublisher recorder = new RecordingPublisher();
+        DynamicPlanObservationPublisher observer = new DynamicPlanObservationPublisher(recorder);
+
+        observer.rejected("llm-shadow", "v1", "SHADOW_TIMEOUT", 80L);
+        observer.rejected("llm-shadow", "v1", "SHADOW_OVERLOADED", 0L);
+
+        assertThat(recorder.events).extracting(event -> event.attributes().get("errorCode"))
+                .containsExactly("SHADOW_TIMEOUT", "SHADOW_OVERLOADED");
+    }
+
+    @Test
     void sortsAndBoundsCapabilityIds() {
         RecordingPublisher recorder = new RecordingPublisher();
         DynamicPlanObservationPublisher observer = new DynamicPlanObservationPublisher(recorder);

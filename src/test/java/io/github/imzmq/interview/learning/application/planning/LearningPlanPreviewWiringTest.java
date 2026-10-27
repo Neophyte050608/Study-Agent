@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.learning.application.planning;
 
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanObservationOperations;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningShadowOperations;
+
 import io.github.imzmq.interview.agent.a2a.A2ABus;
 import io.github.imzmq.interview.agent.application.contract.extension.AgentTaskPromptRenderer;
 import io.github.imzmq.interview.agent.application.contract.task.TaskRequest;
@@ -88,4 +91,22 @@ class LearningPlanPreviewWiringTest {
             verifyNoMoreInteractions(profiles);
         }
     }
+    @Test
+    void springWiresOptionalShadowOperationsWhenAvailable() {
+        DynamicPlanningShadowOperations shadow = mock(DynamicPlanningShadowOperations.class);
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DynamicPlanningShadowOperations.class, () -> shadow);
+            context.registerBean(DynamicPlanObservationOperations.class,
+                    () -> mock(DynamicPlanObservationOperations.class));
+            context.registerBean(LearningPlanNodeOperations.class,
+                    () -> mock(LearningPlanNodeOperations.class));
+            context.register(LearningPlanDynamicPlanningProperties.class,
+                    LearningPlanFixedNodeFactory.class, RuleBasedLearningPlanPlanner.class,
+                    DefaultDynamicPlanningOperations.class, LearningPlanDynamicPlanningService.class);
+            context.refresh();
+
+            assertNotNull(context.getBean(LearningPlanDynamicPlanningService.class));
+        }
+    }
+
 }

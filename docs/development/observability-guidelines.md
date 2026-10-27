@@ -229,7 +229,7 @@ V5 task/node/attempt 是内部执行记录，不是外部 trace payload。owner-
 - 拒绝与回退：`errorCode`、`fallbackTarget`；
 - 影子比较：`ruleDigest`、`shadowDigest`、`same`、`nodeDelta`。
 
-`errorCode` 必须来自稳定白名单，未知值统一映射为 `PLANNING_FAILED`。
+`errorCode` 必须来自稳定白名单，未知值统一映射为 `PLANNING_FAILED`。影子规划超时和有界队列过载分别使用 `SHADOW_TIMEOUT`、`SHADOW_OVERLOADED`；它们只表示非执行比较未完成，不改变主请求返回的规则计划。
 `planDigest`、`ruleDigest` 和 `shadowDigest` 仅用于审计、去重与计划结构比较，
 不是认证 token，也不得用于授权判断。
 
