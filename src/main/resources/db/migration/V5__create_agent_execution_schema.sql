@@ -1,0 +1,50 @@
+CREATE TABLE t_agent_execution_task (
+  task_id VARCHAR(36) NOT NULL PRIMARY KEY,
+  owner_user_id VARCHAR(200) COLLATE utf8mb4_0900_bin NOT NULL,
+  workflow_type VARCHAR(80) COLLATE utf8mb4_0900_bin NOT NULL,
+  workflow_version INT NOT NULL,
+  idempotency_key VARCHAR(120) COLLATE utf8mb4_0900_bin NOT NULL,
+  input_hash CHAR(64) NOT NULL,
+  input_json JSON NOT NULL,
+  definition_json JSON NOT NULL,
+  status VARCHAR(24) NOT NULL,
+  revision INT NOT NULL DEFAULT 0,
+  lease_epoch BIGINT NOT NULL DEFAULT 0,
+  lease_owner VARCHAR(36),
+  lease_until DATETIME(6),
+  run_deadline DATETIME(6),
+  final_result_json JSON,
+  error_code VARCHAR(80),
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  finished_at DATETIME(6),
+  UNIQUE KEY uk_agent_execution_submission(owner_user_id, workflow_type, idempotency_key),
+  KEY idx_agent_execution_claim(status, lease_until, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE t_agent_execution_node (
+  task_id VARCHAR(36) NOT NULL,
+  node_id VARCHAR(120) COLLATE utf8mb4_0900_bin NOT NULL,
+  status VARCHAR(24) NOT NULL,
+  attempt_count INT NOT NULL DEFAULT 0,
+  current_attempt_id VARCHAR(36),
+  output_json JSON,
+  error_code VARCHAR(80),
+  PRIMARY KEY(task_id, node_id),
+  CONSTRAINT fk_agent_node_task FOREIGN KEY(task_id) REFERENCES t_agent_execution_task(task_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE t_agent_execution_attempt (
+  attempt_id VARCHAR(36) NOT NULL PRIMARY KEY,
+  task_id VARCHAR(36) NOT NULL,
+  node_id VARCHAR(120) COLLATE utf8mb4_0900_bin NOT NULL,
+  attempt_number INT NOT NULL,
+  revision INT NOT NULL,
+  lease_epoch BIGINT NOT NULL,
+  input_json JSON NOT NULL,
+  output_json JSON,
+  status VARCHAR(24) NOT NULL,
+  error_code VARCHAR(80),
+  started_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  finished_at DATETIME(6),
+  UNIQUE KEY uk_agent_node_attempt(task_id, node_id, attempt_number),
+  CONSTRAINT fk_agent_attempt_node FOREIGN KEY(task_id, node_id) REFERENCES t_agent_execution_node(task_id, node_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

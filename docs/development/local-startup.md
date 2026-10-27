@@ -336,3 +336,9 @@ docker compose --profile optional-ai up -d clip-embedding
 ```
 
 默认不启动它们是为了让本地开发更轻量、更稳定。
+
+## 可选持久学习计划预览
+
+后台任务默认关闭，不改变 `local-lite` 的启动依赖。需要持久异步契约或学习计划预览 HTTP 入口时，在后端启动参数加 `--app.agent.execution.enabled=true`（或环境变量 `APP_AGENT_EXECUTION_ENABLED=true`）；MySQL 必须可用，Flyway 正常执行 V5。共享节点线程和其他可调参数见 `learning-plan-preview.md`。第三步已增加 `/api/learning/plan-previews` 的提交/查询/retry/终态删除接口，未增加前端；启用开关不会自动产生学习任务；模型仍须按已有方式配置。
+
+HTTP 使用和401/409/503含义见 `learning-plan-preview.md`。open仅本地单用户；共享部署应启用JWT认证，不用X-User-Id代替owner。

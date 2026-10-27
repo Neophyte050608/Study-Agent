@@ -3,6 +3,7 @@ import AppShell from '../shell/AppShell.vue'
 import MonitoringView from '../views/MonitoringView.vue'
 import NotesView from '../views/NotesView.vue'
 import ProfileView from '../views/ProfileView.vue'
+import LearningPlanPreviewView from '../views/LearningPlanPreviewView.vue'
 import OpsView from '../views/OpsView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import PromptsView from '../views/PromptsView.vue'
@@ -61,6 +62,11 @@ const routes = [
       {
         path: 'coding.html',
         redirect: '/chat'
+      },
+      {
+        path: 'learning/plan-preview',
+        name: 'learning-plan-preview',
+        component: LearningPlanPreviewView
       },
       {
         path: 'profile',

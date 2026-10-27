@@ -45,6 +45,102 @@ import static org.assertj.core.api.Assertions.assertThat;
 )
 class ArchitectureRulesTest {
 
+    @Test
+    void learning_api_rules_catch_agent_access_and_json_decoding() {
+        JavaClasses fixture = new ClassFileImporter().importClasses(
+                io.github.imzmq.interview.architecture.fixture.learning.api.ControllerDependingOnExecution.class);
+        assertThat(learning_api_should_not_access_agent_runtime_or_decode_execution_json.evaluate(fixture).hasViolation()).isTrue();
+        assertThat(learning_api_should_not_decode_persisted_json.evaluate(fixture).hasViolation()).isTrue();
+    }
+
+    @ArchTest
+    static final ArchRule learning_api_should_not_access_agent_runtime_or_decode_execution_json =
+            noClasses().that().resideInAPackage("..learning.api..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.agent..", "..infrastructure..",
+                            "io.github.imzmq.interview.learning.application.planning..")
+                    .because("Learning HTTP only consumes Learning-owned application contracts");
+
+    @ArchTest
+    static final ArchRule learning_api_should_not_decode_persisted_json =
+            noClasses().that().resideInAPackage("..learning.api..")
+                    .should().dependOnClassesThat().haveFullyQualifiedName("com.fasterxml.jackson.databind.ObjectMapper")
+                    .because("persisted output projection belongs to Learning application, not HTTP");
+
+    @ArchTest
+    static final ArchRule learning_preview_should_not_have_business_write_or_tool_dependencies =
+            noClasses().that().resideInAPackage("..learning.application.planning..")
+                    .or().haveSimpleName("LearningPlanPreviewTaskHandler")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..tool..", "..mcp..", "..skill..", "..infrastructure..",
+                            "java.nio.file..", "java.io..")
+                    .because("the fixed learning-plan preview only reads materials and generates content");
+
+    @ArchTest
+    static final ArchRule learning_preview_should_not_reuse_note_generation =
+            noClasses().that().resideInAPackage("..learning.application.planning..")
+                    .or().haveSimpleName("LearningPlanPreviewTaskHandler")
+                    .should().dependOnClassesThat(new DescribedPredicate<>("legacy note or learning-plan generation") {
+                        @Override
+                        public boolean test(JavaClass item) {
+                            return Set.of("NoteMakingAgent", "LearningPlanTaskHandler", "LearningPlanGenerator")
+                                    .contains(item.getSimpleName());
+                        }
+                    });
+
+    @ArchTest
+    static final ArchRule preview_evidence_adapter_should_only_search_lexical_index =
+            classes().that().haveSimpleName("LexicalLearningPlanEvidenceReader")
+                    .should(new ArchCondition<>("only call search on LexicalIndexService") {
+                        @Override
+                        public void check(JavaClass item, ConditionEvents events) {
+                            item.getMethodCallsFromSelf().stream()
+                                    .filter(call -> call.getTargetOwner().getSimpleName().equals("LexicalIndexService"))
+                                    .filter(call -> !call.getTarget().getName().equals("search"))
+                                    .forEach(call -> events.add(SimpleConditionEvent.violated(item, call.getDescription())));
+                        }
+                    });
+
+    @ArchTest
+    static final ArchRule learning_preview_should_only_read_profile_operations =
+            classes().that().resideInAPackage("..learning.application.planning..")
+                    .should(new ArchCondition<>("only call snapshot on LearningProfileOperations") {
+                        @Override
+                        public void check(JavaClass item, ConditionEvents events) {
+                            item.getMethodCallsFromSelf().stream()
+                                    .filter(call -> call.getTargetOwner().getSimpleName().equals("LearningProfileOperations"))
+                                    .filter(call -> !call.getTarget().getName().equals("snapshot"))
+                                    .forEach(call -> events.add(SimpleConditionEvent.violated(item, call.getDescription())));
+                        }
+                    });
+
+    @ArchTest
+    static final ArchRule preview_adapters_should_not_execute_skills_tools_or_full_rag =
+            noClasses().that().resideInAPackage("..knowledge.application.planning..")
+                    .should().dependOnClassesThat(new DescribedPredicate<>("tool, write, or full RAG implementation") {
+                        @Override
+                        public boolean test(JavaClass item) {
+                            return item.getPackageName().matches(".*\\.(tool|mcp|skill)($|\\..*)")
+                                    || item.getPackageName().contains(".infrastructure.")
+                                    || Set.of("RAGService", "KnowledgePacketBuilder", "NoteMakingAgent")
+                                            .contains(item.getSimpleName());
+                        }
+                    });
+
+    @ArchTest
+    static final ArchRule preview_generator_should_not_repeat_retrieval =
+            noClasses().that().haveSimpleName("ModelLearningPlanPreviewGenerator")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..knowledge.application.indexing..", "..knowledge.application.retrieval..",
+                            "..knowledge.application.evidence..", "..search..", "..media..");
+
+    @ArchTest
+    static final ArchRule fixed_dag_scheduler_should_not_own_business_nodes =
+            noClasses().that().resideInAnyPackage("..agent.application.execution..", "..agent.domain.execution..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..learning..", "..knowledge..", "..practice..", "..chat..", "..interview.application..",
+                            "..tool..", "..mcp..", "..skill..");
+
     @ArchTest
     static final ArchRule rag_facade_should_not_own_retrieval_adapters =
             noClasses().that().haveFullyQualifiedName("io.github.imzmq.interview.knowledge.application.RAGService")

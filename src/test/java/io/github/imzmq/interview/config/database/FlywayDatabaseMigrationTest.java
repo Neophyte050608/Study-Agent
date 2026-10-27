@@ -87,6 +87,8 @@ class FlywayDatabaseMigrationTest {
         String schemaMigration = readResource("db/migration/V1__create_application_schema.sql");
         String referenceDataMigration = readResource("db/migration/V2__seed_reference_data.sql");
         String chatMemorySchema = readResource("db/migration/V3__create_chat_memory_schema.sql");
+        String executions = readResource("db/migration/V5__create_agent_execution_schema.sql");
+        assertThat(executions).contains("t_agent_execution_task", "t_agent_execution_node", "t_agent_execution_attempt", "lease_epoch", "ON DELETE CASCADE");
         String chatMemoryPrompts = readResource("db/migration/V4__seed_chat_memory_prompts.sql");
 
         assertThat(schemaMigration)

@@ -193,3 +193,13 @@ OpenTelemetry 不替代 Langfuse 的 LLM/RAG 细节追踪。两者可以并存�
 ## RAG 检索内核职责（2026-10-26）
 
 本次重构不新增事件、trace 字段、节点类型或导出 adapter。`RAGService` 保留 `KNOWLEDGE_PACKET` root 生命周期和已有父节点复用规则；`KnowledgePacketBuilder` 直接调用 `RagTraceOperations` 记录 QUERY_REWRITE、DOC_RETRIEVE、IMAGE_ASSOC_RETRIEVE、IMAGE_SEMANTIC_RETRIEVE、WEB_FALLBACK child，替代旧 RetrievalDelegate 回调。三路召回继续复用 `ragRetrieveExecutor`，不新建线程池或单独通道 span。docRefs、docCount、imageCount、fallback 及 metrics/details 内容保持既有口径。
+
+## 固定 DAG 学习计划预览（2026-10-27）
+
+本切片不新增 trace 事件、节点类型或外部导出字段。专用 worker 显式复制当前 traceId/parentId，执行后清理，并禁止线程构造时隐式继承 ThreadLocal，避免并行栈串扰。复用已有模型路由观测与任务分发记账。
+
+响应中的 `nodes` 是请求内状态摘要（status/code），不是持久 trace 或可恢复节点日志；不返回原始画像、原始异常或工具观察。提供给模型的画像和知识摘录仍属于敏感上下文，不因此放开外部导出白名单。未来若增加独立节点 span/事件再同步本文，不把本次上下文透传描述成完整 DAG 可观测系统。
+
+## 持久学习预览状态
+
+V5 task/node/attempt 是内部执行记录，不是外部 trace payload。owner-safe 查询仅返回 taskId/status/revision、节点状态/次数/安全 code 与终态预览；不返回 task input、profile 输出、attempt input、worker/lease identity。技术日志不得输出这些 JSON 或原始异常。当前后台不自动延续 HTTP 请求 trace，不宣称跨重启 trace 关联；节点仍复用隔离线程和既有 trace 清理。不新增外部观测事件或 adapter。终态删除会级联清除三表，暂无 TTL。

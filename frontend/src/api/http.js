@@ -14,34 +14,32 @@ function getAuthHeaders() {
   return headers
 }
 
-export async function httpGet(url) {
-  const response = await fetch(url, { headers: getAuthHeaders() })
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || `请求失败: ${response.status}`)
-  }
-  return unwrap(await response.json())
-}
-
-export async function httpPostJson(url, payload) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify(payload)
-  })
+async function readResponse(response) {
   const raw = await response.text()
   let data = {}
-  if (raw) {
-    try {
-      data = JSON.parse(raw)
-    } catch {
-      data = { message: raw }
-    }
+  try { if (raw) data = JSON.parse(raw) } catch {
+    if (response.ok) throw Object.assign(new Error('响应格式不合法'), { code: 'INVALID_RESPONSE' })
+    // Never expose raw server pages, including malformed error responses.
   }
   if (!response.ok) {
-    throw new Error(data.message || `请求失败: ${response.status}`)
+    const error = new Error(typeof data?.message === 'string' ? data.message : `请求失败: ${response.status}`)
+    error.status = response.status
+    error.code = typeof data?.code === 'string' ? data.code : null
+    throw error
   }
   return unwrap(data)
+}
+
+export async function httpGet(url, options = {}) {
+  return readResponse(await fetch(url, { headers: { ...options.headers, ...getAuthHeaders() }, signal: options.signal }))
+}
+
+export async function httpPostJson(url, payload, options = {}) {
+  return readResponse(await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options.headers, ...getAuthHeaders() },
+    body: JSON.stringify(payload), signal: options.signal
+  }))
 }
 
 export async function httpPostFormData(url, formData) {
@@ -107,20 +105,6 @@ export async function httpPatch(url, payload = {}) {
   return unwrap(data)
 }
 
-export async function httpDelete(url) {
-  const response = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() })
-  if (response.status === 204 || response.headers.get('content-length') === '0') return {}
-  const raw = await response.text()
-  let data = {}
-  if (raw) {
-    try {
-      data = JSON.parse(raw)
-    } catch {
-      data = { message: raw }
-    }
-  }
-  if (!response.ok) {
-    throw new Error(data.message || `请求失败: ${response.status}`)
-  }
-  return unwrap(data)
+export async function httpDelete(url, options = {}) {
+  return readResponse(await fetch(url, { method: 'DELETE', headers: getAuthHeaders(), signal: options.signal }))
 }

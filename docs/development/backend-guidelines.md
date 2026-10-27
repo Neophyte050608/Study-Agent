@@ -128,3 +128,11 @@ src/main/resources/db/migration/
 - 包结构和依赖方向变化需要运行 `ArchitectureRulesTest`。
 - 避免依赖真实模型、真实外部 API 和个人本地服务；必要时使用 stub 或 mock。
 - 测试命名以被测类或行为为中心，例如 `KnowledgeRetrievalCoordinatorTest`。
+
+## 固定 DAG 学习计划预览
+
+`LEARNING_PLAN_PREVIEW` 的职责、调用入口和边界见 `learning-plan-preview.md`。Learning 定义只读三节点，Knowledge 实现 Learning-owned 窄扩展，Agent 提供有界调度。不要复用旧笔记生成链，也不要在本步接入工具或自动重试。新增图执行行为要覆盖入度等待、降级、队列/请求过载、中断与上下文清理，并运行 ArchUnit。
+
+持久预览入口的 task/node/attempt 状态归 Agent，Learning 通过 Agent-owned workflow SPI 提供节点和 codec。数据库事务只用于领取、检查点和终态，不跨模型调用。新增持久图行为必须覆盖失效 epoch 拒写、期限/attempt budget、成功 seed 复用、重试后继闭包与真实取消容量；不得用 mock 替代 MySQL fencing 证据。
+
+持久预览 HTTP 位于 `learning.api`，Controller只调用Learning/Identity公开契约；结果JSON解码在Learning application，HTTP字段通过API-owned `LearningPlanTaskResponse`映射，不直接返回运行时或application记录。局部错误advice优先级高于全局处理，不返回原始异常内容。测试应加载真实SecurityFilterChain与JWT decoder，覆盖认证、owner替换、跨owner和open单用户语义，不能仅靠MockMvc设置principal声称JWT认证已验证。

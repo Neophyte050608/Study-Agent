@@ -29,7 +29,7 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(4);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
@@ -39,7 +39,7 @@ class FlywayMySqlMigrationIntegrationTest {
                     .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(4);
+                    .isEqualTo(5);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM t_prompt_template WHERE deleted = 0 AND name IN ("
                             + quoted(REQUIRED_PROMPTS) + ")"))
@@ -80,13 +80,13 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(adoptingFlyway.migrate().migrationsExecuted).isEqualTo(3);
+        assertThat(adoptingFlyway.migrate().migrationsExecuted).isEqualTo(4);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(4);
+                    .isEqualTo(5);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history "
                             + "WHERE type = 'BASELINE' AND version = '1' AND success = 1"))
