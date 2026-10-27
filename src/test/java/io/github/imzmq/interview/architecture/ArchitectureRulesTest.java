@@ -45,6 +45,123 @@ import static org.assertj.core.api.Assertions.assertThat;
 )
 class ArchitectureRulesTest {
 
+    @Test
+    void learning_api_dynamic_planning_rule_catches_planner_dependency() {
+        JavaClasses fixture = new ClassFileImporter().importClasses(
+                io.github.imzmq.interview.learning.api.dynamicfixture.ControllerDependingOnPlanner.class);
+
+        assertThat(learning_api_should_not_access_dynamic_planning_internals
+                .evaluate(fixture).hasViolation()).isTrue();
+    }
+
+    @Test
+    void dynamic_planning_core_rule_catches_spring_ai_dependency() {
+        JavaClasses fixture = new ClassFileImporter().importClasses(
+                io.github.imzmq.interview.agent.application.execution.dynamic.fixture.CoreDependingOnSpringAi.class);
+
+        assertThat(dynamic_planning_core_should_be_sdk_neutral
+                .evaluate(fixture).hasViolation()).isTrue();
+    }
+
+    @Test
+    void learning_plan_capability_rule_catches_persistence_dependency() {
+        JavaClasses fixture = new ClassFileImporter().importClasses(
+                io.github.imzmq.interview.learning.application.planning.fixture.LearningPlanPersistenceCapability.class,
+                SamplePersistenceMapper.class,
+                SamplePersistenceDO.class);
+
+        assertThat(learning_plan_capabilities_should_not_access_execution_or_persistence_internals
+                .evaluate(fixture).hasViolation()).isTrue();
+    }
+
+    @Test
+    void dynamic_planning_contract_rule_catches_jackson_dependency() {
+        JavaClasses fixture = new ClassFileImporter().importClasses(
+                io.github.imzmq.interview.agent.application.contract.execution.dynamic.fixture.ContractExposingJsonNode.class);
+
+        assertThat(dynamic_planning_public_contracts_should_be_technology_neutral
+                .evaluate(fixture).hasViolation()).isTrue();
+    }
+
+    @ArchTest
+    static final ArchRule learning_api_should_not_access_dynamic_planning_internals =
+            noClasses().that().resideInAPackage("..learning.api..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..agent.application.execution.dynamic..",
+                            "..agent.infrastructure.planning..",
+                            "..learning.application.planning..")
+                    .because("Learning HTTP may use application contracts but not dynamic-planning implementations");
+
+    @ArchTest
+    static final ArchRule dynamic_planning_core_should_be_sdk_neutral =
+            noClasses().that().resideInAnyPackage(
+                            "..agent.application.contract.execution.dynamic..",
+                            "..agent.application.execution.dynamic..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework.web..",
+                            "org.springframework.ai..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "io.milvus..",
+                            "org.neo4j..",
+                            "dev.langchain4j..",
+                            "io.github.imzmq.interview.learning..",
+                            "io.github.imzmq.interview.knowledge..")
+                    .because("generic dynamic-plan contracts, validation, and compilation must remain SDK and product neutral");
+
+    @ArchTest
+    static final ArchRule agent_planning_infrastructure_should_not_access_model_sdks_directly =
+            noClasses().that().resideInAPackage("..agent.infrastructure.planning..")
+                    .should().dependOnClassesThat().resideInAnyPackage("org.springframework.ai..")
+                    .because("Agent planning infrastructure must enter models through ModelRouting's public contract");
+
+    @ArchTest
+    static final ArchRule agent_planning_infrastructure_should_only_use_modelrouting_planning_contract =
+            noClasses().that().resideInAPackage("..agent.infrastructure.planning..")
+                    .should().dependOnClassesThat(new DescribedPredicate<>("ModelRouting types outside DynamicPlanningModelOperations") {
+                        @Override
+                        public boolean test(JavaClass item) {
+                            return item.getPackageName().startsWith("io.github.imzmq.interview.modelrouting.")
+                                    && !item.getName().equals(
+                                            "io.github.imzmq.interview.modelrouting.application.contract.DynamicPlanningModelOperations");
+                        }
+                    })
+                    .because("the provider-owned planning contract preserves the one-way Agent to ModelRouting dependency");
+
+    @ArchTest
+    static final ArchRule learning_plan_capabilities_should_not_access_execution_or_persistence_internals =
+            noClasses().that().resideInAPackage("..learning.application.planning..")
+                    .and().haveSimpleNameStartingWith("LearningPlan")
+                    .and().haveSimpleNameEndingWith("Capability")
+                    .should().dependOnClassesThat(new DescribedPredicate<>("persistence, tool, MCP, or Agent runtime types") {
+                        @Override
+                        public boolean test(JavaClass item) {
+                            String packageName = item.getPackageName();
+                            return areMyBatisMappers().test(item)
+                                    || packageName.contains(".infrastructure.persistence")
+                                    || packageName.matches(".*\\.(tool|mcp)($|\\..*)")
+                                    || packageName.startsWith("io.github.imzmq.interview.agent.runtime");
+                        }
+                    })
+                    .because("Learning dynamic capabilities are bounded business operations, not infrastructure executors");
+
+    @ArchTest
+    static final ArchRule dynamic_planning_public_contracts_should_be_technology_neutral =
+            noClasses().that().resideInAPackage("..application.contract.execution.dynamic..")
+                    .or().haveSimpleName("DynamicNodeCapability")
+                    .or().haveSimpleName("DynamicPlanningModelOperations")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "com.fasterxml.jackson..",
+                            "org.springframework.ai..",
+                            "org.springframework.web..",
+                            "com.baomidou.mybatisplus..",
+                            "org.apache.ibatis..",
+                            "io.milvus..",
+                            "org.neo4j..",
+                            "dev.langchain4j..",
+                            "io.github.imzmq.interview..infrastructure..")
+                    .because("public planning contracts must expose only stable technology-neutral types");
+
     @ArchTest
     static final ArchRule benchmark_application_should_not_depend_on_infrastructure_sdks =
             noClasses().that().resideInAnyPackage(

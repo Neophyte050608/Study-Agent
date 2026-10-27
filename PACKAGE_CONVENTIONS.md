@@ -273,3 +273,11 @@ Historical packages are migration-only:
 - `learning.application.contract.DurableLearningPlanOperations` 返回 Learning-owned `result.DurableLearningPlanView`，最终结果为类型化 `LearningPlanPreview`；固定错误原因由 `LearningPlanAccessException` 暴露，不携带原始异常 cause/message。
 - `learning.application.planning.LearningPlanTaskPresenter` 严格校验 v1 结果字段、预算及节点状态；提交服务负责工作流类型/版本隔离和底层错误翻译。Agent `DurableTaskView` 的 workflow 元数据仅给 application 验证，不对 HTTP 返回。
 - 可信身份仍经 Identity 公开契约 `resolveTrusted`；不自行解析 JWT、不信任请求 owner/userId/context。此入口拒绝会被清理/截断的 principal，open 明确为单用户。
+
+## Controlled dynamic planning ownership (2026-10-28)
+
+- Generic candidate/validated plan contracts, structural validation, capability registry, fingerprinting, and compilation into the existing bounded DAG executor belong to Agent execution. These types remain independent of product modules and model/vendor SDKs.
+- Business capability implementations and scenario policy belong to the business owner. Learning owns its profile/evidence/compose capabilities and the policy that permits their graph shapes; Agent must not discover business implementations by Bean name or class name.
+- LLM planning calls enter ModelRouting only through the provider-owned `modelrouting.application.contract.DynamicPlanningModelOperations`. ModelRouting infrastructure implements that contract, preserving the one-way `agent -> modelrouting` dependency and avoiding a module cycle.
+- A dynamic plan may reference only stable capability IDs and versions. It must not reference Spring Bean names, implementation class names, Tool executors, Agent runtime implementations, MyBatis Mapper/DO types, or persistence adapters.
+- Only request-scoped Learning Plan Preview may select a validated dynamic graph. The versioned durable workflow remains the fixed three-node graph until a separately designed persistence migration explicitly changes it.

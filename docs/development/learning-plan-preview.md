@@ -162,3 +162,26 @@ mvn -q -Dtest=DurableLearningPlanServiceTest,LearningPlanTaskResponseTest,Learni
 负责状态与轮询；页面负责 URL/表单/操作，`views/learning/` 负责节点和纯文本展示。
 不新增列表、自动重试、取消、新基础设施、后台协议或 DB 迁移。
 验证范围与命令见 `verification.md` 的第四步章节。
+
+## 受控动态规划模式
+
+同步、请求内的 Learning Plan Preview 支持以下运行模式，配置前缀为
+`app.learning.plan-preview.dynamic-planning`，环境变量入口为 `APP_LEARNING_PLAN_DYNAMIC_MODE`：
+
+| 模式 | 实际执行图 | 说明 |
+| --- | --- | --- |
+| `FIXED` | 固定 `profile + evidence -> compose` | 仓库默认值，也是 `local-lite` 的强制安全默认值；不发起动态规划。 |
+| `RULES` | 经校验并编译的确定性规则计划 | 只允许已注册、只读且符合 Learning 场景策略的 capability；规划、校验或编译失败时在执行前回退固定图。 |
+| `SHADOW` | 与 `RULES` 相同的规则计划 | 正式结果始终来自规则计划；LLM 候选只在独立有界资源中做非执行比较。影子能力缺失、超时、过载或失败均不得影响正式结果。 |
+
+动态选择只作用于同步的 request-scoped preview。节点开始执行后不会因局部失败换图或重新规划；失败仍按现有节点状态和降级语义返回。持久化预览继续使用版本化的固定三节点 `LearningPlanWorkflow`，不会保存、恢复或执行动态/LLM 候选图。本次能力不修改前端页面、HTTP 路由或响应契约。
+
+动态计划只包含结构、稳定 capability ID/版本和有界标量参数；可信 owner、topic 与 request 由执行上下文提供，计划不得指定 Bean、实现类、Tool executor 或持久化 adapter。LLM shadow 的 prompt、候选原文、业务输入、身份、画像、证据和异常消息不得写入观测事件。
+
+自动化测试不需要真实模型或 API Key。后续经操作者批准进行真实 shadow smoke test 时，沿用已有模型供应商配置，并仅把 Key 写入未跟踪文件：
+
+```text
+/Users/bytedance/bits/StudyAgent/Study-Agent/application-private.yml
+```
+
+不得把 Key 写入仓库配置、测试资源、命令行记录或提交内容。真实 smoke test 结束后恢复 `FIXED`。
