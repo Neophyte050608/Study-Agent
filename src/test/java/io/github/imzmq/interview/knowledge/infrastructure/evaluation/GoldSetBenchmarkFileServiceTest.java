@@ -5,6 +5,7 @@ import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSe
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetBm25Evaluator;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetComparisonMarkdownRenderer;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetDataLoader;
+import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetDatasetValidationException;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetMetricsCalculator;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetRetrievalEvaluator;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetRunComparator;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIOException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GoldSetBenchmarkFileServiceTest {
 
@@ -51,6 +53,25 @@ class GoldSetBenchmarkFileServiceTest {
                 .contains("# Retrieval Evaluation Comparison")
                 .contains("Candidate wins: **1**, baseline wins: **0**, ties: **0**")
                 .contains("| q1 | cache | CANDIDATE_WIN |");
+    }
+
+    @Test
+    void rejectsInconsistentDatasetBeforeWritingReport() throws Exception {
+        Path goldFile = tempDir.resolve("gold.txt");
+        Path corpusFile = tempDir.resolve("test.txt");
+        Path outputFile = tempDir.resolve("report.md");
+        Files.writeString(goldFile, """
+                {"query_id":"q1","question":"Redis persistence","ground_truth":["missing-chunk"]}
+                """);
+        Files.writeString(corpusFile, """
+                {"chunk_id":"c1","document_id":"d1","content":"Redis persistence"}
+                """);
+
+        assertThatThrownBy(() -> serviceWithProductionChunk("missing-chunk")
+                .run(goldFile, corpusFile, outputFile))
+                .isInstanceOf(GoldSetDatasetValidationException.class)
+                .hasMessageContaining("query_id q1 references missing chunk_id: missing-chunk");
+        assertThat(outputFile).doesNotExist();
     }
 
     @Test

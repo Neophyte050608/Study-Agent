@@ -6,6 +6,7 @@ import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSe
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetComparisonMarkdownRenderer;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetComparisonReport;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetDataLoader;
+import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetDatasetValidator;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.util.List;
 public final class GoldSetBenchmarkFileService {
 
     private final GoldSetDataLoader dataLoader = new GoldSetDataLoader();
+    private final GoldSetDatasetValidator datasetValidator = new GoldSetDatasetValidator();
     private final GoldSetBenchmarkComparisonService comparisonService;
     private final GoldSetComparisonMarkdownRenderer markdownRenderer;
 
@@ -49,6 +51,7 @@ public final class GoldSetBenchmarkFileService {
             chunks = dataLoader.loadChunks(reader);
         }
 
+        datasetValidator.validate(cases, chunks);
         GoldSetComparisonReport report = comparisonService.compare(cases, chunks);
         Path parent = outputPath.getParent();
         if (parent != null) {
