@@ -73,6 +73,13 @@ public class KnowledgePacketBuilder {
     public RAGService.KnowledgePacket build(String question,
                                             String userAnswer,
                                             boolean allowWebFallback) {
+        return build(question, userAnswer, allowWebFallback, 5);
+    }
+
+    public RAGService.KnowledgePacket build(String question,
+                                            String userAnswer,
+                                            boolean allowWebFallback,
+                                            int topK) {
         String traceId = RAGTraceContext.getTraceId();
         String parentNodeId = RAGTraceContext.getCurrentNodeId();
         SkillExecutionBudget skillBudget = skillOrchestrator.newBudget();
@@ -84,7 +91,7 @@ public class KnowledgePacketBuilder {
         }
 
         TraceNodeHandle docRetrieveTrace = startTraceChild(traceId, parentNodeId, TraceNodeDefinitions.DOC_RETRIEVE, Map.of("status", "RUNNING"));
-        List<Document> retrievedDocs = retriever.retrieveHybridDocuments(rewrittenQuery, 5);
+        List<Document> retrievedDocs = retriever.retrieveHybridDocuments(rewrittenQuery, topK);
         String context = grounding.buildContext(retrievedDocs);
         double bestRetrievalScore = fusion.bestRetrievalScore(rewrittenQuery.fullQuery(), retrievedDocs);
         completeTraceSuccess(

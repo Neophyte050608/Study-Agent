@@ -88,8 +88,22 @@ public class RAGService {
      * 构建检索知识包，并允许调用方决定是否启用 Web fallback。
      */
     public KnowledgePacket buildKnowledgePacket(String question, String userAnswer, boolean allowWebFallback) {
+        return buildKnowledgePacket(question, userAnswer, allowWebFallback, 5);
+    }
+
+    /**
+     * 构建检索知识包，并显式指定本地检索候选数。
+     *
+     * <p>线上入口继续使用默认 Top-5；离线检索评测可请求 Top-10/20，避免用 Top-5
+     * 候选错误计算 Recall@10/20。候选数被限制在 1..100，防止评测误配置放大资源开销。</p>
+     */
+    public KnowledgePacket buildKnowledgePacket(String question,
+                                                String userAnswer,
+                                                boolean allowWebFallback,
+                                                int topK) {
+        int boundedTopK = Math.max(1, Math.min(topK, 100));
         return executeWithinTraceRoot("KNOWLEDGE_PACKET", "Knowledge Packet Build", "Q: " + question,
-                () -> knowledgePacketBuilder.build(question, userAnswer, allowWebFallback));
+                () -> knowledgePacketBuilder.build(question, userAnswer, allowWebFallback, boundedTopK));
     }
 
     private <T> T executeWithinTraceRoot(String nodeType, String nodeName, String inputSummary, Supplier<T> action) {
