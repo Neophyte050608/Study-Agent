@@ -45,6 +45,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 )
 class ArchitectureRulesTest {
 
+    @ArchTest
+    static final ArchRule benchmark_application_should_not_depend_on_infrastructure_sdks =
+            noClasses().that().resideInAnyPackage(
+                            "..knowledge.application.evaluation.goldset..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.milvus..",
+                            "org.springframework.ai.embedding..",
+                            "..knowledge.infrastructure.evaluation..")
+                    .because("benchmark application code must remain SDK-neutral and depend on ports only");
+
     @Test
     void learning_api_rules_catch_agent_access_and_json_decoding() {
         JavaClasses fixture = new ClassFileImporter().importClasses(

@@ -32,34 +32,87 @@
 - 做项目问答、面试模拟、知识库贴合度验证时跑 `project`
 
 
-## Chunk 级检索对比
+## 隔离检索基准
 
-`knowledge.application.evaluation.goldset` 提供 Saber 风格 JSONL 数据加载、生产检索评测、
-本地 Okapi BM25 基线和结构化对比报告：
+`knowledge.application.evaluation.goldset` 接受数据集无关的 UTF-8 JSONL 查询集与语料集，提供数据校验、
+本地 Okapi BM25 基线、隔离向量索引以及结构化对比报告：
 
-- 使用相同 `query_id`、ground truth、relevance 与 Top-K 比较两次运行。
-- 汇总 Recall@5/10/20、HitRate@5/10/20、MRR、NDCG@10 及其差值。
-- 逐题按 NDCG@10、Recall@20、MRR 的顺序判定胜负，并可渲染为 Markdown。
-- BM25 基线不依赖数据库、向量库、模型服务或 API Key；生产检索仍依赖项目已配置的本地检索基础设施。
+- 查询集每行是一个 JSON 对象，至少包含非空 `query_id`、`question` 和 `ground_truth`；
+  `ground_truth` 保存相关 `chunk_id`，可选 `relevance` 保存分级相关性。
+- 语料集每行是一个 JSON 对象，至少包含非空 `chunk_id` 和 `content`。
+- 比较使用相同 `query_id`、ground truth、relevance 与 Top-K，汇总 Recall@5/10/20、
+  HitRate@5/10/20、MRR、NDCG@10 及其差值。
+- 解析与校验会拒绝重复标识、空问题、空 ground truth 和不存在于语料集的 chunk 引用；错误会带物理行号，
+  不会静默丢弃样本。
 
-比较器会拒绝重复或不一致的 `query_id`、不同 Top-K、不同 ground truth，避免输出口径不公平的报告。
+运行入口默认关闭。启用后一次启动只执行 `VALIDATE`、`INDEX`、`COMPARE`、`CLEAN` 中的一个显式操作。
+数据集由 `dataset-id` 标识；语料指纹作为 dataset version，向量数据按 dataset ID、version 与 embedding
+model ID 隔离，不写入正常知识库 collection。
 
+### VALIDATE：只校验文件
 
-### 从 JSONL 文件生成对比报告
-
-文件运行入口默认关闭，不影响正常启动。显式配置后，应用启动时读取 Saber 风格的
-`gold.txt` 与 `test.txt`，运行生产检索和 BM25，并将 Markdown 报告写入指定路径：
+下面的操作只读取并校验 JSONL，不访问 Milvus、embedding provider、checkpoint 或报告文件，也不需要
+API Key：
 
 ```bash
 APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_ENABLED=true \
-APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_GOLD_FILE=/absolute/path/gold.txt \
-APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CORPUS_FILE=/absolute/path/test.txt \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OPERATION=VALIDATE \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_DATASET_ID=generic-rag \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_GOLD_FILE=/absolute/path/gold.jsonl \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CORPUS_FILE=/absolute/path/corpus.jsonl \
+mvn spring-boot:run
+```
+
+### INDEX：建立隔离向量索引
+
+`INDEX` 会调用配置的 embedding provider，并可能产生调用费用。真实语料执行前，必须先估算 chunk 数、
+批次数、耗时和费用，并获得单独确认。未经确认只运行单元测试中的 fake/mock embedding，不执行此命令：
+
+```bash
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_ENABLED=true \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OPERATION=INDEX \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_DATASET_ID=generic-rag \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_GOLD_FILE=/absolute/path/gold.jsonl \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CORPUS_FILE=/absolute/path/corpus.jsonl \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CHECKPOINT_FILE=/absolute/path/generic-rag-checkpoint.json \
+mvn spring-boot:run
+```
+
+断点文件记录已完成批次；重复运行会校验数据集身份、语料指纹和 embedding 模型，避免把不兼容数据混入
+已有索引。智谱 embedding Key 只放在仓库根目录、已被 Git 忽略的 `application-private.yml` 中，例如
+`spring.ai.zhipuai.api-key: ${ZHIPU_API_KEY:}`；不要写进命令、公共配置、日志或提交记录。
+
+### COMPARE：隔离向量检索与 BM25 对比
+
+`COMPARE` 要求同一数据集已经成功完成 `INDEX`，读取 checkpoint 后运行两条固定通道：
+`isolated-vector/<model-id>` 与本地 `bm25`。BM25 本身完全本地且不需要 API Key；隔离向量通道会为查询
+生成 embedding，因此仍可能调用 provider 并产生费用。成功时报告通过临时文件原子替换，失败不会覆盖旧报告：
+
+```bash
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_ENABLED=true \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OPERATION=COMPARE \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_DATASET_ID=generic-rag \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_GOLD_FILE=/absolute/path/gold.jsonl \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CORPUS_FILE=/absolute/path/corpus.jsonl \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CHECKPOINT_FILE=/absolute/path/generic-rag-checkpoint.json \
 APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OUTPUT_FILE=/absolute/path/retrieval-comparison.md \
 mvn spring-boot:run
 ```
 
-三条路径必须显式填写；输入使用 UTF-8 JSONL，输出目录会自动创建。纯空行允许跳过；其他行必须是
-JSON 对象，并分别提供非空 `query_id` 或 `chunk_id`。格式错误会报告物理行号，不会静默丢弃样本。
-运行器还会在调用任何检索器前校验重复 `query_id`、重复 `chunk_id`、空问题、空 `ground_truth` 以及
-不存在于语料库的 chunk 引用，并一次汇总所有诊断；解析或校验失败时不会写出报告。生产检索需要项目
-原有 MySQL/Milvus/Neo4j 等已启用检索后端，但不需要额外的评测 API Key；BM25 本身仍完全本地运行。
+报告只比较 **isolated-vector vs BM25**，不经过 `RAGService`，也不代表完整生产 hybrid retrieval 链路、
+GraphRAG、融合、重排或 parent-child hydration 的质量。
+
+### CLEAN：按数据集清理
+
+`CLEAN` 不读取查询集或语料集，只删除匹配 `dataset-id` 的隔离向量数据。为了防止误删，
+`cleanup-confirmation` 必须与 `dataset-id` 完全相同：
+
+```bash
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_ENABLED=true \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OPERATION=CLEAN \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_DATASET_ID=generic-rag \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CLEANUP_CONFIRMATION=generic-rag \
+mvn spring-boot:run
+```
+
+该操作不会删除 collection，也不会影响其他 dataset ID、正常知识库向量或本地输入文件。

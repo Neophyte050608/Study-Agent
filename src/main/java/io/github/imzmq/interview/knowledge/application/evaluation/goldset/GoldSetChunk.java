@@ -1,7 +1,7 @@
 package io.github.imzmq.interview.knowledge.application.evaluation.goldset;
 
 /**
- * 语料库中的单个 chunk，对应 Saber test.txt 的一行记录。
+ * 语料库中的单个 chunk，对应通用语料集 JSONL 的一行记录。
  *
  * <p>仅保留评测所需的核心字段；其余元数据(作者、时间、sha256 等)在解析时忽略，
  * 以降低内存占用并聚焦检索评测口径。</p>

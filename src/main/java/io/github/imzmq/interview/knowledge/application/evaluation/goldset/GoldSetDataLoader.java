@@ -13,12 +13,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Saber 风格 chunk 级黄金评测集解析器。
+ * 通用 chunk 级黄金评测集解析器。
  *
  * <p>输入为 JSONL(每行一个 JSON 对象)：</p>
  * <ul>
- *     <li>{@code gold.txt} 行 -> {@link GoldSetCase}</li>
- *     <li>{@code test.txt} 行 -> {@link GoldSetChunk}</li>
+ *     <li>查询集行 -> {@link GoldSetCase}</li>
+ *     <li>语料集行 -> {@link GoldSetChunk}</li>
  * </ul>
  *
  * <p>本类只做纯解析，不触达向量库/数据库/网络，可在无任何 API Key 的环境下运行，

@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 单条 chunk 级黄金评测用例，对应 Saber gold.txt 的一行记录。
+ * 单条 chunk 级黄金评测用例，对应通用查询集 JSONL 的一行记录。
  *
  * <p>与旧的 {@code EvalCase(query, expectedKeywords, tag)} 关键词口径不同，此处保留
  * chunk_id 级 ground truth 与分级 relevance，用于计算 HitRate@K / NDCG@K / Recall@K

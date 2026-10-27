@@ -140,13 +140,26 @@ cd frontend && npm test && npm run build
 构建会生成本地产物，即使仓库已有历史跟踪文件，本次也不将它们作为源码提交。
 
 
-## Chunk 级检索对比报告
+## 隔离检索基准
 
-文件入口默认关闭。先运行不依赖真实外部服务的单元与条件装配验证：
+文件入口默认关闭。先运行不依赖真实外部服务的操作分发与条件装配测试：
 
 ```bash
-mvn -q -Dtest=GoldSetBenchmarkFileServiceTest,GoldSetBenchmarkRunnerTest,GoldSetBenchmarkRunnerConditionTest test
+mvn -q -Dtest=RetrievalBenchmarkFileServiceTest,RetrievalBenchmarkRunnerTest,RetrievalBenchmarkRunnerConditionTest test
 ```
 
-真实数据运行方式及环境变量见 `src/main/resources/eval/README.md`。真实生产检索结果只在
-MySQL/Milvus/Neo4j 等已启用后端可用时有意义；BM25 基线不需要 API Key。
+Milvus adapter 单测使用 Mockito；JDK 21 下应显式提供仓库当前 Byte Buddy agent，避免动态 agent 装载限制：
+
+```bash
+mvn -q \
+  -DargLine='-javaagent:/Users/bytedance/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar -XX:+EnableDynamicAgentLoading' \
+  -Dtest=MilvusBenchmarkIndexTest,MilvusBenchmarkIndexIntegrationTest \
+  test
+```
+
+`MilvusBenchmarkIndexIntegrationTest` 默认跳过；只有显式设置
+`RUN_MILVUS_INTEGRATION_TESTS=true` 才连接本地 Milvus，测试使用确定性 fake embedding，不需要 API Key。
+`VALIDATE` 与本地 BM25 不需要 API Key；`INDEX` 会对语料调用 embedding provider，`COMPARE` 会对查询调用
+provider。不得在未统计调用量、预计耗时和费用并取得单独确认时运行真实 `INDEX`。四个 operation、私密 Key
+位置和数据集级清理确认方式见 `src/main/resources/eval/README.md`。报告仅代表 isolated-vector vs BM25，
+不得当作完整生产 hybrid retrieval 的验证结果。

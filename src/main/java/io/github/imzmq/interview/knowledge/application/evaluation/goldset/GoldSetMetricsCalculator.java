@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Calculates Saber-compatible retrieval metrics from exact chunk identities. */
+/** Calculates standard retrieval metrics from exact chunk identities. */
 @Component
 public final class GoldSetMetricsCalculator {
 

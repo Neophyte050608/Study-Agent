@@ -200,9 +200,20 @@ Knowledge package ownership for new code:
 - `knowledge.application.indexing`: chunking, tokenizer, lexical, parent-child, and Neo4j graph index use cases.
 - `knowledge.application.retrieval`: retrieval orchestration, fusion, query rewrite, evidence evaluation, and fallback.
 - `knowledge.application.localgraph`: local graph retrieval chain.
+- `knowledge.application.evaluation.goldset`: dataset-neutral JSONL contracts, validation, retrieval metrics, local BM25,
+  isolated-vector comparison, application ports, and checkpoint contracts. It must not depend on Milvus SDK,
+  Spring AI embedding SDK, or `knowledge.infrastructure.evaluation`.
 - `knowledge.domain`: knowledge and GraphRAG domain types without Spring Data or vendor dependencies.
 - `knowledge.infrastructure.persistence`: knowledge-owned MyBatis DOs and Mappers.
 - `knowledge.infrastructure.graph`: Neo4j/Spring Data graph adapters and repositories.
+- `knowledge.infrastructure.evaluation`: JSONL file loading, atomic checkpoint/report files, explicit operation runner,
+  and isolated Milvus adapter/schema. Keep benchmark infrastructure separate from normal knowledge ingestion and retrieval.
+
+Evaluation guardrails:
+
+- Do not add dataset-specific adapters, collection names, configuration properties, or Java classes; dataset identity is runtime data.
+- Do not route isolated external-dataset comparisons through `RAGService` or label isolated-vector results as production/hybrid retrieval.
+- `VALIDATE`, `INDEX`, `COMPARE`, and `CLEAN` remain explicit operations; real embedding calls require operator awareness and approval.
 
 Current retrieval implementation (no additional module or plugin framework):
 
