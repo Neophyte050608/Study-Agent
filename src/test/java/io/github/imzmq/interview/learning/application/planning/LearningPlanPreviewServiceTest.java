@@ -93,6 +93,59 @@ class LearningPlanPreviewServiceTest {
     }
 
     @Test
+    void presentationDoesNotReportAnUnselectedSourceAsUnavailable() {
+        var profiles = mock(LearningProfileOperations.class);
+        try (var executor = new FixedDagExecutor()) {
+            var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> "unused");
+            var evidence = List.of(new LearningPlanEvidence("doc", "title", "excerpt"));
+            var result = new io.github.imzmq.interview.agent.application.contract.execution.DagExecutionResult(
+                    "COMPLETED", Map.of(
+                    "evidence", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, new LearningPlanEvidenceMaterial(evidence), "OK"),
+                    "compose", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, new LearningPlanComposeMaterial("plan"), "OK")));
+
+            LearningPlanPreview preview = service.present(result);
+
+            assertEquals("COMPLETED", preview.status());
+            assertFalse(preview.personalized());
+            assertEquals(evidence, preview.evidence());
+            assertFalse(preview.degradations().contains("PROFILE_UNAVAILABLE"));
+            assertFalse(preview.degradations().contains("PROFILE_EMPTY"));
+            assertEquals(Set.of("evidence", "compose"), preview.nodes().keySet());
+        }
+    }
+
+    @Test
+    void presentationAcceptsTypedDynamicAndLegacyFixedOutputsWithoutReflection() {
+        var profiles = mock(LearningProfileOperations.class);
+        try (var executor = new FixedDagExecutor()) {
+            var service = new LearningPlanPreviewService(executor, profiles, topic -> List.of(), input -> "unused");
+            var evidence = List.of(new LearningPlanEvidence("doc", "title", "excerpt"));
+            var typed = new io.github.imzmq.interview.agent.application.contract.execution.DagExecutionResult(
+                    "COMPLETED", Map.of(
+                    "profile", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, new LearningPlanProfileMaterial("profile"), "OK"),
+                    "evidence", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, new LearningPlanEvidenceMaterial(evidence), "OK"),
+                    "compose", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, new LearningPlanComposeMaterial("typed plan"), "OK")));
+            var legacy = new io.github.imzmq.interview.agent.application.contract.execution.DagExecutionResult(
+                    "COMPLETED", Map.of(
+                    "profile", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, "profile", "OK"),
+                    "evidence", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, evidence, "OK"),
+                    "compose", new io.github.imzmq.interview.agent.application.contract.execution.DagNodeResult(
+                            DagNodeStatus.SUCCEEDED, "legacy plan", "OK")));
+
+            assertEquals("typed plan", service.present(typed).plan());
+            assertEquals("legacy plan", service.present(legacy).plan());
+            assertEquals(evidence, service.present(typed).evidence());
+        }
+    }
+
+    @Test
     void handlerRejectsMissingTrustedUserAndPayloadCannotOverrideContextUser() {
         var profiles = mock(LearningProfileOperations.class);
         when(profiles.snapshot("owner")).thenReturn(profile());

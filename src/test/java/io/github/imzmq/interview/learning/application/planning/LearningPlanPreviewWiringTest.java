@@ -45,7 +45,7 @@ class LearningPlanPreviewWiringTest {
             context.registerBean(LearningProfileOperations.class, () -> profiles);
             context.registerBean(LexicalIndexService.class, () -> lexical);
             context.registerBean(RoutingChatService.class, () -> routing);
-            context.register(FixedDagExecutor.class, LearningPlanPreviewService.class,
+            context.register(FixedDagExecutor.class, LearningPlanNodeOperations.class, LearningPlanFixedNodeFactory.class, LearningPlanPreviewService.class,
                     LearningPlanPreviewTaskHandler.class, LexicalLearningPlanEvidenceReader.class,
                     ModelLearningPlanPreviewGenerator.class, TaskHandlerRegistry.class);
             context.refresh();

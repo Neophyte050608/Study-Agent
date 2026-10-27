@@ -12,7 +12,9 @@ class LearningPlanWorkflowTest {
     @Test void fixedVersionCodecsRoundtripOnlyAllowedOutputsAndRejectWrongShape() {
         try(var executor=new FixedDagExecutor()) {
             var service=new LearningPlanPreviewService(executor,mock(LearningProfileOperations.class),t->List.of(),i->"plan");
-            var workflow=new LearningPlanWorkflow(service,new ObjectMapper());
+            var operations=new LearningPlanNodeOperations(mock(LearningProfileOperations.class),t->List.of(),i->"plan");
+            var factory=new LearningPlanFixedNodeFactory(operations);
+            var workflow=new LearningPlanWorkflow(factory,service,new ObjectMapper());
             assertEquals(1,workflow.version());
             var evidence=List.of(new LearningPlanEvidence("doc","title","text"));
             assertEquals(evidence,workflow.decodeOutput("evidence",workflow.encodeOutput("evidence",evidence)));
