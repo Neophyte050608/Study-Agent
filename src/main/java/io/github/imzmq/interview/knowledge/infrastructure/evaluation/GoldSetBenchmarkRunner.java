@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.infrastructure.evaluation;
 
-import io.github.imzmq.interview.config.knowledge.GoldSetBenchmarkProperties;
+import io.github.imzmq.interview.config.knowledge.RetrievalBenchmarkProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -18,11 +18,11 @@ public final class GoldSetBenchmarkRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(GoldSetBenchmarkRunner.class);
 
-    private final GoldSetBenchmarkProperties properties;
+    private final RetrievalBenchmarkProperties properties;
     private final GoldSetBenchmarkFileService fileService;
 
     public GoldSetBenchmarkRunner(
-            GoldSetBenchmarkProperties properties,
+            RetrievalBenchmarkProperties properties,
             GoldSetBenchmarkFileService fileService
     ) {
         this.properties = properties;

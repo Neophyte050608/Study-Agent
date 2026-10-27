@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.infrastructure.evaluation;
 
-import io.github.imzmq.interview.config.knowledge.GoldSetBenchmarkProperties;
+import io.github.imzmq.interview.config.knowledge.RetrievalBenchmarkProperties;
 import io.github.imzmq.interview.knowledge.application.RAGService;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetBenchmarkComparisonService;
 import io.github.imzmq.interview.knowledge.application.evaluation.goldset.GoldSetBm25Evaluator;
@@ -38,7 +38,7 @@ class GoldSetBenchmarkRunnerTest {
         Files.writeString(corpusFile, """
                 {"chunk_id":"c1","document_id":"d1","content":"Redis"}
                 """);
-        GoldSetBenchmarkProperties properties = new GoldSetBenchmarkProperties();
+        RetrievalBenchmarkProperties properties = new RetrievalBenchmarkProperties();
         properties.setGoldFile(goldFile.toString());
         properties.setCorpusFile(corpusFile.toString());
         properties.setOutputFile(outputFile.toString());

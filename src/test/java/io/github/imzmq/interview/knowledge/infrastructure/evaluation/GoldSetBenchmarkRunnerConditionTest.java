@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.knowledge.infrastructure.evaluation;
 
-import io.github.imzmq.interview.config.knowledge.GoldSetBenchmarkProperties;
+import io.github.imzmq.interview.config.knowledge.RetrievalBenchmarkProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GoldSetBenchmarkRunnerConditionTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withUserConfiguration(GoldSetBenchmarkProperties.class, GoldSetBenchmarkRunner.class)
+            .withUserConfiguration(RetrievalBenchmarkProperties.class, GoldSetBenchmarkRunner.class)
             .withBean(
                     GoldSetBenchmarkFileService.class,
                     () -> new GoldSetBenchmarkFileService(null, null)
