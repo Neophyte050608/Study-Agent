@@ -274,6 +274,11 @@ app:
       hydrate-child-match-chars: ${APP_RAG_PARENT_CHILD_HYDRATE_CHILD_MATCH_CHARS:180}
       fallback-to-flat-retrieval: ${APP_RAG_PARENT_CHILD_FALLBACK_TO_FLAT_RETRIEVAL:false}
   knowledge:
+    retrieval-benchmark:
+      enabled: ${APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_ENABLED:false}
+      gold-file: ${APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_GOLD_FILE:}
+      corpus-file: ${APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CORPUS_FILE:}
+      output-file: ${APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OUTPUT_FILE:}
     retrieval:
       default-mode: ${APP_KNOWLEDGE_RETRIEVAL_DEFAULT_MODE:RAG_ONLY}
       index-file-path: ${APP_KNOWLEDGE_RETRIEVAL_INDEX_FILE_PATH:}

@@ -138,3 +138,15 @@ cd frontend && npm test && npm run build
 浏览器 mock 检查补充画像入口、URL 恢复、局部重试、删除确认、纯文本转义和窄屏布局；
 不得读取本地真实 token，不得据此宣称真实模型质量或全应用启动已验证。
 构建会生成本地产物，即使仓库已有历史跟踪文件，本次也不将它们作为源码提交。
+
+
+## Chunk 级检索对比报告
+
+文件入口默认关闭。先运行不依赖真实外部服务的单元与条件装配验证：
+
+```bash
+mvn -q -Dtest=GoldSetBenchmarkFileServiceTest,GoldSetBenchmarkRunnerTest,GoldSetBenchmarkRunnerConditionTest test
+```
+
+真实数据运行方式及环境变量见 `src/main/resources/eval/README.md`。真实生产检索结果只在
+MySQL/Milvus/Neo4j 等已启用后端可用时有意义；BM25 基线不需要 API Key。

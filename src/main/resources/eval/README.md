@@ -43,3 +43,20 @@
 - BM25 基线不依赖数据库、向量库、模型服务或 API Key；生产检索仍依赖项目已配置的本地检索基础设施。
 
 比较器会拒绝重复或不一致的 `query_id`、不同 Top-K、不同 ground truth，避免输出口径不公平的报告。
+
+
+### 从 JSONL 文件生成对比报告
+
+文件运行入口默认关闭，不影响正常启动。显式配置后，应用启动时读取 Saber 风格的
+`gold.txt` 与 `test.txt`，运行生产检索和 BM25，并将 Markdown 报告写入指定路径：
+
+```bash
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_ENABLED=true \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_GOLD_FILE=/absolute/path/gold.txt \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_CORPUS_FILE=/absolute/path/test.txt \
+APP_KNOWLEDGE_RETRIEVAL_BENCHMARK_OUTPUT_FILE=/absolute/path/retrieval-comparison.md \
+mvn spring-boot:run
+```
+
+三条路径必须显式填写；输入使用 UTF-8 JSONL，输出目录会自动创建。生产检索需要项目原有
+MySQL/Milvus/Neo4j 等已启用检索后端，但不需要额外的评测 API Key；BM25 本身仍完全本地运行。
