@@ -19,6 +19,7 @@ public final class DefaultDynamicPlanningOperations implements DynamicPlanningOp
     private final DynamicCapabilityRegistry registry;
     private final DynamicTaskPlanValidator validator;
     private final DynamicTaskPlanCompiler compiler;
+    private final DynamicPlanFingerprint fingerprint = new DynamicPlanFingerprint();
 
     public DefaultDynamicPlanningOperations(List<DynamicNodeCapability<?>> capabilities) {
         this.registry = new DynamicCapabilityRegistry(capabilities);
@@ -44,5 +45,10 @@ public final class DefaultDynamicPlanningOperations implements DynamicPlanningOp
             ValidatedDynamicTaskPlan plan,
             DynamicExecutionContext context) {
         return compiler.compile(plan, context);
+    }
+
+    @Override
+    public String digest(ValidatedDynamicTaskPlan plan) {
+        return fingerprint.digest(plan);
     }
 }

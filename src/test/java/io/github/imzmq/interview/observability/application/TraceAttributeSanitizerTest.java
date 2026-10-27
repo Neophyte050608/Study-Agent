@@ -127,4 +127,38 @@ class TraceAttributeSanitizerTest {
                 );
         assertThat(sanitized.toString()).doesNotContain("secret-token");
     }
+
+    @Test
+    void keepsDynamicPlanningStructureButDropsRawPlanningContentExternally() {
+        TraceAttributeSanitizer sanitizer = new TraceAttributeSanitizer();
+
+        Map<String, Object> sanitized = sanitizer.sanitizeForExternalObservation(Map.ofEntries(
+                Map.entry("scenario", "learning-plan-preview"),
+                Map.entry("plannerType", "rules"),
+                Map.entry("plannerVersion", "v1"),
+                Map.entry("schemaVersion", "1"),
+                Map.entry("nodeCount", 2),
+                Map.entry("depth", 2),
+                Map.entry("capabilities", "learning.profile.lookup,learning.plan.compose"),
+                Map.entry("planDigest", "abc123"),
+                Map.entry("durationMs", 12),
+                Map.entry("fallbackTarget", "fixed"),
+                Map.entry("ruleDigest", "rule"),
+                Map.entry("shadowDigest", "shadow"),
+                Map.entry("same", false),
+                Map.entry("nodeDelta", -1),
+                Map.entry("topic", "secret topic"),
+                Map.entry("request", "raw request"),
+                Map.entry("arguments", "private arguments"),
+                Map.entry("owner", "private owner"),
+                Map.entry("prompt", "private prompt")
+        ));
+
+        assertThat(sanitized).containsOnlyKeys(
+                "scenario", "plannerType", "plannerVersion", "schemaVersion",
+                "nodeCount", "depth", "capabilities", "planDigest", "durationMs",
+                "fallbackTarget", "ruleDigest", "shadowDigest", "same", "nodeDelta");
+        assertThat(sanitized.toString()).doesNotContain(
+                "secret topic", "raw request", "private arguments", "private owner", "private prompt");
+    }
 }

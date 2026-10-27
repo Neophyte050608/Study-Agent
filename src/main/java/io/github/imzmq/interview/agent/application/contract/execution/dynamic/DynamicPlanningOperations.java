@@ -16,4 +16,6 @@ public interface DynamicPlanningOperations {
     List<DagNode> compile(
             ValidatedDynamicTaskPlan plan,
             DynamicExecutionContext context);
+
+    String digest(ValidatedDynamicTaskPlan plan);
 }

@@ -89,7 +89,21 @@ public class TraceAttributeSanitizer {
             "resultCount",
             "queuedCount",
             "lagMs",
-            "errorCode"
+            "errorCode",
+            "scenario",
+            "plannerType",
+            "plannerVersion",
+            "schemaVersion",
+            "nodeCount",
+            "depth",
+            "capabilities",
+            "planDigest",
+            "durationMs",
+            "fallbackTarget",
+            "ruleDigest",
+            "shadowDigest",
+            "same",
+            "nodeDelta"
     );
 
     public Map<String, Object> sanitize(Map<String, Object> source) {

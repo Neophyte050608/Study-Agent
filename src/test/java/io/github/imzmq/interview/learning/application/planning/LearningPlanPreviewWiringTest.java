@@ -7,6 +7,7 @@ import io.github.imzmq.interview.agent.application.contract.task.TaskResponse;
 import io.github.imzmq.interview.agent.application.contract.task.TaskType;
 import io.github.imzmq.interview.agent.application.execution.FixedDagExecutor;
 import io.github.imzmq.interview.agent.application.execution.dynamic.DefaultDynamicPlanningOperations;
+import io.github.imzmq.interview.agent.application.execution.dynamic.DynamicPlanObservationPublisher;
 import io.github.imzmq.interview.agent.router.TaskHandlerRegistry;
 import io.github.imzmq.interview.agent.runtime.TaskRouterAgent;
 import io.github.imzmq.interview.knowledge.application.indexing.LexicalIndexService;
@@ -18,6 +19,7 @@ import io.github.imzmq.interview.learning.application.contract.result.LearningPl
 import io.github.imzmq.interview.learning.application.contract.result.TrainingProfileSnapshot;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.contract.OperationalObservationPublisher;
 import io.github.imzmq.interview.routing.domain.IntentPreFilter;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
 import org.junit.jupiter.api.Test;
@@ -46,11 +48,14 @@ class LearningPlanPreviewWiringTest {
             context.registerBean(LearningProfileOperations.class, () -> profiles);
             context.registerBean(LexicalIndexService.class, () -> lexical);
             context.registerBean(RoutingChatService.class, () -> routing);
+            context.registerBean(OperationalObservationPublisher.class,
+                    () -> (eventType, category, name, status, attributes) -> { });
             context.register(FixedDagExecutor.class, LearningPlanNodeOperations.class,
                     LearningPlanFixedNodeFactory.class, LearningPlanDynamicPlanningProperties.class,
                     RuleBasedLearningPlanPlanner.class, LearningPlanProfileCapability.class,
                     LearningPlanEvidenceCapability.class, LearningPlanComposeCapability.class,
                     DefaultDynamicPlanningOperations.class,
+                    DynamicPlanObservationPublisher.class,
                     LearningPlanDynamicPlanningService.class, LearningPlanPreviewService.class,
                     LearningPlanPreviewTaskHandler.class, LexicalLearningPlanEvidenceReader.class,
                     ModelLearningPlanPreviewGenerator.class, TaskHandlerRegistry.class);

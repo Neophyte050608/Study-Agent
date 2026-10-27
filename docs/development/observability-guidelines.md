@@ -203,3 +203,37 @@ OpenTelemetry 不替代 Langfuse 的 LLM/RAG 细节追踪。两者可以并存�
 ## 持久学习预览状态
 
 V5 task/node/attempt 是内部执行记录，不是外部 trace payload。owner-safe 查询仅返回 taskId/status/revision、节点状态/次数/安全 code 与终态预览；不返回 task input、profile 输出、attempt input、worker/lease identity。技术日志不得输出这些 JSON 或原始异常。当前后台不自动延续 HTTP 请求 trace，不宣称跨重启 trace 关联；节点仍复用隔离线程和既有 trace 清理。不新增外部观测事件或 adapter。终态删除会级联清除三表，暂无 TTL。
+
+## 受控动态规划观测
+
+学习计划预览的请求级动态规划通过
+`agent.application.contract.execution.dynamic.DynamicPlanObservationOperations` 发布无内容、结构化事件，
+具体适配由 `DynamicPlanObservationPublisher` 调用公开的
+`OperationalObservationPublisher`。业务编排不得直接依赖 Observability 内部实现或外部 SDK。
+
+事件集合固定为：
+
+- `dynamic_plan.requested`：开始执行规则或影子规划；
+- `dynamic_plan.generated`：候选计划已通过校验并规范化；
+- `dynamic_plan.rejected`：计划生成、校验或编译阶段被拒绝；
+- `dynamic_plan.compiled`：验证后的计划已编译为执行图；
+- `dynamic_plan.fallback`：执行开始前回退到固定图；
+- `dynamic_plan.shadow_compared`：规则计划与非执行影子计划完成结构比较。
+
+事件的 `category` 固定为 `agent-planning`，`name` 固定为
+`learning-plan-preview`。允许的 attributes 仅限以下受控结构字段：
+
+- 规划元数据：`scenario`、`plannerType`、`plannerVersion`、`schemaVersion`；
+- 图结构：`nodeCount`、`depth`、排序并限长的 `capabilities`；
+- 审计与耗时：`planDigest`、`durationMs`；
+- 拒绝与回退：`errorCode`、`fallbackTarget`；
+- 影子比较：`ruleDigest`、`shadowDigest`、`same`、`nodeDelta`。
+
+`errorCode` 必须来自稳定白名单，未知值统一映射为 `PLANNING_FAILED`。
+`planDigest`、`ruleDigest` 和 `shadowDigest` 仅用于审计、去重与计划结构比较，
+不是认证 token，也不得用于授权判断。
+
+严禁传入或导出完整 topic、原始 request、prompt、模型原始响应、节点 arguments、
+用户画像、证据正文、owner/user/session/task 等业务标识、认证凭据以及 exception message。
+所有事件仍须经过 `TraceAttributeSanitizer.sanitizeForExternalObservation(...)` 的统一白名单清洗。
+`FIXED` 模式不发布动态规划事件；规划节点开始执行后也不再触发固定图回退观测。

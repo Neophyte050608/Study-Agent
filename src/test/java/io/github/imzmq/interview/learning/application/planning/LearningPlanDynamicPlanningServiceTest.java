@@ -8,6 +8,7 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Ca
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicCapabilityDescriptor;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicEffectType;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicExecutionContext;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanObservationOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningOperations;
 import io.github.imzmq.interview.agent.application.execution.FixedDagExecutor;
 import io.github.imzmq.interview.agent.application.contract.extension.DynamicNodeCapability;
@@ -26,6 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -36,11 +39,60 @@ class LearningPlanDynamicPlanningServiceTest {
     @Test
     void fixedModeReturnsTheFixedGraphWithoutInvokingThePlanner() {
         DynamicPlanningOperations dynamicPlanning = mock(DynamicPlanningOperations.class);
-        Fixture fixture = fixedFixture(new ThrowingPlanner(), dynamicPlanning);
+        DynamicPlanObservationOperations observations = mock(DynamicPlanObservationOperations.class);
+        Fixture fixture = fixedFixture(new ThrowingPlanner(), dynamicPlanning, observations);
 
         assertThat(ids(fixture.service.nodes(CONTEXT)))
                 .containsExactly("profile", "evidence", "compose");
         verifyNoInteractions(dynamicPlanning);
+        verifyNoInteractions(observations);
+    }
+
+    @Test
+    void rulesModePublishesOnlyThePreExecutionPlanningLifecycle() {
+        DynamicPlanObservationOperations observations = mock(DynamicPlanObservationOperations.class);
+        Fixture fixture = fixture(LearningPlanDynamicPlanningProperties.Mode.RULES,
+                new RuleBasedLearningPlanPlanner(), observations);
+
+        fixture.service.nodes(CONTEXT);
+
+        var order = inOrder(observations);
+        order.verify(observations).requested("rules", "v1");
+        order.verify(observations).generated(
+                org.mockito.ArgumentMatchers.eq("rules"),
+                org.mockito.ArgumentMatchers.eq("v1"), any(),
+                org.mockito.ArgumentMatchers.matches("[0-9a-f]{64}"),
+                org.mockito.ArgumentMatchers.longThat(value -> value >= 0));
+        order.verify(observations).compiled(
+                org.mockito.ArgumentMatchers.eq("rules"),
+                org.mockito.ArgumentMatchers.eq("v1"), any(),
+                org.mockito.ArgumentMatchers.matches("[0-9a-f]{64}"),
+                org.mockito.ArgumentMatchers.longThat(value -> value >= 0));
+        order.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void invalidPlanPublishesStableRejectionAndFallbackWithoutSensitiveInput() {
+        DynamicPlanObservationOperations observations = mock(DynamicPlanObservationOperations.class);
+        RuleBasedLearningPlanPlanner invalidPlanner = new RuleBasedLearningPlanPlanner() {
+            @Override
+            public CandidateDynamicTaskPlan plan(String topic, String request) {
+                return new CandidateDynamicTaskPlan("1", List.of());
+            }
+        };
+        Fixture fixture = fixture(LearningPlanDynamicPlanningProperties.Mode.RULES,
+                invalidPlanner, observations);
+
+        assertThat(ids(fixture.service.nodes(new DynamicExecutionContext(
+                "secret-owner", "secret-topic", "raw request"))))
+                .containsExactly("profile", "evidence", "compose");
+
+        verify(observations).rejected(
+                org.mockito.ArgumentMatchers.eq("rules"),
+                org.mockito.ArgumentMatchers.eq("v1"),
+                org.mockito.ArgumentMatchers.eq("PLAN_EMPTY"),
+                org.mockito.ArgumentMatchers.longThat(value -> value >= 0));
+        verify(observations).fallback("rules", "v1", "PLAN_EMPTY");
     }
 
     @Test
@@ -147,6 +199,14 @@ class LearningPlanDynamicPlanningServiceTest {
     private static Fixture fixture(
             LearningPlanDynamicPlanningProperties.Mode mode,
             RuleBasedLearningPlanPlanner planner,
+            DynamicPlanObservationOperations observations) {
+        Fixture fixture = fixture(mode, planner);
+        return fixture(mode, planner, fixture.dynamicPlanning, fixture.fixedFactory, observations);
+    }
+
+    private static Fixture fixture(
+            LearningPlanDynamicPlanningProperties.Mode mode,
+            RuleBasedLearningPlanPlanner planner,
             AtomicInteger profileReads,
             AtomicInteger evidenceReads,
             boolean failCompile) {
@@ -196,27 +256,30 @@ class LearningPlanDynamicPlanningServiceTest {
             when(dynamicPlanning.compile(any(), any()))
                     .thenThrow(new IllegalArgumentException("PLAN_COMPILE_FAILED"));
         }
-        return fixture(mode, planner, dynamicPlanning, fixedFactory);
+        return fixture(mode, planner, dynamicPlanning, fixedFactory,
+                mock(DynamicPlanObservationOperations.class));
     }
 
     private static Fixture fixedFixture(
             RuleBasedLearningPlanPlanner planner,
-            DynamicPlanningOperations dynamicPlanning) {
+            DynamicPlanningOperations dynamicPlanning,
+            DynamicPlanObservationOperations observations) {
         LearningPlanNodeOperations operations = new LearningPlanNodeOperations(
                 mock(LearningProfileOperations.class), topic -> List.of(), input -> "plan");
         return fixture(LearningPlanDynamicPlanningProperties.Mode.FIXED, planner,
-                dynamicPlanning, new LearningPlanFixedNodeFactory(operations));
+                dynamicPlanning, new LearningPlanFixedNodeFactory(operations), observations);
     }
 
     private static Fixture fixture(
             LearningPlanDynamicPlanningProperties.Mode mode,
             RuleBasedLearningPlanPlanner planner,
             DynamicPlanningOperations dynamicPlanning,
-            LearningPlanFixedNodeFactory fixedFactory) {
+            LearningPlanFixedNodeFactory fixedFactory,
+            DynamicPlanObservationOperations observations) {
         LearningPlanDynamicPlanningProperties properties = new LearningPlanDynamicPlanningProperties();
         properties.setMode(mode);
         LearningPlanDynamicPlanningService service = new LearningPlanDynamicPlanningService(
-                properties, fixedFactory, planner, dynamicPlanning);
+                properties, fixedFactory, planner, dynamicPlanning, observations);
         return new Fixture(service, fixedFactory, dynamicPlanning);
     }
 

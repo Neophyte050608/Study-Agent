@@ -43,6 +43,7 @@ class DefaultDynamicPlanningOperationsTest {
                 new DynamicExecutionContext("owner", "topic", "request"));
 
         assertThat(result.valid()).isTrue();
+        assertThat(operations.digest(result.plan())).hasSize(64);
         assertThat(nodes).extracting(DagNode::id).containsExactly("source");
         assertThat(nodes.getFirst().action().apply(Map.of())).isEqualTo("owner:topic");
         assertThat(operations.descriptors()).containsExactly(capability.descriptor());

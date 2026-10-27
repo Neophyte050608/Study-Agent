@@ -1,6 +1,7 @@
 package io.github.imzmq.interview.learning.application.planning;
 
 import io.github.imzmq.interview.agent.application.contract.execution.DagExecutionOperations;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanObservationOperations;
 import io.github.imzmq.interview.agent.application.contract.extension.DynamicNodeCapability;
 import io.github.imzmq.interview.agent.application.execution.dynamic.DefaultDynamicPlanningOperations;
 import io.github.imzmq.interview.learning.application.contract.LearningProfileOperations;
@@ -29,7 +30,8 @@ final class LearningPlanPreviewTestFixtures {
                 new LearningPlanDynamicPlanningProperties(),
                 fixedNodes,
                 new RuleBasedLearningPlanPlanner(),
-                new DefaultDynamicPlanningOperations(capabilities));
+                new DefaultDynamicPlanningOperations(capabilities),
+                org.mockito.Mockito.mock(DynamicPlanObservationOperations.class));
         return new LearningPlanPreviewService(executor, planning);
     }
 }
