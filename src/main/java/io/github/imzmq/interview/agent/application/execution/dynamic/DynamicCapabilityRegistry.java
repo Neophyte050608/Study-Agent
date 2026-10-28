@@ -3,22 +3,22 @@ package io.github.imzmq.interview.agent.application.execution.dynamic;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicCapabilityDescriptor;
 import io.github.imzmq.interview.agent.application.contract.extension.DynamicNodeCapability;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 public final class DynamicCapabilityRegistry {
     private final Map<CapabilityKey, DynamicNodeCapability<?>> capabilities;
-    private final List<DynamicCapabilityDescriptor> descriptors;
+    private final List<DynamicCapabilityDescriptor> currentDescriptors;
 
     public DynamicCapabilityRegistry(Collection<DynamicNodeCapability<?>> capabilities) {
         Objects.requireNonNull(capabilities, "Dynamic capabilities are required");
         LinkedHashMap<CapabilityKey, DynamicNodeCapability<?>> registered = new LinkedHashMap<>();
-        List<DynamicCapabilityDescriptor> descriptorSnapshot = new ArrayList<>();
+        TreeMap<String, DynamicCapabilityDescriptor> currentById = new TreeMap<>();
         for (DynamicNodeCapability<?> capability : capabilities) {
             Objects.requireNonNull(capability, "Dynamic capability is required");
             DynamicCapabilityDescriptor descriptor = Objects.requireNonNull(
@@ -26,16 +26,18 @@ public final class DynamicCapabilityRegistry {
             CapabilityKey key = new CapabilityKey(
                     descriptor.capabilityId(), descriptor.capabilityVersion());
             if (registered.putIfAbsent(key, capability) != null) {
-                throw new IllegalArgumentException("Duplicate dynamic capability");
+                throw new IllegalArgumentException("Duplicate dynamic capability version");
             }
-            descriptorSnapshot.add(descriptor);
+            currentById.merge(descriptor.capabilityId(), descriptor,
+                    (left, right) -> left.capabilityVersion() > right.capabilityVersion()
+                            ? left : right);
         }
         this.capabilities = Collections.unmodifiableMap(registered);
-        this.descriptors = List.copyOf(descriptorSnapshot);
+        this.currentDescriptors = List.copyOf(currentById.values());
     }
 
     public List<DynamicCapabilityDescriptor> descriptors() {
-        return descriptors;
+        return currentDescriptors;
     }
 
     DynamicNodeCapability<?> lookup(String capabilityId, int capabilityVersion) {

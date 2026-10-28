@@ -10,6 +10,7 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Dy
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanIssue;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanScenarioPolicy;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningLimits;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskNode;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskPlan;
 import io.github.imzmq.interview.agent.application.contract.extension.DynamicNodeCapability;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,41 @@ class DefaultDynamicPlanningOperationsTest {
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
+    @Test
+    void plansWithLatestVersionAndCompilesPersistedPlanWithExactVersion() {
+        DynamicNodeCapability<NoArguments> versionOne = new VersionedTestCapability(1);
+        DynamicNodeCapability<NoArguments> versionTwo = new VersionedTestCapability(2);
+        DefaultDynamicPlanningOperations operations =
+                new DefaultDynamicPlanningOperations(List.of(versionOne, versionTwo));
+        CandidateDynamicTaskPlan candidate = new CandidateDynamicTaskPlan("1", List.of(
+                new CandidateDynamicTaskNode("source", "source.read", List.of(), Map.of())));
+
+        var latest = operations.validate(candidate, policy(),
+                new DynamicPlanningLimits(2, 1, 1, 1, 1, 2));
+        var persisted = new ValidatedDynamicTaskPlan("1", "test", List.of(
+                new ValidatedDynamicTaskNode(
+                        "source", "source.read", 1, List.of(), Map.of())), 1);
+        DynamicExecutionContext context = new DynamicExecutionContext("owner", "topic", "request");
+
+        assertThat(latest.valid()).isTrue();
+        assertThat(latest.plan().nodes()).extracting(node -> node.capabilityVersion())
+                .containsExactly(2);
+        assertThat(operations.compile(latest.plan(), context).getFirst().action().apply(Map.of()))
+                .isEqualTo("v2:owner:topic");
+        assertThat(operations.compile(persisted, context).getFirst().action().apply(Map.of()))
+                .isEqualTo("v1:owner:topic");
+    }
+
+    private static DynamicPlanScenarioPolicy policy() {
+        return new DynamicPlanScenarioPolicy() {
+            @Override public String scenarioId() { return "test"; }
+            @Override public Set<String> allowedCapabilities() { return Set.of("source.read"); }
+            @Override public List<DynamicPlanIssue> validate(ValidatedDynamicTaskPlan plan) {
+                return List.of();
+            }
+        };
+    }
+
     private record NoArguments() {
     }
 
@@ -68,6 +104,27 @@ class DefaultDynamicPlanningOperationsTest {
                 Map<String, DagNodeResult> upstream,
                 NoArguments arguments) {
             return context.owner() + ":" + context.topic();
+        }
+    }
+
+    private static final class VersionedTestCapability implements DynamicNodeCapability<NoArguments> {
+        private final DynamicCapabilityDescriptor descriptor;
+
+        private VersionedTestCapability(int version) {
+            this.descriptor = new DynamicCapabilityDescriptor(
+                    "source.read", version, DynamicEffectType.READ_ONLY,
+                    Map.of(), Set.of(), 1, true);
+        }
+
+        @Override public DynamicCapabilityDescriptor descriptor() { return descriptor; }
+        @Override public NoArguments decodeArguments(Map<String, Object> arguments) {
+            return new NoArguments();
+        }
+        @Override public Object execute(
+                DynamicExecutionContext context,
+                Map<String, DagNodeResult> upstream,
+                NoArguments arguments) {
+            return "v" + descriptor.capabilityVersion() + ":" + context.owner() + ":" + context.topic();
         }
     }
 }

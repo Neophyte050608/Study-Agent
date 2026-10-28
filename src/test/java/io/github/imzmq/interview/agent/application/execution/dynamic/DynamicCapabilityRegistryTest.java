@@ -13,6 +13,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class DynamicCapabilityRegistryTest {
 
@@ -29,12 +30,16 @@ class DynamicCapabilityRegistryTest {
     void resolvesExactVersionsAndExposesAnImmutableDescriptorSnapshot() {
         DynamicNodeCapability<Void> first = capability("source.read", 1);
         DynamicNodeCapability<Void> upgraded = capability("source.read", 2);
-        DynamicCapabilityRegistry registry = new DynamicCapabilityRegistry(List.of(first, upgraded));
+        DynamicNodeCapability<Void> alphabeticallyFirst = capability("alpha.read", 1);
+        DynamicCapabilityRegistry registry = new DynamicCapabilityRegistry(
+                List.of(first, upgraded, alphabeticallyFirst));
 
         assertThat(registry.lookup("source.read", 1)).isSameAs(first);
         assertThat(registry.lookup("source.read", 2)).isSameAs(upgraded);
-        assertThat(registry.descriptors()).extracting(DynamicCapabilityDescriptor::capabilityVersion)
-                .containsExactly(1, 2);
+        assertThat(registry.descriptors())
+                .extracting(DynamicCapabilityDescriptor::capabilityId,
+                        DynamicCapabilityDescriptor::capabilityVersion)
+                .containsExactly(tuple("alpha.read", 1), tuple("source.read", 2));
         assertThatThrownBy(() -> registry.descriptors().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
     }
