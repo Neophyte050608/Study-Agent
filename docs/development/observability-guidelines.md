@@ -108,6 +108,19 @@ Chat 结构化记忆通过公开契约 `observability.application.contract.Opera
 
 `DefaultOperationalObservationPublisher` 负责适配现有 `AiObservationPublisher`。外部 publisher/adapter 抛出的运行时异常只能以受控 debug 日志降级，不能改变提取、投影、召回、repair 的业务结果，也不能阻断重试与 outbox 状态推进。
 
+### 动态规划运行事件
+
+Learning Plan Preview 的动态规划通过 `DynamicPlanObservationOperations` 发布无内容运行事件，事件类型固定为 `dynamic_plan.*`，`category=agent-planning`，`name=learning-plan-preview`。
+
+允许进入 attributes 的字段仅限：
+
+- 规划器元数据：`plannerType`、`plannerVersion`。
+- 计划结构摘要：`scenario`、`schemaVersion`、`nodeCount`、`depth`、`capabilities`、`planDigest`、`ruleDigest`、`shadowDigest`、`same`、`nodeDelta`。
+- 性能与降级：`durationMs`、`fallbackTarget`。
+- 受控失败分类：`errorCode`。
+
+`shadow_compared` 必须携带 `plannerType/plannerVersion` 以便区分 LLM shadow 来源，但仍只允许记录 digest、节点差异和耗时。禁止记录 prompt、候选原文、用户输入、owner/session/user/task ID、节点参数、模型原始异常、Key、token 或外部响应正文。
+
 ## 禁止直接依赖外部 SDK
 
 业务代码禁止直接依赖 Langfuse、OpenTelemetry 等外部 SDK：

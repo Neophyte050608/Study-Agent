@@ -156,6 +156,8 @@ public final class DynamicPlanningShadowRunner implements DynamicPlanningShadowO
             String shadowDigest = fingerprint.digest(shadowPlan);
             if (terminalObservation.compareAndSet(false, true)) {
                 observations.shadowCompared(
+                        PLANNER_TYPE,
+                        PLANNER_VERSION,
                         ruleDigest,
                         shadowDigest,
                         ruleDigest.equals(shadowDigest),

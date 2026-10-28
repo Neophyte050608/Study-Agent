@@ -14,6 +14,7 @@ public interface DynamicPlanObservationOperations {
 
     void fallback(String plannerType, String plannerVersion, String errorCode);
 
-    void shadowCompared(String ruleDigest, String shadowDigest,
+    void shadowCompared(String plannerType, String plannerVersion,
+                        String ruleDigest, String shadowDigest,
                         boolean same, int nodeDelta, long durationMs);
 }

@@ -48,7 +48,7 @@ class DynamicPlanObservationPublisherTest {
         observer.generated("rules", "v1", plan, "rule-digest", 3L);
         observer.rejected("rules", "v1", "private failure: token=secret", 4L);
         observer.fallback("rules", "v1", "PLAN_COMPILE_FAILED");
-        observer.shadowCompared("rule-digest", "shadow-digest", false, -1, 5L);
+        observer.shadowCompared("llm-shadow", "v1", "rule-digest", "shadow-digest", false, -1, 5L);
 
         assertThat(recorder.events).extracting(RecordedEvent::eventType).containsExactly(
                 "dynamic_plan.requested", "dynamic_plan.generated", "dynamic_plan.rejected",
@@ -62,6 +62,8 @@ class DynamicPlanObservationPublisherTest {
                 .containsEntry("errorCode", "PLAN_COMPILE_FAILED")
                 .containsEntry("fallbackTarget", "fixed");
         assertThat(recorder.events.get(4).attributes()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "plannerType", "llm-shadow",
+                "plannerVersion", "v1",
                 "ruleDigest", "rule-digest",
                 "shadowDigest", "shadow-digest",
                 "same", false,

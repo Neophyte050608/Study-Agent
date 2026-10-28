@@ -66,6 +66,8 @@ class DynamicPlanningShadowRunnerTest {
             runner.submit(CONTEXT, rulePlan(), policy(), descriptors(), LIMITS);
 
             assertThat(observer.compared.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(observer.plannerType).isEqualTo("llm-shadow");
+            assertThat(observer.plannerVersion).isEqualTo("v1");
             assertThat(observer.ruleDigest).matches("[0-9a-f]{64}");
             assertThat(observer.shadowDigest).isEqualTo(observer.ruleDigest);
             assertThat(observer.same).isTrue();
@@ -228,6 +230,8 @@ class DynamicPlanningShadowRunnerTest {
         private final List<String> terminal = new CopyOnWriteArrayList<>();
         private final CountDownLatch rejected = new CountDownLatch(1);
         private final CountDownLatch compared = new CountDownLatch(1);
+        private volatile String plannerType;
+        private volatile String plannerVersion;
         private volatile String ruleDigest;
         private volatile String shadowDigest;
         private volatile boolean same;
@@ -247,8 +251,11 @@ class DynamicPlanningShadowRunnerTest {
             compiledCalls++;
         }
         @Override public void fallback(String plannerType, String plannerVersion, String errorCode) { }
-        @Override public void shadowCompared(String ruleDigest, String shadowDigest,
+        @Override public void shadowCompared(String plannerType, String plannerVersion,
+                                             String ruleDigest, String shadowDigest,
                                              boolean same, int nodeDelta, long durationMs) {
+            this.plannerType = plannerType;
+            this.plannerVersion = plannerVersion;
             this.ruleDigest = ruleDigest;
             this.shadowDigest = shadowDigest;
             this.same = same;

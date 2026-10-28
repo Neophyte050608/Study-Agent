@@ -71,9 +71,10 @@ public final class DynamicPlanObservationPublisher implements DynamicPlanObserva
     }
 
     @Override
-    public void shadowCompared(String ruleDigest, String shadowDigest,
+    public void shadowCompared(String plannerType, String plannerVersion,
+                               String ruleDigest, String shadowDigest,
                                boolean same, int nodeDelta, long durationMs) {
-        Map<String, Object> attributes = new LinkedHashMap<>();
+        Map<String, Object> attributes = plannerAttributes(plannerType, plannerVersion);
         attributes.put("ruleDigest", bounded(ruleDigest));
         attributes.put("shadowDigest", bounded(shadowDigest));
         attributes.put("same", same);

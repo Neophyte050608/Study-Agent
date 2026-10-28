@@ -70,7 +70,8 @@ class DynamicPlanningShadowRunnerSpringWiringTest {
         @Override public void compiled(String plannerType, String plannerVersion,
                                        ValidatedDynamicTaskPlan plan, String digest, long durationMs) { }
         @Override public void fallback(String plannerType, String plannerVersion, String errorCode) { }
-        @Override public void shadowCompared(String ruleDigest, String shadowDigest,
+        @Override public void shadowCompared(String plannerType, String plannerVersion,
+                                             String ruleDigest, String shadowDigest,
                                              boolean same, int nodeDelta, long durationMs) { }
     }
 }
