@@ -66,8 +66,8 @@ public final class DurableExecutionWorker {
         try {
             requireLive(lifetime);
             var workflow=registry.require(task.getWorkflowType(),task.getWorkflowVersion());
-            var nodes=workflow.nodes(task.getOwnerUserId(),task.getInputJson());
-            if(!service.definition(nodes).equals(json.check(task.getDefinitionJson(),65536))) throw new IllegalStateException("WORKFLOW_DEFINITION_MISMATCH");
+            String definition=json.check(task.getDefinitionJson(),65536);
+            var nodes=service.validateNodes(workflow.restore(task.getOwnerUserId(),task.getInputJson(),definition));
             Map<String,DagNodeResult> seed=new LinkedHashMap<>();
             var saved=tx.snapshot(task);
             if(!saved.stream().map(n->n.getNodeId()).collect(java.util.stream.Collectors.toSet())

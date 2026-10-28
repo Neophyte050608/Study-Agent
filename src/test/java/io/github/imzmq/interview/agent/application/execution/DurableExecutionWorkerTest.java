@@ -21,12 +21,13 @@ class DurableExecutionWorkerTest {
         var release = new CountDownLatch(1);
         when(tx.claim(anyString(), anyInt())).thenAnswer(i -> {
             var task = new ExecutionTaskDO(); task.setTaskId(UUID.randomUUID().toString());
-            task.setWorkflowType("TEST"); task.setWorkflowVersion(1); task.setDefinitionJson("[]");
+            task.setOwnerUserId("owner"); task.setWorkflowType("TEST"); task.setWorkflowVersion(1);
+            task.setInputJson("{}"); task.setDefinitionJson("[]");
             return task;
         });
         when(registry.require("TEST", 1)).thenReturn(workflow);
-        when(workflow.nodes(any(), any())).thenReturn(List.of());
-        when(service.definition(any())).thenReturn("[]");
+        when(workflow.restore("owner", "{}", "[]")).thenReturn(List.of(
+                new DagNode("source", Set.of(), true, ignored -> "ok")));
         when(tx.snapshot(any())).thenAnswer(i -> {
             entered.countDown();
             while (release.getCount() != 0) { try { release.await(); } catch (InterruptedException ignored) { } }
@@ -41,6 +42,41 @@ class DurableExecutionWorkerTest {
             } finally { release.countDown(); worker.close(); }
         }
     }
+    @Test void workerRestoresPersistedDefinitionWithoutPreparing() {
+        var tx = mock(ExecutionTransactions.class);
+        var registry = mock(DurableWorkflowRegistry.class);
+        var service = mock(DurableExecutionService.class);
+        var workflow = mock(DurableWorkflow.class);
+        var task = new ExecutionTaskDO();
+        task.setTaskId("task"); task.setOwnerUserId("owner"); task.setWorkflowType("TEST");
+        task.setWorkflowVersion(2); task.setInputJson("{}");
+        task.setDefinitionJson("{\"schemaVersion\":\"2\"}");
+        task.setLeaseOwner("worker"); task.setLeaseEpoch(1L);
+        var node = new DagNode("source", Set.of(), true, ignored -> "ok");
+        var persisted = new io.github.imzmq.interview.agent.infrastructure.persistence.execution.ExecutionNodeDO();
+        persisted.setNodeId("source"); persisted.setStatus("PENDING");
+        when(registry.require("TEST", 2)).thenReturn(workflow);
+        when(workflow.prepare(anyString(), anyString()))
+                .thenThrow(new AssertionError("worker must not prepare"));
+        when(workflow.restore("owner", "{}", "{\"schemaVersion\":\"2\"}"))
+                .thenReturn(List.of(node));
+        when(service.validateNodes(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tx.snapshot(task)).thenReturn(List.of(persisted));
+        when(tx.remaining(task)).thenReturn(TimeUnit.SECONDS.toMicros(1));
+        when(workflow.encodeOutput("source", "ok")).thenReturn("\"ok\"");
+        when(workflow.outcome(any())).thenReturn(new DurableWorkflow.WorkflowOutcome("COMPLETED", "{}"));
+
+        try (var dag = new FixedDagExecutor()) {
+            var worker = new DurableExecutionWorker(tx, service, registry,
+                    new ExecutionJson(new ObjectMapper()), dag, new DurableExecutionProperties());
+            try { worker.run(task); } finally { worker.close(); }
+        }
+
+        verify(workflow, never()).prepare(anyString(), anyString());
+        verify(workflow).restore("owner", "{}", "{\"schemaVersion\":\"2\"}");
+        verify(tx).finish(task, "COMPLETED", "{}", null);
+    }
+
     private void invoke(Object value, String method) throws Exception {
         var m = value.getClass().getDeclaredMethod(method); m.setAccessible(true); m.invoke(value);
     }

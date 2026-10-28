@@ -24,8 +24,9 @@ public final class DurableExecutionService implements DurableExecutionOperations
         require(owner,200); require(type,80); require(key,120);
         String input=json.check(inputJson,16384);
         var workflow=registry.require(type,version);
-        var nodes=workflow.nodes(owner,input);
-        String definition=definition(nodes);
+        var prepared=workflow.prepare(owner,input);
+        String definition=json.check(prepared.definitionJson(),65536);
+        var nodes=validateNodes(prepared.nodes());
         var task=new ExecutionTaskDO();task.setTaskId(UUID.randomUUID().toString());task.setOwnerUserId(owner);
         task.setWorkflowType(type);task.setWorkflowVersion(version);task.setIdempotencyKey(key);task.setInputJson(input);
         task.setDefinitionJson(definition);task.setInputHash(hash(input));
@@ -38,19 +39,24 @@ public final class DurableExecutionService implements DurableExecutionOperations
         // Retrieve workflow identity owner-scoped, never disclose task existence by probing globally.
         var identity=tx.identity(owner,id);
         var workflow=registry.require(identity.getWorkflowType(),identity.getWorkflowVersion());
-        var nodes=workflow.nodes(owner,identity.getInputJson());
-        if(!definition(nodes).equals(json.check(identity.getDefinitionJson(),65536))) throw new IllegalStateException("WORKFLOW_DEFINITION_MISMATCH");
-        Map<String,Set<String>> deps=new LinkedHashMap<>();nodes.forEach(n->deps.put(n.id(),n.dependencies()));
+        String definition=json.check(identity.getDefinitionJson(),65536);
+        var nodes=validateNodes(workflow.restore(owner,identity.getInputJson(),definition));
+        Map<String,Set<String>> deps=dependencies(nodes);
         tx.retry(owner,id,revision,Set.copyOf(selected),deps);return tx.query(owner,id);
     }
     public void delete(String owner,String id) { require(owner,200);tx.delete(owner,id); }
-    String definition(List<DagNode> nodes) {
-        Map<String,Set<String>> deps=new LinkedHashMap<>();nodes.forEach(n->deps.put(n.id(),n.dependencies()));
-        nodes.forEach(n -> require(n.id(),120));
-        new DagStructure(nodes.stream().map(DagNode::id).toList(),deps);
-        return json.write(nodes.stream().sorted(Comparator.comparing(DagNode::id)).map(n->new NodeDefinition(n.id(),n.dependencies().stream().sorted().toList(),n.requireSuccessfulDependencies())).toList(),65536);
+    List<DagNode> validateNodes(List<DagNode> nodes) {
+        if(nodes==null) throw new IllegalArgumentException("WORKFLOW_DEFINITION_INVALID");
+        List<DagNode> validated=List.copyOf(nodes);
+        validated.forEach(node -> {if(node==null) throw new IllegalArgumentException("WORKFLOW_DEFINITION_INVALID");require(node.id(),120);});
+        new DagStructure(validated.stream().map(DagNode::id).toList(),dependencies(validated));
+        return validated;
     }
-    private record NodeDefinition(String id,List<String> dependencies,boolean requireSuccess) { }
+    private Map<String,Set<String>> dependencies(List<DagNode> nodes) {
+        Map<String,Set<String>> dependencies=new LinkedHashMap<>();
+        nodes.forEach(node->dependencies.put(node.id(),node.dependencies()));
+        return dependencies;
+    }
     private void require(String value,int max) {
         if(value==null || value.isBlank() || value.length()>max) throw new IllegalArgumentException("INVALID_EXECUTION_ARGUMENT");
     }

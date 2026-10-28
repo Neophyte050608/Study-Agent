@@ -50,10 +50,21 @@ class DurableExecutionMySqlIntegrationTest {
         json=new ExecutionJson(new ObjectMapper());tx=new ExecutionTransactions(mapper,json);
         registry=new DurableWorkflowRegistry(List.of(new DurableWorkflow() {
             public String type() {return "TEST_PREVIEW";} public int version(){return 1;}
-            public List<DagNode> nodes(String owner,String input) {
+            public Prepared prepare(String owner,String input) {return new Prepared(definition(),graph());}
+            public List<DagNode> restore(String owner,String input,String definition) {
+                if(!definition().equals(json.check(definition,65536))) throw new IllegalArgumentException("WORKFLOW_DEFINITION_MISMATCH");
+                return graph();
+            }
+            private List<DagNode> graph() {
                 return List.of(new DagNode("profile",Set.of(),false,i->{profileCalls.incrementAndGet();return "profile";}),
                         new DagNode("evidence",Set.of(),false,i->{evidenceCalls.incrementAndGet();if(failEvidence)throw new IllegalStateException();return "evidence";}),
                         new DagNode("compose",Set.of("profile","evidence"),false,i->{composeCalls.incrementAndGet();return "plan";}));
+            }
+            private String definition() {
+                return json.write(List.of(
+                        Map.of("id","compose","dependencies",List.of("evidence","profile"),"requireSuccess",false),
+                        Map.of("id","evidence","dependencies",List.of(),"requireSuccess",false),
+                        Map.of("id","profile","dependencies",List.of(),"requireSuccess",false)),65536);
             }
             public String encodeOutput(String id,Object value){return json.write(value,65536);}
             public Object decodeOutput(String id,String value){try{return new ObjectMapper().readValue(value,String.class);}catch(Exception e){throw new IllegalArgumentException();}}
