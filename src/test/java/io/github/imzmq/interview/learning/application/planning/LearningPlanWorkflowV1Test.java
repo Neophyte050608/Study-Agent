@@ -15,7 +15,7 @@ class LearningPlanWorkflowV1Test {
             var service=previewService(executor,mock(LearningProfileOperations.class),t->List.of(),i->"plan");
             var operations=new LearningPlanNodeOperations(mock(LearningProfileOperations.class),t->List.of(),i->"plan");
             var factory=new LearningPlanFixedNodeFactory(operations);
-            var workflow=new LearningPlanWorkflowV1(factory,service,new ObjectMapper());
+            var workflow=new LearningPlanWorkflowV1(factory,new LearningPlanWorkflowOutputCodec(service, new ObjectMapper()),new ObjectMapper());
             assertEquals(1,workflow.version());
             var evidence=List.of(new LearningPlanEvidence("doc","title","text"));
             assertEquals(evidence,workflow.decodeOutput("evidence",workflow.encodeOutput("evidence",evidence)));

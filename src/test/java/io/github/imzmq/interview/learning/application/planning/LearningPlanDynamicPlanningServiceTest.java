@@ -243,7 +243,8 @@ class LearningPlanDynamicPlanningServiceTest {
         LearningPlanPreviewService preview = new LearningPlanPreviewService(
                 (nodes, deadline) -> { throw new AssertionError("not executed"); }, fixture.service);
         LearningPlanWorkflowV1 workflow = new LearningPlanWorkflowV1(
-                fixture.fixedFactory, preview, new ObjectMapper());
+                fixture.fixedFactory, new LearningPlanWorkflowOutputCodec(preview, new ObjectMapper()),
+                new ObjectMapper());
 
         assertThat(ids(workflow.prepare("owner", "{\"topic\":\"Java\",\"request\":\"history\"}").nodes()))
                 .containsExactly("profile", "evidence", "compose");
