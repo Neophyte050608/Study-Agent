@@ -150,12 +150,6 @@ app:
         max-fan-out: ${APP_LEARNING_PLAN_DYNAMIC_MAX_FAN_OUT:4}
         max-estimated-cost: ${APP_LEARNING_PLAN_DYNAMIC_MAX_COST:10}
         max-issues: ${APP_LEARNING_PLAN_DYNAMIC_MAX_ISSUES:20}
-  agent:
-    dynamic-planning:
-      shadow:
-        timeout: ${APP_AGENT_DYNAMIC_PLANNING_SHADOW_TIMEOUT:2s}
-        workers: ${APP_AGENT_DYNAMIC_PLANNING_SHADOW_WORKERS:1}
-        queue-capacity: ${APP_AGENT_DYNAMIC_PLANNING_SHADOW_QUEUE_CAPACITY:8}
   ingestion:
     vault-path: ${APP_INGESTION_VAULT_PATH:}
     image-path: ${APP_INGESTION_IMAGE_PATH:}
@@ -363,6 +357,11 @@ app:
       poll-seconds: 1
       lease-seconds: 30
       heartbeat-seconds: 5
+    dynamic-planning:
+      shadow:
+        timeout: ${APP_AGENT_DYNAMIC_PLANNING_SHADOW_TIMEOUT:2s}
+        workers: ${APP_AGENT_DYNAMIC_PLANNING_SHADOW_WORKERS:1}
+        queue-capacity: ${APP_AGENT_DYNAMIC_PLANNING_SHADOW_QUEUE_CAPACITY:8}
     skills:
       paths: ${APP_AGENT_SKILLS_PATHS:skills}
 

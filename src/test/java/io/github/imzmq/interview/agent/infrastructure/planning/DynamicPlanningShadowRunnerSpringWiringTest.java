@@ -4,14 +4,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanObservationOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningShadowOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskPlan;
+import io.github.imzmq.interview.learning.application.planning.LearningPlanDynamicPlanningProperties;
 import io.github.imzmq.interview.modelrouting.application.contract.DynamicPlanningModelOperations;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,6 +36,41 @@ class DynamicPlanningShadowRunnerSpringWiringTest {
             assertThat(context.getBean(DynamicPlanningShadowOperations.class))
                     .isInstanceOf(DynamicPlanningShadowRunner.class);
         }
+    }
+
+    @Test
+    void localLiteShadowModeWiresBoundedRunnerWithoutCallingModel() {
+        AtomicInteger modelCalls = new AtomicInteger();
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withInitializer(new ConfigDataApplicationContextInitializer())
+                .withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration.class))
+                .withSystemProperties("APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW")
+                .withPropertyValues("spring.profiles.active=local-lite")
+                .withUserConfiguration(
+                        LearningPlanDynamicPlanningProperties.class,
+                        DynamicPlanningShadowProperties.class,
+                        LlmDynamicTaskPlanner.class,
+                        DynamicPlanningShadowRunner.class)
+                .withBean(ObjectMapper.class, ObjectMapper::new)
+                .withBean(DynamicPlanningModelOperations.class, () -> (systemPrompt, userPrompt) -> {
+                    modelCalls.incrementAndGet();
+                    return "{\"schemaVersion\":\"1\",\"nodes\":[]}";
+                })
+                .withBean(DynamicPlanObservationOperations.class, NoopObservations::new);
+
+        runner.run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(LearningPlanDynamicPlanningProperties.class).getMode())
+                    .isEqualTo(LearningPlanDynamicPlanningProperties.Mode.SHADOW);
+            DynamicPlanningShadowProperties properties =
+                    context.getBean(DynamicPlanningShadowProperties.class);
+            assertThat(properties.getTimeout()).isEqualTo(Duration.ofSeconds(2));
+            assertThat(properties.getWorkers()).isEqualTo(1);
+            assertThat(properties.getQueueCapacity()).isEqualTo(8);
+            assertThat(context.getBean(DynamicPlanningShadowOperations.class))
+                    .isInstanceOf(DynamicPlanningShadowRunner.class);
+            assertThat(modelCalls).hasValue(0);
+        });
     }
 
     @Test
