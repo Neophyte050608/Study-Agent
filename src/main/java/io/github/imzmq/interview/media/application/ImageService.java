@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
 import io.github.imzmq.interview.media.application.contract.MediaDocument;
 import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
+import io.github.imzmq.interview.media.application.contract.result.ImageMetadataResult;
 import io.github.imzmq.interview.media.application.contract.result.ImageResult;
 import io.github.imzmq.interview.media.application.contract.extension.ParentImageReferenceSupport;
 import io.github.imzmq.interview.media.application.contract.extension.ParentImageReferenceSupport.ParentImageReferences;
@@ -423,20 +424,44 @@ public class ImageService implements MediaImageOperations {
         return java.util.concurrent.CompletableFuture.completedFuture(stats);
     }
 
-    public ImageMetadataDO getImageById(String imageId) {
-        return imageMetadataMapper.selectOne(
+    public ImageMetadataResult getImageMetadataById(String imageId) {
+        return toMetadataResult(imageMetadataMapper.selectOne(
                 new LambdaQueryWrapper<ImageMetadataDO>()
                         .eq(ImageMetadataDO::getImageId, imageId)
                         .last("LIMIT 1")
-        );
+        ));
     }
 
-    public List<ImageMetadataDO> getImagesByIds(Collection<String> imageIds) {
+    public List<ImageMetadataResult> getImageMetadataByIds(Collection<String> imageIds) {
+        return getImagesByIds(imageIds).stream()
+                .map(this::toMetadataResult)
+                .toList();
+    }
+
+    private List<ImageMetadataDO> getImagesByIds(Collection<String> imageIds) {
         if (imageIds == null || imageIds.isEmpty()) {
             return List.of();
         }
         return imageMetadataMapper.selectList(
                 new LambdaQueryWrapper<ImageMetadataDO>().in(ImageMetadataDO::getImageId, imageIds)
+        );
+    }
+
+    private ImageMetadataResult toMetadataResult(ImageMetadataDO metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        return new ImageMetadataResult(
+                metadata.getImageId(),
+                metadata.getImageName(),
+                metadata.getRelativePath(),
+                metadata.getFilePath(),
+                metadata.getSummaryText(),
+                metadata.getSummaryStatus(),
+                metadata.getMimeType(),
+                metadata.getWidth(),
+                metadata.getHeight(),
+                metadata.getFileSize()
         );
     }
 

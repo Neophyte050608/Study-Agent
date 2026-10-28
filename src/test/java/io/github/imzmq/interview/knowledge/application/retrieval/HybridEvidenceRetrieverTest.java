@@ -37,7 +37,7 @@ class HybridEvidenceRetrieverTest {
                     public String getType() { return "DB"; }
                     public String getDescription() { return "\u2003".repeat(80); }
                 }));
-        HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vector, lexical, Runnable::run, graph,
+        HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vectorProvider(vector), lexical, Runnable::run, graph,
                 new EvidenceFusionService(lexical, new RetrievalTokenizerService()),
                 new GroundingContextAssembler(properties, mock(ParentChildIndexService.class)));
         List<Document> result = retriever.retrieveHybridDocuments(RewrittenQuery.fallback("redis"), 1);
@@ -77,7 +77,7 @@ class HybridEvidenceRetrieverTest {
         ExecutorService pool = Executors.newFixedThreadPool(3);
         ExecutorService caller = Executors.newSingleThreadExecutor();
         try {
-            HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vector, lexical, pool, graph,
+            HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vectorProvider(vector), lexical, pool, graph,
                     new EvidenceFusionService(lexical, new RetrievalTokenizerService()),
                     new GroundingContextAssembler(properties, mock(ParentChildIndexService.class)));
             CompletableFuture<List<Document>> result = CompletableFuture.supplyAsync(
@@ -94,4 +94,28 @@ class HybridEvidenceRetrieverTest {
             caller.shutdownNow();
         }
     }
+    private static org.springframework.beans.factory.ObjectProvider<VectorStore> vectorProvider(VectorStore vectorStore) {
+        return new org.springframework.beans.factory.ObjectProvider<>() {
+            @Override
+            public VectorStore getObject(Object... args) {
+                return vectorStore;
+            }
+
+            @Override
+            public VectorStore getIfAvailable() {
+                return vectorStore;
+            }
+
+            @Override
+            public VectorStore getIfUnique() {
+                return vectorStore;
+            }
+
+            @Override
+            public VectorStore getObject() {
+                return vectorStore;
+            }
+        };
+    }
+
 }

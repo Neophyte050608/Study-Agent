@@ -16,6 +16,7 @@ import io.milvus.param.dml.UpsertParam;
 import io.milvus.response.SearchResultsWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +33,7 @@ public class ImageIndexService {
     private static final int TEXT_DIMENSION = 2048;
 
     private final MilvusServiceClient milvusClient;
+    private final boolean enabled;
     private final ImageMetadataMapper imageMetadataMapper;
     private final ImageEmbeddingService imageEmbeddingService;
     private final ObjectMapper objectMapper;
@@ -39,13 +41,15 @@ public class ImageIndexService {
     private final int visualDimension;
 
     public ImageIndexService(
-            MilvusServiceClient milvusClient,
+            ObjectProvider<MilvusServiceClient> milvusClientProvider,
             ImageMetadataMapper imageMetadataMapper,
             ImageEmbeddingService imageEmbeddingService,
             ObjectMapper objectMapper,
+            @Value("${app.multimodal.image-store.enabled:true}") boolean enabled,
             @Value("${app.multimodal.milvus.image-collection:interview_images}") String collectionName,
             @Value("${app.multimodal.visual.embedding-dimension:512}") int visualDimension) {
-        this.milvusClient = milvusClient;
+        this.enabled = enabled;
+        this.milvusClient = enabled ? milvusClientProvider.getIfAvailable() : null;
         this.imageMetadataMapper = imageMetadataMapper;
         this.imageEmbeddingService = imageEmbeddingService;
         this.objectMapper = objectMapper;
@@ -55,6 +59,10 @@ public class ImageIndexService {
 
     public void indexImage(ImageMetadataDO metadata, Path imagePath) {
         if (metadata == null || metadata.getImageId() == null || metadata.getImageId().isBlank()) {
+            return;
+        }
+        if (!enabled || milvusClient == null) {
+            logger.debug("Skip Milvus image index because image vector store is disabled: {}", metadata.getImageId());
             return;
         }
         try {
@@ -94,7 +102,7 @@ public class ImageIndexService {
 
     public List<ImageHit> search(String query, int topK, boolean visualIntent) {
         String normalized = query == null ? "" : query.trim();
-        if (normalized.isBlank()) {
+        if (normalized.isBlank() || !enabled || milvusClient == null) {
             return List.of();
         }
         int limit = Math.max(1, topK);

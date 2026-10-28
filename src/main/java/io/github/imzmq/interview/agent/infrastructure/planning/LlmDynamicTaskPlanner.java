@@ -5,6 +5,7 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Dy
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicCapabilityDescriptor;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicExecutionContext;
 import io.github.imzmq.interview.modelrouting.application.contract.DynamicPlanningModelOperations;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -28,6 +29,7 @@ public final class LlmDynamicTaskPlanner {
     private final DynamicPlanningModelOperations model;
     private final StrictDynamicPlanJsonParser parser;
 
+    @Autowired
     public LlmDynamicTaskPlanner(DynamicPlanningModelOperations model, ObjectMapper objectMapper) {
         this(model, new StrictDynamicPlanJsonParser(objectMapper, 32 * 1024, 4 * 1024));
     }

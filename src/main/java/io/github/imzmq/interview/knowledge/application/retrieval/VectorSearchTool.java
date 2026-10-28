@@ -3,6 +3,7 @@ package io.github.imzmq.interview.knowledge.application.retrieval;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,14 +19,18 @@ import io.github.imzmq.interview.search.application.contract.ToolGateway;
 @Component
 public class VectorSearchTool implements ToolGateway<VectorSearchTool.Query, List<Document>> {
 
-    private final VectorStore vectorStore;
+    private final ObjectProvider<VectorStore> vectorStoreProvider;
 
-    public VectorSearchTool(VectorStore vectorStore) {
-        this.vectorStore = vectorStore;
+    public VectorSearchTool(ObjectProvider<VectorStore> vectorStoreProvider) {
+        this.vectorStoreProvider = vectorStoreProvider;
     }
 
     @Override
     public List<Document> run(Query input) {
+        VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
+        if (vectorStore == null) {
+            return List.of();
+        }
         int topK = input.topK() == null || input.topK() < 1 ? 3 : input.topK();
         return vectorStore.similaritySearch(
                 SearchRequest.builder()

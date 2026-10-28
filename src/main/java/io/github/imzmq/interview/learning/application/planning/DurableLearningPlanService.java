@@ -6,6 +6,8 @@ import io.github.imzmq.interview.agent.application.contract.execution.durable.Du
 import io.github.imzmq.interview.learning.application.contract.DurableLearningPlanOperations;
 import io.github.imzmq.interview.learning.application.contract.LearningPlanAccessException;
 import io.github.imzmq.interview.learning.application.contract.result.DurableLearningPlanView;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,7 @@ import static io.github.imzmq.interview.learning.application.contract.LearningPl
 
 @Service
 public final class DurableLearningPlanService implements DurableLearningPlanOperations {
+    private static final Logger log = LoggerFactory.getLogger(DurableLearningPlanService.class);
     private static final Pattern TASK_ID = Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
     private static final Set<String> NODES = Set.of("profile", "evidence", "compose");
     private final DurableExecutionOperations execution;
@@ -105,9 +108,15 @@ public final class DurableLearningPlanService implements DurableLearningPlanOper
                 case "RETRY_ROOT_NOT_FAILED" -> error(RETRY_ROOT_NOT_FAILED);
                 case "ATTEMPT_BUDGET_EXHAUSTED" -> error(ATTEMPT_BUDGET_EXHAUSTED);
                 case "EXECUTION_DISABLED" -> error(EXECUTION_DISABLED);
-                default -> error(INTERNAL_ERROR);
+                default -> {
+                    log.warn("Learning plan durable operation failed with unmapped state: {}",
+                            e.getClass().getSimpleName(), e);
+                    yield error(INTERNAL_ERROR);
+                }
             };
         } catch (RuntimeException e) {
+            log.warn("Learning plan durable operation failed with unexpected runtime exception: {}",
+                    e.getClass().getSimpleName(), e);
             throw error(INTERNAL_ERROR);
         }
     }

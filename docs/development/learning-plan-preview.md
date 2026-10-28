@@ -163,6 +163,37 @@ mvn -q -Dtest=DurableLearningPlanServiceTest,LearningPlanTaskResponseTest,Learni
 不新增列表、自动重试、取消、新基础设施、后台协议或 DB 迁移。
 验证范围与命令见 `verification.md` 的第四步章节。
 
+## local-lite 启动与降级边界
+
+`local-lite` profile 默认开启持久学习计划预览后台任务：
+
+```yaml
+app:
+  agent:
+    execution:
+      enabled: true
+```
+
+因此本地启动后可直接使用 `/api/learning/plan-previews` 的异步任务接口，不再需要额外追加 `APP_AGENT_EXECUTION_ENABLED=true`。最小运行依赖是 MySQL 与 Flyway V5；任务提交、租约、节点状态和最终结果都落在 MySQL。Neo4j 不参与 durable execution 事务，Neo4j 不可用不应影响学习计划预览的提交与查询。
+
+`local-lite` 同时关闭通用 Milvus VectorStore 与图片 Milvus store：
+
+```yaml
+spring:
+  ai:
+    vectorstore:
+      type: none
+      milvus:
+        enabled: false
+        initialize-schema: false
+app:
+  multimodal:
+    image-store:
+      enabled: false
+```
+
+无 Milvus/向量库时，证据读取按空材料或词法路径诚实降级；无画像或无证据但模型生成成功时返回 `DEGRADED`，并通过 `PROFILE_EMPTY`、`EVIDENCE_EMPTY` 等原因标明。模型 Key 无效或模型全部失败时不会伪造成功计划。
+
 ## 受控动态规划模式
 
 同步、请求内的 Learning Plan Preview 支持以下运行模式，配置前缀为
@@ -170,7 +201,7 @@ mvn -q -Dtest=DurableLearningPlanServiceTest,LearningPlanTaskResponseTest,Learni
 
 | 模式 | 实际执行图 | 说明 |
 | --- | --- | --- |
-| `FIXED` | 固定 `profile + evidence -> compose` | 仓库默认值，也是 `local-lite` 的强制安全默认值；不发起动态规划。 |
+| `FIXED` | 固定 `profile + evidence -> compose` | 仓库默认值，也是 `local-lite` 未显式配置时的安全默认值；不发起动态规划。 |
 | `RULES` | 经校验并编译的确定性规则计划 | 只允许已注册、只读且符合 Learning 场景策略的 capability；规划、校验或编译失败时在执行前回退固定图。 |
 | `SHADOW` | 与 `RULES` 相同的规则计划 | 正式结果始终来自规则计划；LLM 候选只在独立有界资源中做非执行比较。影子能力缺失、超时、过载或失败均不得影响正式结果。 |
 
@@ -184,4 +215,4 @@ mvn -q -Dtest=DurableLearningPlanServiceTest,LearningPlanTaskResponseTest,Learni
 /Users/bytedance/bits/StudyAgent/Study-Agent/application-private.yml
 ```
 
-不得把 Key 写入仓库配置、测试资源、命令行记录或提交内容。真实 smoke test 结束后恢复 `FIXED`。
+不得把 Key 写入仓库配置、测试资源、命令行记录或提交内容。`local-lite` 默认仍为 `FIXED`，但可通过 `APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW` 做本地影子观测 smoke test；真实 smoke test 结束后恢复 `FIXED`。

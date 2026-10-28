@@ -96,7 +96,9 @@ src/main/resources/application-local-lite.yml
 - 关闭检索后端启动预热：`app.knowledge.retrieval.warmup-enabled=false`
 - 关闭 QQ / 飞书 WebSocket 长连接
 - 关闭图片 Milvus collection 初始化
-- 关闭 Milvus schema 自动初始化
+- 关闭通用 Milvus VectorStore 自动装配与 schema 初始化（`spring.ai.vectorstore.type=none`）
+- 开启持久学习计划预览后台任务（仍只依赖 MySQL/Flyway，不依赖 Neo4j）
+- 同步学习计划动态规划默认保持 `FIXED`；需要本地影子观测时可显式设置 `APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW`
 - 降低 Hikari 本地连接池规模
 - 将 Spring AI 日志从 DEBUG 降到 INFO
 
@@ -337,8 +339,10 @@ docker compose --profile optional-ai up -d clip-embedding
 
 默认不启动它们是为了让本地开发更轻量、更稳定。
 
-## 可选持久学习计划预览
+## 持久学习计划预览
 
-后台任务默认关闭，不改变 `local-lite` 的启动依赖。需要持久异步契约或学习计划预览 HTTP 入口时，在后端启动参数加 `--app.agent.execution.enabled=true`（或环境变量 `APP_AGENT_EXECUTION_ENABLED=true`）；MySQL 必须可用，Flyway 正常执行 V5。共享节点线程和其他可调参数见 `learning-plan-preview.md`。第三步已增加 `/api/learning/plan-previews` 的提交/查询/retry/终态删除接口，未增加前端；启用开关不会自动产生学习任务；模型仍须按已有方式配置。
+`local-lite` 现在默认启用持久学习计划预览后台任务（等价于 `app.agent.execution.enabled=true`），用于支持 `/api/learning/plan-previews` 的提交、查询、局部 retry 和终态删除。它会使用 MySQL 任务/节点/尝试表作为真相源，要求 MySQL 可用且 Flyway 正常执行 V5；不会因为 Milvus VectorStore、图片 Milvus 或 Neo4j 不可用而阻塞任务提交。共享节点线程和其他可调参数见 `learning-plan-preview.md`。
 
-HTTP 使用和401/409/503含义见 `learning-plan-preview.md`。open仅本地单用户；共享部署应启用JWT认证，不用X-User-Id代替owner。
+启用开关不会自动产生学习任务；模型仍须按已有方式配置。若只想启动后端但暂时关闭持久任务，可显式设置环境变量 `APP_AGENT_EXECUTION_ENABLED=false`，或追加启动参数 `--app.agent.execution.enabled=false`。
+
+HTTP 使用和 401/409/503 含义见 `learning-plan-preview.md`。同步 `/api/task/dispatch` 的动态规划本地默认仍为 `FIXED`；如需验证影子规划观测，可临时设置 `APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW` 后启动，结束后取消该环境变量。open 仅本地单用户；共享部署应启用 JWT 认证，不用 X-User-Id 代替 owner。

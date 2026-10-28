@@ -17,7 +17,7 @@ public class ExecutionTransactions {
     private final ExecutionJson json;
     public ExecutionTransactions(ExecutionMapper mapper, ExecutionJson json) { this.mapper=mapper; this.json=json; }
 
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public DurableTaskView submit(ExecutionTaskDO task, List<String> nodes) {
         boolean created;
         try { mapper.insertTask(task); created=true; }
@@ -30,17 +30,17 @@ public class ExecutionTransactions {
         if(created) for(String id:nodes) mapper.insertNode(existing.getTaskId(),id);
         return view(existing);
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public DurableTaskView query(String owner,String taskId) { return view(owned(owner,taskId)); }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public ExecutionTaskDO identity(String owner,String id) { return owned(owner,id); }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public void delete(String owner,String taskId) {
         var task=owned(owner,taskId);
         if(!TERMINAL.contains(task.getStatus())) throw new IllegalStateException("EXECUTION_NOT_TERMINAL");
         mapper.delete(taskId);
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public ExecutionTaskDO claim(String worker,int leaseSeconds) {
         var task=mapper.claimable();
         if(task==null) return null;
@@ -49,19 +49,19 @@ public class ExecutionTransactions {
         mapper.recover(task.getTaskId(),3);
         return mapper.task(task.getTaskId());
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public boolean heartbeat(ExecutionTaskDO task,int seconds) {
         if(mapper.fenced(task.getTaskId(),task.getLeaseOwner(),task.getLeaseEpoch())==null) return false;
         return mapper.heartbeat(task.getTaskId(),task.getLeaseOwner(),task.getLeaseEpoch(),seconds)==1;
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public long remaining(ExecutionTaskDO task) {
         fence(task);
         return mapper.remainingMicros(task.getTaskId());
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public List<ExecutionNodeDO> snapshot(ExecutionTaskDO task) { fence(task); return mapper.nodes(task.getTaskId()); }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public void start(ExecutionTaskDO task,String nodeId,String input) {
         var current=fence(task);
         if(mapper.remainingMicros(task.getTaskId())<=0) throw new IllegalStateException("EXECUTION_DEADLINE");
@@ -71,7 +71,7 @@ public class ExecutionTransactions {
         mapper.startAttempt(attempt,task.getTaskId(),nodeId,node.getAttemptCount()+1,current.getRevision(),task.getLeaseEpoch(),json.check(input,65536));
         if(mapper.startNode(task.getTaskId(),nodeId,attempt,3)!=1) throw new IllegalStateException("NODE_STATE_CONFLICT");
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public void complete(ExecutionTaskDO task,String nodeId,DagNodeResult result,String output) {
         fence(task);
         if(mapper.remainingMicros(task.getTaskId())<=0) throw new IllegalStateException("EXECUTION_DEADLINE");
@@ -85,7 +85,7 @@ public class ExecutionTransactions {
         } else if(!("PENDING".equals(node.getStatus()) && "SKIPPED".equals(status))) throw new IllegalStateException("NODE_STATE_CONFLICT");
         if(mapper.finishNode(task.getTaskId(),nodeId,status,checked,result.code())!=1) throw new IllegalStateException("NODE_STATE_CONFLICT");
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public void finish(ExecutionTaskDO task,String status,String result,String code) {
         fence(task);
         if(!TERMINAL.contains(status)) throw new IllegalArgumentException("INVALID_TASK_TERMINAL");
@@ -106,7 +106,7 @@ public class ExecutionTransactions {
         }
         mapper.finishTask(task.getTaskId(),status,result==null?null:json.check(result,131072),code);
     }
-    @Transactional
+    @Transactional(transactionManager = "dataSourceTransactionManager")
     public void retry(String owner,String taskId,int revision,Set<String> selected,Map<String,Set<String>> deps) {
         var task=owned(owner,taskId);
         if(task.getRevision()!=revision) throw new IllegalStateException("REVISION_CONFLICT");

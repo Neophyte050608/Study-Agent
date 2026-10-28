@@ -162,7 +162,7 @@ class ParentChildRetrievalHydrationTest {
         Executor executor = Runnable::run;
         EvidenceFusionService fusion = new EvidenceFusionService(lexicalIndexService, retrievalTokenizerService);
         GroundingContextAssembler grounding = new GroundingContextAssembler(parentChildRetrievalProperties, parentChildIndexService);
-        HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vectorStore, lexicalIndexService,
+        HybridEvidenceRetriever retriever = new HybridEvidenceRetriever(vectorProvider(vectorStore), lexicalIndexService,
                 executor, techConceptRepository, fusion, grounding);
         KnowledgePacketBuilder knowledgePacketBuilder = new KnowledgePacketBuilder(
                 queryRewriteService,
@@ -233,6 +233,30 @@ class ParentChildRetrievalHydrationTest {
                 new CodingProfileContextSource(),
                 new CodingTaskPlanContextSource()
         )), List.of(new InterviewAgentContextSchemaProvider(), new CodingPracticeAgentContextSchemaProvider(), new KnowledgeQaAgentContextSchemaProvider()));
+    }
+
+    private static org.springframework.beans.factory.ObjectProvider<VectorStore> vectorProvider(VectorStore vectorStore) {
+        return new org.springframework.beans.factory.ObjectProvider<>() {
+            @Override
+            public VectorStore getObject(Object... args) {
+                return vectorStore;
+            }
+
+            @Override
+            public VectorStore getIfAvailable() {
+                return vectorStore;
+            }
+
+            @Override
+            public VectorStore getIfUnique() {
+                return vectorStore;
+            }
+
+            @Override
+            public VectorStore getObject() {
+                return vectorStore;
+            }
+        };
     }
 
 }

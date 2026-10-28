@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestClientResponseException;
 import java.util.concurrent.Executor;
@@ -24,18 +25,18 @@ import java.util.concurrent.Executor;
 @Service
 public class HybridEvidenceRetriever {
     private static final Logger logger = LoggerFactory.getLogger(HybridEvidenceRetriever.class);
-    private final VectorStore vectorStore;
+    private final ObjectProvider<VectorStore> vectorStoreProvider;
     private final LexicalIndexService lexicalIndexService;
     private final Executor ragRetrieveExecutor;
     private final TechConceptRepository techConceptRepository;
     private final EvidenceFusionService fusion;
     private final GroundingContextAssembler grounding;
 
-    public HybridEvidenceRetriever(VectorStore vectorStore, LexicalIndexService lexicalIndexService,
+    public HybridEvidenceRetriever(ObjectProvider<VectorStore> vectorStoreProvider, LexicalIndexService lexicalIndexService,
                                    @Qualifier("ragRetrieveExecutor") Executor ragRetrieveExecutor,
                                    TechConceptRepository techConceptRepository,
                                    EvidenceFusionService fusion, GroundingContextAssembler grounding) {
-        this.vectorStore = vectorStore;
+        this.vectorStoreProvider = vectorStoreProvider;
         this.lexicalIndexService = lexicalIndexService;
         this.ragRetrieveExecutor = ragRetrieveExecutor;
         this.techConceptRepository = techConceptRepository;
@@ -59,6 +60,10 @@ public class HybridEvidenceRetriever {
         // 通道 B：全局向量检索（纯语义兜底）
         java.util.concurrent.CompletableFuture<List<Document>> vectorFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
+                VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
+                if (vectorStore == null) {
+                    return List.<Document>of();
+                }
                 List<Document> docs = vectorStore.similaritySearch(
                         SearchRequest.builder().query(query.fullQuery()).topK(Math.max(topK + 3, 8)).build()
                 );

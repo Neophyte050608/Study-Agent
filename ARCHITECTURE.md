@@ -299,7 +299,7 @@ The optional background slice extends the fixed read-only DAG, not the general a
 
 Short task-row transactions enforce DB-time leases and epoch fencing at node start, attempt/node checkpoint, and task completion. A committed checkpoint precedes dependent scheduling. Recovery reuses successful outputs and abandons interrupted attempts; partial retry invalidates failed roots and descendants with revision compare-and-set, retaining attempt budgets. Model invocation is at-least-once, not exactly-once.
 
-Background submission defaults off; synchronous previews are unchanged. At most two coordinators share the existing four physical node workers with synchronous callers. The second slice added no HTTP endpoint, new infrastructure, business writes, dynamic graph, racing, or Temporal; the HTTP entry is added in the third slice below. Owner-scoped terminal deletion cascades; automatic retention/TTL is not implemented. Details: `docs/development/learning-plan-preview.md`.
+Background submission is opt-in in the base profile and enabled by `local-lite` for local development. Synchronous previews are unchanged. At most two coordinators share the existing four physical node workers with synchronous callers. The second slice added no HTTP endpoint, new infrastructure, business writes, dynamic graph, racing, or Temporal; the HTTP entry is added in the third slice below. Owner-scoped terminal deletion cascades; automatic retention/TTL is not implemented. Agent execution transactions use the JDBC `DataSourceTransactionManager`; Neo4j unavailability must not prevent durable learning-plan submission/query. Details: `docs/development/learning-plan-preview.md`.
 
 
 ## Durable preview HTTP entry (2026-10-27, third slice)

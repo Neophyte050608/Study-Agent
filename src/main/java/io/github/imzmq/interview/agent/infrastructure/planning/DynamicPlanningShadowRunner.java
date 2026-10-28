@@ -12,6 +12,7 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Va
 import io.github.imzmq.interview.agent.application.execution.dynamic.DynamicPlanFingerprint;
 import io.github.imzmq.interview.agent.application.execution.dynamic.DynamicTaskPlanValidator;
 import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -41,6 +42,7 @@ public final class DynamicPlanningShadowRunner implements DynamicPlanningShadowO
     private final ThreadPoolExecutor shadowWorkers;
     private final ScheduledExecutorService timeoutScheduler;
 
+    @Autowired
     public DynamicPlanningShadowRunner(
             LlmDynamicTaskPlanner planner,
             DynamicPlanObservationOperations observations) {

@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 import org.springframework.util.StreamUtils;
@@ -46,7 +47,7 @@ public class IngestionService implements IngestionOperations {
     private final KnowledgeDocumentSplitOperations documentSplitter;
     private final ObsidianKnowledgeExtractor knowledgeExtractor;
     private final KnowledgeLexicalIndexOperations lexicalIndexService;
-    private final VectorStore vectorStore;
+    private final ObjectProvider<VectorStore> vectorStoreProvider;
     private final SyncIndexMapper syncIndexMapper;
     private final KnowledgeParentChildIndexOperations parentChildIndexService;
     private final MediaImageOperations imageService;
@@ -55,12 +56,12 @@ public class IngestionService implements IngestionOperations {
     private volatile IngestionSyncSummary lastSummary = new IngestionSyncSummary(0, 0, 0, 0, 0, 0, 0);
     private volatile long lastSyncTime = 0L;
 
-    public IngestionService(NoteLoader noteLoader, KnowledgeDocumentSplitOperations documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, KnowledgeLexicalIndexOperations lexicalIndexService, VectorStore vectorStore, SyncIndexMapper syncIndexMapper, KnowledgeParentChildIndexOperations parentChildIndexService, MediaImageOperations imageService, KnowledgeGraphIndexCommand knowledgeGraphIndexCommand) {
+    public IngestionService(NoteLoader noteLoader, KnowledgeDocumentSplitOperations documentSplitter, ObsidianKnowledgeExtractor knowledgeExtractor, KnowledgeLexicalIndexOperations lexicalIndexService, ObjectProvider<VectorStore> vectorStoreProvider, SyncIndexMapper syncIndexMapper, KnowledgeParentChildIndexOperations parentChildIndexService, MediaImageOperations imageService, KnowledgeGraphIndexCommand knowledgeGraphIndexCommand) {
         this.noteLoader = noteLoader;
         this.documentSplitter = documentSplitter;
         this.knowledgeExtractor = knowledgeExtractor;
         this.lexicalIndexService = lexicalIndexService;
-        this.vectorStore = vectorStore;
+        this.vectorStoreProvider = vectorStoreProvider;
         this.syncIndexMapper = syncIndexMapper;
         this.parentChildIndexService = parentChildIndexService;
         this.imageService = imageService;
@@ -462,7 +463,7 @@ public class IngestionService implements IngestionOperations {
                 logger.info("Skip file without valid knowledge blocks: {}", filePath);
                 return AddStatus.SKIPPED_EMPTY;
             }
-            vectorStore.add(documents);
+            addVectors(documents);
             lexicalIndexService.upsert(toIndexDocuments(documents));
             parentChildIndexService.rebuild(filePath, toIndexDocuments(documents));
             imageService.indexImagesForDocument(filePath, content, toMediaDocuments(documents));
@@ -494,7 +495,7 @@ public class IngestionService implements IngestionOperations {
             if (documents.isEmpty()) {
                 return AddStatus.SKIPPED_EMPTY;
             }
-            vectorStore.add(documents);
+            addVectors(documents);
             lexicalIndexService.upsert(toIndexDocuments(documents));
             parentChildIndexService.rebuild(filePath, toIndexDocuments(documents));
             imageService.indexImagesForDocument(filePath, content, toMediaDocuments(documents));
@@ -595,9 +596,28 @@ public class IngestionService implements IngestionOperations {
         }
     }
 
+
+    private void addVectors(List<Document> documents) {
+        VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
+        if (vectorStore == null) {
+            logger.debug("Skip vector indexing because VectorStore is unavailable");
+            return;
+        }
+        vectorStore.add(documents);
+    }
+
+    private void deleteVectors(List<String> docIds) {
+        VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
+        if (vectorStore == null) {
+            logger.debug("Skip vector deletion because VectorStore is unavailable");
+            return;
+        }
+        vectorStore.delete(docIds);
+    }
+
     private void removeFile(String filePath, List<String> docIds) {
         if (docIds != null && !docIds.isEmpty()) {
-            vectorStore.delete(docIds);
+            deleteVectors(docIds);
             lexicalIndexService.removeByIds(docIds);
         }
         parentChildIndexService.deleteByFilePath(filePath);

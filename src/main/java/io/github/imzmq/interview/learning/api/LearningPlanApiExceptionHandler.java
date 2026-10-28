@@ -1,6 +1,8 @@
 package io.github.imzmq.interview.learning.api;
 
 import io.github.imzmq.interview.learning.application.contract.LearningPlanAccessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,7 @@ import static io.github.imzmq.interview.learning.application.contract.LearningPl
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = LearningPlanPreviewController.class)
 public class LearningPlanApiExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(LearningPlanApiExceptionHandler.class);
     @ExceptionHandler(LearningPlanAccessException.class)
     public ResponseEntity<Map<String, String>> access(LearningPlanAccessException exception) {
         var code = exception.code();
@@ -48,7 +51,9 @@ public class LearningPlanApiExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> unexpected(Exception ignored) {
+    public ResponseEntity<Map<String, String>> unexpected(Exception exception) {
+        log.warn("Learning plan preview request failed with unexpected exception: {}",
+                exception.getClass().getSimpleName(), exception);
         return access(new LearningPlanAccessException(INTERNAL_ERROR));
     }
 }

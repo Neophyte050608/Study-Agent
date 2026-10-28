@@ -9,7 +9,9 @@ spring:
       connection-timeout: 5000
   ai:
     vectorstore:
+      type: none
       milvus:
+        enabled: false
         initialize-schema: false
 
 logging:
@@ -17,10 +19,13 @@ logging:
     org.springframework.ai: INFO
 
 app:
+  agent:
+    execution:
+      enabled: true
   learning:
     plan-preview:
       dynamic-planning:
-        mode: FIXED
+        mode: ${APP_LEARNING_PLAN_DYNAMIC_MODE:FIXED}
   startup:
     model-preheat-enabled: false
   chat:

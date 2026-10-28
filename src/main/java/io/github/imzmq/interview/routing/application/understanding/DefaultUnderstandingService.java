@@ -4,6 +4,7 @@ import io.github.imzmq.interview.config.routing.RoutingUnderstandingProperties;
 import io.github.imzmq.interview.routing.application.contract.UnderstandingService;
 import io.github.imzmq.interview.routing.application.contract.result.DecisionSource;
 import io.github.imzmq.interview.routing.application.contract.result.IntentRecord;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,7 @@ public class DefaultUnderstandingService implements UnderstandingService {
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
     private final AtomicLong openUntilMillis = new AtomicLong();
 
+    @Autowired
     public DefaultUnderstandingService(
             IntentLlmResolver resolver,
             @Qualifier("routingUnderstandingExecutor") Executor executor,

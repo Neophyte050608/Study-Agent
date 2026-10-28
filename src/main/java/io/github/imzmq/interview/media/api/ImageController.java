@@ -1,9 +1,9 @@
 package io.github.imzmq.interview.media.api;
 
-import io.github.imzmq.interview.media.infrastructure.persistence.ImageMetadataDO;
+import io.github.imzmq.interview.media.application.contract.result.ImageMetadataResult;
 import io.github.imzmq.interview.media.application.contract.extension.MediaSourcePathSupport;
 import io.github.imzmq.interview.media.application.contract.extension.MediaSourcePathSupport.MediaSourcePaths;
-import io.github.imzmq.interview.media.application.ImageService;
+import io.github.imzmq.interview.media.application.contract.MediaImageOperations;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -36,21 +36,21 @@ import java.util.Map;
 @RequestMapping("/api/images")
 public class ImageController {
 
-    private final ImageService imageService;
+    private final MediaImageOperations imageService;
     private final MediaSourcePathSupport mediaSourcePathSupport;
 
-    public ImageController(ImageService imageService, MediaSourcePathSupport mediaSourcePathSupport) {
+    public ImageController(MediaImageOperations imageService, MediaSourcePathSupport mediaSourcePathSupport) {
         this.imageService = imageService;
         this.mediaSourcePathSupport = mediaSourcePathSupport;
     }
 
     @GetMapping("/{imageId}/file")
     public ResponseEntity<Resource> getImageFile(@PathVariable String imageId) throws IOException {
-        ImageMetadataDO metadata = requireImage(imageId);
+        ImageMetadataResult metadata = requireImage(imageId);
         if (metadata == null) {
             return ResponseEntity.notFound().build();
         }
-        Path path = Path.of(metadata.getFilePath());
+        Path path = Path.of(metadata.filePath());
         if (!Files.exists(path)) {
             return ResponseEntity.notFound().build();
         }
@@ -59,14 +59,14 @@ public class ImageController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         return ResponseEntity.ok()
-                .contentType(parseMediaType(metadata.getMimeType()))
+                .contentType(parseMediaType(metadata.mimeType()))
                 .header(HttpHeaders.CACHE_CONTROL, "max-age=3600")
                 .body(new FileSystemResource(resolved));
     }
 
     @GetMapping("/{imageId}/metadata")
     public ResponseEntity<Map<String, Object>> getImageMetadata(@PathVariable String imageId) {
-        ImageMetadataDO metadata = requireImage(imageId);
+        ImageMetadataResult metadata = requireImage(imageId);
         if (metadata == null) {
             return ResponseEntity.notFound().build();
         }
@@ -81,11 +81,11 @@ public class ImageController {
     @GetMapping("/{imageId}/thumbnail")
     public ResponseEntity<Resource> getThumbnail(@PathVariable String imageId,
                                                  @RequestParam(defaultValue = "300") int maxWidth) throws Exception {
-        ImageMetadataDO metadata = requireImage(imageId);
+        ImageMetadataResult metadata = requireImage(imageId);
         if (metadata == null) {
             return ResponseEntity.notFound().build();
         }
-        Path path = Path.of(metadata.getFilePath());
+        Path path = Path.of(metadata.filePath());
         if (!Files.exists(path)) {
             return ResponseEntity.notFound().build();
         }
@@ -117,7 +117,7 @@ public class ImageController {
 
     @PostMapping("/batch-metadata")
     public ResponseEntity<List<Map<String, Object>>> batchGetMetadata(@RequestBody List<String> imageIds) {
-        return ResponseEntity.ok(imageService.getImagesByIds(imageIds).stream().map(this::toView).toList());
+        return ResponseEntity.ok(imageService.getImageMetadataByIds(imageIds).stream().map(this::toView).toList());
     }
 
     @PostMapping("/reindex")
@@ -130,23 +130,23 @@ public class ImageController {
         return ResponseEntity.accepted().body(response);
     }
 
-    private ImageMetadataDO requireImage(String imageId) {
-        return imageService.getImageById(imageId);
+    private ImageMetadataResult requireImage(String imageId) {
+        return imageService.getImageMetadataById(imageId);
     }
 
-    private Map<String, Object> toView(ImageMetadataDO metadata) {
+    private Map<String, Object> toView(ImageMetadataResult metadata) {
         Map<String, Object> view = new LinkedHashMap<>();
-        view.put("imageId", metadata.getImageId());
-        view.put("imageName", metadata.getImageName());
-        view.put("relativePath", metadata.getRelativePath());
-        view.put("summaryText", metadata.getSummaryText());
-        view.put("summaryStatus", metadata.getSummaryStatus());
-        view.put("mimeType", metadata.getMimeType());
-        view.put("width", metadata.getWidth());
-        view.put("height", metadata.getHeight());
-        view.put("fileSize", metadata.getFileSize());
-        view.put("accessUrl", "/api/images/" + metadata.getImageId() + "/file");
-        view.put("thumbnailUrl", "/api/images/" + metadata.getImageId() + "/thumbnail?maxWidth=400");
+        view.put("imageId", metadata.imageId());
+        view.put("imageName", metadata.imageName());
+        view.put("relativePath", metadata.relativePath());
+        view.put("summaryText", metadata.summaryText());
+        view.put("summaryStatus", metadata.summaryStatus());
+        view.put("mimeType", metadata.mimeType());
+        view.put("width", metadata.width());
+        view.put("height", metadata.height());
+        view.put("fileSize", metadata.fileSize());
+        view.put("accessUrl", "/api/images/" + metadata.imageId() + "/file");
+        view.put("thumbnailUrl", "/api/images/" + metadata.imageId() + "/thumbnail?maxWidth=400");
         return view;
     }
 
