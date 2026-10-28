@@ -9,8 +9,6 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Dy
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningShadowOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskPlan;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -25,7 +23,7 @@ public final class LearningPlanDynamicPlanningService {
     private final RuleBasedLearningPlanPlanner planner;
     private final DynamicPlanningOperations dynamicPlanning;
     private final DynamicPlanObservationOperations observations;
-    private final LearningPlanScenarioPolicy policy;
+    private final LearningPlanScenarioPolicy policy = new LearningPlanScenarioPolicy();
     private final DynamicPlanningShadowOperations shadowPlanning;
 
     private static final String PLANNER_TYPE = "rules";
@@ -39,60 +37,23 @@ public final class LearningPlanDynamicPlanningService {
             "SCENARIO_POLICY_VIOLATION", "PLAN_BUDGET_EXCEEDED", "PLAN_COMPILE_FAILED",
             "PLANNER_TIMEOUT", "PLANNER_UNAVAILABLE");
 
-    @Autowired
     public LearningPlanDynamicPlanningService(
             LearningPlanDynamicPlanningProperties properties,
             LearningPlanFixedNodeFactory fixedNodeFactory,
             RuleBasedLearningPlanPlanner planner,
             DynamicPlanningOperations dynamicPlanning,
             DynamicPlanObservationOperations observations,
-            ObjectProvider<DynamicPlanningShadowOperations> shadowPlanning) {
-        this(properties, fixedNodeFactory, planner, dynamicPlanning, observations,
-                new LearningPlanScenarioPolicy(), shadowPlanning.getIfAvailable());
-    }
-
-    LearningPlanDynamicPlanningService(
-            LearningPlanDynamicPlanningProperties properties,
-            LearningPlanFixedNodeFactory fixedNodeFactory,
-            RuleBasedLearningPlanPlanner planner,
-            DynamicPlanningOperations dynamicPlanning,
-            DynamicPlanObservationOperations observations) {
-        this(properties, fixedNodeFactory, planner, dynamicPlanning, observations,
-                new LearningPlanScenarioPolicy(), null);
-    }
-
-    LearningPlanDynamicPlanningService(
-            LearningPlanDynamicPlanningProperties properties,
-            LearningPlanFixedNodeFactory fixedNodeFactory,
-            RuleBasedLearningPlanPlanner planner,
-            DynamicPlanningOperations dynamicPlanning,
-            DynamicPlanObservationOperations observations,
-            LearningPlanScenarioPolicy policy) {
-        this(properties, fixedNodeFactory, planner, dynamicPlanning, observations, policy, null);
-    }
-
-    LearningPlanDynamicPlanningService(
-            LearningPlanDynamicPlanningProperties properties,
-            LearningPlanFixedNodeFactory fixedNodeFactory,
-            RuleBasedLearningPlanPlanner planner,
-            DynamicPlanningOperations dynamicPlanning,
-            DynamicPlanObservationOperations observations,
-            LearningPlanScenarioPolicy policy,
             DynamicPlanningShadowOperations shadowPlanning) {
         this.properties = Objects.requireNonNull(properties);
         this.fixedNodeFactory = Objects.requireNonNull(fixedNodeFactory);
         this.planner = Objects.requireNonNull(planner);
         this.dynamicPlanning = Objects.requireNonNull(dynamicPlanning);
         this.observations = Objects.requireNonNull(observations);
-        this.policy = Objects.requireNonNull(policy);
-        this.shadowPlanning = shadowPlanning;
+        this.shadowPlanning = Objects.requireNonNull(shadowPlanning);
     }
 
     public List<DagNode> nodes(DynamicExecutionContext context) {
         Objects.requireNonNull(context, "Dynamic execution context is required");
-        if (properties.getMode() == LearningPlanDynamicPlanningProperties.Mode.FIXED) {
-            return fixedNodes(context);
-        }
         long startedAt = System.nanoTime();
         long deadline = startedAt + Duration.ofMillis(properties.getPlannerTimeoutMillis()).toNanos();
         observations.requested(PLANNER_TYPE, PLANNER_VERSION);
@@ -137,8 +98,7 @@ public final class LearningPlanDynamicPlanningService {
     private void submitShadowIfEnabled(
             DynamicExecutionContext context,
             ValidatedDynamicTaskPlan rulePlan) {
-        if (properties.getMode() != LearningPlanDynamicPlanningProperties.Mode.SHADOW
-                || shadowPlanning == null) {
+        if (!properties.isShadowEnabled()) {
             return;
         }
         try {

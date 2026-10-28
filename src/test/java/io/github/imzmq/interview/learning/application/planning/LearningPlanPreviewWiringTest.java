@@ -53,6 +53,8 @@ class LearningPlanPreviewWiringTest {
             context.registerBean(RoutingChatService.class, () -> routing);
             context.registerBean(OperationalObservationPublisher.class,
                     () -> (eventType, category, name, status, attributes) -> { });
+            context.registerBean(DynamicPlanningShadowOperations.class,
+                    () -> mock(DynamicPlanningShadowOperations.class));
             context.register(FixedDagExecutor.class, LearningPlanNodeOperations.class,
                     LearningPlanFixedNodeFactory.class, LearningPlanDynamicPlanningProperties.class,
                     RuleBasedLearningPlanPlanner.class, LearningPlanProfileCapability.class,
@@ -92,7 +94,7 @@ class LearningPlanPreviewWiringTest {
         }
     }
     @Test
-    void springWiresOptionalShadowOperationsWhenAvailable() {
+    void springWiresRequiredShadowOperations() {
         DynamicPlanningShadowOperations shadow = mock(DynamicPlanningShadowOperations.class);
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DynamicPlanningShadowOperations.class, () -> shadow);

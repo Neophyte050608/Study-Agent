@@ -249,7 +249,7 @@ V5 task/node/attempt 是内部执行记录，不是外部 trace payload。owner-
 严禁传入或导出完整 topic、原始 request、prompt、模型原始响应、节点 arguments、
 用户画像、证据正文、owner/user/session/task 等业务标识、认证凭据以及 exception message。
 所有事件仍须经过 `TraceAttributeSanitizer.sanitizeForExternalObservation(...)` 的统一白名单清洗。
-`FIXED` 模式不发布动态规划事件；规划节点开始执行后也不再触发固定图回退观测。
+固定图仅作为规划阶段失败的回退目标，因此正常规则规划会发布动态规划事件；业务节点开始执行后不再触发固定图回退观测。
 
 外部观测配置生效时，每个 `dynamic_plan.*` 事件导出为一个 OpenTelemetry span。
 span 名由受控的 event type 与 category 组成，例如

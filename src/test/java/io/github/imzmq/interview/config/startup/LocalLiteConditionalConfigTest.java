@@ -76,24 +76,24 @@ class LocalLiteConditionalConfigTest {
     }
 
     @Test
-    void localLiteShouldDefaultDynamicPlanningToFixed() {
+    void localLiteShouldDefaultDynamicPlanningShadowToDisabled() {
         new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
                 .withPropertyValues("spring.profiles.active=local-lite")
                 .run(context -> assertThat(context.getEnvironment()
-                        .getProperty("app.learning.plan-preview.dynamic-planning.mode"))
-                        .isEqualTo("FIXED"));
+                        .getProperty("app.learning.plan-preview.dynamic-planning.shadow-enabled"))
+                        .isEqualTo("false"));
     }
 
     @Test
-    void localLiteShouldAllowDynamicPlanningModeOverride() {
+    void localLiteShouldAllowDynamicPlanningShadowOverride() {
         new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
-                .withSystemProperties("APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW")
+                .withSystemProperties("APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED=true")
                 .withPropertyValues("spring.profiles.active=local-lite")
                 .run(context -> assertThat(context.getEnvironment()
-                        .getProperty("app.learning.plan-preview.dynamic-planning.mode"))
-                        .isEqualTo("SHADOW"));
+                        .getProperty("app.learning.plan-preview.dynamic-planning.shadow-enabled"))
+                        .isEqualTo("true"));
     }
 
 

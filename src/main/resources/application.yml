@@ -141,9 +141,8 @@ app:
       dir: ${APP_LEARNING_NOTES_DIR:learning-notes}
     plan-preview:
       dynamic-planning:
-        mode: ${APP_LEARNING_PLAN_DYNAMIC_MODE:FIXED}
+        shadow-enabled: ${APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED:false}
         planner-timeout-millis: ${APP_LEARNING_PLAN_DYNAMIC_PLANNER_TIMEOUT_MILLIS:2000}
-        max-plan-bytes: ${APP_LEARNING_PLAN_DYNAMIC_MAX_PLAN_BYTES:32768}
         max-nodes: ${APP_LEARNING_PLAN_DYNAMIC_MAX_NODES:8}
         max-depth: ${APP_LEARNING_PLAN_DYNAMIC_MAX_DEPTH:4}
         max-dependencies-per-node: ${APP_LEARNING_PLAN_DYNAMIC_MAX_DEPENDENCIES:4}

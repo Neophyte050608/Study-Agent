@@ -194,18 +194,23 @@ app:
 
 无 Milvus/向量库时，证据读取按空材料或词法路径诚实降级；无画像或无证据但模型生成成功时返回 `DEGRADED`，并通过 `PROFILE_EMPTY`、`EVIDENCE_EMPTY` 等原因标明。模型 Key 无效或模型全部失败时不会伪造成功计划。
 
-## 受控动态规划模式
+## 受控动态规划
 
-同步、请求内的 Learning Plan Preview 支持以下运行模式，配置前缀为
-`app.learning.plan-preview.dynamic-planning`，环境变量入口为 `APP_LEARNING_PLAN_DYNAMIC_MODE`：
+同步、request-scoped Learning Plan Preview 只有一条正式规划路径：规则规划器生成候选计划，Agent 统一校验、计算摘要并编译为现有有界 DAG。规划、校验或编译在业务节点执行前失败时，系统记录稳定错误码并回退固定 `profile + evidence -> compose` 三节点图。节点开始执行后不会重新规划、换图或再次执行固定图。
 
-| 模式 | 实际执行图 | 说明 |
-| --- | --- | --- |
-| `FIXED` | 固定 `profile + evidence -> compose` | 仓库默认值，也是 `local-lite` 未显式配置时的安全默认值；不发起动态规划。 |
-| `RULES` | 经校验并编译的确定性规则计划 | 只允许已注册、只读且符合 Learning 场景策略的 capability；规划、校验或编译失败时在执行前回退固定图。 |
-| `SHADOW` | 与 `RULES` 相同的规则计划 | 正式结果始终来自规则计划；LLM 候选只在独立有界资源中做非执行比较。影子能力缺失、超时、过载或失败均不得影响正式结果。 |
+配置前缀为 `app.learning.plan-preview.dynamic-planning`。`planner-timeout-millis` 和图限制约束规则规划；LLM 非执行比较由独立开关控制：
 
-动态选择只作用于同步的 request-scoped preview。规则规划、校验和编译共用 `planner-timeout-millis` 的执行前预算；一旦超时，会在节点执行前记录 `PLANNER_TIMEOUT` 并回退固定三节点图。LLM shadow 使用独立有界资源池，`app.agent.dynamic-planning.shadow.timeout/workers/queue-capacity` 分别控制影子比较超时、worker 数和排队容量，过载只记录 `SHADOW_OVERLOADED`，不得影响正式规则图。节点开始执行后不会因局部失败换图或重新规划；失败仍按现有节点状态和降级语义返回。持久化预览继续使用版本化的固定三节点 `LearningPlanWorkflow`，不会保存、恢复或执行动态/LLM 候选图。本次能力不修改前端页面、HTTP 路由或响应契约。
+```yaml
+app:
+  learning:
+    plan-preview:
+      dynamic-planning:
+        shadow-enabled: false
+```
+
+环境变量入口为 `APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED`。默认关闭；设为 `true` 时，正式结果仍只来自规则计划，LLM 候选只在独立有界资源中比较。Agent-owned 的 `app.agent.dynamic-planning.shadow.timeout/workers/queue-capacity` 分别控制比较超时、worker 数和排队容量；能力缺失、超时、过载或失败均不得影响规则图。
+
+动态选择只作用于同步 preview。持久化预览继续使用版本化固定三节点 `LearningPlanWorkflow`，不会保存、恢复或执行动态/LLM 候选图。本次能力不修改前端页面、HTTP 路由或响应契约。
 
 动态计划只包含结构、稳定 capability ID/版本和有界标量参数；可信 owner、topic 与 request 由执行上下文提供，计划不得指定 Bean、实现类、Tool executor 或持久化 adapter。LLM shadow 的 prompt、候选原文、业务输入、身份、画像、证据和异常消息不得写入观测事件。
 
@@ -215,4 +220,4 @@ app:
 /Users/bytedance/bits/StudyAgent/Study-Agent/application-private.yml
 ```
 
-不得把 Key 写入仓库配置、测试资源、命令行记录或提交内容。默认 seed 的 DeepSeek 动态候选没有单独保存候选 Key 时，会使用 `spring.ai.openai.api-key` 作为 OpenAI 兼容 Key fallback；模型供应商页面单独保存的候选加密 Key 优先。`local-lite` 默认仍为 `FIXED`，但可通过 `APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW` 做本地影子观测 smoke test；真实 smoke test 结束后恢复 `FIXED`。
+不得把 Key 写入仓库配置、测试资源、命令行记录或提交内容。默认 seed 的 DeepSeek 动态候选没有单独保存候选 Key 时，会使用 `spring.ai.openai.api-key` 作为 OpenAI 兼容 Key fallback；模型供应商页面单独保存的候选加密 Key 优先。`local-lite` 如需真实 shadow smoke test，可临时设置 `APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED=true`，结束后取消该环境变量。

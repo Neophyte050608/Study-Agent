@@ -39,12 +39,12 @@ class DynamicPlanningShadowRunnerSpringWiringTest {
     }
 
     @Test
-    void localLiteShadowModeWiresBoundedRunnerWithoutCallingModel() {
+    void localLiteShadowSwitchWiresBoundedRunnerWithoutCallingModel() {
         AtomicInteger modelCalls = new AtomicInteger();
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
                 .withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration.class))
-                .withSystemProperties("APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW")
+                .withSystemProperties("APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED=true")
                 .withPropertyValues("spring.profiles.active=local-lite")
                 .withUserConfiguration(
                         LearningPlanDynamicPlanningProperties.class,
@@ -60,8 +60,8 @@ class DynamicPlanningShadowRunnerSpringWiringTest {
 
         runner.run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context.getBean(LearningPlanDynamicPlanningProperties.class).getMode())
-                    .isEqualTo(LearningPlanDynamicPlanningProperties.Mode.SHADOW);
+            assertThat(context.getBean(LearningPlanDynamicPlanningProperties.class)
+                    .isShadowEnabled()).isTrue();
             DynamicPlanningShadowProperties properties =
                     context.getBean(DynamicPlanningShadowProperties.class);
             assertThat(properties.getTimeout()).isEqualTo(Duration.ofSeconds(2));

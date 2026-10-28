@@ -31,7 +31,7 @@ export ZHIPU_API_KEY="<你的 Embedding Key>"
 
 注意 YAML 的 `:` 后必须有空格，例如 `api-key: sk-xxx`。模型管理表中的 OpenAI 兼容动态候选（如默认 seed 的 DeepSeek）如果没有单独保存候选 Key，会回退使用 `spring.ai.openai.api-key`；如果候选已保存加密 Key，则候选 Key 优先。
 
-如需本地调试学习计划 LLM shadow，可用环境变量覆盖有界资源：`APP_AGENT_DYNAMIC_PLANNING_SHADOW_TIMEOUT`、`APP_AGENT_DYNAMIC_PLANNING_SHADOW_WORKERS`、`APP_AGENT_DYNAMIC_PLANNING_SHADOW_QUEUE_CAPACITY`。默认分别为 `2s`、`1`、`8`。
+学习计划同步预览默认执行规则规划，不需要额外开关。需要本地调试 LLM 非执行 shadow 时，设置 `APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED=true`；可用 `APP_AGENT_DYNAMIC_PLANNING_SHADOW_TIMEOUT`、`APP_AGENT_DYNAMIC_PLANNING_SHADOW_WORKERS`、`APP_AGENT_DYNAMIC_PLANNING_SHADOW_QUEUE_CAPACITY` 覆盖有界资源，默认分别为 `2s`、`1`、`8`。
 
 之后在项目根目录执行：
 
@@ -102,7 +102,7 @@ src/main/resources/application-local-lite.yml
 - 关闭图片 Milvus collection 初始化
 - 关闭通用 Milvus VectorStore 自动装配与 schema 初始化（`spring.ai.vectorstore.type=none`）
 - 开启持久学习计划预览后台任务（仍只依赖 MySQL/Flyway，不依赖 Neo4j）
-- 同步学习计划动态规划默认保持 `FIXED`；需要本地影子观测时可显式设置 `APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW`
+- 同步学习计划预览始终执行受控规则规划；LLM 非执行 shadow 默认关闭，可显式设置 `APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED=true`
 - 降低 Hikari 本地连接池规模
 - 将 Spring AI 日志从 DEBUG 降到 INFO
 
@@ -349,4 +349,4 @@ docker compose --profile optional-ai up -d clip-embedding
 
 启用开关不会自动产生学习任务；模型仍须按已有方式配置。若只想启动后端但暂时关闭持久任务，可显式设置环境变量 `APP_AGENT_EXECUTION_ENABLED=false`，或追加启动参数 `--app.agent.execution.enabled=false`。
 
-HTTP 使用和 401/409/503 含义见 `learning-plan-preview.md`。同步 `/api/task/dispatch` 的动态规划本地默认仍为 `FIXED`；如需验证影子规划观测，可临时设置 `APP_LEARNING_PLAN_DYNAMIC_MODE=SHADOW` 后启动，结束后取消该环境变量。open 仅本地单用户；共享部署应启用 JWT 认证，不用 X-User-Id 代替 owner。
+HTTP 使用和 401/409/503 含义见 `learning-plan-preview.md`。同步 `/api/task/dispatch` 始终使用受控规则规划，规划失败会在执行前回退固定图；如需验证影子规划观测，可临时设置 `APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED=true` 后启动，结束后取消该环境变量。open 仅本地单用户；共享部署应启用 JWT 认证，不用 X-User-Id 代替 owner。

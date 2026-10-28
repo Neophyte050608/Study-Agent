@@ -8,15 +8,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 @ConfigurationProperties(prefix = "app.learning.plan-preview.dynamic-planning")
 public class LearningPlanDynamicPlanningProperties {
-    public enum Mode {
-        FIXED,
-        RULES,
-        SHADOW
-    }
-
-    private Mode mode = Mode.FIXED;
+    private boolean shadowEnabled;
     private int plannerTimeoutMillis = 2000;
-    private int maxPlanBytes = 32768;
     private int maxNodes = 8;
     private int maxDepth = 4;
     private int maxDependenciesPerNode = 4;
@@ -26,9 +19,7 @@ public class LearningPlanDynamicPlanningProperties {
 
     @PostConstruct
     public void validate() {
-        if (mode == null
-                || plannerTimeoutMillis < 100 || plannerTimeoutMillis > 3000
-                || maxPlanBytes < 1024 || maxPlanBytes > 32768
+        if (plannerTimeoutMillis < 100 || plannerTimeoutMillis > 3000
                 || maxNodes < 2 || maxNodes > 8
                 || maxDepth < 1 || maxDepth > 4
                 || maxDependenciesPerNode < 1 || maxDependenciesPerNode > 4
@@ -49,12 +40,12 @@ public class LearningPlanDynamicPlanningProperties {
                 maxIssues);
     }
 
-    public Mode getMode() {
-        return mode;
+    public boolean isShadowEnabled() {
+        return shadowEnabled;
     }
 
-    public void setMode(Mode mode) {
-        this.mode = mode;
+    public void setShadowEnabled(boolean shadowEnabled) {
+        this.shadowEnabled = shadowEnabled;
     }
 
     public int getPlannerTimeoutMillis() {
@@ -63,14 +54,6 @@ public class LearningPlanDynamicPlanningProperties {
 
     public void setPlannerTimeoutMillis(int plannerTimeoutMillis) {
         this.plannerTimeoutMillis = plannerTimeoutMillis;
-    }
-
-    public int getMaxPlanBytes() {
-        return maxPlanBytes;
-    }
-
-    public void setMaxPlanBytes(int maxPlanBytes) {
-        this.maxPlanBytes = maxPlanBytes;
     }
 
     public int getMaxNodes() {

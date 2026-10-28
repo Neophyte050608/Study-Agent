@@ -22,10 +22,6 @@ app:
   agent:
     execution:
       enabled: true
-  learning:
-    plan-preview:
-      dynamic-planning:
-        mode: ${APP_LEARNING_PLAN_DYNAMIC_MODE:FIXED}
   startup:
     model-preheat-enabled: false
   chat:
