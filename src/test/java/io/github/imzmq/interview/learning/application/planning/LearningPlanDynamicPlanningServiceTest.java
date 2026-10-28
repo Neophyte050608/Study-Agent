@@ -187,6 +187,39 @@ class LearningPlanDynamicPlanningServiceTest {
     }
 
     @Test
+    void rulesModeFallsBackWhenPlanningBudgetIsExceededBeforeExecution() {
+        DynamicPlanObservationOperations observations = mock(DynamicPlanObservationOperations.class);
+        Fixture base = fixture(LearningPlanDynamicPlanningProperties.Mode.RULES,
+                new RuleBasedLearningPlanPlanner());
+        DynamicPlanningOperations slowCompiler = mock(DynamicPlanningOperations.class);
+        when(slowCompiler.validate(any(), any(), any())).thenAnswer(invocation ->
+                base.dynamicPlanning.validate(invocation.getArgument(0), invocation.getArgument(1),
+                        invocation.getArgument(2)));
+        when(slowCompiler.digest(any())).thenAnswer(invocation ->
+                base.dynamicPlanning.digest(invocation.getArgument(0)));
+        when(slowCompiler.compile(any(), any())).thenAnswer(invocation -> {
+            Thread.sleep(130);
+            return base.dynamicPlanning.compile(invocation.getArgument(0), invocation.getArgument(1));
+        });
+
+        LearningPlanDynamicPlanningProperties properties = new LearningPlanDynamicPlanningProperties();
+        properties.setMode(LearningPlanDynamicPlanningProperties.Mode.RULES);
+        properties.setPlannerTimeoutMillis(100);
+        LearningPlanDynamicPlanningService service = new LearningPlanDynamicPlanningService(
+                properties, base.fixedFactory, new RuleBasedLearningPlanPlanner(),
+                slowCompiler, observations);
+
+        assertThat(ids(service.nodes(CONTEXT)))
+                .containsExactly("profile", "evidence", "compose");
+        verify(observations).rejected(
+                org.mockito.ArgumentMatchers.eq("rules"),
+                org.mockito.ArgumentMatchers.eq("v1"),
+                org.mockito.ArgumentMatchers.eq("PLANNER_TIMEOUT"),
+                org.mockito.ArgumentMatchers.longThat(value -> value >= 100));
+        verify(observations).fallback("rules", "v1", "PLANNER_TIMEOUT");
+    }
+
+    @Test
     void executionFailureDoesNotTriggerASecondFixedExecution() {
         AtomicInteger profileReads = new AtomicInteger();
         Fixture fixture = fixture(LearningPlanDynamicPlanningProperties.Mode.RULES,

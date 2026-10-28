@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -93,11 +94,14 @@ public final class LearningPlanDynamicPlanningService {
             return fixedNodes(context);
         }
         long startedAt = System.nanoTime();
+        long deadline = startedAt + Duration.ofMillis(properties.getPlannerTimeoutMillis()).toNanos();
         observations.requested(PLANNER_TYPE, PLANNER_VERSION);
         try {
             CandidateDynamicTaskPlan candidate = planner.plan(context.topic(), context.request());
+            ensureWithinPlanningBudget(deadline);
             DynamicPlanValidationResult result = dynamicPlanning.validate(
                     candidate, policy, properties.toLimits());
+            ensureWithinPlanningBudget(deadline);
             if (!result.valid()) {
                 String errorCode = firstIssue(result);
                 observations.rejected(PLANNER_TYPE, PLANNER_VERSION,
@@ -110,6 +114,7 @@ public final class LearningPlanDynamicPlanningService {
             observations.generated(PLANNER_TYPE, PLANNER_VERSION,
                     plan, digest, elapsedMillis(startedAt));
             List<DagNode> nodes = dynamicPlanning.compile(plan, context);
+            ensureWithinPlanningBudget(deadline);
             observations.compiled(PLANNER_TYPE, PLANNER_VERSION,
                     plan, digest, elapsedMillis(startedAt));
             submitShadowIfEnabled(context, plan);
@@ -120,6 +125,12 @@ public final class LearningPlanDynamicPlanningService {
                     errorCode, elapsedMillis(startedAt));
             observations.fallback(PLANNER_TYPE, PLANNER_VERSION, errorCode);
             return fixedNodes(context);
+        }
+    }
+
+    private static void ensureWithinPlanningBudget(long deadlineNanos) {
+        if (System.nanoTime() > deadlineNanos) {
+            throw new IllegalArgumentException("PLANNER_TIMEOUT");
         }
     }
 

@@ -441,7 +441,7 @@ spring:
 
 | 配置项 | 是否必填 | 说明 |
 |---|---|---|
-| `spring.ai.openai.api-key` | 是 | 主对话模型 API Key，当前默认接 DeepSeek OpenAI 兼容接口 |
+| `spring.ai.openai.api-key` | 是 | 主对话模型 API Key，当前默认接 DeepSeek OpenAI 兼容接口；未单独保存候选 Key 的 OpenAI 兼容动态候选也会回退使用它 |
 | `spring.ai.openai.base-url` | 是 | Chat 模型接口地址 |
 | `spring.ai.zhipuai.api-key` | 是 | Embedding 使用的智谱 API Key |
 | `spring.ai.zhipuai.embedding.options.model` | 否 | 默认 `embedding-3` |
@@ -511,7 +511,7 @@ spring:
       api-key: ${ZHIPU_API_KEY:}
 ```
 
-仓库根目录的 `application-private.example.yml` 与上面内容一致。MySQL、Redis、Neo4j、内存 A2A 总线和 Java 评测引擎已有本地默认值；只有需要覆盖默认参数时，才在私有配置中添加对应项。
+仓库根目录的 `application-private.example.yml` 与上面内容一致。注意 YAML 的 `:` 后必须有空格，例如 `api-key: ${DEEPSEEK_API_KEY:}`；`api-key:${DEEPSEEK_API_KEY:}` 不是推荐写法。MySQL、Redis、Neo4j、内存 A2A 总线和 Java 评测引擎已有本地默认值；只有需要覆盖默认参数时，才在私有配置中添加对应项。
 
 如果你要启用 RocketMQ，再补：
 

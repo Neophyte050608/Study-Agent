@@ -6,6 +6,7 @@ import io.github.imzmq.interview.modelrouting.registry.DynamicChatModelRegistry;
 import io.github.imzmq.interview.modelrouting.registry.ModelBeanResolver;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,17 +20,22 @@ public class DynamicModelFactory {
 
     private final ApplicationContext applicationContext;
     private final ModelBeanResolver modelBeanResolver;
+    private static final String OPENAI_API_KEY_PROPERTY = "spring.ai.openai.api-key";
+
     private final DynamicChatModelRegistry dynamicChatModelRegistry;
     private final ApiKeyEncryptor apiKeyEncryptor;
+    private final Environment environment;
 
     public DynamicModelFactory(ApplicationContext applicationContext,
                                ModelBeanResolver modelBeanResolver,
                                DynamicChatModelRegistry dynamicChatModelRegistry,
-                               ApiKeyEncryptor apiKeyEncryptor) {
+                               ApiKeyEncryptor apiKeyEncryptor,
+                               Environment environment) {
         this.applicationContext = applicationContext;
         this.modelBeanResolver = modelBeanResolver;
         this.dynamicChatModelRegistry = dynamicChatModelRegistry;
         this.apiKeyEncryptor = apiKeyEncryptor;
+        this.environment = environment;
     }
 
     public ChatModel getByCandidate(ModelRoutingCandidate candidate) {
@@ -38,10 +44,7 @@ public class DynamicModelFactory {
             if (cachedModel != null) {
                 return cachedModel;
             }
-            String apiKey = "";
-            if (candidate.apiKeyRef() != null && !candidate.apiKeyRef().isBlank()) {
-                apiKey = apiKeyEncryptor.decrypt(candidate.apiKeyRef());
-            }
+            String apiKey = resolveApiKey(candidate);
             return dynamicChatModelRegistry.getOrCreate(
                     candidate.name(),
                     candidate.baseUrl(),
@@ -50,6 +53,16 @@ public class DynamicModelFactory {
             );
         }
         return getByBeanNameOrDefault(modelBeanResolver.resolveByRoutingCandidate(candidate.provider(), candidate.beanName()));
+    }
+
+    private String resolveApiKey(ModelRoutingCandidate candidate) {
+        if (candidate.apiKeyRef() != null && !candidate.apiKeyRef().isBlank()) {
+            return apiKeyEncryptor.decrypt(candidate.apiKeyRef());
+        }
+        if ("openai".equalsIgnoreCase(candidate.provider())) {
+            return environment.getProperty(OPENAI_API_KEY_PROPERTY, "");
+        }
+        return "";
     }
 
     private ChatModel getByBeanNameOrDefault(String beanName) {
