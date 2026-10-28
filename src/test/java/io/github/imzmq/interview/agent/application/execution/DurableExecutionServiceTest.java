@@ -54,6 +54,10 @@ class DurableExecutionServiceTest {
         when(tx.query("owner", "task")).thenReturn(view);
 
         assertSame(view, service.submit("owner", "TEST", 2, "key", "{}"));
+        var submitted = org.mockito.ArgumentCaptor.forClass(ExecutionTaskDO.class);
+        verify(tx).submit(submitted.capture(), eq(List.of("source")));
+        assertEquals("{\"schemaVersion\":\"2\"}", submitted.getValue().getDefinitionJson());
+
         assertSame(view, service.retry("owner", "task", 0, Set.of("source")));
 
         verify(workflow).prepare("owner", "{}");

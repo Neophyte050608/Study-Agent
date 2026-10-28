@@ -77,6 +77,37 @@ class DurableExecutionWorkerTest {
         verify(tx).finish(task, "COMPLETED", "{}", null);
     }
 
+    @Test void definitionNodeMismatchFailsWithoutExecutingAnyAction() {
+        var tx = mock(ExecutionTransactions.class);
+        var registry = mock(DurableWorkflowRegistry.class);
+        var service = mock(DurableExecutionService.class);
+        var workflow = mock(DurableWorkflow.class);
+        var task = new ExecutionTaskDO();
+        task.setTaskId("task"); task.setOwnerUserId("owner"); task.setWorkflowType("TEST");
+        task.setWorkflowVersion(2); task.setInputJson("{}"); task.setDefinitionJson("definition");
+        task.setLeaseOwner("worker"); task.setLeaseEpoch(1L);
+        var action = mock(java.util.function.Function.class);
+        var restored = new DagNode("restored", Set.of(), true, action);
+        var saved = new io.github.imzmq.interview.agent.infrastructure.persistence.execution.ExecutionNodeDO();
+        saved.setNodeId("persisted"); saved.setStatus("PENDING");
+        when(registry.require("TEST", 2)).thenReturn(workflow);
+        when(workflow.restore("owner", "{}", "definition")).thenReturn(List.of(restored));
+        when(service.validateNodes(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tx.snapshot(task)).thenReturn(List.of(saved));
+
+        try (var dag = new FixedDagExecutor()) {
+            var worker = new DurableExecutionWorker(tx, service, registry,
+                    new ExecutionJson(new ObjectMapper()), dag, new DurableExecutionProperties());
+            try { worker.run(task); } finally { worker.close(); }
+        }
+
+        verify(action, never()).apply(any());
+        verify(workflow, never()).prepare(anyString(), anyString());
+        verify(tx).finish(task, "FAILED", null, "EXECUTION_FAILED");
+        verify(tx, never()).start(any(), anyString(), anyString());
+        verify(tx, never()).complete(any(), anyString(), any(), any());
+    }
+
     private void invoke(Object value, String method) throws Exception {
         var m = value.getClass().getDeclaredMethod(method); m.setAccessible(true); m.invoke(value);
     }

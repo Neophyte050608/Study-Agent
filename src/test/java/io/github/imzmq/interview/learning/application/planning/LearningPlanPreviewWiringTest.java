@@ -1,5 +1,8 @@
 package io.github.imzmq.interview.learning.application.planning;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningOperations;
+import io.github.imzmq.interview.agent.application.execution.DurableWorkflowRegistry;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanObservationOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningShadowOperations;
 
@@ -108,6 +111,34 @@ class LearningPlanPreviewWiringTest {
             context.refresh();
 
             assertNotNull(context.getBean(LearningPlanDynamicPlanningService.class));
+        }
+    }
+
+    @Test
+    void springRegistersHistoricalAndCurrentLearningPlanWorkflows() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
+            context.registerBean(LearningPlanNodeOperations.class,
+                    () -> mock(LearningPlanNodeOperations.class));
+            context.registerBean(LearningPlanPreviewService.class,
+                    () -> mock(LearningPlanPreviewService.class));
+            context.registerBean(LearningPlanDynamicPlanningService.class,
+                    () -> mock(LearningPlanDynamicPlanningService.class));
+            context.registerBean(DynamicPlanningOperations.class,
+                    () -> mock(DynamicPlanningOperations.class));
+            context.register(LearningPlanFixedNodeFactory.class,
+                    LearningPlanWorkflowOutputCodec.class,
+                    LearningPlanWorkflowSnapshotCodec.class,
+                    LearningPlanWorkflowV1.class,
+                    LearningPlanWorkflowV2.class,
+                    DurableWorkflowRegistry.class);
+            context.refresh();
+
+            DurableWorkflowRegistry registry = context.getBean(DurableWorkflowRegistry.class);
+            assertInstanceOf(LearningPlanWorkflowV1.class,
+                    registry.require("LEARNING_PLAN_PREVIEW", 1));
+            assertInstanceOf(LearningPlanWorkflowV2.class,
+                    registry.require("LEARNING_PLAN_PREVIEW", 2));
         }
     }
 
