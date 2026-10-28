@@ -78,14 +78,14 @@ class LearningPlanPreviewSecurityTest {
 
     @Test
     void validSignedJwtOwnerCannotBeReplacedByHeaderOrPayload() throws Exception {
-        when(execution.submit(eq("subject:alice"), eq("LEARNING_PLAN_PREVIEW"), eq(1), eq("key"), anyString()))
+        when(execution.submit(eq("subject:alice"), eq("LEARNING_PLAN_PREVIEW"), eq(2), eq("key"), anyString()))
                 .thenReturn(task());
         var result = mvc.perform(post(BASE).header("Authorization", bearer("alice"))
                         .header("X-User-Id", "bob").header("Idempotency-Key", "key")
                         .contentType("application/json").content("{\"topic\":\"Java\",\"userId\":\"bob\",\"owner\":\"bob\"}"))
                 .andExpect(status().isAccepted()).andExpect(jsonPath("$.status").value("QUEUED")).andReturn();
         assertThat(result.getRequest().getSession(false)).isNull();
-        verify(execution).submit("subject:alice", "LEARNING_PLAN_PREVIEW", 1, "key", "{\"topic\":\"Java\",\"request\":\"\"}");
+        verify(execution).submit("subject:alice", "LEARNING_PLAN_PREVIEW", 2, "key", "{\"topic\":\"Java\",\"request\":\"\"}");
     }
 
     @Test
@@ -146,7 +146,7 @@ class LearningPlanPreviewSecurityTest {
     private DurableTaskView task() {
         var node = new DurableTaskView.NodeView("PENDING", 0, "PENDING");
         return new DurableTaskView(ID, "QUEUED", 0, null, null,
-                Map.of("profile", node, "evidence", node, "compose", node), "LEARNING_PLAN_PREVIEW", 1);
+                Map.of("profile", node, "evidence", node, "compose", node), "LEARNING_PLAN_PREVIEW", 2);
     }
 
     private String bearer(String subject) {
