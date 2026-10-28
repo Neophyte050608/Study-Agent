@@ -105,6 +105,37 @@ docker compose config
 - 命令失败时，报告失败命令、关键错误和下一步建议。
 - 因耗时、缺依赖或网络限制跳过检查时，必须明确说明。
 
+## Durable 动态计划快照
+
+快照协议、v1/v2 workflow 与 Spring 注册：
+
+```bash
+mvn -q \
+  -Dtest=LearningPlanWorkflowSnapshotCodecTest,LearningPlanWorkflowV1Test,LearningPlanWorkflowV2Test,LearningPlanDynamicPlanningServiceTest,LearningPlanPreviewWiringTest \
+  -DargLine='-javaagent:/Users/bytedance/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar' \
+  test
+```
+
+持久提交/恢复、节点集合一致性、局部重试与 v1/v2 结果投影：
+
+```bash
+mvn -q \
+  -Dtest=DurableExecutionServiceTest,DurableExecutionWorkerTest,DurableLearningPlanServiceTest,LearningPlanTaskPresenterTest \
+  -DargLine='-javaagent:/Users/bytedance/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar' \
+  test
+```
+
+完整 durable/dynamic/planning 单测切片：
+
+```bash
+mvn -q \
+  -Dtest='io.github.imzmq.interview.agent.application.execution.*Test,io.github.imzmq.interview.agent.application.execution.dynamic.*Test,io.github.imzmq.interview.learning.application.planning.*Test' \
+  -DargLine='-javaagent:/Users/bytedance/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar' \
+  test
+```
+
+这组单测不调用真实模型或外部 API，不需要 API Key。它证明 submit 保存 workflow 生成的定义、worker/retry 只恢复定义、节点集合不一致时拒绝执行，以及历史 v1 与当前 v2 同时注册；它不替代下面的真实 MySQL fencing/recovery 证据。
+
 ## 持久 DAG 的 MySQL 集成验证
 
 `DurableExecutionMySqlIntegrationTest` 默认跳过数据库验证。使用一次性 MySQL 8 库（不得使用开发/生产库）：
@@ -112,10 +143,15 @@ docker compose config
 ```bash
 mvn -q -Dtest=DurableExecutionMySqlIntegrationTest \
   -Dtest.mysql.execution-jdbc-url='jdbc:mysql://127.0.0.1:33318/isolated_execution_test?allowPublicKeyRetrieval=true&useSSL=false' \
-  -Dtest.mysql.username=root -Dtest.mysql.password='<temporary-test-password>' test
+  -Dtest.mysql.username=root \
+  -Dtest.mysql.password='<temporary-test-password>' \
+  -DargLine='-javaagent:/Users/bytedance/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar' \
+  test
 ```
 
-此测试执行 Flyway，并清理测试 workflow 的 task/node/attempt，需自行创建并回收隔离库。验证并发领取、epoch 接管、失效 owner 拒写、期限不续命、late output/attempt 预算、级联删除、幂等输入、并发 revision 重试、真实检查点恢复；模型节点使用 stub。另用 `FlywayMySqlMigrationIntegrationTest` 验证全新库与 V1 baseline 接管到 V5，两个 URL 都必须指向空的临时库。
+此测试执行 Flyway，并清理测试 workflow 的 task/node/attempt，需自行创建并回收隔离库。验证并发领取、epoch 接管、失效 owner 拒写、期限不续命、late output/attempt 预算、级联删除、幂等输入、并发 revision 重试、持久定义恢复与真实检查点恢复；模型节点使用 stub。另用 `FlywayMySqlMigrationIntegrationTest` 验证全新库与 V1 baseline 接管到 V5，两个 URL 都必须指向空的临时库。
+
+只有 Surefire 明确显示测试实际执行且零失败/错误时，才能声称 MySQL recovery、fencing 或 retry 已验证。未配置 `test.mysql.execution-jdbc-url` 时，JUnit assumption 会跳过全部用例；即使命令 `BUILD SUCCESS`，`Tests run: 7, Skipped: 7` 也不是数据库通过证据，必须单独报告为未验证。
 
 ## 学习计划预览 HTTP（第三步）
 

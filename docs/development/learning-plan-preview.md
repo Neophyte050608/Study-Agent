@@ -1,4 +1,4 @@
-# 固定 DAG 学习计划预览
+# 学习计划预览：固定执行器与受控动态计划
 
 ## 同步入口（第一步，保持不变）
 
@@ -88,11 +88,11 @@ durableLearningPlanOperations.delete(executionUserId, accepted.taskId()); // 仅
 
 MySQL 为 task/node/attempt 真相源；DB 时间控制租约和每 revision 首次领取后的 75 秒期限，接管不重新计时。每次领取 epoch 递增，每个节点开始/提交和终态提交都检查 owner/epoch/status/未过期租约。短事务落节点和 attempt，提交后才释放后继；模型调用不持行锁。恢复复用已提交成功输出，原 RUNNING attempt 标记 ABANDONED，节点最多尝试 3 次；不自动重试普通失败，也不承诺模型 exactly-once。
 
-FAILED/TIMED_OUT/DEGRADED 允许以 expectedRevision 重试失败根与全部后继，包括旧成功 compose；成功 sibling 保留，结果清空、revision 增长，attempt_count 不清零。超时或整图终止时未执行节点记 FAILED，使调用方可以显式重试。两个并发重试只有一个成功。不支持动态图、竞速、用户取消、工具或业务写入。
+FAILED/TIMED_OUT/DEGRADED 允许以 expectedRevision 重试失败根与全部后继，包括旧成功 compose；成功 sibling 保留，结果清空、revision 增长，attempt_count 不清零。超时或整图终止时未执行节点记 FAILED，使调用方可以显式重试。两个并发重试只有一个成功。不支持运行中重新规划、竞速、用户取消、工具或业务写入。新任务可以在提交时得到受控的两节点或三节点图，但持久化后图结构不可变。
 
 输入/输出预算：任务输入 16 KiB，节点输入和输出各 64 KiB，最终结果 128 KiB。版本化 workflow 只保存 JSON，不保存 lambda/类名；JSON 对象递归规范化，拒绝空/null/尾随内容和超预算。保留策略当前是 owner-scoped 终态删除并外键级联，尚无自动 TTL。
 
-新增验证：`DurableExecutionConfigurationTest`、`ExecutionJsonTest`、`DurableExecutionWorkerTest`、`DurableRetrySelectionTest`、`DurableCheckpointTest`、`DurableExecutionServiceTest`、`LearningPlanWorkflowTest`，以及 opt-in `DurableExecutionMySqlIntegrationTest`。真实数据库测试需要 **独立临时库**，见验证指南；stub 三节点验证调度，不代表验证真实模型质量。
+新增验证：`DurableExecutionConfigurationTest`、`ExecutionJsonTest`、`DurableExecutionWorkerTest`、`DurableRetrySelectionTest`、`DurableCheckpointTest`、`DurableExecutionServiceTest`、`LearningPlanWorkflowV1Test`、`LearningPlanWorkflowV2Test`、`LearningPlanWorkflowSnapshotCodecTest`，以及 opt-in `DurableExecutionMySqlIntegrationTest`。真实数据库测试需要 **独立临时库**，见验证指南；stub 图验证调度，不代表验证真实模型质量。
 
 
 ## 第三步：HTTP 使用入口
@@ -210,7 +210,11 @@ app:
 
 环境变量入口为 `APP_LEARNING_PLAN_DYNAMIC_SHADOW_ENABLED`。默认关闭；设为 `true` 时，正式结果仍只来自规则计划，LLM 候选只在独立有界资源中比较。Agent-owned 的 `app.agent.dynamic-planning.shadow.timeout/workers/queue-capacity` 分别控制比较超时、worker 数和排队容量；能力缺失、超时、过载或失败均不得影响规则图。
 
-动态选择只作用于同步 preview。持久化预览继续使用版本化固定三节点 `LearningPlanWorkflow`，不会保存、恢复或执行动态/LLM 候选图。本次能力不修改前端页面、HTTP 路由或响应契约。
+同步 preview 与 durable v2 共用同一个最终规则/固定兜底计划，但执行生命周期不同：同步入口在请求内直接执行；新 durable 提交只规划一次，将完整 capability 图以 `RULES` 或 `FIXED_FALLBACK` 快照写入现有 `definition_json`，然后异步执行。worker 恢复和局部 retry 只按快照中的精确 capability ID/版本重新编译，不调用规则规划器、fallback 选择或 LLM shadow，也不会在运行中换图。
+
+历史 durable workflow v1 仅恢复升级前已经持久化的固定三节点任务；所有新提交固定使用 v2。`definition_json` 是执行定义的唯一真相源，task/node 行只保存运行状态和检查点，不能取代或重建定义。已持久化的 capability ID/版本属于兼容契约：只要可能仍有对应任务，就必须保留其精确版本的编译能力。v1/v2 共存不代表运行模式开关，也没有兼容别名或双写。
+
+这次升级复用既有表和 `definition_json`，不新增 Flyway、表、列、启动依赖、环境变量或 API Key；前端页面、HTTP 路由和响应契约不变。
 
 动态计划只包含结构、稳定 capability ID/版本和有界标量参数；可信 owner、topic 与 request 由执行上下文提供，计划不得指定 Bean、实现类、Tool executor 或持久化 adapter。LLM shadow 的 prompt、候选原文、业务输入、身份、画像、证据和异常消息不得写入观测事件。
 
