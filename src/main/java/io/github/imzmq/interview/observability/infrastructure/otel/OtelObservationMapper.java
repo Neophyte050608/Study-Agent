@@ -48,11 +48,30 @@ public class OtelObservationMapper {
         putIfHasText(attributes, "rag.retrieval_mode", source.get("retrievalMode"));
         putIfHasText(attributes, "agent.task_type", source.get("taskType"));
         putIfHasText(attributes, "agent.route_source", source.get("routeSource"));
+        putPlanningAttributes(attributes, source);
 
         if (attributes.isEmpty()) {
             return Map.of();
         }
         return Map.copyOf(attributes);
+    }
+
+    private static void putPlanningAttributes(Map<String, String> target, Map<String, Object> source) {
+        putIfHasText(target, "agent.planning.planner_type", source.get("plannerType"));
+        putIfHasText(target, "agent.planning.planner_version", source.get("plannerVersion"));
+        putIfHasText(target, "agent.planning.scenario", source.get("scenario"));
+        putIfHasText(target, "agent.planning.schema_version", source.get("schemaVersion"));
+        putIfHasText(target, "agent.planning.node_count", source.get("nodeCount"));
+        putIfHasText(target, "agent.planning.depth", source.get("depth"));
+        putIfHasText(target, "agent.planning.capabilities", source.get("capabilities"));
+        putIfHasText(target, "agent.planning.plan_digest", source.get("planDigest"));
+        putIfHasText(target, "agent.planning.rule_digest", source.get("ruleDigest"));
+        putIfHasText(target, "agent.planning.shadow_digest", source.get("shadowDigest"));
+        putIfHasText(target, "agent.planning.same", source.get("same"));
+        putIfHasText(target, "agent.planning.node_delta", source.get("nodeDelta"));
+        putIfHasText(target, "agent.planning.duration_ms", source.get("durationMs"));
+        putIfHasText(target, "agent.planning.error_code", source.get("errorCode"));
+        putIfHasText(target, "agent.planning.fallback_target", source.get("fallbackTarget"));
     }
 
     private static void putLatency(Map<String, String> target, Map<String, Object> source) {

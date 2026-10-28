@@ -250,3 +250,38 @@ V5 task/node/attempt 是内部执行记录，不是外部 trace payload。owner-
 用户画像、证据正文、owner/user/session/task 等业务标识、认证凭据以及 exception message。
 所有事件仍须经过 `TraceAttributeSanitizer.sanitizeForExternalObservation(...)` 的统一白名单清洗。
 `FIXED` 模式不发布动态规划事件；规划节点开始执行后也不再触发固定图回退观测。
+
+外部观测配置生效时，每个 `dynamic_plan.*` 事件导出为一个 OpenTelemetry span。
+span 名由受控的 event type 与 category 组成，例如
+`ai.dynamic_plan_shadow_compared.agent-planning`。结构字段由 `OtelObservationMapper`
+逐项映射到以下固定 attributes，不允许按前缀或整张 map 透传：
+
+- `plannerType`、`plannerVersion`、`scenario`、`schemaVersion` 分别映射为
+  `agent.planning.planner_type`、`agent.planning.planner_version`、
+  `agent.planning.scenario`、`agent.planning.schema_version`；
+- `nodeCount`、`depth`、`capabilities` 分别映射为
+  `agent.planning.node_count`、`agent.planning.depth`、`agent.planning.capabilities`；
+- `planDigest`、`ruleDigest`、`shadowDigest` 分别映射为
+  `agent.planning.plan_digest`、`agent.planning.rule_digest`、
+  `agent.planning.shadow_digest`；
+- `same`、`nodeDelta`、`durationMs` 分别映射为
+  `agent.planning.same`、`agent.planning.node_delta`、`agent.planning.duration_ms`；
+- `errorCode`、`fallbackTarget` 分别映射为
+  `agent.planning.error_code`、`agent.planning.fallback_target`。
+
+默认 `app.observability.external.enabled=false`；未完整配置或 adapter 初始化失败时使用
+`NoopAiObservationPublisher`，因此本地默认不会产生外部 span。即使启用外部导出，也不会导出
+prompt、候选计划原文、owner/user/session/task、模型原始响应或原始异常。
+
+常见事件序列可按下表诊断：
+
+| 事件序列 | 含义 |
+|---|---|
+| `requested(rules) -> generated -> compiled` | 规则计划生成、校验与编译正常 |
+| `requested(rules) -> rejected -> fallback` | 规则规划失败，执行前已回退固定图 |
+| `requested(llm-shadow) -> shadow_compared` | 非执行 shadow 比较成功 |
+| `requested(llm-shadow) -> rejected` | shadow 失败，正式规则图不受影响 |
+
+常见受控错误码包括 `PLANNER_TIMEOUT`、`PLANNER_UNAVAILABLE`、`INVALID_PLAN_JSON`、
+`SHADOW_TIMEOUT`、`SHADOW_OVERLOADED`、`PLANNING_FAILED`。其中
+`SHADOW_TIMEOUT` 和 `SHADOW_OVERLOADED` 只影响非执行 shadow，不影响规则图主流程。

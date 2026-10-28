@@ -59,6 +59,60 @@ class OtelObservationMapperTest {
     }
 
     @Test
+    void mapsControlledDynamicPlanningFieldsWithoutSensitiveContent() {
+        Map<String, Object> sourceAttributes = new LinkedHashMap<>();
+        sourceAttributes.put("plannerType", "llm-shadow");
+        sourceAttributes.put("plannerVersion", "v1");
+        sourceAttributes.put("scenario", "learning-plan-preview");
+        sourceAttributes.put("schemaVersion", "1");
+        sourceAttributes.put("nodeCount", 3);
+        sourceAttributes.put("depth", 2);
+        sourceAttributes.put("capabilities", "knowledge.evidence.retrieve,learning.plan.compose");
+        sourceAttributes.put("planDigest", "plan-digest");
+        sourceAttributes.put("ruleDigest", "rule-digest");
+        sourceAttributes.put("shadowDigest", "shadow-digest");
+        sourceAttributes.put("same", false);
+        sourceAttributes.put("nodeDelta", -1);
+        sourceAttributes.put("durationMs", 15);
+        sourceAttributes.put("errorCode", "SHADOW_TIMEOUT");
+        sourceAttributes.put("fallbackTarget", "fixed");
+        sourceAttributes.put("prompt", "do not export");
+        sourceAttributes.put("owner", "owner-1");
+        sourceAttributes.put("rawResponse", "do not export");
+
+        AiObservationEvent event = new AiObservationEvent(
+                "dynamic_plan.shadow_compared",
+                "",
+                "",
+                "agent-planning",
+                "learning-plan-preview",
+                "COMPARED",
+                null,
+                sourceAttributes);
+
+        assertThat(new OtelObservationMapper().toAttributes(event))
+                .containsAllEntriesOf(Map.ofEntries(
+                        Map.entry("agent.planning.planner_type", "llm-shadow"),
+                        Map.entry("agent.planning.planner_version", "v1"),
+                        Map.entry("agent.planning.scenario", "learning-plan-preview"),
+                        Map.entry("agent.planning.schema_version", "1"),
+                        Map.entry("agent.planning.node_count", "3"),
+                        Map.entry("agent.planning.depth", "2"),
+                        Map.entry("agent.planning.capabilities", "knowledge.evidence.retrieve,learning.plan.compose"),
+                        Map.entry("agent.planning.plan_digest", "plan-digest"),
+                        Map.entry("agent.planning.rule_digest", "rule-digest"),
+                        Map.entry("agent.planning.shadow_digest", "shadow-digest"),
+                        Map.entry("agent.planning.same", "false"),
+                        Map.entry("agent.planning.node_delta", "-1"),
+                        Map.entry("agent.planning.duration_ms", "15"),
+                        Map.entry("agent.planning.error_code", "SHADOW_TIMEOUT"),
+                        Map.entry("agent.planning.fallback_target", "fixed")))
+                .doesNotContainKeys("prompt", "owner", "rawResponse");
+        assertThat(new OtelObservationMapper().toAttributes(event).values())
+                .doesNotContain("do not export", "owner-1");
+    }
+
+    @Test
     void doesNotMapSensitiveFields() {
         Map<String, Object> sourceAttributes = new LinkedHashMap<>();
         sourceAttributes.put("userId", "user-1");
