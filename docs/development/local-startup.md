@@ -31,6 +31,8 @@ export ZHIPU_API_KEY="<你的 Embedding Key>"
 
 注意 YAML 的 `:` 后必须有空格，例如 `api-key: sk-xxx`。模型管理表中的 OpenAI 兼容动态候选（如默认 seed 的 DeepSeek）如果没有单独保存候选 Key，会回退使用 `spring.ai.openai.api-key`；如果候选已保存加密 Key，则候选 Key 优先。
 
+如需本地调试学习计划 LLM shadow，可用环境变量覆盖有界资源：`APP_AGENT_DYNAMIC_PLANNING_SHADOW_TIMEOUT`、`APP_AGENT_DYNAMIC_PLANNING_SHADOW_WORKERS`、`APP_AGENT_DYNAMIC_PLANNING_SHADOW_QUEUE_CAPACITY`。默认分别为 `2s`、`1`、`8`。
+
 之后在项目根目录执行：
 
 ```bash

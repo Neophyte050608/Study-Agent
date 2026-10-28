@@ -205,7 +205,7 @@ app:
 | `RULES` | 经校验并编译的确定性规则计划 | 只允许已注册、只读且符合 Learning 场景策略的 capability；规划、校验或编译失败时在执行前回退固定图。 |
 | `SHADOW` | 与 `RULES` 相同的规则计划 | 正式结果始终来自规则计划；LLM 候选只在独立有界资源中做非执行比较。影子能力缺失、超时、过载或失败均不得影响正式结果。 |
 
-动态选择只作用于同步的 request-scoped preview。规则规划、校验和编译共用 `planner-timeout-millis` 的执行前预算；一旦超时，会在节点执行前记录 `PLANNER_TIMEOUT` 并回退固定三节点图。节点开始执行后不会因局部失败换图或重新规划；失败仍按现有节点状态和降级语义返回。持久化预览继续使用版本化的固定三节点 `LearningPlanWorkflow`，不会保存、恢复或执行动态/LLM 候选图。本次能力不修改前端页面、HTTP 路由或响应契约。
+动态选择只作用于同步的 request-scoped preview。规则规划、校验和编译共用 `planner-timeout-millis` 的执行前预算；一旦超时，会在节点执行前记录 `PLANNER_TIMEOUT` 并回退固定三节点图。LLM shadow 使用独立有界资源池，`app.agent.dynamic-planning.shadow.timeout/workers/queue-capacity` 分别控制影子比较超时、worker 数和排队容量，过载只记录 `SHADOW_OVERLOADED`，不得影响正式规则图。节点开始执行后不会因局部失败换图或重新规划；失败仍按现有节点状态和降级语义返回。持久化预览继续使用版本化的固定三节点 `LearningPlanWorkflow`，不会保存、恢复或执行动态/LLM 候选图。本次能力不修改前端页面、HTTP 路由或响应契约。
 
 动态计划只包含结构、稳定 capability ID/版本和有界标量参数；可信 owner、topic 与 request 由执行上下文提供，计划不得指定 Bean、实现类、Tool executor 或持久化 adapter。LLM shadow 的 prompt、候选原文、业务输入、身份、画像、证据和异常消息不得写入观测事件。
 

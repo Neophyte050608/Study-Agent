@@ -45,8 +45,10 @@ public final class DynamicPlanningShadowRunner implements DynamicPlanningShadowO
     @Autowired
     public DynamicPlanningShadowRunner(
             LlmDynamicTaskPlanner planner,
-            DynamicPlanObservationOperations observations) {
-        this(planner, observations, new DynamicPlanFingerprint(), Duration.ofSeconds(2), 1, 8);
+            DynamicPlanObservationOperations observations,
+            DynamicPlanningShadowProperties properties) {
+        this(planner, observations, new DynamicPlanFingerprint(),
+                properties.getTimeout(), properties.getWorkers(), properties.getQueueCapacity());
     }
 
     public DynamicPlanningShadowRunner(
