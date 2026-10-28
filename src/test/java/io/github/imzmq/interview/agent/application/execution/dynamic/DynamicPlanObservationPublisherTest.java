@@ -2,6 +2,10 @@ package io.github.imzmq.interview.agent.application.execution.dynamic;
 
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskNode;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskPlan;
+import io.github.imzmq.interview.observability.application.AiObservationEvent;
+import io.github.imzmq.interview.observability.application.AiObservationPublisher;
+import io.github.imzmq.interview.observability.application.DefaultOperationalObservationPublisher;
+import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import io.github.imzmq.interview.observability.application.contract.OperationalObservationPublisher;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +77,37 @@ class DynamicPlanObservationPublisherTest {
     }
 
     @Test
+    void shadowLifecycleSurvivesExternalSanitizationWithOnlyControlledAttributes() {
+        CapturingAiObservationPublisher sink = new CapturingAiObservationPublisher();
+        DynamicPlanObservationPublisher observer = new DynamicPlanObservationPublisher(
+                new DefaultOperationalObservationPublisher(sink, new TraceAttributeSanitizer()));
+
+        observer.requested("llm-shadow", "v1");
+        observer.shadowCompared(
+                "llm-shadow", "v1", "rule-digest", "shadow-digest", false, -1, 5L);
+
+        assertThat(sink.events).extracting(AiObservationEvent::eventType)
+                .containsExactly("dynamic_plan.requested", "dynamic_plan.shadow_compared");
+        assertThat(sink.events).allSatisfy(event -> {
+            assertThat(event.traceId()).isEmpty();
+            assertThat(event.nodeId()).isEmpty();
+            assertThat(event.category()).isEqualTo("agent-planning");
+            assertThat(event.name()).isEqualTo("learning-plan-preview");
+        });
+        assertThat(sink.events.getFirst().attributes()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "plannerType", "llm-shadow",
+                "plannerVersion", "v1"));
+        assertThat(sink.events.getLast().attributes()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "plannerType", "llm-shadow",
+                "plannerVersion", "v1",
+                "ruleDigest", "rule-digest",
+                "shadowDigest", "shadow-digest",
+                "same", "false",
+                "nodeDelta", "-1",
+                "durationMs", "5"));
+    }
+
+    @Test
     void preservesStableShadowTimeoutAndOverloadCodes() {
         RecordingPublisher recorder = new RecordingPublisher();
         DynamicPlanObservationPublisher observer = new DynamicPlanObservationPublisher(recorder);
@@ -127,6 +162,15 @@ class DynamicPlanObservationPublisherTest {
             String name,
             String status,
             Map<String, Object> attributes) {
+    }
+
+    private static final class CapturingAiObservationPublisher implements AiObservationPublisher {
+        private final List<AiObservationEvent> events = new ArrayList<>();
+
+        @Override
+        public void publish(AiObservationEvent event) {
+            events.add(event);
+        }
     }
 
     private static final class RecordingPublisher implements OperationalObservationPublisher {
