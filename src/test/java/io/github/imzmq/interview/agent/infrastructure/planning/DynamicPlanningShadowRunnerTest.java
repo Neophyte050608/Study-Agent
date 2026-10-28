@@ -66,6 +66,7 @@ class DynamicPlanningShadowRunnerTest {
             runner.submit(CONTEXT, rulePlan(), policy(), descriptors(), LIMITS);
 
             assertThat(observer.compared.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(observer.requestedCalls).isEqualTo(1);
             assertThat(observer.plannerType).isEqualTo("llm-shadow");
             assertThat(observer.plannerVersion).isEqualTo("v1");
             assertThat(observer.ruleDigest).matches("[0-9a-f]{64}");
@@ -84,6 +85,7 @@ class DynamicPlanningShadowRunnerTest {
                 invalidObserver, Duration.ofSeconds(1), 1, 1)) {
             runner.submit(CONTEXT, rulePlan(), policy(), descriptors(), LIMITS);
             assertThat(invalidObserver.rejected.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(invalidObserver.requestedCalls).isEqualTo(1);
             assertThat(invalidObserver.terminal).containsExactly("INVALID_PLAN_JSON");
         }
 
@@ -93,6 +95,7 @@ class DynamicPlanningShadowRunnerTest {
         }, failureObserver, Duration.ofSeconds(1), 1, 1)) {
             runner.submit(CONTEXT, rulePlan(), policy(), descriptors(), LIMITS);
             assertThat(failureObserver.rejected.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(failureObserver.requestedCalls).isEqualTo(1);
             assertThat(failureObserver.terminal).containsExactly("PLANNER_UNAVAILABLE");
         }
     }
@@ -114,6 +117,7 @@ class DynamicPlanningShadowRunnerTest {
             runner.submit(CONTEXT, rulePlan(), policy(), descriptors(), LIMITS);
 
             assertThat(observer.rejected.await(1, TimeUnit.SECONDS)).isTrue();
+            assertThat(observer.requestedCalls).isEqualTo(1);
             assertThat(interrupted.await(1, TimeUnit.SECONDS)).isTrue();
             Thread.sleep(30);
             assertThat(observer.terminal).containsExactly("SHADOW_TIMEOUT");
@@ -144,6 +148,7 @@ class DynamicPlanningShadowRunnerTest {
             runner.submit(CONTEXT, rulePlan(), policy(), descriptors(), LIMITS);
 
             assertThat(observer.awaitCode("SHADOW_OVERLOADED", 1, TimeUnit.SECONDS)).isTrue();
+            assertThat(observer.requestedCalls).isEqualTo(3);
             keepRunning.set(false);
             assertThat(release.await(1, TimeUnit.SECONDS)).isTrue();
         }
@@ -236,9 +241,14 @@ class DynamicPlanningShadowRunnerTest {
         private volatile String shadowDigest;
         private volatile boolean same;
         private volatile int nodeDelta;
+        private volatile int requestedCalls;
         private volatile int compiledCalls;
 
-        @Override public void requested(String plannerType, String plannerVersion) { }
+        @Override public void requested(String plannerType, String plannerVersion) {
+            this.plannerType = plannerType;
+            this.plannerVersion = plannerVersion;
+            requestedCalls++;
+        }
         @Override public void generated(String plannerType, String plannerVersion,
                                         ValidatedDynamicTaskPlan plan, String digest, long durationMs) { }
         @Override public void rejected(String plannerType, String plannerVersion,

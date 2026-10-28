@@ -91,6 +91,7 @@ public final class DynamicPlanningShadowRunner implements DynamicPlanningShadowO
         Objects.requireNonNull(limits);
 
         long startedAt = System.nanoTime();
+        observations.requested(PLANNER_TYPE, PLANNER_VERSION);
         AtomicBoolean terminalObservation = new AtomicBoolean();
         AtomicReference<Future<?>> workerReference = new AtomicReference<>();
         AtomicReference<ScheduledFuture<?>> timeoutReference = new AtomicReference<>();

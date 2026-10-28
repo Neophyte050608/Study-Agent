@@ -119,7 +119,7 @@ Learning Plan Preview 的动态规划通过 `DynamicPlanObservationOperations` �
 - 性能与降级：`durationMs`、`fallbackTarget`。
 - 受控失败分类：`errorCode`。
 
-`shadow_compared` 必须携带 `plannerType/plannerVersion` 以便区分 LLM shadow 来源，但仍只允许记录 digest、节点差异和耗时。禁止记录 prompt、候选原文、用户输入、owner/session/user/task ID、节点参数、模型原始异常、Key、token 或外部响应正文。
+每次 LLM shadow 提交必须先发布一个 `dynamic_plan.requested`，随后只发布一个终态事件：成功时为 `dynamic_plan.shadow_compared`，解析、校验、模型、超时或过载失败时为 `dynamic_plan.rejected`。`shadow_compared` 必须携带 `plannerType/plannerVersion` 以便区分 LLM shadow 来源，但仍只允许记录 digest、节点差异和耗时。禁止记录 prompt、候选原文、用户输入、owner/session/user/task ID、节点参数、模型原始异常、Key、token 或外部响应正文。
 
 ## 禁止直接依赖外部 SDK
 
