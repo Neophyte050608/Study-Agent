@@ -28,7 +28,7 @@ class DurableLearningPlanServiceTest {
     void normalizesOnlyAllowedInputAndPreservesTrustedOwner() {
         when(execution.submit(anyString(), anyString(), anyInt(), anyString(), anyString())).thenReturn(task("QUEUED", null));
         assertThat(service.submit("trusted", "key", " Java ", " three days ").taskId()).isEqualTo(ID);
-        verify(execution).submit("trusted", "LEARNING_PLAN_PREVIEW", 1, "key", "{\"topic\":\"Java\",\"request\":\"three days\"}");
+        verify(execution).submit("trusted", "LEARNING_PLAN_PREVIEW", 2, "key", "{\"topic\":\"Java\",\"request\":\"three days\"}");
         doReturn(task("FAILED", null)).when(execution).query("trusted", ID);
         when(execution.retry("trusted", ID, 2, Set.of("evidence"))).thenReturn(task("QUEUED", null));
         service.query("trusted", ID);
@@ -50,9 +50,31 @@ class DurableLearningPlanServiceTest {
         assertCode(() -> service.submit("trusted", "key", "Java", "x".repeat(2001)), "INVALID_PREVIEW_REQUEST");
         assertCode(() -> service.query("trusted", "not-a-uuid"), "INVALID_INPUT");
         assertCode(() -> service.retry("trusted", ID, -1, Set.of()), "INVALID_INPUT");
-        assertCode(() -> service.retry("trusted", ID, 0, Set.of("unknown")), "INVALID_INPUT");
         assertCode(() -> service.retry("trusted", ID, 0, new HashSet<>(Arrays.asList((String) null))), "INVALID_INPUT");
         verifyNoInteractions(execution);
+    }
+
+    @Test
+    void validatesRetrySelectionAgainstTheOwnerScopedTaskNodes() {
+        Map<String, DurableTaskView.NodeView> profilePlan = Map.of(
+                "profile", failedNode(), "compose", failedNode());
+        doReturn(taskV2("FAILED", null, profilePlan)).when(execution).query("trusted", ID);
+        doReturn(taskV2("QUEUED", null, profilePlan)).when(execution)
+                .retry("trusted", ID, 2, Set.of("profile"));
+
+        service.retry("trusted", ID, 2, Set.of("profile"));
+        assertCode(() -> service.retry("trusted", ID, 2, Set.of("evidence")), "INVALID_INPUT");
+
+        Map<String, DurableTaskView.NodeView> evidencePlan = Map.of(
+                "evidence", failedNode(), "compose", failedNode());
+        doReturn(taskV2("FAILED", null, evidencePlan)).when(execution).query("trusted", ID);
+        doReturn(taskV2("QUEUED", null, evidencePlan)).when(execution)
+                .retry("trusted", ID, 2, Set.of());
+        service.retry("trusted", ID, 2, Set.of());
+
+        verify(execution).retry("trusted", ID, 2, Set.of("profile"));
+        verify(execution).retry("trusted", ID, 2, Set.of());
+        verify(execution, never()).retry("trusted", ID, 2, Set.of("evidence"));
     }
 
     @Test
@@ -176,6 +198,18 @@ class DurableLearningPlanServiceTest {
 
     private DurableTaskView task(String status, String json) {
         return new DurableTaskView(ID, status, 2, json, null, nodes(), "LEARNING_PLAN_PREVIEW", 1);
+    }
+
+    private DurableTaskView taskV2(
+            String status,
+            String json,
+            Map<String, DurableTaskView.NodeView> nodes) {
+        return new DurableTaskView(ID, status, 2, json, null, nodes,
+                "LEARNING_PLAN_PREVIEW", 2);
+    }
+
+    private DurableTaskView.NodeView failedNode() {
+        return new DurableTaskView.NodeView("FAILED", 1, "NODE_FAILED");
     }
 
     private Map<String, DurableTaskView.NodeView> nodes() {

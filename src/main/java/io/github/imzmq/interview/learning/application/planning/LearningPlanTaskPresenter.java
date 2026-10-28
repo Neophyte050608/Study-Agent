@@ -16,9 +16,10 @@ import java.util.*;
 
 import static io.github.imzmq.interview.learning.application.contract.LearningPlanAccessException.Code.*;
 
-/** Strict projection of persisted v1 output, not an unrestricted JSON passthrough. */
+/** Strict projection of persisted learning-plan output, not an unrestricted JSON passthrough. */
 final class LearningPlanTaskPresenter {
-    private static final Set<String> NODES = Set.of("profile", "evidence", "compose");
+    private static final Set<String> FIXED_NODES = Set.of("profile", "evidence", "compose");
+    private static final Set<String> OPTIONAL_MATERIALS = Set.of("profile", "evidence");
     private static final Set<String> TASK_STATES = Set.of("QUEUED", "RUNNING", "COMPLETED", "DEGRADED", "FAILED", "TIMED_OUT");
     private static final Set<String> SUCCESS = Set.of("COMPLETED", "DEGRADED");
     private static final Set<String> REASONS = Set.of("PROFILE_UNAVAILABLE", "PROFILE_EMPTY", "EVIDENCE_UNAVAILABLE", "EVIDENCE_EMPTY");
@@ -32,7 +33,8 @@ final class LearningPlanTaskPresenter {
 
     void requireWorkflow(DurableTaskView task) {
         if (task == null) throw invalid();
-        if (!"LEARNING_PLAN_PREVIEW".equals(task.workflowType()) || task.workflowVersion() != 1) {
+        if (!"LEARNING_PLAN_PREVIEW".equals(task.workflowType())
+                || (task.workflowVersion() != 1 && task.workflowVersion() != 2)) {
             throw new LearningPlanAccessException(EXECUTION_NOT_FOUND);
         }
     }
@@ -40,17 +42,19 @@ final class LearningPlanTaskPresenter {
     DurableLearningPlanView present(DurableTaskView task) {
         requireWorkflow(task);
         try {
-            if (!TASK_STATES.contains(task.status()) || task.revision() < 0 || !task.nodes().keySet().equals(NODES)) throw invalid();
+            Set<String> expected = expectedNodes(task);
+            if (!TASK_STATES.contains(task.status()) || task.revision() < 0) throw invalid();
             Map<String, DurableLearningPlanView.NodeView> nodes = new LinkedHashMap<>();
             task.nodes().forEach((id, node) -> {
                 DagNodeStatus.valueOf(node.status());
                 if (node.attempts() < 0 || node.attempts() > 3) throw invalid();
                 nodes.put(id, new DurableLearningPlanView.NodeView(node.status(), node.attempts(), safeCode(node.code())));
             });
-            LearningPlanPreview result = task.resultJson() == null ? null : result(task.resultJson(), task.status());
+            LearningPlanPreview result = task.resultJson() == null
+                    ? null : result(task.resultJson(), task.status(), expected);
             if (SUCCESS.contains(task.status()) && result == null) throw invalid();
             if (result != null) {
-                for (String id : NODES) {
+                for (String id : expected) {
                     if (!result.nodes().get(id).status().name().equals(nodes.get(id).status())) throw invalid();
                 }
             }
@@ -60,7 +64,22 @@ final class LearningPlanTaskPresenter {
         }
     }
 
-    private LearningPlanPreview result(String json, String taskStatus) {
+    private Set<String> expectedNodes(DurableTaskView task) {
+        Set<String> actual = Set.copyOf(task.nodes().keySet());
+        if (task.workflowVersion() == 1) {
+            if (!actual.equals(FIXED_NODES)) throw invalid();
+            return FIXED_NODES;
+        }
+        Set<String> materials = new HashSet<>(actual);
+        materials.remove("compose");
+        if (!actual.contains("compose") || materials.isEmpty()
+                || !OPTIONAL_MATERIALS.containsAll(materials)) {
+            throw invalid();
+        }
+        return actual;
+    }
+
+    private LearningPlanPreview result(String json, String taskStatus, Set<String> expected) {
         try {
             if (json.getBytes(StandardCharsets.UTF_8).length > 131072) throw invalid();
             JsonNode tree = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
@@ -90,9 +109,9 @@ final class LearningPlanTaskPresenter {
                 if (!REASONS.contains(reason) || reasons.contains(reason)) throw invalid();
                 reasons.add(reason);
             }
-            fields(tree.get("nodes"), NODES);
+            fields(tree.get("nodes"), expected);
             Map<String, LearningPlanPreview.NodeSummary> nodes = new LinkedHashMap<>();
-            for (String id : NODES) {
+            for (String id : expected) {
                 var item = tree.get("nodes").get(id);
                 fields(item, Set.of("status", "code"));
                 DagNodeStatus state = DagNodeStatus.valueOf(text(item.get("status"), 20));
@@ -101,6 +120,9 @@ final class LearningPlanTaskPresenter {
                 nodes.put(id, new LearningPlanPreview.NodeSummary(state, safeCode(code)));
             }
             if (composed != (nodes.get("compose").status() == DagNodeStatus.SUCCEEDED)
+                    || (!expected.contains("profile") && tree.get("personalized").booleanValue())
+                    || (!expected.contains("evidence")
+                    && (tree.get("evidenceAvailable").booleanValue() || !evidence.isEmpty()))
                     || ("COMPLETED".equals(status) && !reasons.isEmpty())
                     || ("DEGRADED".equals(status) && reasons.isEmpty())
                     || tree.get("evidenceAvailable").booleanValue() != !evidence.isEmpty()) throw invalid();

@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -21,7 +22,6 @@ import static io.github.imzmq.interview.learning.application.contract.LearningPl
 public final class DurableLearningPlanService implements DurableLearningPlanOperations {
     private static final Logger log = LoggerFactory.getLogger(DurableLearningPlanService.class);
     private static final Pattern TASK_ID = Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-    private static final Set<String> NODES = Set.of("profile", "evidence", "compose");
     private final DurableExecutionOperations execution;
     private final ObjectMapper mapper;
     private final LearningPlanTaskPresenter presenter;
@@ -41,7 +41,7 @@ public final class DurableLearningPlanService implements DurableLearningPlanOper
         if (instruction.length() > 2000) throw error(INVALID_PREVIEW_REQUEST);
         return access(() -> {
             try {
-                return presenter.present(execution.submit(owner, "LEARNING_PLAN_PREVIEW", 1, key,
+                return presenter.present(execution.submit(owner, "LEARNING_PLAN_PREVIEW", 2, key,
                         mapper.writeValueAsString(new Input(topic.trim(), instruction))));
             } catch (JsonProcessingException e) {
                 throw error(INVALID_INPUT);
@@ -58,10 +58,17 @@ public final class DurableLearningPlanService implements DurableLearningPlanOper
     @Override
     public DurableLearningPlanView retry(String owner, String id, int revision, Set<String> nodes) {
         identify(owner, id);
-        if (revision < 0 || nodes == null || nodes.size() > 3 || nodes.stream().anyMatch(idNode -> idNode == null || !NODES.contains(idNode))) throw error(INVALID_INPUT);
+        if (revision < 0 || nodes == null || nodes.stream().anyMatch(Objects::isNull)) {
+            throw error(INVALID_INPUT);
+        }
         Set<String> selected = Set.copyOf(nodes);
         return access(() -> {
-            presenter.requireWorkflow(execution.query(owner, id));
+            var task = execution.query(owner, id);
+            presenter.requireWorkflow(task);
+            if (selected.size() > task.nodes().size()
+                    || selected.stream().anyMatch(node -> !task.nodes().containsKey(node))) {
+                throw error(INVALID_INPUT);
+            }
             return presenter.present(execution.retry(owner, id, revision, selected));
         });
     }
