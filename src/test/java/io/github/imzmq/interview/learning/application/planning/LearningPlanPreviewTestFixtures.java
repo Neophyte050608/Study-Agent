@@ -22,14 +22,12 @@ final class LearningPlanPreviewTestFixtures {
             LearningPlanPreviewGenerator generator) {
         LearningPlanNodeOperations operations = new LearningPlanNodeOperations(
                 profiles, evidenceReader, generator);
-        LearningPlanFixedNodeFactory fixedNodes = new LearningPlanFixedNodeFactory(operations);
         List<DynamicNodeCapability<?>> capabilities = List.of(
                 new LearningPlanProfileCapability(operations),
                 new LearningPlanEvidenceCapability(operations),
                 new LearningPlanComposeCapability(operations));
         LearningPlanDynamicPlanningService planning = new LearningPlanDynamicPlanningService(
                 new LearningPlanDynamicPlanningProperties(),
-                fixedNodes,
                 new RuleBasedLearningPlanPlanner(),
                 new DefaultDynamicPlanningOperations(capabilities),
                 org.mockito.Mockito.mock(DynamicPlanObservationOperations.class),

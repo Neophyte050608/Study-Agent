@@ -2,6 +2,7 @@ package io.github.imzmq.interview.learning.application.planning;
 
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.CandidateDynamicTaskNode;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.CandidateDynamicTaskPlan;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -30,6 +31,16 @@ class RuleBasedLearningPlanPlannerTest {
         assertThat(first.schemaVersion()).isEqualTo("1");
         assertThat(first.nodes().stream().flatMap(node -> node.arguments().keySet().stream()))
                 .doesNotContain("owner", "userId", "prompt", "timeout");
+    }
+
+    @Test
+    void fixedFallbackAlwaysProducesTheCanonicalFullGraph() {
+        CandidateDynamicTaskPlan fallback = planner.fixedFallback();
+
+        assertThat(shape(fallback)).isEqualTo("profile|evidence|compose");
+        assertThat(fallback.nodes().get(1).arguments()).containsEntry("limit", 4);
+        assertThat(fallback.nodes().get(2).dependsOn())
+                .containsExactly("profile", "evidence");
     }
 
     private static String shape(CandidateDynamicTaskPlan plan) {

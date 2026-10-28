@@ -8,7 +8,9 @@ import io.github.imzmq.interview.agent.application.contract.execution.dynamic.Ca
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicCapabilityDescriptor;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicEffectType;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicExecutionContext;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanIssue;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanObservationOperations;
+import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanValidationResult;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.DynamicPlanningShadowOperations;
 import io.github.imzmq.interview.agent.application.contract.execution.dynamic.ValidatedDynamicTaskPlan;
@@ -44,7 +46,13 @@ class LearningPlanDynamicPlanningServiceTest {
         DynamicPlanObservationOperations observations = mock(DynamicPlanObservationOperations.class);
         Fixture fixture = fixture(new RuleBasedLearningPlanPlanner(), observations, false);
 
-        assertThat(ids(fixture.service.nodes(CONTEXT))).containsExactly("profile", "compose");
+        LearningPlanPreparedGraph prepared = fixture.service.prepare(CONTEXT);
+
+        assertThat(prepared.source()).isEqualTo(LearningPlanPreparedGraph.Source.RULES);
+        assertThat(prepared.fallbackCode()).isNull();
+        assertThat(prepared.plan().scenarioId()).isEqualTo("learning-plan-preview");
+        assertThat(prepared.digest()).hasSize(64);
+        assertThat(ids(prepared.nodes())).containsExactly("profile", "compose");
 
         var order = inOrder(observations);
         order.verify(observations).requested("rules", "v1");
@@ -97,9 +105,14 @@ class LearningPlanDynamicPlanningServiceTest {
         };
         Fixture fixture = fixture(invalidPlanner, observations, false);
 
-        assertThat(ids(fixture.service.nodes(new DynamicExecutionContext(
-                "secret-owner", "secret-topic", "raw request"))))
-                .containsExactly("profile", "evidence", "compose");
+        LearningPlanPreparedGraph prepared = fixture.service.prepare(new DynamicExecutionContext(
+                "secret-owner", "secret-topic", "raw request"));
+
+        assertThat(prepared.source()).isEqualTo(LearningPlanPreparedGraph.Source.FIXED_FALLBACK);
+        assertThat(prepared.fallbackCode()).isEqualTo("PLAN_EMPTY");
+        assertThat(prepared.plan().scenarioId()).isEqualTo("learning-plan-preview");
+        assertThat(prepared.digest()).hasSize(64);
+        assertThat(ids(prepared.nodes())).containsExactly("profile", "evidence", "compose");
 
         verify(observations).rejected(
                 eq("rules"), eq("v1"), eq("PLAN_EMPTY"),
@@ -145,8 +158,34 @@ class LearningPlanDynamicPlanningServiceTest {
 
         Fixture compileFailure = fixture(new RuleBasedLearningPlanPlanner(),
                 new AtomicInteger(), new AtomicInteger(), true, false, false);
-        assertThat(ids(compileFailure.service.nodes(CONTEXT)))
-                .containsExactly("profile", "evidence", "compose");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> compileFailure.service.prepare(CONTEXT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PLAN_COMPILE_FAILED");
+    }
+
+    @Test
+    void fallbackValidationFailurePropagatesWithoutDirectFixedNodes() {
+        RuleBasedLearningPlanPlanner invalidPlanner = new RuleBasedLearningPlanPlanner() {
+            @Override
+            public CandidateDynamicTaskPlan plan(String topic, String request) {
+                return new CandidateDynamicTaskPlan("1", List.of());
+            }
+        };
+        DynamicPlanningOperations dynamicPlanning = mock(DynamicPlanningOperations.class);
+        when(dynamicPlanning.validate(any(), any(), any()))
+                .thenReturn(DynamicPlanValidationResult.invalid(
+                        List.of(new DynamicPlanIssue("PLAN_EMPTY", "rules"))))
+                .thenReturn(DynamicPlanValidationResult.invalid(
+                        List.of(new DynamicPlanIssue("UNKNOWN_CAPABILITY", "fallback"))));
+        LearningPlanDynamicPlanningService service = new LearningPlanDynamicPlanningService(
+                new LearningPlanDynamicPlanningProperties(), invalidPlanner, dynamicPlanning,
+                mock(DynamicPlanObservationOperations.class),
+                mock(DynamicPlanningShadowOperations.class));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.prepare(CONTEXT))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("UNKNOWN_CAPABILITY");
     }
 
     @Test
@@ -168,7 +207,7 @@ class LearningPlanDynamicPlanningServiceTest {
         properties.setPlannerTimeoutMillis(100);
         DynamicPlanningShadowOperations shadowPlanning = mock(DynamicPlanningShadowOperations.class);
         LearningPlanDynamicPlanningService service = new LearningPlanDynamicPlanningService(
-                properties, base.fixedFactory, new RuleBasedLearningPlanPlanner(),
+                properties, new RuleBasedLearningPlanPlanner(),
                 slowCompiler, observations, shadowPlanning);
 
         assertThat(ids(service.nodes(CONTEXT)))
@@ -303,7 +342,7 @@ class LearningPlanDynamicPlanningServiceTest {
         properties.setShadowEnabled(shadowEnabled);
         DynamicPlanningShadowOperations shadowPlanning = mock(DynamicPlanningShadowOperations.class);
         LearningPlanDynamicPlanningService service = new LearningPlanDynamicPlanningService(
-                properties, fixedFactory, planner, dynamicPlanning, observations, shadowPlanning);
+                properties, planner, dynamicPlanning, observations, shadowPlanning);
         return new Fixture(service, fixedFactory, dynamicPlanning, shadowPlanning);
     }
 

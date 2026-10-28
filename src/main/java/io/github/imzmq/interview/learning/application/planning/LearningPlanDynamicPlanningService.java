@@ -19,7 +19,6 @@ import java.util.Set;
 @Service
 public final class LearningPlanDynamicPlanningService {
     private final LearningPlanDynamicPlanningProperties properties;
-    private final LearningPlanFixedNodeFactory fixedNodeFactory;
     private final RuleBasedLearningPlanPlanner planner;
     private final DynamicPlanningOperations dynamicPlanning;
     private final DynamicPlanObservationOperations observations;
@@ -39,13 +38,11 @@ public final class LearningPlanDynamicPlanningService {
 
     public LearningPlanDynamicPlanningService(
             LearningPlanDynamicPlanningProperties properties,
-            LearningPlanFixedNodeFactory fixedNodeFactory,
             RuleBasedLearningPlanPlanner planner,
             DynamicPlanningOperations dynamicPlanning,
             DynamicPlanObservationOperations observations,
             DynamicPlanningShadowOperations shadowPlanning) {
         this.properties = Objects.requireNonNull(properties);
-        this.fixedNodeFactory = Objects.requireNonNull(fixedNodeFactory);
         this.planner = Objects.requireNonNull(planner);
         this.dynamicPlanning = Objects.requireNonNull(dynamicPlanning);
         this.observations = Objects.requireNonNull(observations);
@@ -53,10 +50,15 @@ public final class LearningPlanDynamicPlanningService {
     }
 
     public List<DagNode> nodes(DynamicExecutionContext context) {
+        return prepare(context).nodes();
+    }
+
+    LearningPlanPreparedGraph prepare(DynamicExecutionContext context) {
         Objects.requireNonNull(context, "Dynamic execution context is required");
         long startedAt = System.nanoTime();
         long deadline = startedAt + Duration.ofMillis(properties.getPlannerTimeoutMillis()).toNanos();
         observations.requested(PLANNER_TYPE, PLANNER_VERSION);
+        String fallbackCode;
         try {
             CandidateDynamicTaskPlan candidate = planner.plan(context.topic(), context.request());
             ensureWithinPlanningBudget(deadline);
@@ -64,28 +66,47 @@ public final class LearningPlanDynamicPlanningService {
                     candidate, policy, properties.toLimits());
             ensureWithinPlanningBudget(deadline);
             if (!result.valid()) {
-                String errorCode = firstIssue(result);
-                observations.rejected(PLANNER_TYPE, PLANNER_VERSION,
-                        errorCode, elapsedMillis(startedAt));
-                observations.fallback(PLANNER_TYPE, PLANNER_VERSION, errorCode);
-                return fixedNodes(context);
+                fallbackCode = firstIssue(result);
+            } else {
+                ValidatedDynamicTaskPlan plan = result.plan();
+                String digest = dynamicPlanning.digest(plan);
+                observations.generated(PLANNER_TYPE, PLANNER_VERSION,
+                        plan, digest, elapsedMillis(startedAt));
+                List<DagNode> nodes = dynamicPlanning.compile(plan, context);
+                ensureWithinPlanningBudget(deadline);
+                observations.compiled(PLANNER_TYPE, PLANNER_VERSION,
+                        plan, digest, elapsedMillis(startedAt));
+                submitShadowIfEnabled(context, plan);
+                return new LearningPlanPreparedGraph(
+                        plan, digest, nodes, LearningPlanPreparedGraph.Source.RULES, null);
+            }
+        } catch (RuntimeException exception) {
+            fallbackCode = stableExceptionCode(exception);
+        }
+
+        observations.rejected(PLANNER_TYPE, PLANNER_VERSION,
+                fallbackCode, elapsedMillis(startedAt));
+        observations.fallback(PLANNER_TYPE, PLANNER_VERSION, fallbackCode);
+        return prepareFallback(context, fallbackCode);
+    }
+
+    private LearningPlanPreparedGraph prepareFallback(
+            DynamicExecutionContext context,
+            String fallbackCode) {
+        try {
+            DynamicPlanValidationResult result = dynamicPlanning.validate(
+                    planner.fixedFallback(), policy, properties.toLimits());
+            if (!result.valid()) {
+                throw new IllegalArgumentException(firstIssue(result));
             }
             ValidatedDynamicTaskPlan plan = result.plan();
             String digest = dynamicPlanning.digest(plan);
-            observations.generated(PLANNER_TYPE, PLANNER_VERSION,
-                    plan, digest, elapsedMillis(startedAt));
             List<DagNode> nodes = dynamicPlanning.compile(plan, context);
-            ensureWithinPlanningBudget(deadline);
-            observations.compiled(PLANNER_TYPE, PLANNER_VERSION,
-                    plan, digest, elapsedMillis(startedAt));
-            submitShadowIfEnabled(context, plan);
-            return nodes;
+            return new LearningPlanPreparedGraph(
+                    plan, digest, nodes,
+                    LearningPlanPreparedGraph.Source.FIXED_FALLBACK, fallbackCode);
         } catch (RuntimeException exception) {
-            String errorCode = stableExceptionCode(exception);
-            observations.rejected(PLANNER_TYPE, PLANNER_VERSION,
-                    errorCode, elapsedMillis(startedAt));
-            observations.fallback(PLANNER_TYPE, PLANNER_VERSION, errorCode);
-            return fixedNodes(context);
+            throw new IllegalArgumentException(stableExceptionCode(exception), exception);
         }
     }
 
@@ -111,10 +132,6 @@ public final class LearningPlanDynamicPlanningService {
         } catch (RuntimeException ignored) {
             // Shadow comparison must never affect the validated rule-plan result.
         }
-    }
-
-    private List<DagNode> fixedNodes(DynamicExecutionContext context) {
-        return fixedNodeFactory.nodes(context.owner(), context.topic(), context.request());
     }
 
     private static String firstIssue(DynamicPlanValidationResult result) {

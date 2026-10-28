@@ -43,6 +43,14 @@ public class RuleBasedLearningPlanPlanner {
         return new CandidateDynamicTaskPlan("1", nodes);
     }
 
+    CandidateDynamicTaskPlan fixedFallback() {
+        return new CandidateDynamicTaskPlan("1", List.of(
+                node("profile", "learning.profile.lookup", List.of(), Map.of()),
+                node("evidence", "knowledge.evidence.retrieve", List.of(), Map.of("limit", 4)),
+                node("compose", "learning.plan.compose",
+                        List.of("profile", "evidence"), Map.of())));
+    }
+
     private static boolean containsAny(String text, Set<String> keywords) {
         return keywords.stream().anyMatch(text::contains);
     }
