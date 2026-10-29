@@ -86,12 +86,10 @@ public class MenuConfigService {
 
     private String normalizeUrl(String url) {
         if (url == null || url.isBlank()) {
-            return "/interview";
+            return "/chat";
         }
         return switch (url) {
-            case "/", "/interview.html" -> "/interview";
             case "/knowledge", "/knowledge.html", "/notes.html" -> "/notes";
-            case "/practice", "/practice.html", "/coding.html" -> "/coding";
             case "/profile.html" -> "/profile";
             case "/monitoring.html" -> "/monitoring";
             case "/ops.html" -> "/ops";
@@ -109,17 +107,15 @@ public class MenuConfigService {
             merged.put(menu.getId(), menu);
         }
         List<MenuConfig> defaults = new ArrayList<>();
-        defaults.add(new MenuConfig("DASHBOARD", "面试控制台", "开始一场新的模拟面试", "dashboard", "/interview", "SIDEBAR", 1, false));
+        defaults.add(new MenuConfig("CHAT", "AI 助手", "与 AI 进行知识问答对话", "chat_bubble", "/chat", "SIDEBAR", 1, false));
         defaults.add(new MenuConfig("NOTES", "知识库管理", "同步与搜索你的个人笔记", "description", "/notes", "SIDEBAR", 2, false));
-        defaults.add(new MenuConfig("CODING", "算法刷题", "针对薄弱点进行专项算法训练", "code", "/coding", "SIDEBAR", 3, false));
-        defaults.add(new MenuConfig("PROFILE", "能力画像", "查看你的技术掌握度曲线", "analytics", "/profile", "SIDEBAR", 4, false));
-        defaults.add(new MenuConfig("MONITORING", "系统监控", "模型路由、熔断状态与调用统计", "monitoring", "/monitoring", "SIDEBAR", 5, false));
-        defaults.add(new MenuConfig("CHAT", "AI 助手", "与 AI 进行知识问答对话", "chat_bubble", "/chat", "SIDEBAR", 6, false));
-        defaults.add(new MenuConfig("OPS", "运维中心", "查看 RAG 运行态与审计信息", "build", "/ops", "EXTENSION", 7, false));
-        defaults.add(new MenuConfig("SETTINGS", "模型配置", "统一配置 Agent 的模型参数", "tune", "/settings", "EXTENSION", 8, false));
-        defaults.add(new MenuConfig("MCP", "MCP 工具台", "查看能力并发起 MCP 调用", "hub", "/mcp", "EXTENSION", 9, false));
-        defaults.add(new MenuConfig("INTENT_TREE", "意图树配置", "在线维护意图树阈值与策略", "account_tree", "/intent-tree", "EXTENSION", 10, false));
-        defaults.add(new MenuConfig("WORKSPACE", "扩展空间", "管理菜单布局与扩展模块入口", "dashboard_customize", "/workspace", "EXTENSION", 11, false));
+        defaults.add(new MenuConfig("PROFILE", "能力画像", "查看你的技术掌握度曲线", "analytics", "/profile", "SIDEBAR", 3, false));
+        defaults.add(new MenuConfig("MONITORING", "系统监控", "模型路由、熔断状态与调用统计", "monitoring", "/monitoring", "SIDEBAR", 4, false));
+        defaults.add(new MenuConfig("OPS", "运维中心", "查看 RAG 运行态与审计信息", "build", "/ops", "EXTENSION", 5, false));
+        defaults.add(new MenuConfig("SETTINGS", "模型配置", "统一配置 Agent 的模型参数", "tune", "/settings", "EXTENSION", 6, false));
+        defaults.add(new MenuConfig("MCP", "MCP 工具台", "查看能力并发起 MCP 调用", "hub", "/mcp", "EXTENSION", 7, false));
+        defaults.add(new MenuConfig("INTENT_TREE", "意图树配置", "在线维护意图树阈值与策略", "account_tree", "/intent-tree", "EXTENSION", 8, false));
+        defaults.add(new MenuConfig("WORKSPACE", "扩展空间", "管理菜单布局与扩展模块入口", "dashboard_customize", "/workspace", "EXTENSION", 9, false));
         for (MenuConfig fallback : defaults) {
             merged.putIfAbsent(fallback.getId(), fallback);
         }

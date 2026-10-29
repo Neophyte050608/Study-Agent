@@ -28,14 +28,6 @@ const routes = [
         redirect: '/chat'
       },
       {
-        path: 'interview',
-        redirect: '/chat'
-      },
-      {
-        path: 'interview.html',
-        redirect: '/chat'
-      },
-      {
         path: 'monitoring',
         name: 'monitoring',
         component: MonitoringView,
@@ -46,22 +38,6 @@ const routes = [
         name: 'notes',
         component: NotesView,
         alias: ['knowledge', 'knowledge.html', 'notes.html']
-      },
-      {
-        path: 'coding',
-        redirect: '/chat'
-      },
-      {
-        path: 'practice',
-        redirect: '/chat'
-      },
-      {
-        path: 'practice.html',
-        redirect: '/chat'
-      },
-      {
-        path: 'coding.html',
-        redirect: '/chat'
       },
       {
         path: 'learning/plan-preview',

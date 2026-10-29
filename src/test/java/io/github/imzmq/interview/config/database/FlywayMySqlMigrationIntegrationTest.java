@@ -31,7 +31,7 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
@@ -41,7 +41,13 @@ class FlywayMySqlMigrationIntegrationTest {
                     .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(7);
+                    .isEqualTo(8);
+            assertThat(singleLong(statement,
+                    "SELECT COUNT(*) FROM t_menu_config WHERE menu_code IN ('DASHBOARD', 'CODING')"))
+                    .isZero();
+            assertThat(singleLong(statement,
+                    "SELECT sort_order FROM t_menu_config WHERE menu_code = 'CHAT'"))
+                    .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM t_prompt_template WHERE deleted = 0 AND name IN ("
                             + quoted(REQUIRED_PROMPTS) + ")"))
@@ -126,13 +132,19 @@ class FlywayMySqlMigrationIntegrationTest {
                 .baselineVersion("1")
                 .cleanDisabled(true)
                 .load();
-        assertThat(lifecycleUpgrade.migrate().migrationsExecuted).isEqualTo(2);
+        assertThat(lifecycleUpgrade.migrate().migrationsExecuted).isEqualTo(3);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(7);
+                    .isEqualTo(8);
+            assertThat(singleLong(statement,
+                    "SELECT COUNT(*) FROM t_menu_config WHERE menu_code IN ('DASHBOARD', 'CODING')"))
+                    .isZero();
+            assertThat(singleLong(statement,
+                    "SELECT sort_order FROM t_menu_config WHERE menu_code = 'CHAT'"))
+                    .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history "
                             + "WHERE type = 'BASELINE' AND version = '1' AND success = 1"))

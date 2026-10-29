@@ -103,9 +103,6 @@ const toSpaPath = (rawUrl) => {
   switch (normalized) {
     case '/':
       return '/chat'
-    case '/interview':
-    case '/interview.html':
-      return '/chat'
     case '/monitoring':
     case '/monitoring.html':
       return '/monitoring'
@@ -114,11 +111,6 @@ const toSpaPath = (rawUrl) => {
     case '/notes':
     case '/notes.html':
       return '/notes'
-    case '/practice':
-    case '/practice.html':
-    case '/coding':
-    case '/coding.html':
-      return '/chat'
     case '/profile':
     case '/profile.html':
       return '/profile'
@@ -179,12 +171,10 @@ const loadMenus = async () => {
   } catch (error) {
     console.error('Failed to load menus, using fallback:', error)
     menus.value = [
-      { id: 'DASHBOARD', title: '面试控制台', icon: 'dashboard', url: '/interview' },
+      { id: 'CHAT', title: 'AI 助手', icon: 'chat_bubble', url: '/chat' },
       { id: 'NOTES', title: '知识库管理', icon: 'description', url: '/notes' },
-      { id: 'CODING', title: '算法刷题', icon: 'code', url: '/coding' },
       { id: 'PROFILE', title: '能力画像', icon: 'analytics', url: '/profile' },
-      { id: 'MONITORING', title: '系统监控', icon: 'monitoring', url: '/monitoring' },
-      { id: 'CHAT', title: 'AI 助手', icon: 'chat_bubble', url: '/chat' }
+      { id: 'MONITORING', title: '系统监控', icon: 'monitoring', url: '/monitoring' }
     ]
   }
 }

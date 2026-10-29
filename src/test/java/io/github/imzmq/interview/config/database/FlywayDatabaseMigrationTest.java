@@ -154,6 +154,22 @@ class FlywayDatabaseMigrationTest {
                 .doesNotContain("ON DUPLICATE KEY UPDATE");
     }
 
+    @Test
+    void consolidatesMenusWithoutTouchingInterviewOrCodingBusinessData() throws IOException {
+        String menuConsolidation = readResource("db/migration/V8__consolidate_chat_menu.sql");
+        String deleteStatement = menuConsolidation.substring(0, menuConsolidation.indexOf("UPDATE `t_menu_config`"));
+
+        assertThat(deleteStatement)
+                .contains("DELETE FROM `t_menu_config`")
+                .contains("WHERE `menu_code` IN ('DASHBOARD', 'CODING')")
+                .doesNotContain("CHAT", "NOTES", "PROFILE", "MONITORING");
+        assertThat(menuConsolidation)
+                .containsOnlyOnce("DELETE FROM")
+                .contains("WHEN 'CHAT' THEN 1")
+                .contains("WHEN 'NOTES' THEN 2")
+                .doesNotContain("t_interview", "t_question", "t_chat_session", "t_chat_message");
+    }
+
     private String readResource(String path) throws IOException {
         try (InputStream input = getClass().getClassLoader().getResourceAsStream(path)) {
             assertThat(input).as("classpath resource %s", path).isNotNull();
