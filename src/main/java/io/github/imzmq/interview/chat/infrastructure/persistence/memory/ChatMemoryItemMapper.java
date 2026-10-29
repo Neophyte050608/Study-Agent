@@ -6,10 +6,60 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
 public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
+
+    @Select("""
+            SELECT *
+            FROM t_chat_memory_item
+            WHERE user_id = #{userId}
+              AND category = #{category}
+              AND subject_key = #{subjectKey}
+            ORDER BY id
+            FOR UPDATE
+            """)
+    List<ChatMemoryItemDO> lockThemeRows(
+            @Param("userId") String userId,
+            @Param("category") String category,
+            @Param("subjectKey") String subjectKey);
+
+    @Update("""
+            UPDATE t_chat_memory_item
+            SET status = 'SUPERSEDED',
+                valid_until = #{validUntil},
+                version = #{nextVersion},
+                updated_at = CURRENT_TIMESTAMP(6)
+            WHERE id = #{memoryId}
+              AND user_id = #{userId}
+              AND status = 'ACTIVE'
+              AND version = #{currentVersion}
+            """)
+    int markSuperseded(
+            @Param("memoryId") long memoryId,
+            @Param("userId") String userId,
+            @Param("currentVersion") long currentVersion,
+            @Param("nextVersion") long nextVersion,
+            @Param("validUntil") LocalDateTime validUntil);
+
+    @Update("""
+            UPDATE t_chat_memory_item
+            SET status = 'ACTIVE',
+                quarantine_reason = NULL,
+                version = #{nextVersion},
+                updated_at = CURRENT_TIMESTAMP(6)
+            WHERE id = #{memoryId}
+              AND user_id = #{userId}
+              AND status = 'QUARANTINED'
+              AND version = #{currentVersion}
+            """)
+    int activateQuarantined(
+            @Param("memoryId") long memoryId,
+            @Param("userId") String userId,
+            @Param("currentVersion") long currentVersion,
+            @Param("nextVersion") long nextVersion);
 
     @Update("""
             UPDATE t_chat_memory_item

@@ -16,11 +16,19 @@ public class ChatMemoryItemDO {
     private Long id;
     private String userId;
     private String category;
+    private String subjectKey;
+    private String subjectCardinality;
     private String content;
     private String contentHash;
     private String status;
     @Version
     private Long version;
+    private LocalDateTime validFrom;
+    private LocalDateTime validUntil;
+    private LocalDateTime originMessageCreatedAt;
+    private Long originMessagePk;
+    private Integer originQuoteStart;
+    private String quarantineReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime deletedAt;
