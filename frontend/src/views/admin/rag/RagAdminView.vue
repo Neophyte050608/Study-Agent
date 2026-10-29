@@ -1,14 +1,9 @@
 <template>
   <div class="bg-surface text-content antialiased min-h-screen">
-    <!-- TopNavBar Shell -->
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-      <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-brand-text">观测与运维 <span class="text-content-secondary font-medium text-sm ml-2">/ 实时监控 RAG 检索链路性能与系统高可用状态</span></h1>
-      </div>
-    </header>
+<!-- Main Content Canvas -->
+    <main class="min-h-screen space-y-8 bg-surface-field px-8 py-8">
+      <RagOverviewPanel />
 
-    <!-- Main Content Canvas -->
-    <main class="pt-24 px-8 pb-12 min-h-screen bg-surface-field transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
       <!-- Header & Tabs -->
       <div class="mb-8">
         <div class="flex items-end justify-between">
@@ -27,7 +22,7 @@
       </div>
 
       <!-- Content Grid: Bento Style -->
-      <div class="grid grid-cols-12 gap-6">
+      <div id="rag-traces" class="grid grid-cols-12 gap-6 scroll-mt-6">
         <div class="col-span-12 bg-surface-raised rounded-xl p-8 shadow-sm border border-slate-200">
           <div class="flex items-center justify-between mb-6">
             <div>
@@ -36,7 +31,7 @@
                 评测数据集控制台
               </h3>
               <p class="mt-2 text-sm text-content-secondary">
-                直接在 /ops 页面选择分层黄金集并触发检索评测或生成质量评测。
+                在当前页面选择分层黄金集并触发检索评测或生成质量评测。
               </p>
             </div>
             <button @click="loadEvalDatasets" :disabled="datasetLoading" class="px-4 py-2 bg-surface-hover text-content-secondary rounded-lg text-sm font-bold hover:bg-slate-200 transition-all disabled:opacity-50 flex items-center gap-2">
@@ -803,14 +798,9 @@
 import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns, loadRetrievalMetrics } from '../api/admin'
+import RagOverviewPanel from './RagOverviewPanel.vue'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns, loadRetrievalMetrics } from '../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const router = useRouter()
 const loading = ref(false)
@@ -1361,7 +1351,7 @@ const formatTime = (value) => {
 }
 
 const viewDetail = (traceId) => {
-  router.push({ name: 'rag-trace-detail', params: { traceId } })
+  router.push({ name: 'admin-rag-trace', params: { traceId } })
 }
 
 const toggleTraceExpansion = async () => {

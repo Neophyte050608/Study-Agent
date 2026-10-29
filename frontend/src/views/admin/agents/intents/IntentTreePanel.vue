@@ -1,23 +1,6 @@
 <template>
-  <div class="bg-surface text-content min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-    <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图树管理 <span class="text-content-secondary dark:text-slate-500 font-medium text-sm ml-2">/ 树结构浏览、节点定位与全局路由参数配置</span></h1>
-    </div>
-    <div class="flex items-center gap-2">
-      <RouterLink to="/intent-list" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-content-secondary dark:text-slate-500 hover:bg-surface-field">
-        切到列表页
-      </RouterLink>
-      <button @click="reload" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-content-secondary dark:text-slate-500 hover:bg-surface-field disabled:opacity-50">
-        刷新
-      </button>
-      <button @click="saveAll" :disabled="loading || saving" class="px-3 py-1.5 text-xs rounded bg-[#0057c2] text-white hover:opacity-90 disabled:opacity-50">
-        保存全局配置
-      </button>
-    </div>
-  </header>
-
-  <main class="min-h-screen bg-surface-field pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <section class="relative bg-surface text-content">
+<section class="space-y-6">
     <div class="grid grid-cols-4 gap-4">
       <div class="bg-surface-raised p-4 rounded shadow-sm border-l-4 border-[#0057c2]">
         <div class="text-[10px] uppercase tracking-wider text-[#727786] font-semibold mb-1">系统状态</div>
@@ -125,22 +108,16 @@
         </div>
       </div>
     </section>
-  </main>
-  </div>
+  </section>
+  </section>
 </template>
 
 <script setup>
 import { computed, defineComponent, h, onMounted, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { useIntentTreeAdmin } from '../composables/useIntentTreeAdmin'
-import { saveIntentTreeConfig } from '../api/admin'
+import { useRoute, useRouter } from 'vue-router'
+import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin'
+import { saveIntentTreeConfig } from '../../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const route = useRoute()
 const router = useRouter()
@@ -237,12 +214,12 @@ const saveAll = async () => {
 
 const openEditSelected = () => {
   if (!selectedLeaf.value) return
-  router.push(`/intent-list/${selectedLeaf.value.index}/edit?from=${encodeURIComponent(route.fullPath)}`)
+  router.push(`/admin/agents/intents/${selectedLeaf.value.index}/edit?from=${encodeURIComponent(route.fullPath)}`)
 }
 
 const createChild = () => {
   if (!selectedLeaf.value) return
-  router.push(`/intent-list/new/edit?parentIndex=${selectedLeaf.value.index}&from=${encodeURIComponent(route.fullPath)}`)
+  router.push(`/admin/agents/intents/new/edit?parentIndex=${selectedLeaf.value.index}&from=${encodeURIComponent(route.fullPath)}`)
 }
 
 const offlineSelected = async () => {

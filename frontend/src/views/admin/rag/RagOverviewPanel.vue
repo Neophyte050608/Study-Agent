@@ -1,13 +1,6 @@
 <template>
-  <div class="bg-surface text-content antialiased min-h-screen">
-    <!-- Header -->
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-      <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-brand-text">RAG 监控 <span class="text-content-secondary font-medium text-sm ml-2">/ 检索质量仪表盘</span></h1>
-      </div>
-    </header>
-
-    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-surface transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <section class="bg-surface text-content antialiased">
+<section class="relative z-10 bg-surface">
       <!-- Metric Cards Row -->
       <div class="grid grid-cols-6 gap-4 mb-8">
         <div v-for="card in metricCards" :key="card.label" class="bg-surface-raised p-4 rounded-xl border border-divider shadow-sm">
@@ -82,7 +75,7 @@
             </div>
           </div>
           <div v-else class="text-xs text-slate-400 mb-4">无活跃告警</div>
-          <a href="/ops" class="block w-full py-2 bg-surface-hover text-content-secondary rounded-lg text-xs font-bold hover:bg-slate-200 transition-all text-center no-underline">
+          <a href="#rag-traces" class="block w-full py-2 bg-surface-hover text-content-secondary rounded-lg text-xs font-bold hover:bg-slate-200 transition-all text-center no-underline">
             运维中心：查看 Trace 详情 →
           </a>
         </div>
@@ -107,17 +100,14 @@
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">满意度</div>
         </div>
       </div>
-    </main>
-  </div>
+    </section>
+  </section>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
-import { loadRagDashboard, loadMetricsHistory, triggerSnapshot } from '../api/admin'
+import { loadRagDashboard, loadMetricsHistory, triggerSnapshot } from '../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: { type: Boolean, default: false }
-})
 
 const dashboard = ref({ currentHour: {}, alertLevel: 'NONE', alertTags: [], riskTagCounts: {} })
 const historySnapshots = ref([])

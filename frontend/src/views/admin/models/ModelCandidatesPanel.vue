@@ -1,15 +1,6 @@
 <template>
-  <div class="bg-surface text-content antialiased min-h-screen">
-    <header
-      class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-xl border-b border-divider-light flex justify-between items-center px-8 z-40 transition-all duration-300"
-      :class="sidebarCollapsed ? 'left-20' : 'left-64'"
-    >
-      <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-brand-text">
-          模型提供商管理
-          <span class="text-content-secondary font-medium text-sm ml-2">/ 多模型候补与健康监控</span>
-        </h1>
-      </div>
+  <section class="bg-surface text-content antialiased">
+    <div class="mb-6 flex justify-end">
       <button
         class="bg-brand text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-brand-hover transition-all active:scale-[0.98] disabled:opacity-60"
         @click="openCreateModal"
@@ -18,12 +9,9 @@
         <span class="material-symbols-outlined text-sm">add</span>
         新增模型
       </button>
-    </header>
+    </div>
 
-    <main
-      class="pt-24 p-8 min-h-screen bg-surface transition-all duration-300"
-      :class="sidebarCollapsed ? 'ml-20' : 'ml-64'"
-    >
+    <section>
       <div class="max-w-7xl mx-auto space-y-6">
         <section class="grid grid-cols-1 xl:grid-cols-5 gap-4">
           <div class="bg-surface-raised rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-5">
@@ -223,7 +211,7 @@
           </article>
         </div>
       </div>
-    </main>
+    </section>
 
     <div v-if="showModal" class="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="w-full max-w-3xl bg-surface-raised rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -350,7 +338,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
@@ -364,14 +352,8 @@ import {
   probeModelCandidate,
   copyModelCandidateKey,
   loadModelRoutingStats
-} from '../api/admin'
+} from '../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const inputClass = 'bg-surface-field'
 

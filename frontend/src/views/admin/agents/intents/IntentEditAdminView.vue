@@ -1,6 +1,6 @@
 <template>
   <div class="bg-surface text-content min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <header class="flex items-center justify-between border-b border-divider bg-surface-overlay px-8 py-5 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200">
     <div class="flex items-center gap-4">
       <h1 class="text-xl font-bold tracking-tight text-indigo-700">{{ isCreateMode ? '新增意图节点' : '编辑意图节点' }} <span class="text-content-secondary dark:text-slate-500 font-medium text-sm ml-2">/ {{ currentTitle }}</span></h1>
     </div>
@@ -12,7 +12,7 @@
     </div>
   </header>
 
-  <main class="min-h-screen bg-surface-field pt-24 pb-10 px-8 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <main class="min-h-screen bg-surface-field px-8 py-8">
     <section v-if="loading" class="bg-surface-raised rounded shadow-sm p-10 text-center text-content-secondary dark:text-slate-500">加载中...</section>
     <section v-else-if="!form" class="bg-surface-raised rounded shadow-sm p-10 text-center text-content-secondary dark:text-slate-500">未找到对应意图节点</section>
     <section v-else class="bg-surface-raised rounded shadow-sm p-6 space-y-4 max-w-4xl">
@@ -71,16 +71,10 @@
 // 中文注释：独立编辑页，支持单节点编辑与新增子节点，保存后返回来源页
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { saveIntentTreeConfig } from '../api/admin'
-import { useIntentTreeAdmin } from '../composables/useIntentTreeAdmin'
-import { editorFormToLeaf } from '../utils/intentTreeTransform'
+import { saveIntentTreeConfig } from '../../../../api/admin'
+import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin'
+import { editorFormToLeaf } from '../../../../utils/intentTreeTransform'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const route = useRoute()
 const router = useRouter()
@@ -105,7 +99,7 @@ const currentTitle = computed(() => {
 
 const returnTo = computed(() => {
   const from = String(route.query.from || '')
-  return from.startsWith('/') ? from : '/intent-list'
+  return from.startsWith('/admin/agents/intents') ? from : '/admin/agents/intents'
 })
 
 const buildCreateForm = () => {

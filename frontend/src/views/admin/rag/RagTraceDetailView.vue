@@ -1,9 +1,9 @@
 <template>
   <div class="bg-slate-50 min-h-screen antialiased relative">
     <!-- Header -->
-    <header class="fixed top-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
+    <header class="flex items-center justify-between border-b border-divider bg-surface-overlay px-8 py-5 bg-white/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40">
       <div class="flex items-center gap-3">
-        <router-link to="/ops" class="text-slate-500 hover:text-slate-700 transition-colors">
+        <router-link to="/admin/rag" class="text-slate-500 hover:text-slate-700 transition-colors">
           <span class="material-symbols-outlined align-middle">arrow_back</span>
         </router-link>
         <div class="h-4 w-px bg-slate-200 mx-1"></div>
@@ -25,7 +25,7 @@
       </div>
     </header>
 
-    <main class="pt-24 px-8 pb-12 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+    <main class="px-8 py-8">
       <div v-if="loading && !trace" class="flex flex-col items-center justify-center py-32 text-slate-400">
         <span class="material-symbols-outlined animate-spin text-4xl mb-4">refresh</span>
         <p class="text-sm font-medium">正在加载链路时序数据...</p>
@@ -34,7 +34,7 @@
       <div v-else-if="!trace" class="flex flex-col items-center justify-center py-32 text-slate-400">
         <span class="material-symbols-outlined text-4xl mb-4 text-red-300">error</span>
         <p class="text-sm font-medium">未找到该链路记录或已过期</p>
-        <router-link to="/ops" class="mt-4 text-indigo-600 font-bold hover:underline">返回列表</router-link>
+        <router-link to="/admin/rag" class="mt-4 text-indigo-600 font-bold hover:underline">返回列表</router-link>
       </div>
 
       <div v-else class="space-y-6">
@@ -313,14 +313,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { loadOpsTraceDetail } from '../api/admin'
+import { loadOpsTraceDetail } from '../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const route = useRoute()
 const traceId = ref(route.params.traceId)

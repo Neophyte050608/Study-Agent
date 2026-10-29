@@ -1,10 +1,13 @@
 <template>
   <div class="bg-surface text-content antialiased min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-xl border-b border-slate-100 flex justify-between items-center px-8 z-40 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-      <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-brand-text">提示词管理 <span class="text-content-secondary dark:text-slate-500 font-medium text-sm ml-2">/ 集中管理各业务场景下的系统提示词</span></h1>
-      </div>
-      <div class="flex items-center gap-6">
+    <main class="min-h-screen bg-surface-field p-8">
+      <div class="max-w-7xl mx-auto">
+        <header class="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h3 class="text-3xl font-extrabold text-content tracking-tight">提示词管理</h3>
+            <p class="text-content-secondary dark:text-slate-500 mt-2 max-w-2xl">管理所有 AI 提示词模板，支持分类浏览、在线编辑和渲染预览。</p>
+          </div>
+          <div class="flex items-center gap-6">
         <button class="bg-surface-raised border border-slate-200 text-content-secondary px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-surface-field transition-all active:scale-[0.98] disabled:opacity-60" @click="handleReloadCache" :disabled="loading">
           <span class="material-symbols-outlined text-sm">refresh</span>
           刷新缓存
@@ -14,13 +17,6 @@
           新建模板
         </button>
       </div>
-    </header>
-
-    <main class="pt-24 p-8 min-h-screen bg-surface-field transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
-      <div class="max-w-7xl mx-auto">
-        <header class="mb-8">
-          <h3 class="text-3xl font-extrabold text-content tracking-tight">提示词管理</h3>
-          <p class="text-content-secondary dark:text-slate-500 mt-2 max-w-2xl">管理所有 AI 提示词模板，支持分类浏览、在线编辑和渲染预览。</p>
         </header>
 
         <!-- Filter Bar -->
@@ -178,14 +174,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { loadPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate, previewPromptTemplate, reloadPromptCache } from '../api/admin'
+import { loadPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate, previewPromptTemplate, reloadPromptCache } from '../../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const prompts = ref([])
 const loading = ref(false)

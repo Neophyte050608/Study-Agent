@@ -1,14 +1,7 @@
 <template>
   <div class="bg-surface text-content min-h-screen relative">
-  <!-- TopNavBar Anchor -->
-  <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 border-none shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-    <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-brand-text">MCP 工具台 <span class="text-content-secondary font-medium text-sm ml-2">/ 接入与管理各类外部工具插件</span></h1>
-    </div>
-  </header>
-
-  <!-- Main Content Canvas -->
-  <main class="pt-24 pb-12 px-8 min-h-screen bg-surface transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+<!-- Main Content Canvas -->
+  <main class="min-h-screen bg-surface px-8 py-8">
     <div class="max-w-6xl mx-auto space-y-8">
       <!-- Header Section -->
       <div class="flex flex-col space-y-2">
@@ -168,14 +161,8 @@
 
 <script setup>
 import { onMounted, ref, computed } from 'vue'
-import { invokeMcpCapability, loadMcpCapabilities } from '../api/admin'
+import { invokeMcpCapability, loadMcpCapabilities } from '../../../../api/admin'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const loading = ref(false)
 const hint = ref('加载可用能力后进行调用')

@@ -1,20 +1,6 @@
 <template>
-  <div class="bg-surface text-content min-h-screen relative">
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm border-b border-slate-200 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-    <div class="flex items-center gap-4">
-      <h1 class="text-xl font-bold tracking-tight text-indigo-700">意图列表 <span class="text-content-secondary dark:text-slate-500 font-medium text-sm ml-2">/ 筛选、分页与批量下线意图节点</span></h1>
-    </div>
-    <div class="flex items-center gap-2">
-      <RouterLink to="/intent-tree" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-content-secondary dark:text-slate-500 hover:bg-surface-field">
-        回到树页
-      </RouterLink>
-      <button @click="reload" :disabled="loading" class="px-3 py-1.5 text-xs rounded border border-slate-200 text-content-secondary dark:text-slate-500 hover:bg-surface-field disabled:opacity-50">
-        刷新
-      </button>
-    </div>
-  </header>
-
-  <main class="min-h-screen bg-surface-field pt-24 pb-10 px-8 space-y-6 transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <section class="relative bg-surface text-content">
+<section class="space-y-6">
     <section class="rounded-xl border border-slate-200 bg-surface-raised p-4">
       <div class="flex flex-wrap items-center gap-2">
         <div class="relative w-full md:w-[420px]">
@@ -119,24 +105,20 @@
         </div>
       </div>
     </section>
-  </main>
-  </div>
+  </section>
+  </section>
 </template>
 
 <script setup>
 // 中文注释：列表页实现，支持筛选、分页与批量下线，并与树页/编辑页双向导航
 import { computed, onMounted, ref } from 'vue'
-import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { useIntentTreeAdmin } from '../composables/useIntentTreeAdmin'
+import { useRouter, useRoute } from 'vue-router'
+
+const emit = defineEmits(['show-tree'])
+import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin'
 
 const router = useRouter()
 const route = useRoute()
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 const {
   loading,
   hint,
@@ -187,11 +169,11 @@ const togglePageSelect = (checked) => {
 
 // 中文注释：导航行为
 const navigateToTree = (row) => {
-  router.push(`/intent-tree?intentCode=${encodeURIComponent(row.intentId)}`)
+  emit('show-tree', row.intentId)
 }
 const navigateToEdit = (row) => {
   const from = route.fullPath
-  router.push(`/intent-list/${row.index}/edit?from=${encodeURIComponent(from)}`)
+  router.push(`/admin/agents/intents/${row.index}/edit?from=${encodeURIComponent(from)}`)
 }
 
 // 中文注释：批量与单项操作

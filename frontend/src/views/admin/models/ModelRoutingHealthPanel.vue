@@ -1,13 +1,6 @@
 <template>
-  <div class="bg-surface text-content antialiased min-h-screen">
-    <!-- Top Navigation Bar -->
-    <header class="fixed top-0 right-0 h-16 bg-surface-overlay/80 backdrop-blur-md flex items-center justify-between px-8 z-40 shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800 transition-all duration-300" :class="sidebarCollapsed ? 'left-20' : 'left-64'">
-      <div class="flex items-center gap-4">
-        <h1 class="text-xl font-bold tracking-tight text-brand-text">系统监控 <span class="text-content-secondary font-medium text-sm ml-2">/ 实时追踪模型路由状态与健康指标</span></h1>
-      </div>
-    </header>
-
-    <main class="pt-24 px-8 pb-12 min-h-screen relative z-10 bg-surface transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
+  <section class="bg-surface text-content antialiased">
+<section class="relative z-10 bg-surface">
       <!-- Dashboard Header -->
       <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12 w-full lg:w-[80%]">
         <div>
@@ -225,20 +218,14 @@
         </div>
       </div>
       </div>
-    </main>
-  </div>
+    </section>
+  </section>
 </template>
 
 <script setup>
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { loadModelRoutingStats } from '../api/monitoring'
+import { loadModelRoutingStats } from '../../../api/monitoring'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false
-  }
-})
 
 const runtimeStats = ref({ totalRequests: 0, totalFailureCount: 0, routeFallbackCount: 0 })
 const rawDetails = ref({})

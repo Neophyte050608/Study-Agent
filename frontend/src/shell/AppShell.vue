@@ -1,75 +1,65 @@
 <template>
   <div class="flex h-screen w-full">
-    <!-- Sidebar matching layout.js -->
-    <aside 
-      class="fixed left-0 top-0 h-full bg-surface border-r border-divider-light flex flex-col z-50 transition-all duration-300"
+    <aside
+      class="fixed left-0 top-0 z-50 flex h-full flex-col border-r border-divider-light bg-surface transition-all duration-300"
       :class="sidebarCollapsed ? 'w-20' : 'w-64'"
     >
-    <div class="p-6 flex items-center gap-3 relative">
-      <div class="w-10 h-10 bg-primary-container rounded-xl flex items-center justify-center text-white shrink-0">
-        <span class="material-symbols-outlined">enterprise</span>
+      <div class="relative flex items-center gap-3 p-6">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-container text-white">
+          <span class="material-symbols-outlined">enterprise</span>
+        </div>
+        <div class="flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300" :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'">
+          <h1 class="text-xl font-bold leading-tight tracking-widest text-brand-text">青梧</h1>
+          <span class="text-[10px] font-medium tracking-wider text-content-secondary">MIQI学习</span>
+        </div>
+        <button
+          type="button"
+          class="absolute -right-3 top-8 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-surface-raised text-content-muted shadow-sm transition-all hover:border-divider-hover hover:text-brand-text"
+          :aria-label="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+          @click="sidebarCollapsed = !sidebarCollapsed"
+        >
+          <span class="material-symbols-outlined text-[14px]">{{ sidebarCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
+        </button>
       </div>
-      <div class="flex flex-col overflow-hidden whitespace-nowrap transition-all duration-300" :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'">
-        <h1 class="text-xl font-bold text-brand-text leading-tight tracking-widest">青梧</h1>
-        <span class="text-[10px] text-content-secondary font-medium tracking-wider">MIQI学习</span>
+
+      <nav class="no-scrollbar mt-4 flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-4" aria-label="主导航">
+        <RouterLink
+          v-for="menu in menus"
+          :key="menu.id"
+          :to="menu.path"
+          class="group flex items-center gap-3 rounded-lg py-3 font-sans text-sm font-medium tracking-tight transition-all"
+          :class="[
+            activeId === menu.id
+              ? 'border-l-4 border-brand-text bg-surface-raised text-brand-text shadow-sm dark:bg-brand-subtle/50 dark:text-content'
+              : 'text-content-secondary hover:bg-surface-hover',
+            sidebarCollapsed ? 'justify-center border-l-0 px-0' : 'px-4'
+          ]"
+          :title="sidebarCollapsed ? menu.title : ''"
+        >
+          <span
+            class="material-symbols-outlined shrink-0"
+            :class="sidebarCollapsed && activeId === menu.id ? 'text-brand-text' : ''"
+            :style="activeId === menu.id ? 'font-variation-settings: \'FILL\' 1;' : ''"
+          >{{ menu.icon }}</span>
+          <span class="overflow-hidden whitespace-nowrap transition-all duration-300" :class="sidebarCollapsed ? 'hidden w-0 opacity-0' : 'block w-full opacity-100'">{{ menu.title }}</span>
+        </RouterLink>
+      </nav>
+
+      <div class="mt-auto border-t border-divider-light/50 p-4">
+        <button
+          type="button"
+          class="group mt-2 flex w-full items-center gap-3 rounded-lg py-3 font-sans text-sm font-medium tracking-tight text-content-secondary transition-all hover:bg-surface-hover"
+          :class="sidebarCollapsed ? 'justify-center px-0' : 'px-4'"
+          :title="sidebarCollapsed ? (isDark ? '切换到浅色模式' : '切换到深色模式') : ''"
+          @click="toggleTheme"
+        >
+          <span class="material-symbols-outlined shrink-0 transition-colors group-hover:text-brand-text">{{ isDark ? 'light_mode' : 'dark_mode' }}</span>
+          <span class="overflow-hidden whitespace-nowrap text-left transition-all duration-300 group-hover:text-brand-text" :class="sidebarCollapsed ? 'hidden w-0 opacity-0' : 'block w-full opacity-100'">{{ isDark ? '浅色模式' : '深色模式' }}</span>
+        </button>
       </div>
-      <!-- 折叠按钮 -->
-      <button 
-        @click="sidebarCollapsed = !sidebarCollapsed"
-        class="absolute -right-3 top-8 w-6 h-6 bg-surface-raised border border-divider rounded-full flex items-center justify-center text-content-muted hover:text-brand-text hover:border-divider-hover shadow-sm transition-all z-50"
-      >
-        <span class="material-symbols-outlined text-[14px]">{{ sidebarCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
-      </button>
-    </div>
-    <nav class="flex-1 px-4 space-y-1 mt-4 overflow-y-auto overflow-x-hidden no-scrollbar">
-      <router-link
-        v-for="menu in menus"
-        :key="menu.id"
-        :to="toSpaPath(menu.url)"
-        class="flex items-center gap-3 py-3 font-sans text-sm font-medium tracking-tight transition-all rounded-lg group"
-        :class="[
-          isActive(menu.url)
-            ? 'bg-surface-raised dark:bg-brand-subtle/50 text-brand-text dark:text-content shadow-sm border-l-4 border-brand-text'
-            : 'text-content-secondary hover:bg-surface-hover',
-          sidebarCollapsed ? 'px-0 justify-center border-l-0' : 'px-4'
-        ]"
-        :title="sidebarCollapsed ? menu.title : ''"
-      >
-        <span class="material-symbols-outlined shrink-0" :class="sidebarCollapsed && isActive(menu.url) ? 'text-brand-text' : ''" :style="isActive(menu.url) ? 'font-variation-settings: \'FILL\' 1;' : ''">{{ menu.icon || 'apps' }}</span>
-        <span class="overflow-hidden whitespace-nowrap transition-all duration-300" :class="sidebarCollapsed ? 'w-0 opacity-0 hidden' : 'w-full opacity-100 block'">{{ menu.title }}</span>
-      </router-link>
-    </nav>
-    <div class="p-4 mt-auto border-t border-divider-light/50">
-      <router-link
-        :to="toSpaPath('/workspace')"
-        class="flex items-center gap-3 py-3 font-sans text-sm font-medium tracking-tight transition-all rounded-lg group"
-        :class="[
-          isWorkspaceActive
-            ? 'bg-surface-raised dark:bg-brand-subtle/50 text-brand-text dark:text-content shadow-sm border-l-4 border-brand-text'
-            : 'text-content-secondary hover:bg-surface-hover',
-          sidebarCollapsed ? 'px-0 justify-center border-l-0' : 'px-4'
-        ]"
-        :title="sidebarCollapsed ? '扩展空间' : ''"
-      >
-        <span class="material-symbols-outlined shrink-0" :class="sidebarCollapsed && isWorkspaceActive ? 'text-brand-text' : ''" :style="isWorkspaceActive ? 'font-variation-settings: \'FILL\' 1;' : ''">dashboard_customize</span>
-        <span class="overflow-hidden whitespace-nowrap transition-all duration-300" :class="sidebarCollapsed ? 'w-0 opacity-0 hidden' : 'w-full opacity-100 block'">扩展空间</span>
-      </router-link>
+    </aside>
 
-      <!-- 主题切换按钮 -->
-      <button
-        @click="toggleTheme"
-        class="w-full flex items-center gap-3 py-3 mt-2 font-sans text-sm font-medium tracking-tight transition-all rounded-lg group text-content-secondary hover:bg-surface-hover"
-        :class="[sidebarCollapsed ? 'px-0 justify-center' : 'px-4']"
-        :title="sidebarCollapsed ? (isDark ? '切换到浅色模式' : '切换到深色模式') : ''"
-      >
-        <span class="material-symbols-outlined shrink-0 group-hover:text-brand-text transition-colors">{{ isDark ? 'light_mode' : 'dark_mode' }}</span>
-        <span class="overflow-hidden whitespace-nowrap transition-all duration-300 text-left group-hover:text-brand-text" :class="sidebarCollapsed ? 'w-0 opacity-0 hidden' : 'w-full opacity-100 block'">{{ isDark ? '浅色模式' : '深色模式' }}</span>
-      </button>
-    </div>
-  </aside>
-
-  <!-- Each view provides its own <main> to match original HTML -->
-    <div class="flex-1 w-full">
+    <div class="w-full flex-1">
       <RouterView v-slot="{ Component }">
         <component :is="Component" :sidebar-collapsed="sidebarCollapsed" />
       </RouterView>
@@ -78,113 +68,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { loadSidebarMenus } from '../api/menu'
 import { useTheme } from '../composables/useTheme'
+import { isPrimaryNavigationActive, primaryNavigation } from './navigation.js'
 
 const route = useRoute()
-const menus = ref([])
+const menus = primaryNavigation
 const sidebarCollapsed = ref(false)
-
-// 引入主题管理
+const activeId = computed(() => menus.find((item) => isPrimaryNavigationActive(item.id, route.path))?.id)
 const { isDark, toggleTheme } = useTheme()
-
-const normalize = (path) => {
-  if (!path) {
-    return '/'
-  }
-  const normalized = path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path
-  return normalized.startsWith('/') ? normalized : `/${normalized}`
-}
-
-const toSpaPath = (rawUrl) => {
-  const normalized = normalize(rawUrl)
-  switch (normalized) {
-    case '/':
-      return '/chat'
-    case '/monitoring':
-    case '/monitoring.html':
-      return '/monitoring'
-    case '/knowledge':
-    case '/knowledge.html':
-    case '/notes':
-    case '/notes.html':
-      return '/notes'
-    case '/profile':
-    case '/profile.html':
-      return '/profile'
-    case '/ops':
-    case '/ops.html':
-      return '/ops'
-    case '/rag-dashboard':
-      return '/rag-dashboard'
-    case '/model-providers':
-    case '/model-providers.html':
-      return '/model-providers'
-    case '/settings':
-    case '/settings.html':
-      return '/settings'
-    case '/workspace':
-    case '/workspace.html':
-      return '/workspace'
-    case '/mcp':
-    case '/mcp.html':
-      return '/mcp'
-    case '/intent-tree':
-    case '/intent-tree.html':
-      return '/intent-tree'
-    case '/intent-list':
-    case '/intent-list.html':
-      return '/intent-list'
-    case '/prompts':
-    case '/prompts.html':
-      return '/prompts'
-    case '/chat':
-    case '/chat.html':
-      return '/chat'
-    default:
-      return normalized
-  }
-}
-
-const currentSpaPath = computed(() => {
-  const normalizedRoutePath = normalize(route.path)
-  if (normalizedRoutePath.startsWith('/intent-list/')) {
-    return '/intent-list'
-  }
-  return normalize(toSpaPath(route.path))
-})
-
-const isActive = (url) => normalize(toSpaPath(url)) === currentSpaPath.value
-const isWorkspaceActive = computed(() => currentSpaPath.value === '/workspace')
-
-const loadMenus = async () => {
-  try {
-    const data = await loadSidebarMenus()
-    console.log('Loaded menus from API:', data)
-    if (data && data.length > 0) {
-      menus.value = data
-    } else {
-      throw new Error('Empty menu data')
-    }
-  } catch (error) {
-    console.error('Failed to load menus, using fallback:', error)
-    menus.value = [
-      { id: 'CHAT', title: 'AI 助手', icon: 'chat_bubble', url: '/chat' },
-      { id: 'NOTES', title: '知识库管理', icon: 'description', url: '/notes' },
-      { id: 'PROFILE', title: '能力画像', icon: 'analytics', url: '/profile' },
-      { id: 'MONITORING', title: '系统监控', icon: 'monitoring', url: '/monitoring' }
-    ]
-  }
-}
-
-onMounted(() => {
-  loadMenus()
-  window.addEventListener('menu-layout-changed', loadMenus)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('menu-layout-changed', loadMenus)
-})
 </script>
