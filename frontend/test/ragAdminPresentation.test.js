@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildTraceQuery, overviewCards, normalizeEvaluationRuns, auditSummary } from '../src/views/admin/rag/ragPresentation.js'
+import { buildTraceQuery, overviewCards, normalizeEvaluationRuns, auditSummary, qualityDetailResults } from '../src/views/admin/rag/ragPresentation.js'
 
 test('overview has one stable metric owner', () => {
   assert.deepEqual(overviewCards({ currentHour: { traceCount: 3, successRate: '90%', avgLatencyMs: 120 } })
@@ -16,4 +16,10 @@ test('trace filters map only active values', () => {
 test('evaluation and audit mappings tolerate empty payloads', () => {
   assert.deepEqual(normalizeEvaluationRuns(undefined), [])
   assert.deepEqual(auditSummary({}, []), { idempotencyTotal: 0, auditCount: 0 })
+})
+
+test('quality detail reads case results from the backend report contract', () => {
+  const report = { results: [{ query: 'Q1', generatedAnswer: 'A1' }] }
+  assert.deepEqual(qualityDetailResults(report), report.results)
+  assert.deepEqual(qualityDetailResults({ cases: report.results }), [])
 })

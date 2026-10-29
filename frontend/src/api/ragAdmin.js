@@ -1,8 +1,4 @@
-import { httpGet, httpPostJson } from './http'
-
-export function loadOpsOverview() {
-  return httpGet('/api/observability/rag/overview')
-}
+import { httpGet, httpPostJson } from './http.js'
 
 export function loadOpsTraces(filters = {}) {
   const params = new URLSearchParams()

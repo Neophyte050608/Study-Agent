@@ -42,6 +42,10 @@ export function normalizeEvaluationRuns(payload) {
   return Array.isArray(payload?.runs) ? payload.runs : []
 }
 
+export function qualityDetailResults(report) {
+  return Array.isArray(report?.results) ? report.results : []
+}
+
 export function auditSummary(idempotency = {}, audits = []) {
   const inMemorySize = Number(idempotency?.inMemorySize) || 0
   const redisSize = Number(idempotency?.redisSize) || 0

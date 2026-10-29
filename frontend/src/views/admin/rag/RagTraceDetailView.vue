@@ -33,8 +33,11 @@
 
       <div v-else-if="!trace" class="flex flex-col items-center justify-center py-32 text-slate-400">
         <span class="material-symbols-outlined text-4xl mb-4 text-red-300">error</span>
-        <p class="text-sm font-medium">未找到该链路记录或已过期</p>
-        <router-link to="/admin/rag" class="mt-4 text-indigo-600 font-bold hover:underline">返回列表</router-link>
+        <p class="text-sm font-medium">{{ error ? `链路详情加载失败：${error}` : '未找到该链路记录或已过期' }}</p>
+        <div class="mt-4 flex items-center gap-4">
+          <button v-if="error" class="text-indigo-600 font-bold hover:underline" @click="loadDetail">重试</button>
+          <router-link to="/admin/rag" class="text-indigo-600 font-bold hover:underline">返回列表</router-link>
+        </div>
       </div>
 
       <div v-else class="space-y-6">
@@ -313,16 +316,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { loadOpsTraceDetail } from '../../../api/ragAdmin'
+import { loadOpsTraceDetail } from '../../../api/ragAdmin.js'
 
 
 const route = useRoute()
 const traceId = ref(route.params.traceId)
 const loading = ref(false)
+const error = ref('')
 const trace = ref(null)
 const traceSummaryResponse = ref(null)
 const selectedNode = ref(null)
-const SLOW_THRESHOLD_MS = Number(import.meta.env.VITE_RAG_SLOW_THRESHOLD_MS || 20000)
+const SLOW_THRESHOLD_MS = Number(import.meta.env?.VITE_RAG_SLOW_THRESHOLD_MS || 20000)
 
 const resolveDisplayTraceStatus = (traceStatus, durationMs, nodes) => {
   const normalizedTraceStatus = typeof traceStatus === 'string' ? traceStatus.trim().toUpperCase() : ''
@@ -504,6 +508,7 @@ const timelineNodes = computed(() => {
 
 const loadDetail = async () => {
   loading.value = true
+  error.value = ''
   try {
     const data = await loadOpsTraceDetail(traceId.value)
     if (data) {
@@ -511,7 +516,9 @@ const loadDetail = async () => {
       traceSummaryResponse.value = data.summary || null
     }
   } catch (err) {
-    console.error('Failed to load trace detail:', err)
+    trace.value = null
+    traceSummaryResponse.value = null
+    error.value = err?.message || '链路详情加载失败'
   } finally {
     loading.value = false
   }
