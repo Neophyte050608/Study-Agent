@@ -3,6 +3,7 @@ package io.github.imzmq.interview.chat.application.memory;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemoryCandidate;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,19 @@ class ChatMemoryCommitCoordinatorRetryTest {
 
         verify(transactionService, times(3)).commitBatchOnce(
                 List.of(new ChatMemoryCommitRequest("task-1", "lease-1", candidates)));
+    }
+
+    @Test
+    void retriesTheDeadlockTranslationUsedByMySql() {
+        doThrow(new DeadlockLoserDataAccessException("deadlock", null))
+                .doNothing()
+                .when(transactionService).commitBatchOnce(List.of(
+                        new ChatMemoryCommitRequest("task-1", "lease-1", candidates)));
+
+        service.commit("task-1", "lease-1", candidates);
+
+        verify(transactionService, times(2)).commitBatchOnce(List.of(
+                new ChatMemoryCommitRequest("task-1", "lease-1", candidates)));
     }
 
     @Test

@@ -1,8 +1,8 @@
 package io.github.imzmq.interview.chat.application.memory;
 
 import io.github.imzmq.interview.chat.domain.memory.ChatMemoryCandidate;
-import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +39,7 @@ public class ChatMemoryCommitService {
                 if (attempt == MAX_COMMIT_ATTEMPTS) {
                     throw new ChatMemoryCommitException("MEMORY_WRITE_CONFLICT");
                 }
-            } catch (DuplicateKeyException | CannotAcquireLockException exception) {
+            } catch (DuplicateKeyException | PessimisticLockingFailureException exception) {
                 if (attempt == MAX_COMMIT_ATTEMPTS) {
                     throw new ChatMemoryCommitException("MEMORY_WRITE_CONFLICT");
                 }
