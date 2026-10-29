@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | 安装依赖 | `cd frontend && npm install` | 首次启动或依赖变化时运行。 |
 | 本地开发 | `cd frontend && npm run dev` | 启动 Vite 开发服务。 |
-| 前端单元测试 | `cd frontend && npm test` | Node 内置运行器；覆盖学习计划状态机及导航、管理路由和管理页纯映射，不是全站组件覆盖。 |
+| 前端单元测试 | `cd frontend && npm test` | Node 内置运行器；覆盖学习计划状态机、导航/管理路由、纯映射、主题偏好及模型表单语义，不是全站组件覆盖。 |
 | 生产构建 | `cd frontend && npm run build` | 检查 Vue/Vite 构建是否通过。 |
 | 构建到 Spring 静态目录 | `cd frontend && npm run build:spring` | 需要后端直接托管 SPA 时使用。 |
 
@@ -40,6 +40,30 @@ cd frontend && node --test \
 ```bash
 mvn -q -Dtest=FrontendRouteControllerTest test
 ```
+
+## 共享主题与模型管理 UI
+
+```bash
+cd frontend && node --test \
+  test/theme.test.js \
+  test/modelAdminPresentation.test.js \
+  test/modelUiContract.test.js
+```
+
+- `theme.test.js` 检查调色板、CSS 变量、共享状态、偏好初始化、切换与存储不可用情形。
+- `modelAdminPresentation.test.js` 检查表单必填规则、密钥留空保留/替换/显式清空、未知状态和实际成功率。
+- `modelUiContract.test.js` 是源码结构约束：使用成熟控件、不保留旧控件或虚构指标、重试可见、窄屏导航不折成竖字；它不运行 Vue 组件。
+- `npm run build` 仍需单独运行，并观察入口/页面 chunk 与 gzip 大小；组件库引入会增加包体，不能将 CSS 减少等同于构建体积下降。
+
+浏览器验收使用隔离 dummy 模型/密钥，拦截实际 `/api/` 请求（不要误拦 `/src/api/` 模块），不读取本地真实账号、token 或已保存的 key：
+
+1. 在 1440px 和 390px 检查侧栏偏移、页面无横向溢出、表格局部滚动、操作换行和弹窗视口边界。
+2. 检查深浅色及刷新后的偏好，覆盖控件与浮层。
+3. 检查真实 input 的标签关联、Esc 关闭及焦点恢复；保存中禁止重复提交和取消。
+4. 检查新增/编辑、密钥为空不回填、保留/替换/清空请求语义、失败后保留输入重试、probe、受服务端开关约束的密钥复制及删除确认/取消。
+5. 检查首次加载失败、空成功结果、未知健康、刷新失败保留快照及重试；对聊天和画像进行主题接入后的布局/挂载冒烟。
+
+2026-10-30 的浏览器验收使用仓库外临时 Playwright 脚本，不是本仓库的持久自动化测试命令。mock 交互通过不代表真实模型、数据库、聊天 Markdown 全场景或全应用联调已验证。
 
 ## 本地启动脚本检查
 

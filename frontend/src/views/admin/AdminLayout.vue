@@ -17,14 +17,14 @@ const isSectionActive = (target) => target.startsWith('/admin/agents')
 
 <template>
   <div class="min-h-screen bg-surface transition-all duration-300" :class="sidebarCollapsed ? 'ml-20' : 'ml-64'">
-    <header class="border-b border-divider bg-surface-overlay px-8 py-5">
+    <header class="border-b border-divider bg-surface-overlay px-4 py-5 md:px-6">
       <h1 class="text-xl font-bold text-brand-text">管理中心</h1>
       <nav class="mt-4 flex gap-2 overflow-x-auto" aria-label="管理中心">
         <RouterLink
           v-for="item in sections"
           :key="item.to"
           :to="item.to"
-          class="rounded-lg px-4 py-2 text-sm font-bold text-content-secondary transition-colors hover:bg-surface-hover hover:text-brand-text"
+          class="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-bold text-content-secondary transition-colors hover:bg-surface-hover hover:text-brand-text"
           :class="isSectionActive(item.to) ? 'bg-brand-subtle text-brand-text' : ''"
         >
           {{ item.title }}
