@@ -11,8 +11,11 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemo
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +30,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ChatMemoryProjectionWorkerTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-29T12:00:00Z");
+    private static final LocalDateTime NOW_UTC = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
     private final ChatMemoryOutboxClaimService claimService = mock(ChatMemoryOutboxClaimService.class);
     private final ChatMemoryItemMapper itemMapper = mock(ChatMemoryItemMapper.class);
@@ -43,7 +50,7 @@ class ChatMemoryProjectionWorkerTest {
         properties.setProjectionMaxAttempts(10);
         worker = new ChatMemoryProjectionWorker(
                 claimService, itemMapper, sourceMapper, outboxMapper, projection, properties,
-                mock(ChatMemoryObservationPublisher.class));
+                mock(ChatMemoryObservationPublisher.class), CLOCK);
     }
 
     @Test
@@ -106,7 +113,7 @@ class ChatMemoryProjectionWorkerTest {
 
     @Test
     void tombstoneOrMemoryWithoutEffectiveSourceDeletesProjection() {
-        for (String status : List.of("DELETED", "QUARANTINED")) {
+        for (String status : List.of("DELETED", "QUARANTINED", "SUPERSEDED")) {
             ChatMemoryOutboxDO event = event(2L, "UPSERT");
             when(itemMapper.selectById(10L)).thenReturn(item(status, 2L));
             when(outboxMapper.completeEvent(eq("event-1"), eq("lease-1"), any())).thenReturn(1);
@@ -118,9 +125,43 @@ class ChatMemoryProjectionWorkerTest {
         when(sourceMapper.selectCount(any(Wrapper.class))).thenReturn(0L);
         worker.process(noSource);
 
-        verify(projection, org.mockito.Mockito.times(3))
+        verify(projection, org.mockito.Mockito.times(4))
                 .deleteMemory("user-1", 10L, Duration.ofSeconds(10));
         verify(projection, never()).upsert(any(), any());
+    }
+
+    @Test
+    void futureOrExpiredActiveTruthDeletesProjectionInsteadOfRevivingIt() {
+        ChatMemoryItemDO future = item("ACTIVE", 2L);
+        future.setValidFrom(NOW_UTC.plusSeconds(1));
+        ChatMemoryItemDO expired = item("ACTIVE", 2L);
+        expired.setValidUntil(NOW_UTC);
+        when(sourceMapper.selectCount(any(Wrapper.class))).thenReturn(1L);
+        when(outboxMapper.completeEvent(eq("event-1"), eq("lease-1"), any())).thenReturn(1);
+
+        when(itemMapper.selectById(10L)).thenReturn(future, expired);
+        worker.process(event(2L, "UPSERT"));
+        worker.process(event(2L, "UPSERT"));
+
+        verify(projection, times(2))
+                .deleteMemory("user-1", 10L, Duration.ofSeconds(10));
+        verify(projection, never()).upsert(any(), any());
+    }
+
+    @Test
+    void delayedDeleteReprojectsCurrentProjectableTruth() {
+        when(itemMapper.selectById(10L)).thenReturn(item("ACTIVE", 2L));
+        when(sourceMapper.selectCount(any(Wrapper.class))).thenReturn(1L);
+        when(outboxMapper.completeEvent(eq("event-1"), eq("lease-1"), any())).thenReturn(1);
+
+        worker.process(event(2L, "DELETE"));
+
+        verify(projection).upsert(eq(new ChatMemoryProjection(
+                "10:2", 10L, "user-1", 2L, "hash", "FACT", "content")),
+                eq(Duration.ofSeconds(10)));
+        verify(projection).deleteOtherVersions(
+                "user-1", 10L, 2L, Duration.ofSeconds(10));
+        verify(projection, never()).deleteMemory(any(), any(), any());
     }
 
     @Test
@@ -292,6 +333,8 @@ class ChatMemoryProjectionWorkerTest {
         item.setContentHash("hash");
         item.setCategory("FACT");
         item.setContent("content");
+        item.setValidFrom(NOW_UTC.minusDays(1));
+        item.setValidUntil(null);
         return item;
     }
 }

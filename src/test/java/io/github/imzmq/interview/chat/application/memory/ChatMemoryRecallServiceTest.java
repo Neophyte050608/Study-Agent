@@ -10,8 +10,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +31,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ChatMemoryRecallServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-29T12:00:00Z");
+    private static final LocalDateTime NOW_UTC = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
     private final ChatMemoryProjectionPort projectionPort = mock(ChatMemoryProjectionPort.class);
     private final ChatMemoryItemMapper itemMapper = mock(ChatMemoryItemMapper.class);
@@ -46,7 +53,7 @@ class ChatMemoryRecallServiceTest {
         properties.setFallbackScanLimit(50);
         service = new ChatMemoryRecallService(
                 Optional.of(projectionPort), itemMapper, properties, executor,
-                mock(ChatMemoryObservationPublisher.class));
+                mock(ChatMemoryObservationPublisher.class), CLOCK);
     }
 
     @AfterEach
@@ -59,13 +66,13 @@ class ChatMemoryRecallServiceTest {
         ChatMemoryVectorCandidate candidate = candidate(1L, 3L, "hash-1", "FACT", 0.9);
         when(projectionPort.search("user-a", "Java", 20, Duration.ofMillis(100)))
                 .thenReturn(List.of(candidate));
-        when(itemMapper.selectRecallItems("user-a", List.of(1L)))
+        when(itemMapper.selectRecallItems("user-a", List.of(1L), NOW_UTC))
                 .thenReturn(List.of(item(1L, "user-b", "FACT", "other user's memory", "hash-1", "ACTIVE", 3L)));
-        when(itemMapper.selectRecentEffectiveItems("user-a", 50)).thenReturn(List.of());
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC)).thenReturn(List.of());
 
         assertThat(service.recall("user-a", "Java")).isEmpty();
 
-        verify(itemMapper).selectRecallItems("user-a", List.of(1L));
+        verify(itemMapper).selectRecallItems("user-a", List.of(1L), NOW_UTC);
     }
 
     @Test
@@ -77,13 +84,35 @@ class ChatMemoryRecallServiceTest {
                 candidate(4L, 4L, "hash-4", "FACT", 0.6),
                 candidate(5L, 5L, "hash-5", "FACT", 0.5));
         when(projectionPort.search(any(), any(), anyInt(), any())).thenReturn(candidates);
-        when(itemMapper.selectRecallItems(eq("user-a"), anyList())).thenReturn(List.of(
+        when(itemMapper.selectRecallItems(eq("user-a"), anyList(), eq(NOW_UTC))).thenReturn(List.of(
                 item(1L, "user-a", "FACT", "stale version", "hash-1", "ACTIVE", 2L),
                 item(2L, "user-a", "FACT", "wrong hash", "hash-2", "ACTIVE", 2L),
                 item(3L, "user-a", "FACT", "wrong category", "hash-3", "ACTIVE", 3L),
                 item(4L, "user-a", "FACT", "deleted", "hash-4", "DELETED", 4L),
                 item(5L, "user-a", "FACT", "quarantined", "hash-5", "QUARANTINED", 5L)));
-        when(itemMapper.selectRecentEffectiveItems("user-a", 50)).thenReturn(List.of());
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC)).thenReturn(List.of());
+
+        assertThat(service.recall("user-a", "query")).isEmpty();
+    }
+
+    @Test
+    void rejectsFutureExpiredAndSupersededVectorCandidatesAfterMysqlRevalidation() {
+        List<ChatMemoryVectorCandidate> candidates = List.of(
+                candidate(6L, 1L, "hash-6", "FACT", 0.9),
+                candidate(7L, 1L, "hash-7", "FACT", 0.8),
+                candidate(8L, 1L, "hash-8", "FACT", 0.7));
+        ChatMemoryItemDO future = item(
+                6L, "user-a", "FACT", "future", "hash-6", "ACTIVE", 1L);
+        future.setValidFrom(NOW_UTC.plusSeconds(1));
+        ChatMemoryItemDO expired = item(
+                7L, "user-a", "FACT", "expired", "hash-7", "ACTIVE", 1L);
+        expired.setValidUntil(NOW_UTC);
+        ChatMemoryItemDO superseded = item(
+                8L, "user-a", "FACT", "superseded", "hash-8", "SUPERSEDED", 1L);
+        when(projectionPort.search(any(), any(), anyInt(), any())).thenReturn(candidates);
+        when(itemMapper.selectRecallItems("user-a", List.of(6L, 7L, 8L), NOW_UTC))
+                .thenReturn(List.of(future, expired, superseded));
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC)).thenReturn(List.of());
 
         assertThat(service.recall("user-a", "query")).isEmpty();
     }
@@ -93,8 +122,8 @@ class ChatMemoryRecallServiceTest {
         when(projectionPort.search(any(), any(), anyInt(), any()))
                 .thenReturn(List.of(candidate(9L, 1L, "hash-9", "FACT", 0.99)));
         // The mapper intentionally returns no row when source/session/message validity fails.
-        when(itemMapper.selectRecallItems("user-a", List.of(9L))).thenReturn(List.of());
-        when(itemMapper.selectRecentEffectiveItems("user-a", 50)).thenReturn(List.of());
+        when(itemMapper.selectRecallItems("user-a", List.of(9L), NOW_UTC)).thenReturn(List.of());
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC)).thenReturn(List.of());
 
         assertThat(service.recall("user-a", "sensitive query")).isEmpty();
     }
@@ -102,7 +131,7 @@ class ChatMemoryRecallServiceTest {
     @Test
     void effectiveRecallSqlValidatesSourceSessionMessageAndUserOwnership() throws Exception {
         Method method = ChatMemoryItemMapper.class.getMethod(
-                "selectRecallItems", String.class, List.class);
+                "selectRecallItems", String.class, List.class, LocalDateTime.class);
         String sql = String.join("\n", method.getAnnotation(Select.class).value())
                 .replaceAll("\\s+", " ")
                 .toLowerCase();
@@ -110,6 +139,8 @@ class ChatMemoryRecallServiceTest {
         assertThat(sql)
                 .contains("item.user_id = #{userid}")
                 .contains("item.status = 'active'")
+                .contains("item.valid_from <= #{now}")
+                .contains("item.valid_until is null or item.valid_until > #{now}")
                 .contains("source.invalidated_at is null")
                 .contains("source.user_id = item.user_id")
                 .contains("session.user_id = item.user_id")
@@ -131,7 +162,7 @@ class ChatMemoryRecallServiceTest {
                 2L, "user-a", "FACT", "我住在杭州", "h2", "ACTIVE", 1L);
         ChatMemoryItemDO stablePreference = item(
                 3L, "user-a", "PREFERENCE", "偏好先看代码示例", "h3", "ACTIVE", 1L);
-        when(itemMapper.selectRecentEffectiveItems("user-a", 50))
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC))
                 .thenReturn(List.of(irrelevantFact, stablePreference, relevant));
 
         assertThat(service.recall("user-a", "Java 并发怎么学习"))
@@ -152,7 +183,7 @@ class ChatMemoryRecallServiceTest {
         });
         ChatMemoryItemDO preference = item(
                 1L, "user-a", "PREFERENCE", "偏好简洁回答", "h1", "ACTIVE", 1L);
-        when(itemMapper.selectRecentEffectiveItems("user-a", 50)).thenReturn(List.of(preference));
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC)).thenReturn(List.of(preference));
 
         assertThat(service.recall("user-a", "unrelated"))
                 .extracting(ChatMemoryRecallService.RecalledMemory::content)
@@ -166,7 +197,7 @@ class ChatMemoryRecallServiceTest {
         try {
             assertThat(service.recall("user-a", "query")).isEmpty();
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
-            verify(itemMapper, never()).selectRecentEffectiveItems(any(), anyInt());
+            verify(itemMapper, never()).selectRecentEffectiveItems(any(), anyInt(), any());
         } finally {
             Thread.interrupted();
         }
@@ -176,19 +207,19 @@ class ChatMemoryRecallServiceTest {
     void returnsEmptyWhenMysqlRevalidationFailsEvenIfMilvusHasCandidates() {
         when(projectionPort.search(any(), any(), anyInt(), any()))
                 .thenReturn(List.of(candidate(1L, 1L, "h1", "FACT", 0.9)));
-        when(itemMapper.selectRecallItems("user-a", List.of(1L)))
+        when(itemMapper.selectRecallItems("user-a", List.of(1L), NOW_UTC))
                 .thenThrow(new IllegalStateException("database unavailable"));
 
         assertThat(service.recall("user-a", "query")).isEmpty();
 
-        verify(itemMapper, never()).selectRecentEffectiveItems(any(), anyInt());
+        verify(itemMapper, never()).selectRecentEffectiveItems(any(), anyInt(), any());
     }
 
     @Test
     void fallbackReturnsEmptyWhenMysqlIsUnavailable() {
         when(projectionPort.search(any(), any(), anyInt(), any()))
                 .thenThrow(new ChatMemoryProjectionException("MEMORY_PROJECTION_TIMEOUT"));
-        when(itemMapper.selectRecentEffectiveItems("user-a", 50))
+        when(itemMapper.selectRecentEffectiveItems("user-a", 50, NOW_UTC))
                 .thenThrow(new IllegalStateException("database unavailable"));
 
         assertThat(service.recall("user-a", "query")).isEmpty();
@@ -204,7 +235,7 @@ class ChatMemoryRecallServiceTest {
                 .toList();
         when(projectionPort.search("user-a", "query", 20, Duration.ofMillis(100)))
                 .thenReturn(candidates);
-        when(itemMapper.selectRecallItems(eq("user-a"), anyList())).thenReturn(rows);
+        when(itemMapper.selectRecallItems(eq("user-a"), anyList(), eq(NOW_UTC))).thenReturn(rows);
 
         assertThat(service.recall("user-a", "query"))
                 .extracting(ChatMemoryRecallService.RecalledMemory::content)
@@ -220,7 +251,7 @@ class ChatMemoryRecallServiceTest {
         assertThat(service.recall(" ", "query")).isEmpty();
 
         verify(projectionPort, never()).search(any(), any(), anyInt(), any());
-        verify(itemMapper, never()).selectRecentEffectiveItems(any(), anyInt());
+        verify(itemMapper, never()).selectRecentEffectiveItems(any(), anyInt(), any());
     }
 
     private ChatMemoryVectorCandidate candidate(
@@ -245,6 +276,8 @@ class ChatMemoryRecallServiceTest {
         item.setContentHash(hash);
         item.setStatus(status);
         item.setVersion(version);
+        item.setValidFrom(NOW_UTC.minusDays(1));
+        item.setValidUntil(null);
         item.setUpdatedAt(LocalDateTime.of(2026, 10, 26, 12, 0).plusMinutes(id));
         return item;
     }

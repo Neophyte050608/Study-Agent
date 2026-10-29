@@ -60,7 +60,7 @@ class ChatSessionDeletionServiceTest {
         when(itemMapper.lockOwnedItem("user-a", 7L))
                 .thenReturn(item(7L, "user-a", 3L));
         when(sourceMapper.countEffectiveSources("user-a", 7L)).thenReturn(0);
-        when(itemMapper.markDeleted(7L, "user-a", 3L, 4L)).thenReturn(1);
+        when(itemMapper.markActiveDeleted(7L, "user-a", 3L, 4L)).thenReturn(1);
 
         service.delete("user-a", "session-a");
 
@@ -78,7 +78,7 @@ class ChatSessionDeletionServiceTest {
         order.verify(sourceMapper).invalidateSessionSources("user-a", "session-a");
         order.verify(itemMapper).lockOwnedItem("user-a", 7L);
         order.verify(sourceMapper).countEffectiveSources("user-a", 7L);
-        order.verify(itemMapper).markDeleted(7L, "user-a", 3L, 4L);
+        order.verify(itemMapper).markActiveDeleted(7L, "user-a", 3L, 4L);
     }
 
     @Test
@@ -106,8 +106,55 @@ class ChatSessionDeletionServiceTest {
         itemOrder.verify(itemMapper).bumpVersion(9L, "user-a", 5L, 6L);
         verify(outboxEventService).enqueue(7L, "user-a", 3L, "UPSERT");
         verify(outboxEventService).enqueue(9L, "user-a", 6L, "UPSERT");
-        verify(itemMapper, never()).markDeleted(7L, "user-a", 2L, 3L);
-        verify(itemMapper, never()).markDeleted(9L, "user-a", 5L, 6L);
+        verify(itemMapper, never()).markActiveDeleted(7L, "user-a", 2L, 3L);
+        verify(itemMapper, never()).markActiveDeleted(9L, "user-a", 5L, 6L);
+    }
+
+    @Test
+    void quarantinedLastSourceIsDeletedWithoutProjectionEvent() {
+        arrangeAffectedMemory(item(7L, "user-a", "QUARANTINED", 3L), 0);
+        when(itemMapper.markQuarantinedDeleted(7L, "user-a", 3L, 4L)).thenReturn(1);
+
+        service.delete("user-a", "session-a");
+
+        verify(itemMapper).markQuarantinedDeleted(7L, "user-a", 3L, 4L);
+        verify(outboxEventService, never()).enqueue(7L, "user-a", 4L, "DELETE");
+        verify(outboxEventService, never()).enqueue(7L, "user-a", 4L, "UPSERT");
+    }
+
+    @Test
+    void quarantinedMemoryWithAnotherSourceOnlyBumpsItsVersion() {
+        arrangeAffectedMemory(item(7L, "user-a", "QUARANTINED", 3L), 1);
+        when(itemMapper.bumpQuarantinedVersion(7L, "user-a", 3L, 4L)).thenReturn(1);
+
+        service.delete("user-a", "session-a");
+
+        verify(itemMapper).bumpQuarantinedVersion(7L, "user-a", 3L, 4L);
+        verify(outboxEventService, never()).enqueue(7L, "user-a", 4L, "DELETE");
+        verify(outboxEventService, never()).enqueue(7L, "user-a", 4L, "UPSERT");
+    }
+
+    @Test
+    void supersededOrDeletedMemoryStateIsNotChangedWhenSourcesDisappear() {
+        for (String status : List.of("SUPERSEDED", "DELETED")) {
+            ChatMemoryItemDO item = item(7L, "user-a", status, 3L);
+            when(sessionMapper.lockOwnedSession("user-a", "session-a"))
+                    .thenReturn(session("session-a", "user-a"));
+            when(sessionMapper.markOwnedSessionDeleted("user-a", "session-a")).thenReturn(1);
+            when(sourceMapper.selectSessionMemoryIds("user-a", "session-a"))
+                    .thenReturn(List.of(7L));
+            when(itemMapper.lockOwnedItem("user-a", 7L)).thenReturn(item);
+
+            service.delete("user-a", "session-a");
+        }
+
+        verify(sourceMapper, never()).countEffectiveSources("user-a", 7L);
+        verify(itemMapper, never()).markActiveDeleted(7L, "user-a", 3L, 4L);
+        verify(itemMapper, never()).markQuarantinedDeleted(7L, "user-a", 3L, 4L);
+        verify(itemMapper, never()).bumpVersion(7L, "user-a", 3L, 4L);
+        verify(itemMapper, never()).bumpQuarantinedVersion(7L, "user-a", 3L, 4L);
+        verify(outboxEventService, never()).enqueue(7L, "user-a", 4L, "DELETE");
+        verify(outboxEventService, never()).enqueue(7L, "user-a", 4L, "UPSERT");
     }
 
     @Test
@@ -134,11 +181,25 @@ class ChatSessionDeletionServiceTest {
         return session;
     }
 
+    private void arrangeAffectedMemory(ChatMemoryItemDO item, int sourceCount) {
+        when(sessionMapper.lockOwnedSession("user-a", "session-a"))
+                .thenReturn(session("session-a", "user-a"));
+        when(sessionMapper.markOwnedSessionDeleted("user-a", "session-a")).thenReturn(1);
+        when(sourceMapper.selectSessionMemoryIds("user-a", "session-a"))
+                .thenReturn(List.of(item.getId()));
+        when(itemMapper.lockOwnedItem("user-a", item.getId())).thenReturn(item);
+        when(sourceMapper.countEffectiveSources("user-a", item.getId())).thenReturn(sourceCount);
+    }
+
     private ChatMemoryItemDO item(long id, String userId, long version) {
+        return item(id, userId, "ACTIVE", version);
+    }
+
+    private ChatMemoryItemDO item(long id, String userId, String status, long version) {
         ChatMemoryItemDO item = new ChatMemoryItemDO();
         item.setId(id);
         item.setUserId(userId);
-        item.setStatus("ACTIVE");
+        item.setStatus(status);
         item.setVersion(version);
         item.setContent("memory");
         return item;

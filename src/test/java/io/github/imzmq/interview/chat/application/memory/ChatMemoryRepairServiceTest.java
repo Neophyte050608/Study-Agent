@@ -11,8 +11,11 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemo
 import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemorySourceMapper;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -33,6 +36,10 @@ import static org.mockito.Mockito.when;
 
 class ChatMemoryRepairServiceTest {
 
+    private static final Instant NOW = Instant.parse("2026-10-29T12:00:00Z");
+    private static final LocalDateTime NOW_UTC = LocalDateTime.ofInstant(NOW, ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+
     @Test
     void twoSidedSweepRepairsDriftOnlyThroughExactOutboxKeys() {
         ChatMemoryItemMapper itemMapper = mock(ChatMemoryItemMapper.class);
@@ -43,7 +50,7 @@ class ChatMemoryRepairServiceTest {
         ChatMemoryOutboxEventService outboxService = new ChatMemoryOutboxEventService(outboxMapper);
         ChatMemoryRepairService service = new ChatMemoryRepairService(
                 itemMapper, sourceMapper, projectionPort, outboxService, properties,
-                mock(ChatMemoryObservationPublisher.class));
+                mock(ChatMemoryObservationPublisher.class), CLOCK);
 
         List<ChatMemoryItemDO> truth = List.of(
                 item(1L, "ACTIVE", 2L, "hash-1", "FACT"),
@@ -121,7 +128,7 @@ class ChatMemoryRepairServiceTest {
         ChatMemoryRepairService service = new ChatMemoryRepairService(
                 itemMapper, sourceMapper, projectionPort,
                 new ChatMemoryOutboxEventService(outboxMapper), properties(),
-                mock(ChatMemoryObservationPublisher.class));
+                mock(ChatMemoryObservationPublisher.class), CLOCK);
         ChatMemoryItemDO item = item(10L, "ACTIVE", 2L, "hash", "FACT");
         ChatMemoryProjectionRow row = new ChatMemoryProjectionRow(
                 "10:2", 10L, "wrong-owner", 2L, "hash", "FACT");
@@ -152,7 +159,7 @@ class ChatMemoryRepairServiceTest {
         ChatMemoryRepairService service = new ChatMemoryRepairService(
                 itemMapper, sourceMapper, projectionPort,
                 new ChatMemoryOutboxEventService(outboxMapper), properties(),
-                mock(ChatMemoryObservationPublisher.class));
+                mock(ChatMemoryObservationPublisher.class), CLOCK);
         ChatMemoryItemDO item = item(10L, "ACTIVE", 2L, "hash", "FACT");
         ChatMemoryProjectionRow row = row("10:2", 10L, 2L, "hash", "FACT");
         when(itemMapper.selectRepairPage(0L, 2)).thenReturn(List.of(item));
@@ -172,6 +179,42 @@ class ChatMemoryRepairServiceTest {
         assertThat(inserted.getValue().getOperation()).isEqualTo("DELETE");
         assertThat(inserted.getValue().getMemoryId()).isEqualTo(10L);
         assertThat(inserted.getValue().getMemoryVersion()).isEqualTo(2L);
+    }
+
+    @Test
+    void futureAndExpiredActiveTruthQueueProjectionDeletion() {
+        ChatMemoryItemMapper itemMapper = mock(ChatMemoryItemMapper.class);
+        ChatMemorySourceMapper sourceMapper = mock(ChatMemorySourceMapper.class);
+        ChatMemoryOutboxMapper outboxMapper = mock(ChatMemoryOutboxMapper.class);
+        ChatMemoryProjectionPort projectionPort = mock(ChatMemoryProjectionPort.class);
+        ChatMemoryRepairService service = new ChatMemoryRepairService(
+                itemMapper, sourceMapper, projectionPort,
+                new ChatMemoryOutboxEventService(outboxMapper), properties(),
+                mock(ChatMemoryObservationPublisher.class), CLOCK);
+        ChatMemoryItemDO future = item(10L, "ACTIVE", 2L, "future-hash", "FACT");
+        future.setValidFrom(NOW_UTC.plusSeconds(1));
+        ChatMemoryItemDO expired = item(11L, "ACTIVE", 3L, "expired-hash", "FACT");
+        expired.setValidUntil(NOW_UTC);
+        List<ChatMemoryProjectionRow> rows = List.of(
+                row("10:2", 10L, 2L, "future-hash", "FACT"),
+                row("11:3", 11L, 3L, "expired-hash", "FACT"));
+        when(itemMapper.selectRepairPage(0L, 2)).thenReturn(List.of(future, expired));
+        when(itemMapper.selectRepairPage(11L, 2)).thenReturn(List.of());
+        when(projectionPort.findByProjectionIds(
+                List.of("10:2", "11:3"), Duration.ofSeconds(3))).thenReturn(rows);
+        when(projectionPort.openCursor(2, Duration.ofSeconds(3))).thenReturn(cursor(rows));
+        when(itemMapper.selectBatchIds(List.of(10L, 11L))).thenReturn(List.of(future, expired));
+        when(sourceMapper.selectEffectiveMemoryIds(anyList())).thenReturn(List.of(10L, 11L));
+        when(outboxMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+
+        service.repairAll();
+
+        org.mockito.ArgumentCaptor<ChatMemoryOutboxDO> inserted =
+                org.mockito.ArgumentCaptor.forClass(ChatMemoryOutboxDO.class);
+        verify(outboxMapper, times(2)).insert(inserted.capture());
+        assertThat(inserted.getAllValues())
+                .extracting(event -> event.getMemoryId() + ":" + event.getOperation())
+                .containsExactlyInAnyOrder("10:DELETE", "11:DELETE");
     }
 
     @Test
@@ -231,6 +274,8 @@ class ChatMemoryRepairServiceTest {
         item.setVersion(version);
         item.setContentHash(hash);
         item.setCategory(category);
+        item.setValidFrom(NOW_UTC.minusDays(1));
+        item.setValidUntil(null);
         return item;
     }
 

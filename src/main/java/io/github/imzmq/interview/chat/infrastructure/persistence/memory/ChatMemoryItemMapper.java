@@ -123,6 +123,57 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             @Param("currentVersion") long currentVersion,
             @Param("nextVersion") long nextVersion);
 
+    @Update("""
+            UPDATE t_chat_memory_item
+            SET status = 'DELETED',
+                content = '',
+                version = #{nextVersion},
+                deleted_at = CURRENT_TIMESTAMP(6),
+                updated_at = CURRENT_TIMESTAMP(6)
+            WHERE id = #{memoryId}
+              AND user_id = #{userId}
+              AND status = 'ACTIVE'
+              AND version = #{currentVersion}
+            """)
+    int markActiveDeleted(
+            @Param("memoryId") long memoryId,
+            @Param("userId") String userId,
+            @Param("currentVersion") long currentVersion,
+            @Param("nextVersion") long nextVersion);
+
+    @Update("""
+            UPDATE t_chat_memory_item
+            SET status = 'DELETED',
+                content = '',
+                version = #{nextVersion},
+                deleted_at = CURRENT_TIMESTAMP(6),
+                updated_at = CURRENT_TIMESTAMP(6)
+            WHERE id = #{memoryId}
+              AND user_id = #{userId}
+              AND status = 'QUARANTINED'
+              AND version = #{currentVersion}
+            """)
+    int markQuarantinedDeleted(
+            @Param("memoryId") long memoryId,
+            @Param("userId") String userId,
+            @Param("currentVersion") long currentVersion,
+            @Param("nextVersion") long nextVersion);
+
+    @Update("""
+            UPDATE t_chat_memory_item
+            SET version = #{nextVersion},
+                updated_at = CURRENT_TIMESTAMP(6)
+            WHERE id = #{memoryId}
+              AND user_id = #{userId}
+              AND status = 'QUARANTINED'
+              AND version = #{currentVersion}
+            """)
+    int bumpQuarantinedVersion(
+            @Param("memoryId") long memoryId,
+            @Param("userId") String userId,
+            @Param("currentVersion") long currentVersion,
+            @Param("nextVersion") long nextVersion);
+
     @Select("""
             SELECT *
             FROM t_chat_memory_item
@@ -143,6 +194,8 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             JOIN t_chat_message message ON message.id = source.source_message_pk
             WHERE item.user_id = #{userId}
               AND item.status = 'ACTIVE'
+              AND item.valid_from <= #{now}
+              AND (item.valid_until IS NULL OR item.valid_until > #{now})
               AND item.id IN
               <foreach collection="memoryIds" item="memoryId" open="(" separator="," close=")">
                 #{memoryId}
@@ -161,7 +214,8 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             """)
     List<ChatMemoryItemDO> selectRecallItems(
             @Param("userId") String userId,
-            @Param("memoryIds") List<Long> memoryIds);
+            @Param("memoryIds") List<Long> memoryIds,
+            @Param("now") LocalDateTime now);
 
     @Select("""
             SELECT DISTINCT item.*
@@ -171,6 +225,8 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             JOIN t_chat_message message ON message.id = source.source_message_pk
             WHERE item.user_id = #{userId}
               AND item.status = 'ACTIVE'
+              AND item.valid_from <= #{now}
+              AND (item.valid_until IS NULL OR item.valid_until > #{now})
               AND source.invalidated_at IS NULL
               AND source.user_id = item.user_id
               AND session.user_id = item.user_id
@@ -185,5 +241,6 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             """)
     List<ChatMemoryItemDO> selectRecentEffectiveItems(
             @Param("userId") String userId,
-            @Param("limit") int limit);
+            @Param("limit") int limit,
+            @Param("now") LocalDateTime now);
 }

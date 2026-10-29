@@ -11,7 +11,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -38,18 +41,21 @@ public class ChatMemoryRecallService {
     private final ChatMemoryProperties properties;
     private final ExecutorService recallExecutor;
     private final ChatMemoryObservationPublisher observationPublisher;
+    private final Clock clock;
 
     public ChatMemoryRecallService(
             Optional<ChatMemoryProjectionPort> projectionPort,
             ChatMemoryItemMapper itemMapper,
             ChatMemoryProperties properties,
             @Qualifier("chatMemoryRecallExecutor") ExecutorService recallExecutor,
-            ChatMemoryObservationPublisher observationPublisher) {
+            ChatMemoryObservationPublisher observationPublisher,
+            Clock clock) {
         this.projectionPort = projectionPort;
         this.itemMapper = itemMapper;
         this.properties = properties;
         this.recallExecutor = recallExecutor;
         this.observationPublisher = observationPublisher;
+        this.clock = clock;
     }
 
     public List<RecalledMemory> recall(String userId, String query) {
@@ -145,8 +151,9 @@ public class ChatMemoryRecallService {
             return List.of();
         }
 
+        LocalDateTime now = lifecycleNow();
         Map<Long, ChatMemoryItemDO> itemsById = new HashMap<>();
-        for (ChatMemoryItemDO item : itemMapper.selectRecallItems(userId, memoryIds)) {
+        for (ChatMemoryItemDO item : itemMapper.selectRecallItems(userId, memoryIds, now)) {
             if (item != null && item.getId() != null) {
                 itemsById.put(item.getId(), item);
             }
@@ -159,7 +166,7 @@ public class ChatMemoryRecallService {
             ChatMemoryCategory category = exactCategory(candidate.category(), item);
             if (category == null
                     || !seen.add(candidate.memoryId())
-                    || !matchesProjection(userId, candidate, item)) {
+                    || !matchesProjection(userId, candidate, item, now)) {
                 continue;
             }
             recalled.add(new RecalledMemory(item.getId(), category, item.getContent()));
@@ -171,10 +178,11 @@ public class ChatMemoryRecallService {
     }
 
     private boolean matchesProjection(
-            String userId, ChatMemoryVectorCandidate candidate, ChatMemoryItemDO item) {
+            String userId, ChatMemoryVectorCandidate candidate, ChatMemoryItemDO item,
+            LocalDateTime now) {
         return item != null
                 && userId.equals(item.getUserId())
-                && "ACTIVE".equals(item.getStatus())
+                && isCurrentlyValid(item, now)
                 && item.getVersion() != null
                 && item.getVersion() == candidate.memoryVersion()
                 && item.getContentHash() != null
@@ -206,9 +214,10 @@ public class ChatMemoryRecallService {
             Set<String> queryTokens = tokenize(query);
             List<RankedMemory> ranked = new ArrayList<>();
             int recency = 0;
+            LocalDateTime now = lifecycleNow();
             for (ChatMemoryItemDO item : itemMapper.selectRecentEffectiveItems(
-                    userId, properties.getFallbackScanLimit())) {
-                RankedMemory candidate = rankFallback(userId, item, queryTokens, recency++);
+                    userId, properties.getFallbackScanLimit(), now)) {
+                RankedMemory candidate = rankFallback(userId, item, queryTokens, recency++, now);
                 if (candidate != null) {
                     ranked.add(candidate);
                 }
@@ -227,10 +236,11 @@ public class ChatMemoryRecallService {
     }
 
     private RankedMemory rankFallback(
-            String userId, ChatMemoryItemDO item, Set<String> queryTokens, int recency) {
+            String userId, ChatMemoryItemDO item, Set<String> queryTokens, int recency,
+            LocalDateTime now) {
         if (item == null
                 || !userId.equals(item.getUserId())
-                || !"ACTIVE".equals(item.getStatus())
+                || !isCurrentlyValid(item, now)
                 || item.getContent() == null
                 || item.getContent().isBlank()) {
             return null;
@@ -306,6 +316,17 @@ public class ChatMemoryRecallService {
             tokens.add(new String(codePoints, index, 2));
         }
         han.setLength(0);
+    }
+
+    private LocalDateTime lifecycleNow() {
+        return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    private boolean isCurrentlyValid(ChatMemoryItemDO item, LocalDateTime now) {
+        return "ACTIVE".equals(item.getStatus())
+                && item.getValidFrom() != null
+                && !item.getValidFrom().isAfter(now)
+                && (item.getValidUntil() == null || item.getValidUntil().isAfter(now));
     }
 
     public record RecalledMemory(long id, ChatMemoryCategory category, String content) {

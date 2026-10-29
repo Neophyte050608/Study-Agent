@@ -14,8 +14,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +36,7 @@ public class ChatMemoryProjectionWorker {
     private final ChatMemoryProjectionPort projectionPort;
     private final ChatMemoryProperties properties;
     private final ChatMemoryObservationPublisher observationPublisher;
+    private final Clock clock;
 
     public ChatMemoryProjectionWorker(
             ChatMemoryOutboxClaimService claimService,
@@ -42,7 +45,8 @@ public class ChatMemoryProjectionWorker {
             ChatMemoryOutboxMapper outboxMapper,
             ChatMemoryProjectionPort projectionPort,
             ChatMemoryProperties properties,
-            ChatMemoryObservationPublisher observationPublisher) {
+            ChatMemoryObservationPublisher observationPublisher,
+            Clock clock) {
         this.claimService = claimService;
         this.itemMapper = itemMapper;
         this.sourceMapper = sourceMapper;
@@ -50,6 +54,7 @@ public class ChatMemoryProjectionWorker {
         this.projectionPort = projectionPort;
         this.properties = properties;
         this.observationPublisher = observationPublisher;
+        this.clock = clock;
     }
 
     @Scheduled(fixedDelayString = "${app.chat.memory.worker-poll:1s}")
@@ -97,16 +102,13 @@ public class ChatMemoryProjectionWorker {
         }
 
         long currentVersion = requiredVersion(item.getVersion());
-        if ("DELETE".equals(event.getOperation())) {
-            if (eventUserId.equals(item.getUserId()) && eventVersion == currentVersion) {
-                projectionPort.deleteMemory(eventUserId, item.getId(), timeout);
-            } else {
+        boolean deleteEvent = "DELETE".equals(event.getOperation());
+        if (item.getUserId() == null || !item.getUserId().equals(eventUserId)) {
+            if (deleteEvent) {
                 projectionPort.deleteVersion(
                         eventUserId, event.getMemoryId(), eventVersion, timeout);
+                return;
             }
-            return;
-        }
-        if (item.getUserId() == null || !item.getUserId().equals(eventUserId)) {
             throw new ChatMemoryProjectionException("MEMORY_PROJECTION_OWNER_MISMATCH");
         }
 
@@ -115,14 +117,19 @@ public class ChatMemoryProjectionWorker {
             return;
         }
         if (eventVersion > currentVersion) {
+            if (deleteEvent) {
+                projectionPort.deleteVersion(
+                        eventUserId, event.getMemoryId(), eventVersion, timeout);
+                return;
+            }
             throw new ChatMemoryProjectionException("MEMORY_PROJECTION_VERSION_AHEAD");
         }
-        if (!"ACTIVE".equals(item.getStatus()) || !hasEffectiveSource(item)) {
+        if (!"UPSERT".equals(event.getOperation()) && !deleteEvent) {
+            throw new ChatMemoryProjectionException("MEMORY_PROJECTION_OPERATION_INVALID");
+        }
+        if (!isCurrentlyValid(item) || !hasEffectiveSource(item)) {
             projectionPort.deleteMemory(item.getUserId(), item.getId(), timeout);
             return;
-        }
-        if (!"UPSERT".equals(event.getOperation())) {
-            throw new ChatMemoryProjectionException("MEMORY_PROJECTION_OPERATION_INVALID");
         }
 
         projectionPort.upsert(new ChatMemoryProjection(
@@ -135,6 +142,14 @@ public class ChatMemoryProjectionWorker {
                 item.getContent()), timeout);
         projectionPort.deleteOtherVersions(
                 item.getUserId(), item.getId(), item.getVersion(), timeout);
+    }
+
+    private boolean isCurrentlyValid(ChatMemoryItemDO item) {
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        return "ACTIVE".equals(item.getStatus())
+                && item.getValidFrom() != null
+                && !item.getValidFrom().isAfter(now)
+                && (item.getValidUntil() == null || item.getValidUntil().isAfter(now));
     }
 
     private boolean hasEffectiveSource(ChatMemoryItemDO item) {

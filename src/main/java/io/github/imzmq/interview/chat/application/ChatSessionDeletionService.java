@@ -66,20 +66,31 @@ public class ChatSessionDeletionService {
 
     private void propagateMemoryChange(String userId, long memoryId) {
         ChatMemoryItemDO item = itemMapper.lockOwnedItem(userId, memoryId);
-        if (item == null || !"ACTIVE".equals(item.getStatus())) {
+        if (item == null
+                || (!("ACTIVE".equals(item.getStatus()))
+                && !("QUARANTINED".equals(item.getStatus())))) {
             return;
         }
         long currentVersion = item.getVersion();
         long nextVersion = currentVersion + 1;
+        boolean active = "ACTIVE".equals(item.getStatus());
         if (sourceMapper.countEffectiveSources(userId, memoryId) == 0) {
-            requireSingleUpdate(itemMapper.markDeleted(
-                    memoryId, userId, currentVersion, nextVersion));
-            outboxEventService.enqueue(memoryId, userId, nextVersion, "DELETE");
+            int updated = active
+                    ? itemMapper.markActiveDeleted(memoryId, userId, currentVersion, nextVersion)
+                    : itemMapper.markQuarantinedDeleted(memoryId, userId, currentVersion, nextVersion);
+            requireSingleUpdate(updated);
+            if (active) {
+                outboxEventService.enqueue(memoryId, userId, nextVersion, "DELETE");
+            }
             return;
         }
-        requireSingleUpdate(itemMapper.bumpVersion(
-                memoryId, userId, currentVersion, nextVersion));
-        outboxEventService.enqueue(memoryId, userId, nextVersion, "UPSERT");
+        int updated = active
+                ? itemMapper.bumpVersion(memoryId, userId, currentVersion, nextVersion)
+                : itemMapper.bumpQuarantinedVersion(memoryId, userId, currentVersion, nextVersion);
+        requireSingleUpdate(updated);
+        if (active) {
+            outboxEventService.enqueue(memoryId, userId, nextVersion, "UPSERT");
+        }
     }
 
     private void requireSingleUpdate(int updated) {

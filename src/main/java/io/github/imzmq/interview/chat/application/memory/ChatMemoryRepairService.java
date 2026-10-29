@@ -9,7 +9,10 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemo
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,6 +30,7 @@ public class ChatMemoryRepairService {
     private final ChatMemoryOutboxEventService outboxEventService;
     private final ChatMemoryProperties properties;
     private final ChatMemoryObservationPublisher observationPublisher;
+    private final Clock clock;
 
     public ChatMemoryRepairService(
             ChatMemoryItemMapper itemMapper,
@@ -34,13 +38,15 @@ public class ChatMemoryRepairService {
             ChatMemoryProjectionPort projectionPort,
             ChatMemoryOutboxEventService outboxEventService,
             ChatMemoryProperties properties,
-            ChatMemoryObservationPublisher observationPublisher) {
+            ChatMemoryObservationPublisher observationPublisher,
+            Clock clock) {
         this.itemMapper = itemMapper;
         this.sourceMapper = sourceMapper;
         this.projectionPort = projectionPort;
         this.outboxEventService = outboxEventService;
         this.properties = properties;
         this.observationPublisher = observationPublisher;
+        this.clock = clock;
     }
 
     public RepairSummary repairAll() {
@@ -132,7 +138,12 @@ public class ChatMemoryRepairService {
     }
 
     private boolean isProjectable(ChatMemoryItemDO item, Set<Long> effectiveSourceIds) {
-        return "ACTIVE".equals(item.getStatus()) && effectiveSourceIds.contains(item.getId());
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        return "ACTIVE".equals(item.getStatus())
+                && item.getValidFrom() != null
+                && !item.getValidFrom().isAfter(now)
+                && (item.getValidUntil() == null || item.getValidUntil().isAfter(now))
+                && effectiveSourceIds.contains(item.getId());
     }
 
     private Set<Long> effectiveSourceIds(List<Long> memoryIds) {
