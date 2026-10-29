@@ -9,9 +9,14 @@ import java.util.List;
 public record ChatMemoryView(
         long id,
         String category,
+        String subjectKey,
+        String subjectCardinality,
         String content,
         String status,
+        String quarantineReason,
         long version,
+        Instant validFrom,
+        Instant validUntil,
         Instant createdAt,
         Instant updatedAt,
         List<String> sourceMessageIds

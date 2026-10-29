@@ -8,11 +8,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
-@RestControllerAdvice(basePackageClasses = ChatController.class)
+@RestControllerAdvice(assignableTypes = ChatController.class)
 public class ChatApiExceptionHandler {
 
     @ExceptionHandler(ChatSessionAccessException.class)
-    public ResponseEntity<Map<String, String>> handleSessionAccess(ChatSessionAccessException exception) {
+    public ResponseEntity<Map<String, String>> handleSessionAccess(
+            ChatSessionAccessException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                 "code", "CHAT_SESSION_NOT_FOUND",
                 "message", "会话不存在"

@@ -14,6 +14,24 @@ public interface ChatMemoryEvolutionMapper extends BaseMapper<ChatMemoryEvolutio
     int insert(ChatMemoryEvolutionDO relation);
 
     @Select("""
+            SELECT relation.to_memory_id
+            FROM t_chat_memory_evolution relation
+            JOIN t_chat_memory_item source_item
+              ON source_item.id = relation.from_memory_id
+             AND source_item.user_id = relation.user_id
+            JOIN t_chat_memory_item target_item
+              ON target_item.id = relation.to_memory_id
+             AND target_item.user_id = relation.user_id
+            WHERE relation.user_id = #{userId}
+              AND relation.from_memory_id = #{memoryId}
+              AND relation.relation_type = 'CONFLICTS_WITH'
+            ORDER BY relation.to_memory_id
+            """)
+    List<Long> selectOwnedConflictTargets(
+            @Param("userId") String userId,
+            @Param("memoryId") long memoryId);
+
+    @Select("""
             SELECT relation.*
             FROM t_chat_memory_evolution relation
             JOIN t_chat_memory_item source_item

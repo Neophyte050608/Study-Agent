@@ -81,6 +81,9 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             SELECT *
             FROM t_chat_memory_item
             WHERE user_id = #{userId}
+            <if test="status != null">
+              AND status = #{status}
+            </if>
             <if test="beforeId != null">
               AND id &lt; #{beforeId}
             </if>
@@ -90,8 +93,20 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             """)
     List<ChatMemoryItemDO> selectManagementPage(
             @Param("userId") String userId,
+            @Param("status") String status,
             @Param("beforeId") Long beforeId,
             @Param("limit") int limit);
+
+    @Select("""
+            SELECT *
+            FROM t_chat_memory_item
+            WHERE id = #{memoryId}
+              AND user_id = #{userId}
+            LIMIT 1
+            """)
+    ChatMemoryItemDO selectOwnedItem(
+            @Param("userId") String userId,
+            @Param("memoryId") long memoryId);
 
     @Select("""
             SELECT *
@@ -109,19 +124,25 @@ public interface ChatMemoryItemMapper extends BaseMapper<ChatMemoryItemDO> {
             UPDATE t_chat_memory_item
             SET status = 'DELETED',
                 content = '',
+                valid_until = CASE
+                    WHEN #{expectedStatus} = 'ACTIVE' THEN #{deletedAt}
+                    ELSE valid_until
+                END,
                 version = #{nextVersion},
-                deleted_at = CURRENT_TIMESTAMP(6),
-                updated_at = CURRENT_TIMESTAMP(6)
+                deleted_at = #{deletedAt},
+                updated_at = #{deletedAt}
             WHERE id = #{memoryId}
               AND user_id = #{userId}
-              AND status IN ('ACTIVE', 'QUARANTINED')
+              AND status = #{expectedStatus}
               AND version = #{currentVersion}
             """)
     int markDeleted(
             @Param("memoryId") long memoryId,
             @Param("userId") String userId,
+            @Param("expectedStatus") String expectedStatus,
             @Param("currentVersion") long currentVersion,
-            @Param("nextVersion") long nextVersion);
+            @Param("nextVersion") long nextVersion,
+            @Param("deletedAt") LocalDateTime deletedAt);
 
     @Update("""
             UPDATE t_chat_memory_item
