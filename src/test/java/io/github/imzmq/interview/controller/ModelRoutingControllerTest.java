@@ -1,6 +1,6 @@
 package io.github.imzmq.interview.controller;
 
-import io.github.imzmq.interview.modelrouting.api.ModelCandidateDTO;
+import io.github.imzmq.interview.modelrouting.api.ModelCandidateResponse;
 import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.api.ModelRoutingController;
 import io.github.imzmq.interview.modelrouting.core.ModelRoutingProperties;
@@ -11,15 +11,24 @@ import io.github.imzmq.interview.modelrouting.catalog.ModelCandidateService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ModelRoutingControllerTest {
+
+    @Test
+    void ordinaryCandidateResponseNeverContainsWritableApiKey() {
+        assertThat(ModelCandidateResponse.class.getDeclaredFields())
+                .extracting(Field::getName)
+                .doesNotContain("apiKey");
+    }
 
     @Test
     void shouldReturnModelRoutingStats() {
@@ -73,14 +82,14 @@ class ModelRoutingControllerTest {
         ModelCandidateDO entity = new ModelCandidateDO();
         entity.setId(1L);
         entity.setName("deepseek-chat");
-        ModelCandidateDTO dto = new ModelCandidateDTO();
+        ModelCandidateResponse dto = new ModelCandidateResponse();
         dto.setId(1L);
         dto.setName("deepseek-chat");
         dto.setApiKeyMasked("sk-a****z");
         dto.setApiKeyConfigured(true);
         dto.setApiKeyReadable(true);
         when(modelCandidateService.listAll()).thenReturn(List.of(entity));
-        when(modelCandidateService.toMaskedDto(entity)).thenReturn(dto);
+        when(modelCandidateService.toResponse(entity)).thenReturn(dto);
 
         ModelRoutingController controller = new ModelRoutingController(
                 routingChatService,
@@ -91,7 +100,7 @@ class ModelRoutingControllerTest {
                 false
         );
 
-        ResponseEntity<List<ModelCandidateDTO>> response = controller.listCandidates();
+        ResponseEntity<List<ModelCandidateResponse>> response = controller.listCandidates();
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
@@ -156,12 +165,12 @@ class ModelRoutingControllerTest {
 
         ModelCandidateDO entity = new ModelCandidateDO();
         entity.setId(1L);
-        ModelCandidateDTO dto = new ModelCandidateDTO();
+        ModelCandidateResponse dto = new ModelCandidateResponse();
         dto.setId(1L);
         dto.setApiKeyConfigured(true);
         dto.setApiKeyReadable(true);
         when(modelCandidateService.listAll()).thenReturn(List.of(entity));
-        when(modelCandidateService.toMaskedDto(entity)).thenReturn(dto);
+        when(modelCandidateService.toResponse(entity)).thenReturn(dto);
 
         ModelRoutingController controller = new ModelRoutingController(
                 routingChatService,
@@ -172,19 +181,8 @@ class ModelRoutingControllerTest {
                 true
         );
 
-        ResponseEntity<List<ModelCandidateDTO>> response = controller.listCandidates();
+        ResponseEntity<List<ModelCandidateResponse>> response = controller.listCandidates();
 
         assertEquals(Boolean.TRUE, response.getBody().getFirst().getApiKeyCopyAllowed());
     }
 }
-
-
-
-
-
-
-
-
-
-
-

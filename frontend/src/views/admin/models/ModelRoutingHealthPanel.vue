@@ -7,7 +7,7 @@
           <h2 class="font-headline text-3xl font-bold tracking-tighter text-content mb-2">模型路由与健康分析</h2>
           <p class="text-content-secondary text-sm flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">update</span>
-            数据刷新于: <span class="text-[#059669] dark:text-emerald-400 font-mono font-bold">{{ lastUpdate }}</span> | 下次更新 <span class="text-[#059669] dark:text-emerald-400 font-mono underline decoration-dotted underline-offset-4">{{ countdown }}s</span>
+            数据来自模型管理页的统一共享快照
           </p>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
@@ -103,12 +103,16 @@
 
       <div v-for="item in detailCards" :key="item.name" 
            class="bg-surface-raised border p-6 rounded-xl relative group transition-all duration-300 hover:shadow-lg"
-           :class="item.statusClass === 'safe' ? 'border-divider shadow-[0_4px_20px_-2px_rgba(5,150,105,0.1)]' : 'border-[#fee2e2] shadow-[0_4px_20px_-2px_rgba(220,38,38,0.1)]'">
+           :class="item.statusClass === 'safe'
+             ? 'border-divider shadow-[0_4px_20px_-2px_rgba(5,150,105,0.1)]'
+             : item.statusClass === 'warn'
+               ? 'border-[#fde68a] shadow-[0_4px_20px_-2px_rgba(217,119,6,0.1)]'
+               : 'border-[#fee2e2] shadow-[0_4px_20px_-2px_rgba(220,38,38,0.1)]'">
         <div class="flex justify-between items-start mb-8">
           <div class="flex items-center gap-4">
             <div class="relative">
-              <div class="w-3 h-3" :class="item.statusClass === 'safe' ? 'bg-[#059669]' : 'bg-[#dc2626] animate-pulse'"></div>
-              <div class="absolute -inset-1 border opacity-20 scale-150" :class="item.statusClass === 'safe' ? 'border-[#059669]' : 'border-[#dc2626]'"></div>
+              <div class="w-3 h-3" :class="item.statusClass === 'safe' ? 'bg-[#059669]' : item.statusClass === 'warn' ? 'bg-[#d97706]' : 'bg-[#dc2626] animate-pulse'"></div>
+              <div class="absolute -inset-1 border opacity-20 scale-150" :class="item.statusClass === 'safe' ? 'border-[#059669]' : item.statusClass === 'warn' ? 'border-[#d97706]' : 'border-[#dc2626]'"></div>
             </div>
             <div>
               <h3 class="font-headline text-lg font-bold tracking-tight text-content">{{ item.name }}</h3>
@@ -117,8 +121,12 @@
           </div>
           <div class="flex flex-col items-end">
             <div class="font-mono text-xs font-bold px-2 py-0.5 border uppercase rounded"
-                 :class="item.statusClass === 'safe' ? 'text-[#047857] dark:text-emerald-300 border-[#a7f3d0] dark:border-emerald-800 bg-[#ecfdf5] dark:bg-emerald-950/30' : 'text-[#b91c1c] dark:text-red-300 border-[#fecaca] dark:border-red-800 bg-[#fef2f2] dark:bg-red-950/30'">
-              Status: {{ item.statusClass === 'safe' ? 'Closed' : 'Open' }}
+                 :class="item.statusClass === 'safe'
+                   ? 'text-[#047857] dark:text-emerald-300 border-[#a7f3d0] dark:border-emerald-800 bg-[#ecfdf5] dark:bg-emerald-950/30'
+                   : item.statusClass === 'warn'
+                     ? 'text-[#92400e] dark:text-amber-300 border-[#fde68a] dark:border-amber-800 bg-[#fffbeb] dark:bg-amber-950/30'
+                     : 'text-[#b91c1c] dark:text-red-300 border-[#fecaca] dark:border-red-800 bg-[#fef2f2] dark:bg-red-950/30'">
+              Status: {{ item.state }}
             </div>
           </div>
         </div>
@@ -133,7 +141,7 @@
           </div>
           <div>
             <div class="text-[9px] font-bold text-content-secondary uppercase mb-1 tracking-widest">Reliability</div>
-            <div class="text-xl font-black" :class="item.statusClass === 'safe' ? 'text-[#059669] dark:text-emerald-400' : 'text-[#dc2626] dark:text-red-400'">
+            <div class="text-xl font-black" :class="item.statusClass === 'safe' ? 'text-[#059669] dark:text-emerald-400' : item.statusClass === 'warn' ? 'text-[#d97706] dark:text-amber-400' : 'text-[#dc2626] dark:text-red-400'">
               {{ item.reliabilityPercent }}%
             </div>
           </div>
@@ -147,7 +155,7 @@
           </div>
           <div class="h-2 bg-[#f3f4f6] dark:bg-slate-800 rounded-full overflow-hidden">
             <div class="h-full rounded-full transition-all duration-500" 
-                 :class="item.statusClass === 'safe' ? 'bg-[#10b981]' : 'bg-[#ef4444]'"
+                 :class="item.statusClass === 'safe' ? 'bg-[#10b981]' : item.statusClass === 'warn' ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'"
                  :style="{ width: item.capacityPercent + '%' }"></div>
           </div>
         </div>
@@ -159,10 +167,10 @@
         </div>
         
         <div class="flex justify-between items-center pt-4 border-t border-divider">
-          <span class="text-[9px] font-mono font-bold" :class="item.statusClass === 'safe' ? 'text-content-secondary' : 'text-[#dc2626] dark:text-red-400 animate-pulse tracking-tighter'">
-            {{ item.statusClass === 'safe' ? '_MODEL_STABLE' : '// CIRCUIT_BREAKER_TRIPPED' }}
+          <span class="text-[9px] font-mono font-bold" :class="item.statusClass === 'safe' ? 'text-content-secondary' : item.statusClass === 'warn' ? 'text-[#d97706] dark:text-amber-400' : 'text-[#dc2626] dark:text-red-400 animate-pulse tracking-tighter'">
+            {{ item.statusClass === 'safe' ? '_MODEL_STABLE' : item.statusClass === 'warn' ? '_MODEL_RECOVERING' : '// CIRCUIT_BREAKER_TRIPPED' }}
           </span>
-          <button v-if="item.statusClass === 'safe'" class="text-[10px] font-bold text-content uppercase hover:text-[#059669] dark:text-emerald-400 transition-colors flex items-center gap-1 group/btn">
+          <button v-if="item.statusClass !== 'danger'" class="text-[10px] font-bold text-content uppercase hover:text-[#059669] dark:text-emerald-400 transition-colors flex items-center gap-1 group/btn">
             <span>_ DETAILS</span>
             <span class="material-symbols-outlined text-xs group-hover/btn:translate-x-1 transition-transform">chevron_right</span>
           </button>
@@ -223,120 +231,54 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { loadModelRoutingStats } from '../../../api/monitoring'
+import { computed } from 'vue'
+import { routingHealthTone } from './modelPresentation'
 
-
-const runtimeStats = ref({ totalRequests: 0, totalFailureCount: 0, routeFallbackCount: 0 })
-const rawDetails = ref({})
-const rawStates = ref({})
-const healthLogs = ref([])
-const ollamaHealth = ref({
-  baseUrl: '',
-  model: '',
-  serviceUp: false,
-  modelReady: false,
-  status: 'UNKNOWN',
-  latencyMs: 0,
-  error: null,
-  checkedAt: null
+const props = defineProps({ stats: { type: Object, default: null } })
+const runtime = computed(() => props.stats?.runtime || {})
+const runtimeStats = computed(() => ({
+  totalRequests: runtime.value.health?.totalRequests || 0,
+  totalFailureCount: runtime.value.health?.totalFailureCount || 0,
+  routeFallbackCount: runtime.value.routeFallbackCount || 0
+}))
+const rawDetails = computed(() => runtime.value.details || {})
+const rawStates = computed(() => runtime.value.states || {})
+const healthLogs = computed(() => props.stats?.healthLogs || [])
+const ollamaHealth = computed(() => props.stats?.ollama || {
+  baseUrl: '', model: '', serviceUp: false, modelReady: false,
+  status: 'UNKNOWN', latencyMs: 0, error: null, checkedAt: null
 })
-
-const lastUpdate = ref('00:00:00')
-const countdown = ref(5)
-
-const systemHealthLabel = computed(() => {
-  if (!rawStates.value) return '全系统健康'
-  const hasOpen = Object.values(rawStates.value).some(s => s === 'OPEN')
-  return hasOpen ? '系统降级中' : '全系统健康'
+const lastUpdate = computed(() => {
+  const value = ollamaHealth.value.checkedAt
+  if (!value) return 'CURRENT_SNAPSHOT'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'CURRENT_SNAPSHOT' : date.toLocaleTimeString('en-US', { hour12: false })
 })
-
-const detailCards = computed(() => {
-  if (!rawDetails.value) return []
-  return Object.entries(rawDetails.value).map(([name, detail]) => {
-    const state = rawStates.value?.[name] || 'UNKNOWN'
-    const isHealthy = state === 'CLOSED' || state === 'HALF_OPEN'
-    const successCount = detail.successCount || 0
-    const failureCount = detail.failureCount || detail.consecutiveFailureCount || 0
-    const requestCount = detail.requestCount || successCount + failureCount
-    const total = successCount + failureCount
-    const reliabilityPercent = total === 0 ? 100 : ((successCount / total) * 100).toFixed(1)
-
-    return {
-      name,
-      state,
-      statusClass: isHealthy ? 'safe' : 'danger',
-      successCount,
-      failureCount,
-      lastCostMs: detail.lastCostMs || 0,
-      reliabilityPercent,
-      capacityPercent: Math.min(100, Math.round((requestCount / 500) * 100) + (isHealthy ? 20 : 80)),
-      lastFailureMessage: !isHealthy ? (detail.lastFailureMessage || '未知降级原因') : null
-    }
-  })
-})
-
-const ollamaCard = computed(() => {
-  const status = ollamaHealth.value?.status || 'UNKNOWN'
-  if (status === 'UP') {
-    return { statusClass: 'safe' }
+const systemHealthLabel = computed(() => Object.values(rawStates.value).some(state => state === 'OPEN') ? '系统降级中' : '全系统健康')
+const detailCards = computed(() => Object.entries(rawDetails.value).map(([name, detail]) => {
+  const state = rawStates.value[name] || 'UNKNOWN'
+  const tone = routingHealthTone(state)
+  const isHealthy = tone === 'healthy'
+  const successCount = detail.successCount || 0
+  const failureCount = detail.failureCount || detail.consecutiveFailureCount || 0
+  const requestCount = detail.requestCount || successCount + failureCount
+  const total = successCount + failureCount
+  return {
+    name,
+    state,
+    statusClass: isHealthy ? 'safe' : tone === 'warning' ? 'warn' : 'danger',
+    successCount,
+    failureCount,
+    lastCostMs: detail.lastCostMs || 0,
+    reliabilityPercent: total === 0 ? 100 : ((successCount / total) * 100).toFixed(1),
+    capacityPercent: Math.min(100, Math.round((requestCount / 500) * 100) + (isHealthy ? 20 : 80)),
+    lastFailureMessage: tone === 'danger' ? (detail.lastFailureMessage || '未知降级原因') : null
   }
-  if (status === 'DEGRADED') {
-    return { statusClass: 'warn' }
-  }
-  return { statusClass: 'danger' }
-})
-
+}))
+const ollamaCard = computed(() => ({ statusClass: ollamaHealth.value.status === 'UP' ? 'safe' : ollamaHealth.value.status === 'DEGRADED' ? 'warn' : 'danger' }))
 function formatCheckedAt(value) {
   if (!value) return 'CHECK_PENDING'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'CHECK_PENDING'
-  return `checked ${date.toLocaleTimeString('en-US', { hour12: false })}`
+  return Number.isNaN(date.getTime()) ? 'CHECK_PENDING' : `checked ${date.toLocaleTimeString('en-US', { hour12: false })}`
 }
-
-let timer = null
-let countdownTimer = null
-
-const updateStats = async () => {
-  try {
-    const data = await loadModelRoutingStats()
-    if (data.runtime) {
-      const runtimeHealth = data.runtime.health || {}
-      runtimeStats.value = {
-        totalRequests: runtimeHealth.totalRequests || 0,
-        totalFailureCount: runtimeHealth.totalFailureCount || 0,
-        routeFallbackCount: data.runtime.routeFallbackCount || 0
-      }
-      rawDetails.value = data.runtime.details || {}
-      rawStates.value = data.runtime.states || {}
-      healthLogs.value = data.healthLogs || []
-      ollamaHealth.value = data.ollama || ollamaHealth.value
-      if (import.meta.env.DEV) {
-        const hasRequiredHealthFields = typeof runtimeHealth.totalRequests === 'number'
-          && typeof runtimeHealth.totalFailureCount === 'number'
-        if (!hasRequiredHealthFields) {
-          console.warn('model-routing stats 字段缺失: runtime.health.totalRequests/totalFailureCount')
-        }
-      }
-    }
-    const now = new Date()
-    lastUpdate.value = now.toLocaleTimeString('en-US', { hour12: false })
-    countdown.value = 5
-  } catch (err) {
-    console.error('Failed to fetch stats:', err)
-  }
-}
-
-onMounted(() => {
-  updateStats()
-  timer = setInterval(updateStats, 5000)
-  countdownTimer = setInterval(() => {
-    if (countdown.value > 0) countdown.value--
-  }, 1000)
-})
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-  if (countdownTimer) clearInterval(countdownTimer)
-})
 </script>

@@ -3,7 +3,7 @@ package io.github.imzmq.interview.modelrouting.api;
 import lombok.Data;
 
 @Data
-public class ModelCandidateDTO {
+public class ModelCandidateResponse {
 
     private Long id;
     private String name;
@@ -11,7 +11,6 @@ public class ModelCandidateDTO {
     private String provider;
     private String model;
     private String baseUrl;
-    private String apiKey;
     private String apiKeyMasked;
     private Boolean apiKeyConfigured;
     private Boolean apiKeyReadable;
@@ -22,4 +21,3 @@ public class ModelCandidateDTO {
     private Boolean enabled;
     private String routeType;
 }
-

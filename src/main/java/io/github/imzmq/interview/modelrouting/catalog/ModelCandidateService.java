@@ -1,7 +1,8 @@
 package io.github.imzmq.interview.modelrouting.catalog;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import io.github.imzmq.interview.modelrouting.api.ModelCandidateDTO;
+import io.github.imzmq.interview.modelrouting.api.ModelCandidateResponse;
+import io.github.imzmq.interview.modelrouting.api.ModelCandidateWriteRequest;
 import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateDO;
 import io.github.imzmq.interview.modelrouting.infrastructure.persistence.ModelCandidateMapper;
 import io.github.imzmq.interview.modelrouting.registry.DynamicChatModelRegistry;
@@ -48,11 +49,11 @@ public class ModelCandidateService {
     }
 
     @CacheEvict(value = "modelCandidates", allEntries = true)
-    public ModelCandidateDO create(ModelCandidateDTO dto) {
+    public ModelCandidateDO create(ModelCandidateWriteRequest request) {
         ModelCandidateDO entity = new ModelCandidateDO();
-        copyFromDto(entity, dto);
-        if (dto.getApiKey() != null && !dto.getApiKey().isBlank()) {
-            entity.setApiKeyEncrypted(apiKeyEncryptor.encrypt(dto.getApiKey()));
+        copyFromRequest(entity, request);
+        if (request.getApiKey() != null && !request.getApiKey().isBlank()) {
+            entity.setApiKeyEncrypted(apiKeyEncryptor.encrypt(request.getApiKey()));
         }
         mapper.insert(entity);
         dynamicChatModelRegistry.evict(entity.getName());
@@ -60,15 +61,17 @@ public class ModelCandidateService {
     }
 
     @CacheEvict(value = "modelCandidates", allEntries = true)
-    public ModelCandidateDO update(Long id, ModelCandidateDTO dto) {
+    public ModelCandidateDO update(Long id, ModelCandidateWriteRequest request) {
         ModelCandidateDO entity = mapper.selectById(id);
         if (entity == null) {
             throw new IllegalArgumentException("候选模型不存在: " + id);
         }
         String oldName = entity.getName();
-        copyFromDto(entity, dto);
-        if (dto.getApiKey() != null && !dto.getApiKey().isBlank()) {
-            entity.setApiKeyEncrypted(apiKeyEncryptor.encrypt(dto.getApiKey()));
+        copyFromRequest(entity, request);
+        if (request.isClearApiKey()) {
+            entity.setApiKeyEncrypted(null);
+        } else if (request.getApiKey() != null && !request.getApiKey().isBlank()) {
+            entity.setApiKeyEncrypted(apiKeyEncryptor.encrypt(request.getApiKey()));
         }
         mapper.updateById(entity);
         dynamicChatModelRegistry.evict(oldName);
@@ -106,8 +109,8 @@ public class ModelCandidateService {
         return apiKeyEncryptor.decrypt(entity.getApiKeyEncrypted());
     }
 
-    public ModelCandidateDTO toMaskedDto(ModelCandidateDO entity) {
-        ModelCandidateDTO dto = new ModelCandidateDTO();
+    public ModelCandidateResponse toResponse(ModelCandidateDO entity) {
+        ModelCandidateResponse dto = new ModelCandidateResponse();
         dto.setId(entity.getId());
         dto.setName(entity.getName());
         dto.setDisplayName(entity.getDisplayName());
@@ -123,7 +126,7 @@ public class ModelCandidateService {
         return dto;
     }
 
-    private void fillApiKeyView(ModelCandidateDTO dto, ModelCandidateDO entity) {
+    private void fillApiKeyView(ModelCandidateResponse dto, ModelCandidateDO entity) {
         String encrypted = entity.getApiKeyEncrypted();
         boolean configured = encrypted != null && !encrypted.isBlank();
         dto.setApiKeyConfigured(configured);
@@ -143,36 +146,36 @@ public class ModelCandidateService {
         }
     }
 
-    private void copyFromDto(ModelCandidateDO entity, ModelCandidateDTO dto) {
-        if (dto.getName() != null) {
-            entity.setName(dto.getName());
+    private void copyFromRequest(ModelCandidateDO entity, ModelCandidateWriteRequest request) {
+        if (request.getName() != null) {
+            entity.setName(request.getName());
         }
-        if (dto.getDisplayName() != null) {
-            entity.setDisplayName(dto.getDisplayName());
+        if (request.getDisplayName() != null) {
+            entity.setDisplayName(request.getDisplayName());
         }
-        if (dto.getProvider() != null) {
-            entity.setProvider(dto.getProvider());
+        if (request.getProvider() != null) {
+            entity.setProvider(request.getProvider());
         }
-        if (dto.getModel() != null) {
-            entity.setModel(dto.getModel());
+        if (request.getModel() != null) {
+            entity.setModel(request.getModel());
         }
-        if (dto.getBaseUrl() != null) {
-            entity.setBaseUrl(dto.getBaseUrl());
+        if (request.getBaseUrl() != null) {
+            entity.setBaseUrl(request.getBaseUrl());
         }
-        if (dto.getPriority() != null) {
-            entity.setPriority(dto.getPriority());
+        if (request.getPriority() != null) {
+            entity.setPriority(request.getPriority());
         }
-        if (dto.getIsPrimary() != null) {
-            entity.setIsPrimary(dto.getIsPrimary());
+        if (request.getIsPrimary() != null) {
+            entity.setIsPrimary(request.getIsPrimary());
         }
-        if (dto.getSupportsThinking() != null) {
-            entity.setSupportsThinking(dto.getSupportsThinking());
+        if (request.getSupportsThinking() != null) {
+            entity.setSupportsThinking(request.getSupportsThinking());
         }
-        if (dto.getEnabled() != null) {
-            entity.setEnabled(dto.getEnabled());
+        if (request.getEnabled() != null) {
+            entity.setEnabled(request.getEnabled());
         }
-        if (dto.getRouteType() != null) {
-            entity.setRouteType(dto.getRouteType());
+        if (request.getRouteType() != null) {
+            entity.setRouteType(request.getRouteType());
         }
     }
 }

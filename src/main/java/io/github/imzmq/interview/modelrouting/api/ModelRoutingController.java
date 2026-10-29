@@ -55,33 +55,33 @@ public class ModelRoutingController {
     }
 
     @GetMapping("/candidates")
-    public ResponseEntity<List<ModelCandidateDTO>> listCandidates() {
-        List<ModelCandidateDTO> candidates = modelCandidateService.listAll().stream()
-                .map(modelCandidateService::toMaskedDto)
+    public ResponseEntity<List<ModelCandidateResponse>> listCandidates() {
+        List<ModelCandidateResponse> candidates = modelCandidateService.listAll().stream()
+                .map(modelCandidateService::toResponse)
                 .peek(this::applySecurityFlags)
                 .toList();
         return ResponseEntity.ok(candidates);
     }
 
     @GetMapping("/candidates/{id}")
-    public ResponseEntity<ModelCandidateDTO> getCandidate(@PathVariable Long id) {
+    public ResponseEntity<ModelCandidateResponse> getCandidate(@PathVariable Long id) {
         ModelCandidateDO entity = modelCandidateService.getById(id);
         if (entity == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toMaskedDto(entity)));
+        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toResponse(entity)));
     }
 
     @PostMapping("/candidates")
-    public ResponseEntity<ModelCandidateDTO> createCandidate(@RequestBody ModelCandidateDTO dto) {
-        ModelCandidateDO created = modelCandidateService.create(dto);
-        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toMaskedDto(created)));
+    public ResponseEntity<ModelCandidateResponse> createCandidate(@RequestBody ModelCandidateWriteRequest request) {
+        ModelCandidateDO created = modelCandidateService.create(request);
+        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toResponse(created)));
     }
 
     @PutMapping("/candidates/{id}")
-    public ResponseEntity<ModelCandidateDTO> updateCandidate(@PathVariable Long id, @RequestBody ModelCandidateDTO dto) {
-        ModelCandidateDO updated = modelCandidateService.update(id, dto);
-        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toMaskedDto(updated)));
+    public ResponseEntity<ModelCandidateResponse> updateCandidate(@PathVariable Long id, @RequestBody ModelCandidateWriteRequest request) {
+        ModelCandidateDO updated = modelCandidateService.update(id, request);
+        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toResponse(updated)));
     }
 
     @DeleteMapping("/candidates/{id}")
@@ -91,13 +91,13 @@ public class ModelRoutingController {
     }
 
     @PostMapping("/candidates/{id}/toggle")
-    public ResponseEntity<ModelCandidateDTO> toggleCandidate(@PathVariable Long id) {
+    public ResponseEntity<ModelCandidateResponse> toggleCandidate(@PathVariable Long id) {
         modelCandidateService.toggleEnabled(id);
         ModelCandidateDO entity = modelCandidateService.getById(id);
         if (entity == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toMaskedDto(entity)));
+        return ResponseEntity.ok(applySecurityFlags(modelCandidateService.toResponse(entity)));
     }
 
     @PostMapping("/candidates/{id}/copy-key")
@@ -117,20 +117,8 @@ public class ModelRoutingController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    private ModelCandidateDTO applySecurityFlags(ModelCandidateDTO dto) {
+    private ModelCandidateResponse applySecurityFlags(ModelCandidateResponse dto) {
         dto.setApiKeyCopyAllowed(allowPlaintextKeyExport);
         return dto;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-

@@ -106,8 +106,9 @@
                 <div class="sm:col-span-2">
                   <p class="text-xs font-bold uppercase tracking-wider text-content-secondary">密钥</p>
                   <div class="mt-1 flex items-center gap-3 flex-wrap">
-                    <span class="text-sm font-medium text-content">{{ candidate.apiKeyMasked || '未配置' }}</span>
+                    <span class="text-sm font-medium text-content">{{ getApiKeyState(candidate).detail }}</span>
                     <button
+                      v-if="candidate.apiKeyCopyAllowed === true"
                       class="bg-surface-hover text-content-secondary px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-all disabled:opacity-60"
                       @click="handleCopyKey(candidate.id)"
                       :disabled="copyingId === candidate.id || !canCopyKey(candidate)"
@@ -273,6 +274,7 @@
                 class="w-full border-none rounded-lg p-3 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                 :type="showApiKey ? 'text' : 'password'"
                 :placeholder="apiKeyPlaceholder"
+                :disabled="form.clearApiKey"
               />
               <button class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300" @click="showApiKey = !showApiKey" type="button">
                 <span class="material-symbols-outlined text-[18px]">{{ showApiKey ? 'visibility_off' : 'visibility' }}</span>
@@ -281,6 +283,10 @@
             <p class="text-xs text-content-secondary">
               {{ apiKeyHelperText }}
             </p>
+            <label v-if="editingId !== null" class="mt-3 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300">
+              <input v-model="form.clearApiKey" class="mt-0.5 h-4 w-4 accent-red-600" type="checkbox" />
+              <span class="text-xs"><strong>清除现有 API Key</strong><br />勾选后保存会删除已加密密钥；不勾选且输入框留空时保留原密钥。</span>
+            </label>
           </div>
 
           <div class="space-y-2">
@@ -342,17 +348,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import {
-  loadModelCandidates,
-  createModelCandidate,
-  updateModelCandidate,
-  deleteModelCandidate,
-  toggleModelCandidate,
-  probeModelCandidate,
-  copyModelCandidateKey,
-  loadModelRoutingStats
-} from '../../../api/admin'
+import { computed, ref } from 'vue'
+import { apiKeyState } from './modelPresentation'
+const props = defineProps({ candidates: { type: Array, default: () => [] }, stats: { type: Object, default: null }, loading: Boolean, actions: { type: Object, required: true } })
+const candidates = computed(() => props.candidates)
+const stats = computed(() => props.stats)
+const loading = computed(() => props.loading)
 
 
 const inputClass = 'bg-surface-field'
@@ -368,14 +369,12 @@ const createEmptyForm = () => ({
   routeType: 'GENERAL',
   isPrimary: false,
   supportsThinking: false,
-  enabled: true
+  enabled: true,
+  clearApiKey: false
 })
 
-const candidates = ref([])
-const stats = ref(null)
 const hint = ref('')
 const hintTone = ref('info')
-const loading = ref(false)
 const saving = ref(false)
 const showModal = ref(false)
 const editingId = ref(null)
@@ -423,27 +422,6 @@ const setHint = (message, tone = 'info') => {
   hintTone.value = tone
 }
 
-const reload = async (options = {}) => {
-  const silent = Boolean(options.silent)
-  if (!silent) {
-    loading.value = true
-    setHint('正在加载模型候选与路由状态...')
-  }
-  try {
-    const [candidateData, statsData] = await Promise.all([
-      loadModelCandidates(),
-      loadModelRoutingStats()
-    ])
-    candidates.value = Array.isArray(candidateData) ? candidateData : []
-    stats.value = statsData || null
-    if (!silent) setHint('模型候选已同步', 'success')
-  } catch (error) {
-    setHint(`加载失败: ${error.message || 'unknown'}`, 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
 const closeModal = () => {
   showModal.value = false
   editingId.value = null
@@ -471,7 +449,8 @@ const openEditModal = (candidate) => {
     routeType: candidate.routeType || 'GENERAL',
     isPrimary: Boolean(candidate.isPrimary),
     supportsThinking: Boolean(candidate.supportsThinking),
-    enabled: Boolean(candidate.enabled)
+    enabled: Boolean(candidate.enabled),
+    clearApiKey: false
   }
   showApiKey.value = false
   showModal.value = true
@@ -508,6 +487,7 @@ const buildPayload = () => ({
   model: form.value.model.trim(),
   baseUrl: form.value.baseUrl.trim(),
   apiKey: form.value.apiKey.trim(),
+  clearApiKey: Boolean(form.value.clearApiKey),
   priority: Number.isFinite(Number(form.value.priority)) ? Number(form.value.priority) : 100,
   routeType: form.value.routeType,
   isPrimary: Boolean(form.value.isPrimary),
@@ -523,14 +503,13 @@ const saveCandidate = async () => {
   try {
     const payload = buildPayload()
     if (editingId.value === null) {
-      await createModelCandidate(payload)
+      await props.actions.create(payload)
       setHint('模型候选已创建', 'success')
     } else {
-      await updateModelCandidate(editingId.value, payload)
+      await props.actions.update(editingId.value, payload)
       setHint('模型候选已更新', 'success')
     }
     closeModal()
-    await reload({ silent: true })
   } catch (error) {
     setHint(`保存失败: ${error.message || 'unknown'}`, 'error')
   } finally {
@@ -544,9 +523,8 @@ const handleDelete = async (candidate) => {
 
   setHint(`正在删除 ${candidate.name}...`)
   try {
-    await deleteModelCandidate(candidate.id)
+    await props.actions.remove(candidate.id)
     delete probeResults.value[candidate.id]
-    await reload({ silent: true })
     setHint('模型候选已删除', 'success')
   } catch (error) {
     setHint(`删除失败: ${error.message || 'unknown'}`, 'error')
@@ -563,9 +541,9 @@ const withUpdatedSet = (sourceSet, id, active) => {
 const handleToggle = async (candidate) => {
   withUpdatedSet(toggleLoadingIds, candidate.id, true)
   try {
-    await toggleModelCandidate(candidate.id)
-    candidate.enabled = !candidate.enabled
-    setHint(`模型 ${candidate.displayName || candidate.name} 已${candidate.enabled ? '启用' : '停用'}`, 'success')
+    const nextEnabled = !candidate.enabled
+    await props.actions.toggle(candidate.id)
+    setHint(`模型 ${candidate.displayName || candidate.name} 已${nextEnabled ? '启用' : '停用'}`, 'success')
   } catch (error) {
     setHint(`切换失败: ${error.message || 'unknown'}`, 'error')
   } finally {
@@ -576,12 +554,11 @@ const handleToggle = async (candidate) => {
 const handleProbe = async (id) => {
   withUpdatedSet(probingIds, id, true)
   try {
-    const result = await probeModelCandidate(id)
+    const result = await props.actions.probe(id)
     probeResults.value = {
       ...probeResults.value,
       [id]: result
     }
-    await reload({ silent: true })
     setHint(result.status === 'healthy' ? '探测完成，模型状态健康' : '探测完成，模型状态异常', result.status === 'healthy' ? 'success' : 'error')
   } catch (error) {
     probeResults.value = {
@@ -618,7 +595,7 @@ const writeClipboard = async (text) => {
 const handleCopyKey = async (id) => {
   copyingId.value = id
   try {
-    const data = await copyModelCandidateKey(id)
+    const data = await props.actions.copyKey(id)
     await writeClipboard(data.apiKey || '')
     copiedId.value = id
     setHint('密钥已复制到剪贴板', 'success')
@@ -632,6 +609,8 @@ const handleCopyKey = async (id) => {
     copyingId.value = null
   }
 }
+
+const getApiKeyState = candidate => apiKeyState(candidate)
 
 const canCopyKey = (candidate) => {
   return Boolean(candidate?.apiKeyConfigured) && Boolean(candidate?.apiKeyReadable) && Boolean(candidate?.apiKeyCopyAllowed)
@@ -684,7 +663,4 @@ const formatProbeResult = (result) => {
   return `✗ unhealthy: ${result.error || '未知错误'}`
 }
 
-onMounted(() => {
-  reload()
-})
 </script>
