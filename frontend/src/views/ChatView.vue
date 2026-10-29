@@ -89,7 +89,7 @@
       </div>
 
       <!-- 右侧聊天区域 -->
-      <div class="flex-1 flex flex-col relative h-full min-w-0 transition-all duration-300">
+      <div class="flex-1 flex flex-col relative h-full min-h-0 min-w-0 transition-all duration-300">
         <!-- 侧边栏控制和新建对话按钮 -->
         <div class="absolute top-4 left-4 z-20 flex items-center gap-2">
           <button 
@@ -202,7 +202,11 @@
         </template>
         <template v-else>
           <!-- 消息流 -->
-          <div class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-slate-50/30 dark:bg-slate-900" ref="messagesContainer">
+          <div
+            ref="messagesContainer"
+            class="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 scroll-smooth bg-slate-50/30 dark:bg-slate-900"
+            @scroll.passive="handleMessagesScroll"
+          >
             <div v-if="messagesLoading" class="h-full flex flex-col items-center justify-center text-slate-400">
               <span class="material-symbols-outlined text-4xl mb-2 animate-spin text-indigo-400">progress_activity</span>
               <p>加载中...</p>
@@ -214,8 +218,8 @@
 
             <template v-if="!messagesLoading">
               <div
-                v-for="(msg, idx) in messages"
-                :key="idx"
+                v-for="msg in messages"
+                :key="messageRenderKey(msg)"
                 class="flex"
                 :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
               >
@@ -223,13 +227,14 @@
                   <span class="material-symbols-outlined text-sm text-brand-text">robot_2</span>
                 </div>
                 <div
-                  class="max-w-[85%] rounded-2xl px-5 py-3.5"
+                  class="max-w-[85%] min-w-0 overflow-hidden rounded-2xl px-5 py-3.5"
                   :class="msg.role === 'user' ? 'bg-brand text-white rounded-tr-sm shadow-sm' : 'bg-white dark:bg-slate-800 border border-divider shadow-sm rounded-tl-sm text-content'"
                 >
                   <div v-if="msg.role === 'user'" class="whitespace-pre-wrap leading-relaxed">{{ msg.content }}</div>
-                  <div v-else class="markdown-body text-[15px] leading-relaxed">
-                    <div v-html="renderMarkdown(msg.content)"></div>
-                    <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${idx}-${imageIdx}`" :image="image" />
+                  <div v-else class="min-w-0 overflow-hidden">
+                    <div class="assistant-message-content min-w-0 overflow-hidden">
+                      <div class="markdown-body min-w-0 overflow-hidden text-[15px] leading-relaxed" v-html="renderMarkdown(msg.content)"></div>
+                      <ImageCard v-for="(image, imageIdx) in msg.images || []" :key="`${messageRenderKey(msg)}-image-${imageIdx}`" :image="image" />
                     <QuizCard v-if="msg.quizPayload" :payload="msg.quizPayload" />
                     <ScenarioCard
                       v-if="msg.scenarioPayload"
@@ -252,7 +257,8 @@
                       :chat-session-id="currentSessionId"
                       @updated="handleStructuredMessageUpdated"
                     />
-                    <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason || msg.routeLabel || msg.routeSource" class="mt-3 flex flex-wrap gap-2">
+                    </div>
+                    <div v-if="msg.generationStatus || msg.retrievalModeResolved || msg.localGraphUsed || msg.ragUsed || msg.fallbackReason || msg.routeLabel || msg.routeSource" class="assistant-execution-meta mt-3 flex flex-wrap gap-2">
                       <span v-if="msg.generationStatus === 'RUNNING'" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900">
                         generating
                       </span>
@@ -281,33 +287,33 @@
                         via: {{ formatRouteLabel(msg.routeSource) }}
                       </span>
                     </div>
-                    <div class="mt-3 flex items-center gap-1.5 text-xs text-content-secondary">
+                    <div class="assistant-actions mt-4 flex flex-wrap items-center gap-1.5 border-t border-divider-light pt-3 text-xs text-content-secondary">
                       <button
                         class="inline-flex items-center gap-1 px-2 py-1 rounded-md border transition-colors"
-                        :class="getReaction(msg, idx) === 'like'
+                        :class="getReaction(msg) === 'like'
                           ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:bg-emerald-950/30'
                           : 'border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-700/60'"
-                        @click="toggleReaction(msg, idx, 'like')"
+                        @click="toggleReaction(msg, 'like')"
                       >
-                        <span class="material-symbols-outlined text-[15px]" :style="getReaction(msg, idx) === 'like' ? `font-variation-settings: 'FILL' 1` : ''">thumb_up</span>
+                        <span class="material-symbols-outlined text-[15px]" :style="getReaction(msg) === 'like' ? `font-variation-settings: 'FILL' 1` : ''">thumb_up</span>
                         点赞
                       </button>
                       <button
                         class="inline-flex items-center gap-1 px-2 py-1 rounded-md border transition-colors"
-                        :class="getReaction(msg, idx) === 'dislike'
+                        :class="getReaction(msg) === 'dislike'
                           ? 'border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:bg-rose-950/30'
                           : 'border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-700/60'"
-                        @click="toggleReaction(msg, idx, 'dislike')"
+                        @click="toggleReaction(msg, 'dislike')"
                       >
-                        <span class="material-symbols-outlined text-[15px]" :style="getReaction(msg, idx) === 'dislike' ? `font-variation-settings: 'FILL' 1` : ''">thumb_down</span>
+                        <span class="material-symbols-outlined text-[15px]" :style="getReaction(msg) === 'dislike' ? `font-variation-settings: 'FILL' 1` : ''">thumb_down</span>
                         点踩
                       </button>
                       <button
                         class="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-transparent hover:border-slate-200 hover:bg-slate-100 dark:hover:border-slate-700 dark:hover:bg-slate-700/60 transition-colors"
-                        @click="copyMessage(msg, idx)"
+                        @click="copyMessage(msg)"
                       >
-                        <span class="material-symbols-outlined text-[15px]">{{ copiedState[getMessageActionKey(msg, idx)] ? 'check' : 'content_copy' }}</span>
-                        {{ copiedState[getMessageActionKey(msg, idx)] ? '已复制' : '复制' }}
+                        <span class="material-symbols-outlined text-[15px]">{{ copiedState[getMessageActionKey(msg)] ? 'check' : 'content_copy' }}</span>
+                        {{ copiedState[getMessageActionKey(msg)] ? '已复制' : '复制' }}
                       </button>
                     </div>
                   </div>
@@ -318,16 +324,18 @@
                  <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center mr-3 flex-shrink-0 mt-1">
                   <span class="material-symbols-outlined text-sm text-brand-text">robot_2</span>
                 </div>
-                <div class="max-w-[85%] rounded-2xl px-5 py-3.5 bg-white dark:bg-slate-800 border border-divider shadow-sm rounded-tl-sm text-content min-h-[52px] flex items-center">
+                <div class="max-w-[85%] min-w-0 overflow-hidden rounded-2xl px-5 py-3.5 bg-white dark:bg-slate-800 border border-divider shadow-sm rounded-tl-sm text-content min-h-[52px] flex items-center">
                    <div v-if="!streamingContent" class="flex items-center gap-1.5 px-2">
                      <div class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-[bounce_1s_infinite_-0.3s]"></div>
                      <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-[bounce_1s_infinite_-0.15s]"></div>
                      <div class="w-2.5 h-2.5 rounded-full bg-brand animate-[bounce_1s_infinite]"></div>
                    </div>
-                   <div v-else class="markdown-body text-[15px] leading-relaxed">
-                     <span v-html="renderMarkdown(streamingContent)"></span>
-                     <ImageCard v-for="(image, imageIdx) in streamingImages" :key="`stream-${imageIdx}`" :image="image" />
-                     <div v-if="streamingMeta.retrievalModeResolved || streamingMeta.localGraphUsed || streamingMeta.ragUsed || streamingMeta.fallbackReason || streamingMeta.routeLabel || streamingMeta.routeSource" class="mt-3 flex flex-wrap gap-2">
+                   <div v-else class="min-w-0 overflow-hidden">
+                     <div class="assistant-message-content min-w-0 overflow-hidden">
+                       <div class="markdown-body min-w-0 overflow-hidden text-[15px] leading-relaxed" v-html="renderMarkdown(streamingContent)"></div>
+                       <ImageCard v-for="(image, imageIdx) in streamingImages" :key="`stream-${imageIdx}`" :image="image" />
+                     </div>
+                     <div v-if="streamingMeta.retrievalModeResolved || streamingMeta.localGraphUsed || streamingMeta.ragUsed || streamingMeta.fallbackReason || streamingMeta.routeLabel || streamingMeta.routeSource" class="assistant-execution-meta mt-3 flex flex-wrap gap-2">
                        <span v-if="streamingMeta.retrievalModeResolved" class="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
                          mode: {{ formatRetrievalMode(streamingMeta.retrievalModeResolved) }}
                        </span>
@@ -355,7 +363,7 @@
           </div>
 
           <!-- 底部输入框 -->
-          <div class="p-6 bg-transparent z-10 w-full max-w-6xl mx-auto">
+          <div class="shrink-0 p-6 bg-transparent z-10 w-full max-w-6xl mx-auto">
             <div class="mb-3 flex items-center justify-between">
               <div class="flex items-center gap-2 text-xs text-content-secondary">
                 <span class="font-semibold">检索模式</span>
@@ -428,6 +436,7 @@ import FillCard from './chat/FillCard.vue'
 import InterviewCard from './chat/InterviewCard.vue'
 import ImageCard from './chat/ImageCard.vue'
 import AutocompleteDropdown from './chat/AutocompleteDropdown.vue'
+import { createClientMessage, messageRenderKey, normalizeChatMessages } from './chat/chatMessages.js'
 import { fetchSuggestions, recordClick } from '../api/autocomplete'
 import {
   createChatSession,
@@ -465,6 +474,7 @@ const currentQuizPayload = ref(null)
 const streamTaskId = ref(null)
 const streamHandle = ref(null)
 const messagesContainer = ref(null)
+const shouldFollowMessages = ref(true)
 const selectedRetrievalMode = ref('RAG_ONLY')
 const acSuggestions = ref([])
 const acVisible = ref(false)
@@ -532,69 +542,6 @@ const hasRunningMessages = (items) => {
   return Array.isArray(items) && items.some(msg => msg?.generationStatus === 'RUNNING')
 }
 
-const normalizeImageItem = (item) => {
-  if (!item || typeof item !== 'object') return null
-  const source = item.value && typeof item.value === 'object' ? item.value : item
-  return {
-    ...source,
-    position: item.position ?? source.position
-  }
-}
-
-const normalizeMessages = (rawMessages) => {
-  return rawMessages.map(msg => {
-    const metadata = msg?.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}
-    if (msg.contentType === 'scenario_card' && msg.content) {
-      try {
-        const scenarioPayload = JSON.parse(msg.content)
-        return { ...msg, ...metadata, scenarioPayload, content: '' }
-      } catch (e) {
-        return { ...msg, ...metadata }
-      }
-    }
-    if (msg.contentType === 'fill_card' && msg.content) {
-      try {
-        const fillPayload = JSON.parse(msg.content)
-        return { ...msg, ...metadata, fillPayload, content: '' }
-      } catch (e) {
-        return { ...msg, ...metadata }
-      }
-    }
-    if (msg.contentType === 'interview_card' && msg.content) {
-      try {
-        const interviewPayload = JSON.parse(msg.content)
-        return { ...msg, ...metadata, interviewPayload, content: '' }
-      } catch (e) {
-        return { ...msg, ...metadata }
-      }
-    }
-    if (msg.contentType === 'quiz' && msg.content) {
-      try {
-        const quizPayload = JSON.parse(msg.content)
-        return { ...msg, ...metadata, quizPayload, content: '' }
-      } catch (e) {
-        return { ...msg, ...metadata }
-      }
-    }
-    if (msg.contentType === 'rich' && msg.content) {
-      try {
-        const richPayload = JSON.parse(msg.content)
-        return {
-          ...msg,
-          ...metadata,
-          content: richPayload?.text || '',
-          images: Array.isArray(richPayload?.images)
-            ? richPayload.images.map(normalizeImageItem).filter(Boolean)
-            : []
-        }
-      } catch (e) {
-        return { ...msg, ...metadata }
-      }
-    }
-    return { ...msg, ...metadata }
-  })
-}
-
 const handleStructuredMessageUpdated = async () => {
   await refreshCurrentMessages({ silent: true })
 }
@@ -607,11 +554,11 @@ const refreshCurrentMessages = async ({ silent = false } = {}) => {
   try {
     const data = await listChatMessages(currentSessionId.value, 200)
     const rawMessages = Array.isArray(data) ? data : (data.content || [])
-    messages.value = normalizeMessages(rawMessages)
+    messages.value = normalizeChatMessages(rawMessages)
     if (!hasRunningMessages(messages.value)) {
       stopRunningMessagePolling()
     }
-    scrollToBottom()
+    scrollToBottom({ force: !silent })
   } catch (err) {
     console.error('Failed to refresh messages', err)
     if (!silent) {
@@ -736,6 +683,7 @@ const selectSession = async (id) => {
   isStreaming.value = false
   cancelActiveStream({ expected: true })
   await refreshCurrentMessages()
+  await scrollToBottom({ force: true })
   ensureRunningMessagePolling()
 }
 
@@ -781,11 +729,23 @@ const saveRename = async (id) => {
   }
 }
 
-const scrollToBottom = async () => {
+const isNearMessagesBottom = () => {
+  const el = messagesContainer.value
+  return !el || el.scrollHeight - el.scrollTop - el.clientHeight <= 80
+}
+
+const handleMessagesScroll = () => {
+  shouldFollowMessages.value = isNearMessagesBottom()
+}
+
+const scrollToBottom = async ({ force = false } = {}) => {
+  const shouldScroll = force || shouldFollowMessages.value || isNearMessagesBottom()
+  if (!shouldScroll) return
   await nextTick()
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-  }
+  const el = messagesContainer.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+  shouldFollowMessages.value = true
 }
 
 // 渲染 markdown，只在内容不为空时渲染
@@ -810,14 +770,10 @@ const formatRouteLabel = (label) => {
   return normalized.replaceAll('-', ' ')
 }
 
-const getMessageActionKey = (msg, idx) => {
-  if (msg?.messageId) return String(msg.messageId)
-  if (msg?.id) return String(msg.id)
-  return `msg-${idx}`
-}
+const getMessageActionKey = (msg) => messageRenderKey(msg)
 
-const getReaction = (msg, idx) => {
-  return reactionState.value[getMessageActionKey(msg, idx)] || ''
+const getReaction = (msg) => {
+  return reactionState.value[getMessageActionKey(msg)] || ''
 }
 
 const submitFeedback = (type, traceId, messageId) => {
@@ -833,8 +789,8 @@ const submitFeedback = (type, traceId, messageId) => {
   }).catch(() => { /* 静默失败，不阻塞 UI */ })
 }
 
-const toggleReaction = (msg, idx, reaction) => {
-  const key = getMessageActionKey(msg, idx)
+const toggleReaction = (msg, reaction) => {
+  const key = getMessageActionKey(msg)
   const prev = reactionState.value[key] || ''
   const newReaction = prev === reaction ? '' : reaction
   reactionState.value[key] = newReaction
@@ -846,14 +802,14 @@ const toggleReaction = (msg, idx, reaction) => {
   }
 }
 
-const copyMessage = async (msg, idx) => {
+const copyMessage = async (msg) => {
   const text = typeof msg?.content === 'string' ? msg.content : ''
   if (!text.trim()) {
     showError('当前消息没有可复制文本')
     return
   }
 
-  const key = getMessageActionKey(msg, idx)
+  const key = getMessageActionKey(msg)
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text)
@@ -921,9 +877,9 @@ const handleSend = async () => {
   acHighlightIndex.value = -1
 
   // 乐观更新：用户消息先入本地列表，提升输入反馈速度。
-  messages.value.push({ role: 'user', content })
+  messages.value.push(createClientMessage({ role: 'user', content }))
   inputContent.value = ''
-  scrollToBottom()
+  scrollToBottom({ force: true })
 
   // 初始化本次流式状态容器。
   isStreaming.value = true
@@ -997,7 +953,7 @@ const handleSend = async () => {
           routeLabel: result?.routeLabel || '',
           routeSource: result?.routeSource || ''
         }
-        messages.value.push({
+        messages.value.push(createClientMessage({
           role: 'assistant',
           messageId: result?.assistantMessageId || '',
           content: finalContent,
@@ -1007,7 +963,7 @@ const handleSend = async () => {
           fillPayload: finalFillPayload,
           interviewPayload: finalInterviewPayload,
           ...streamingMeta.value
-        })
+        }))
         streamingContent.value = ''
         streamingImages.value = []
         currentQuizPayload.value = null
@@ -1025,7 +981,7 @@ const handleSend = async () => {
           return
         }
         console.error('Stream error:', err)
-        messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[生成出错]**' })
+        messages.value.push(createClientMessage({ role: 'assistant', content: streamingContent.value + '\n\n**[生成出错]**' }))
         cleanupStreamingState()
         showError('流式生成出错')
         scrollToBottom()
@@ -1068,7 +1024,7 @@ const handleStop = async () => {
   }
   if (isStreaming.value) {
     // 3) 补一条“已停止”消息，避免界面停在半句。
-    messages.value.push({ role: 'assistant', content: streamingContent.value + '\n\n**[已停止]**' })
+    messages.value.push(createClientMessage({ role: 'assistant', content: streamingContent.value + '\n\n**[已停止]**' }))
     cleanupStreamingState()
   }
   scrollToBottom()
@@ -1198,6 +1154,7 @@ watch(inputContent, (val) => {
   background-color: #f8fafc;
   border-radius: 0.5rem;
   padding: 1rem;
+  max-width: 100%;
   overflow-x: auto;
   margin: 0.5rem 0;
 }
@@ -1205,10 +1162,23 @@ watch(inputContent, (val) => {
   background-color: #0f172a;
 }
 :deep(.markdown-body code) {
+  overflow-wrap: anywhere;
   background-color: #f1f5f9;
   padding: 0.2em 0.4em;
   border-radius: 0.25rem;
   font-size: 0.875em;
+}
+:deep(.markdown-body pre code) {
+  overflow-wrap: normal;
+  white-space: pre;
+}
+:deep(.markdown-body img),
+:deep(.markdown-body table) {
+  max-width: 100%;
+}
+:deep(.markdown-body table) {
+  display: block;
+  overflow-x: auto;
 }
 :deep(.dark .markdown-body code) {
   background-color: #1e293b;
