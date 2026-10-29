@@ -1,22 +1,21 @@
 <script setup>
+import { useRoute } from 'vue-router'
+import { agentAdminNavigation, isAgentSectionActive } from './agentAdminNavigation.js'
+
 defineProps({ sidebarCollapsed: Boolean })
 
-const sections = [
-  { title: '提示词', to: '/admin/agents/prompts' },
-  { title: '意图路由', to: '/admin/agents/intents' },
-  { title: 'MCP 能力', to: '/admin/agents/mcp' }
-]
+const route = useRoute()
 </script>
 
 <template>
   <section>
     <nav class="flex gap-2 overflow-x-auto border-b border-divider bg-surface px-8 py-4" aria-label="Agent 工具与配置">
       <RouterLink
-        v-for="item in sections"
-        :key="item.to"
-        :to="item.to"
+        v-for="item in agentAdminNavigation"
+        :key="item.path"
+        :to="item.path"
         class="rounded-lg px-4 py-2 text-sm font-bold text-content-secondary transition-colors hover:bg-surface-hover hover:text-brand-text"
-        active-class="bg-brand-subtle text-brand-text"
+        :class="isAgentSectionActive(route.path, item.path) ? 'bg-brand-subtle text-brand-text' : ''"
       >
         {{ item.title }}
       </RouterLink>

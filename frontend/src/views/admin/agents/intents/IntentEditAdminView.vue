@@ -13,7 +13,11 @@
   </header>
 
   <main class="min-h-screen bg-surface-field px-8 py-8">
-    <section v-if="loading" class="bg-surface-raised rounded shadow-sm p-10 text-center text-content-secondary dark:text-slate-500">加载中...</section>
+    <section v-if="error" class="mb-6 flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <span>意图配置加载失败：{{ error }}</span>
+      <button class="font-bold underline disabled:opacity-50" :disabled="loading" @click="retryLoad">重试</button>
+    </section>
+    <section v-else-if="loading" class="bg-surface-raised rounded shadow-sm p-10 text-center text-content-secondary dark:text-slate-500">加载中...</section>
     <section v-else-if="!form" class="bg-surface-raised rounded shadow-sm p-10 text-center text-content-secondary dark:text-slate-500">未找到对应意图节点</section>
     <section v-else class="bg-surface-raised rounded shadow-sm p-6 space-y-4 max-w-4xl">
       <div class="grid grid-cols-2 gap-4">
@@ -71,9 +75,9 @@
 // 中文注释：独立编辑页，支持单节点编辑与新增子节点，保存后返回来源页
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { saveIntentTreeConfig } from '../../../../api/admin'
-import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin'
-import { editorFormToLeaf } from '../../../../utils/intentTreeTransform'
+import { saveIntentTreeConfig } from '../../../../api/intentAdmin.js'
+import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin.js'
+import { editorFormToLeaf } from '../../../../utils/intentTreeTransform.js'
 
 
 const route = useRoute()
@@ -82,6 +86,7 @@ const {
   loading,
   saving,
   hint,
+  error,
   config,
   flatLeafs,
   reload
@@ -97,10 +102,7 @@ const currentTitle = computed(() => {
   return row ? `${row.name || '-'}（${row.intentId}）` : '未找到节点'
 })
 
-const returnTo = computed(() => {
-  const from = String(route.query.from || '')
-  return from.startsWith('/admin/agents/intents') ? from : '/admin/agents/intents'
-})
+const returnTo = '/admin/agents/intents'
 
 const buildCreateForm = () => {
   const parentIndex = String(route.query.parentIndex || '')
@@ -183,7 +185,7 @@ const save = async () => {
   try {
     await saveIntentTreeConfig(payload)
     await reload()
-    router.push(returnTo.value)
+    router.push(returnTo)
   } catch (error) {
     errorText.value = error.message || '保存失败'
   } finally {
@@ -192,11 +194,12 @@ const save = async () => {
 }
 
 const goBack = () => {
-  router.push(returnTo.value)
+  router.push(returnTo)
 }
 
-onMounted(async () => {
-  await reload()
-  fillForm()
-})
+const retryLoad = async () => {
+  if (await reload()) fillForm()
+}
+
+onMounted(retryLoad)
 </script>

@@ -111,14 +111,13 @@
 
 <script setup>
 // 中文注释：列表页实现，支持筛选、分页与批量下线，并与树页/编辑页双向导航
-import { computed, onMounted, ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const emit = defineEmits(['show-tree'])
-import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin'
 
+const props = defineProps({ state: { type: Object, required: true } })
 const router = useRouter()
-const route = useRoute()
 const {
   loading,
   hint,
@@ -131,7 +130,7 @@ const {
   selectedIndexes,
   reload,
   toggleBatchEnabled
-} = useIntentTreeAdmin()
+} = props.state
 
 // 中文注释：分页状态
 const pageSizeOptions = [10, 20, 50]
@@ -172,8 +171,7 @@ const navigateToTree = (row) => {
   emit('show-tree', row.intentId)
 }
 const navigateToEdit = (row) => {
-  const from = route.fullPath
-  router.push(`/admin/agents/intents/${row.index}/edit?from=${encodeURIComponent(from)}`)
+  router.push({ name: 'admin-agent-intent-edit', params: { index: row.index } })
 }
 
 // 中文注释：批量与单项操作
@@ -181,17 +179,19 @@ const runBatchOffline = async () => {
   if (selectedIndexes.value.length === 0) return
   const ok = window.confirm(`确认下线已选中的 ${selectedIndexes.value.length} 个意图节点吗？`)
   if (!ok) return
-  await toggleBatchEnabled(false)
-  await reload()
-  selectedIndexes.value = []
+  if (await toggleBatchEnabled(false)) {
+    await reload()
+    selectedIndexes.value = []
+  }
 }
 const offlineSingle = async (row) => {
   const ok = window.confirm(`确认下线节点 [${row.intentId || row.name}] 吗？`)
   if (!ok) return
   selectedIndexes.value = [row.index]
-  await toggleBatchEnabled(false)
-  await reload()
-  selectedIndexes.value = []
+  if (await toggleBatchEnabled(false)) {
+    await reload()
+    selectedIndexes.value = []
+  }
 }
 
 const resetFilters = () => {
@@ -205,7 +205,4 @@ const setPage = (no) => {
   pageNo.value = no
 }
 
-onMounted(async () => {
-  await reload()
-})
 </script>

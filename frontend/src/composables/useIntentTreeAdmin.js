@@ -1,9 +1,11 @@
 import { computed, ref } from 'vue'
-import { batchToggleLeafEnabled, loadIntentTreeAdminData, saveSingleLeaf } from '../api/intentTreeAdmin'
-import { editorFormToLeaf, flattenLeafIntents, leafToEditorForm, normalizePathToArray } from '../utils/intentTreeTransform'
+import { batchToggleLeafEnabled, loadIntentTreeAdminData, saveSingleLeaf } from '../api/intentTreeAdmin.js'
+import { editorFormToLeaf, flattenLeafIntents, leafToEditorForm, normalizePathToArray } from '../utils/intentTreeTransform.js'
 
 export function useIntentTreeAdmin() {
   const loading = ref(false)
+  const loaded = ref(false)
+  const error = ref('')
   const saving = ref(false)
   const hint = ref('在线管理意图树配置')
   const config = ref({})
@@ -39,16 +41,20 @@ export function useIntentTreeAdmin() {
 
   const reload = async () => {
     loading.value = true
+    error.value = ''
     hint.value = '正在加载配置...'
     try {
       const data = await loadIntentTreeAdminData()
       config.value = data.config
       stats.value = data.stats
       selectedIndexes.value = selectedIndexes.value.filter((index) => (config.value?.leafIntents || [])[index])
+      loaded.value = true
       hint.value = '配置已加载'
-    } catch (error) {
-      hint.value = `加载失败: ${error.message || 'unknown'}`
-      throw error
+      return true
+    } catch (cause) {
+      error.value = cause.message || '加载失败'
+      hint.value = `加载失败: ${error.value}`
+      return false
     } finally {
       loading.value = false
     }
@@ -69,10 +75,15 @@ export function useIntentTreeAdmin() {
     const targets = Array.isArray(indexes) && indexes.length > 0 ? indexes : selectedIndexes.value
     if (targets.length === 0) return
     saving.value = true
+    error.value = ''
     hint.value = `正在${enabled ? '启用' : '下线'}选中节点...`
     try {
       const next = await batchToggleLeafEnabled(config.value, targets, enabled)
       await saveConfig(next)
+      return true
+    } catch (cause) {
+      error.value = cause.message || '节点状态保存失败'
+      return false
     } finally {
       saving.value = false
     }
@@ -116,6 +127,8 @@ export function useIntentTreeAdmin() {
 
   return {
     loading,
+    loaded,
+    error,
     saving,
     hint,
     config,

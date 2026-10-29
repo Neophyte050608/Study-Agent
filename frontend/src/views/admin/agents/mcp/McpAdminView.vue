@@ -11,8 +11,19 @@
         </p>
       </div>
 
+      <div v-if="loading && capabilities.length === 0" class="rounded-xl border border-divider bg-surface-raised py-12 text-center text-content-secondary">
+        正在发现 MCP 能力...
+      </div>
+      <div v-if="error" class="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <span>MCP 能力加载失败：{{ error }}</span>
+        <button class="font-bold underline disabled:opacity-50" :disabled="loading" @click="reload">重试</button>
+      </div>
+      <div v-else-if="!loading && capabilities.length === 0" class="rounded-xl border border-dashed border-divider bg-surface-raised py-12 text-center text-content-secondary">
+        暂未发现可用的 MCP 能力。
+      </div>
+
       <!-- Bento Grid Layout for MCP Workflow -->
-      <div class="grid grid-cols-12 gap-6 items-start">
+      <div v-if="capabilities.length > 0" class="grid grid-cols-12 gap-6 items-start">
         <!-- Left Column: Config & Input -->
         <div class="col-span-12 lg:col-span-7 space-y-6">
           <!-- Step 1: Discovery -->
@@ -161,10 +172,11 @@
 
 <script setup>
 import { onMounted, ref, computed } from 'vue'
-import { invokeMcpCapability, loadMcpCapabilities } from '../../../../api/admin'
+import { invokeMcpCapability, loadMcpCapabilities } from '../../../../api/mcpAdmin.js'
 
 
 const loading = ref(false)
+const error = ref('')
 const hint = ref('加载可用能力后进行调用')
 const capabilities = ref([])
 const selectedCapability = ref('')
@@ -217,13 +229,17 @@ const onCapabilityChange = () => {
 
 const reload = async () => {
   loading.value = true
+  error.value = ''
   hint.value = '正在加载能力列表...'
   try {
     const data = await loadMcpCapabilities()
     capabilities.value = normalizeCapabilities(data)
     hint.value = `已加载 ${capabilities.value.length} 个能力`
-  } catch (error) {
-    hint.value = `加载失败: ${error.message || 'unknown'}`
+  } catch (cause) {
+    capabilities.value = []
+    selectedCapability.value = ''
+    error.value = cause?.message || 'MCP 能力加载失败'
+    hint.value = `加载失败: ${error.value}`
   } finally {
     loading.value = false
   }

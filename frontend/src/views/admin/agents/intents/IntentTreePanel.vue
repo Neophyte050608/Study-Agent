@@ -115,22 +115,23 @@
 <script setup>
 import { computed, defineComponent, h, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin'
-import { saveIntentTreeConfig } from '../../../../api/admin'
+import { saveIntentTreeConfig } from '../../../../api/intentAdmin.js'
 
 
+const props = defineProps({ state: { type: Object, required: true } })
 const route = useRoute()
 const router = useRouter()
 const {
   loading,
   saving,
   hint,
+  error,
   config,
   stats,
   flatLeafs,
   reload,
   toggleBatchEnabled
-} = useIntentTreeAdmin()
+} = props.state
 
 const expandedMap = ref({})
 const selectedKey = ref('')
@@ -204,9 +205,12 @@ const toggleExpand = (key) => {
 const saveAll = async () => {
   saving.value = true
   hint.value = '正在保存全局配置...'
+  error.value = ''
   try {
     await saveIntentTreeConfig(config.value)
     await reload()
+  } catch (cause) {
+    error.value = cause?.message || '全局配置保存失败'
   } finally {
     saving.value = false
   }
@@ -214,20 +218,21 @@ const saveAll = async () => {
 
 const openEditSelected = () => {
   if (!selectedLeaf.value) return
-  router.push(`/admin/agents/intents/${selectedLeaf.value.index}/edit?from=${encodeURIComponent(route.fullPath)}`)
+  router.push({ name: 'admin-agent-intent-edit', params: { index: selectedLeaf.value.index } })
 }
 
 const createChild = () => {
   if (!selectedLeaf.value) return
-  router.push(`/admin/agents/intents/new/edit?parentIndex=${selectedLeaf.value.index}&from=${encodeURIComponent(route.fullPath)}`)
+  router.push({ name: 'admin-agent-intent-edit', params: { index: 'new' }, query: { parentIndex: selectedLeaf.value.index } })
 }
 
 const offlineSelected = async () => {
   if (!selectedLeaf.value) return
   const ok = window.confirm(`确认下线节点 [${selectedLeaf.value.intentId || selectedLeaf.value.name}] 吗？`)
   if (!ok) return
-  await toggleBatchEnabled(false, [selectedLeaf.value.index])
-  await reload()
+  if (await toggleBatchEnabled(false, [selectedLeaf.value.index])) {
+    await reload()
+  }
 }
 
 const TreeNode = defineComponent({
@@ -285,8 +290,7 @@ const TreeNode = defineComponent({
   }
 })
 
-onMounted(async () => {
-  await reload()
+onMounted(() => {
   const focusIntentCode = route.query.intentCode ? String(route.query.intentCode) : ''
   if (focusIntentCode) {
     const matchedLeaf = flatLeafs.value.find((item) => item.intentId === focusIntentCode)

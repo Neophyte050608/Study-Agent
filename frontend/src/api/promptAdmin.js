@@ -1,39 +1,11 @@
-import { httpGet, httpPostJson, httpPut, httpDelete } from './http'
+import { httpDelete, httpGet, httpPostJson, httpPut } from './http.js'
 
-export function loadMcpCapabilities() {
-  const traceId = `trace-${Date.now()}`
-  return httpGet(`/api/mcp/capabilities?traceId=${traceId}`)
-}
-
-export function invokeMcpCapability(capability, params) {
-  return httpPostJson('/api/mcp/invoke', {
-    capability,
-    method: capability,
-    params,
-    traceId: `trace-${Date.now()}`
-  })
-}
-
-export function loadIntentTreeConfig() {
-  return httpGet('/api/intent-tree/config')
-}
-
-export function loadIntentTreeStats() {
-  return httpGet('/api/intent-tree/stats')
-}
-
-export function saveIntentTreeConfig(payload) {
-  return httpPostJson('/api/intent-tree/config', payload)
-}
-
-
-// ===== 提示词管理 =====
 export function loadPromptTemplates(category, type) {
   let url = '/api/settings/prompts'
   const params = []
   if (category) params.push(`category=${category}`)
   if (type) params.push(`type=${type}`)
-  if (params.length) url += '?' + params.join('&')
+  if (params.length) url += `?${params.join('&')}`
   return httpGet(url)
 }
 

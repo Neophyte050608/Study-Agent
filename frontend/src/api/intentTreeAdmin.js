@@ -1,5 +1,5 @@
-import { loadIntentTreeConfig, loadIntentTreeStats, saveIntentTreeConfig } from './admin'
-import { editorFormToLeaf, flattenLeafIntents, leafToEditorForm } from '../utils/intentTreeTransform'
+import { loadIntentTreeConfig, loadIntentTreeStats, saveIntentTreeConfig } from './intentAdmin.js'
+import { editorFormToLeaf, flattenLeafIntents, leafToEditorForm } from '../utils/intentTreeTransform.js'
 
 // 中文注释：加载意图树配置与统计，返回管理页统一数据结构
 export async function loadIntentTreeAdminData() {

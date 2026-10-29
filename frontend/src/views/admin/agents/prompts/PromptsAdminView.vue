@@ -19,6 +19,11 @@
       </div>
         </header>
 
+        <div v-if="error" class="mb-6 flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>提示词加载失败：{{ error }}</span>
+          <button class="font-bold underline disabled:opacity-50" :disabled="loading" @click="loadData">重试</button>
+        </div>
+
         <!-- Filter Bar -->
         <div class="flex flex-col md:flex-row gap-4 mb-8 bg-surface-raised p-4 rounded-xl shadow-sm border border-slate-200">
           <div class="flex-1">
@@ -49,8 +54,13 @@
           <span class="material-symbols-outlined animate-spin text-4xl">autorenew</span>
           <p class="mt-4">加载中...</p>
         </div>
-        
-        <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div v-else-if="!error && prompts.length === 0" class="rounded-xl border border-dashed border-slate-300 bg-surface-raised py-16 text-center text-content-secondary">
+          暂无提示词模板，可点击“新建模板”创建。
+        </div>
+        <div v-else-if="!error && filteredPrompts.length === 0" class="rounded-xl border border-dashed border-slate-300 bg-surface-raised py-16 text-center text-content-secondary">
+          没有符合当前筛选条件的提示词模板。
+        </div>
+        <div v-else-if="!error" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           <div v-for="item in filteredPrompts" :key="item.name" class="bg-surface-raised flex flex-col rounded-xl shadow-sm overflow-hidden transition-all duration-300 border border-slate-200 hover:border-indigo-300">
             <div class="p-5 flex-1">
               <div class="flex justify-between items-start mb-3">
@@ -174,11 +184,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { loadPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate, previewPromptTemplate, reloadPromptCache } from '../../../../api/admin'
+import { loadPromptTemplates, createPromptTemplate, updatePromptTemplate, deletePromptTemplate, previewPromptTemplate, reloadPromptCache } from '../../../../api/promptAdmin.js'
 
 
 const prompts = ref([])
 const loading = ref(false)
+const error = ref('')
 const saving = ref(false)
 const searchQuery = ref('')
 const filterCategory = ref('')
@@ -237,11 +248,13 @@ const formatRelativeTime = (dateStr) => {
 
 const loadData = async () => {
   loading.value = true
+  error.value = ''
   try {
     const data = await loadPromptTemplates()
     prompts.value = data || []
   } catch (err) {
-    alert(err.message || '加载失败')
+    prompts.value = []
+    error.value = err?.message || '提示词加载失败'
   } finally {
     loading.value = false
   }

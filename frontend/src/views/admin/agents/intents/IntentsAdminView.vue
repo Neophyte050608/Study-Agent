@@ -1,16 +1,21 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useIntentTreeAdmin } from '../../../../composables/useIntentTreeAdmin.js'
 import IntentListPanel from './IntentListPanel.vue'
 import IntentTreePanel from './IntentTreePanel.vue'
 
 const mode = ref('tree')
 const router = useRouter()
+const intentState = useIntentTreeAdmin()
+const { loading, loaded, error, reload } = intentState
 
 const showTree = async (intentCode) => {
   await router.replace({ name: 'admin-agent-intents', query: { intentCode } })
   mode.value = 'tree'
 }
+
+onMounted(reload)
 </script>
 
 <template>
@@ -25,7 +30,12 @@ const showTree = async (intentCode) => {
         <button type="button" class="rounded-md px-4 py-2 text-sm font-bold" :class="mode === 'list' ? 'bg-brand-subtle text-brand-text' : 'text-content-secondary'" @click="mode = 'list'">列表</button>
       </div>
     </header>
-    <IntentTreePanel v-if="mode === 'tree'" />
-    <IntentListPanel v-else @show-tree="showTree" />
+    <div v-if="error" class="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <span>意图配置操作失败：{{ error }}</span>
+      <button class="font-bold underline" :disabled="loading" @click="reload">重试</button>
+    </div>
+    <div v-if="loading && !loaded" class="rounded-xl border border-divider bg-surface-raised py-16 text-center text-content-secondary">加载中...</div>
+    <IntentTreePanel v-else-if="loaded && mode === 'tree'" :state="intentState" />
+    <IntentListPanel v-else-if="loaded" :state="intentState" @show-tree="showTree" />
   </main>
 </template>
