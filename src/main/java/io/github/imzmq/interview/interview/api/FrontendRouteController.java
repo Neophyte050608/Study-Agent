@@ -8,32 +8,16 @@ public class FrontendRouteController {
 
     @GetMapping({
             "/",
-            "/monitoring",
-            "/monitoring/**",
+            "/chat",
+            "/chat/**",
             "/notes",
             "/notes/**",
-            "/coding",
-            "/coding/**",
             "/profile",
             "/profile/**",
-            "/interview",
-            "/interview/**",
-            "/knowledge",
-            "/knowledge/**",
-            "/practice",
-            "/practice/**",
-            "/ops",
-            "/ops/**",
-            "/settings",
-            "/settings/**",
-            "/workspace",
-            "/workspace/**",
-            "/mcp",
-            "/mcp/**",
-            "/intent-tree",
-            "/intent-tree/**",
-            "/app",
-            "/app/**"
+            "/learning",
+            "/learning/**",
+            "/admin",
+            "/admin/**"
     })
     public String forwardToSpa() {
         return "forward:/spa/index.html";
