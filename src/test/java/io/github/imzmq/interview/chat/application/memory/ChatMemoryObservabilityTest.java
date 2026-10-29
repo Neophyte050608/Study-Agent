@@ -5,7 +5,11 @@ import io.github.imzmq.interview.observability.application.AiObservationPublishe
 import io.github.imzmq.interview.observability.application.DefaultOperationalObservationPublisher;
 import io.github.imzmq.interview.observability.application.TraceAttributeSanitizer;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +67,128 @@ class ChatMemoryObservabilityTest {
     }
 
     @Test
+    void lifecycleExportsOnlyBoundedContentFreeAttributes() {
+        CapturingPublisher sink = new CapturingPublisher();
+        ChatMemoryObservationPublisher publisher = new ChatMemoryObservationPublisher(new DefaultOperationalObservationPublisher(
+                sink, new TraceAttributeSanitizer()));
+
+        publisher.lifecycle("QUARANTINED", Map.ofEntries(
+                Map.entry("stage", "management"),
+                Map.entry("resultCount", 2),
+                Map.entry("reasonCode", "AMBIGUOUS_SINGLETON"),
+                Map.entry("previousStatus", "QUARANTINED"),
+                Map.entry("nextStatus", "ACTIVE"),
+                Map.entry("errorCode", "MEMORY_STATE_CONFLICT"),
+                Map.entry("latencyMs", 7),
+                Map.entry("content", "用户原文"),
+                Map.entry("quote", "原始引文"),
+                Map.entry("subjectKey", "preference.editor"),
+                Map.entry("userId", "user-1"),
+                Map.entry("sessionId", "session-1"),
+                Map.entry("messageId", "message-1"),
+                Map.entry("memoryId", 42L),
+                Map.entry("prompt", "private prompt"),
+                Map.entry("rawJson", "{\"content\":\"secret\"}"),
+                Map.entry("embedding", "[0.1, 0.2]"),
+                Map.entry("exceptionText", "database failed: token=secret")
+        ));
+
+        assertThat(sink.event.eventType()).isEqualTo("chat.memory.lifecycle");
+        assertThat(sink.event.category()).isEqualTo("chat.memory");
+        assertThat(sink.event.name()).isEqualTo("lifecycle");
+        assertThat(sink.event.status()).isEqualTo("QUARANTINED");
+        assertThat(sink.event.attributes())
+                .containsEntry("stage", "management")
+                .containsEntry("resultCount", "2")
+                .containsEntry("reasonCode", "AMBIGUOUS_SINGLETON")
+                .containsEntry("previousStatus", "QUARANTINED")
+                .containsEntry("nextStatus", "ACTIVE")
+                .containsEntry("errorCode", "MEMORY_STATE_CONFLICT")
+                .containsEntry("latencyMs", "7")
+                .doesNotContainKeys(
+                        "content", "quote", "subjectKey", "userId", "sessionId", "messageId",
+                        "memoryId", "prompt", "rawJson", "embedding", "exceptionText");
+        assertThat(sink.event.attributes().toString())
+                .doesNotContain("用户原文", "原始引文", "preference.editor", "user-1",
+                        "message-1", "private prompt", "secret", "token");
+    }
+
+    @Test
+    void lifecycleRejectsUnboundedLifecycleAttributeValues() {
+        CapturingPublisher sink = new CapturingPublisher();
+        ChatMemoryObservationPublisher publisher = new ChatMemoryObservationPublisher(new DefaultOperationalObservationPublisher(
+                sink, new TraceAttributeSanitizer()));
+
+        publisher.lifecycle("DELETED", Map.of(
+                "stage", "用户原文",
+                "resultCount", "result contains secret",
+                "latencyMs", "database failed: token=secret",
+                "reasonCode", "invalid reason"
+        ));
+
+        assertThat(sink.event.attributes()).isEmpty();
+        assertThat(sink.event.attributes().toString())
+                .doesNotContain("用户原文", "secret", "token", "invalid reason");
+    }
+
+    @Test
+    void lifecycleAcceptsOnlyKnownLifecycleStatuses() {
+        CapturingPublisher sink = new CapturingPublisher();
+        ChatMemoryObservationPublisher publisher = new ChatMemoryObservationPublisher(new DefaultOperationalObservationPublisher(
+                sink, new TraceAttributeSanitizer()));
+
+        for (String status : List.of(
+                "AUTO_SUPERSEDED",
+                "QUARANTINED",
+                "CONFIRMED_REPLACEMENT",
+                "CONFIRMED_COEXISTENCE",
+                "DELETED",
+                "STATE_CONFLICT")) {
+            publisher.lifecycle(status, Map.of("stage", "management", "resultCount", 1));
+        }
+
+        assertThat(sink.events)
+                .extracting(AiObservationEvent::status)
+                .containsExactly(
+                        "AUTO_SUPERSEDED",
+                        "QUARANTINED",
+                        "CONFIRMED_REPLACEMENT",
+                        "CONFIRMED_COEXISTENCE",
+                        "DELETED",
+                        "STATE_CONFLICT");
+    }
+
+    @Test
+    void lifecycleAfterCommitWaitsForCommitAndDropsRollbackEvents() {
+        CapturingPublisher sink = new CapturingPublisher();
+        ChatMemoryObservationPublisher publisher = new ChatMemoryObservationPublisher(new DefaultOperationalObservationPublisher(
+                sink, new TraceAttributeSanitizer()));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            publisher.lifecycleAfterCommit("DELETED", Map.of("stage", "management", "resultCount", 1));
+            assertThat(sink.events).isEmpty();
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            assertThat(sink.events).hasSize(1);
+            assertThat(sink.event.status()).isEqualTo("DELETED");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        sink.events.clear();
+        sink.event = null;
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            publisher.lifecycleAfterCommit("QUARANTINED", Map.of("stage", "write", "resultCount", 1));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(sink.events).isEmpty();
+    }
+
+    @Test
     void rejectsUncontrolledErrorValuesAndNeverBreaksMemoryWork() {
         ChatMemoryObservationPublisher publisher = new ChatMemoryObservationPublisher(new DefaultOperationalObservationPublisher(
                 event -> { throw new IllegalStateException("external telemetry unavailable"); },
@@ -75,11 +201,13 @@ class ChatMemoryObservabilityTest {
     }
 
     private static final class CapturingPublisher implements AiObservationPublisher {
+        private final List<AiObservationEvent> events = new ArrayList<>();
         private AiObservationEvent event;
 
         @Override
         public void publish(AiObservationEvent event) {
             this.event = event;
+            this.events.add(event);
         }
     }
 }

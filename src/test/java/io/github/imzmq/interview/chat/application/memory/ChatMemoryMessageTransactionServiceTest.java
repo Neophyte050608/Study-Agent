@@ -1,6 +1,8 @@
 package io.github.imzmq.interview.chat.application.memory;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import io.github.imzmq.interview.chat.application.ChatSessionAccessException;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
@@ -8,6 +10,8 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionMapper;
 import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemoryExtractionTaskDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemoryExtractionTaskMapper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +29,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class ChatMemoryMessageTransactionServiceTest {
+
+    @BeforeAll
+    static void initializeMyBatisMetadata() {
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "chat-memory-test");
+        TableInfoHelper.initTableInfo(assistant, ChatMessageDO.class);
+        TableInfoHelper.initTableInfo(assistant, ChatSessionDO.class);
+    }
 
     private final ChatSessionMapper sessionMapper = mock(ChatSessionMapper.class);
     private final ChatMessageMapper messageMapper = mock(ChatMessageMapper.class);

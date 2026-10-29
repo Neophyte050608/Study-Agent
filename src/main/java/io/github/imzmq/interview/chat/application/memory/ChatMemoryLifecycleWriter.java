@@ -27,17 +27,20 @@ public class ChatMemoryLifecycleWriter {
     private final ChatMemorySourceMapper sourceMapper;
     private final ChatMemoryEvolutionMapper evolutionMapper;
     private final ChatMemoryOutboxEventService outboxEventService;
+    private final ChatMemoryObservationPublisher observationPublisher;
     private final ChatMemoryLifecyclePolicy policy = new ChatMemoryLifecyclePolicy();
 
     public ChatMemoryLifecycleWriter(
             ChatMemoryItemMapper itemMapper,
             ChatMemorySourceMapper sourceMapper,
             ChatMemoryEvolutionMapper evolutionMapper,
-            ChatMemoryOutboxEventService outboxEventService) {
+            ChatMemoryOutboxEventService outboxEventService,
+            ChatMemoryObservationPublisher observationPublisher) {
         this.itemMapper = itemMapper;
         this.sourceMapper = sourceMapper;
         this.evolutionMapper = evolutionMapper;
         this.outboxEventService = outboxEventService;
+        this.observationPublisher = observationPublisher;
     }
 
     public void writeBatch(List<ChatMemoryLifecycleRequest> requests, LocalDateTime writeTime) {
@@ -168,6 +171,11 @@ public class ChatMemoryLifecycleWriter {
                 ChatMemoryRelationType.SUPERSEDES, writeTime);
         outboxEventService.enqueue(oldItem.getId(), request.userId(), nextVersion, "DELETE");
         outboxEventService.enqueue(newItem.getId(), request.userId(), 1L, "UPSERT");
+        observationPublisher.lifecycleAfterCommit("AUTO_SUPERSEDED", Map.of(
+                "stage", "write",
+                "resultCount", 2,
+                "previousStatus", ChatMemoryStatus.ACTIVE.name(),
+                "nextStatus", ChatMemoryStatus.ACTIVE.name()));
     }
 
     private void quarantine(
@@ -184,6 +192,11 @@ public class ChatMemoryLifecycleWriter {
             insertRelation(request.userId(), item.getId(), relatedId,
                     ChatMemoryRelationType.CONFLICTS_WITH, writeTime);
         }
+        observationPublisher.lifecycleAfterCommit("QUARANTINED", Map.of(
+                "stage", "write",
+                "resultCount", 1,
+                "reasonCode", decision.quarantineReason().name(),
+                "nextStatus", ChatMemoryStatus.QUARANTINED.name()));
     }
 
     private ChatMemoryItemDO insertItem(

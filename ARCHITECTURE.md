@@ -64,7 +64,7 @@ Generic web chat is owned by `chat`: `chat.api.ChatController` is the unchanged 
 
 M3 removed every chat persistence allowlist entry. It also removed the former M4 `CodingPracticeController -> ChatMessageDO` edge early because that controller now uses `ChatMessageOperations`.
 
-Structured Chat memory remains Chat-owned: `ChatMemoryOperations` is the SDK-neutral management boundary, while MySQL mappers and the Milvus adapter remain internal. Session deletion is coordinated transactionally inside Chat so logical session/message deletion, unfinished extraction cancellation, source invalidation, memory versioning, and projection Outbox creation cannot diverge.
+Structured Chat memory remains Chat-owned: `ChatMemoryOperations` is the SDK-neutral, version-fenced management boundary, while MySQL mappers and the Milvus adapter remain internal. MySQL memory item rows are the current lifecycle read model and truth source; evolution rows are append-only audit relations for conflicts and supersession. The model may propose candidate `subjectKey` values, but backend lifecycle and cardinality rules decide activation, quarantine, replacement, coexistence, deletion, and projection work. Recall and Milvus use only effective `ACTIVE` leaves. Session deletion is coordinated transactionally inside Chat so logical session/message deletion, unfinished extraction cancellation, source invalidation, memory versioning, and projection Outbox creation cannot diverge. Neo4j evolution projection, natural-language validity parsing, Agent Context `RECALL`, and a management UI are not part of the current Chat memory boundary.
 
 ### Practice ownership after M4
 

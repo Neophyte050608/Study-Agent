@@ -51,6 +51,7 @@ public class ChatMemoryManagementService implements ChatMemoryOperations {
     private final ChatMemorySourceMapper sourceMapper;
     private final ChatMemoryEvolutionMapper evolutionMapper;
     private final ChatMemoryOutboxEventService outboxEventService;
+    private final ChatMemoryObservationPublisher observationPublisher;
     private final Clock clock;
 
     public ChatMemoryManagementService(
@@ -58,11 +59,13 @@ public class ChatMemoryManagementService implements ChatMemoryOperations {
             ChatMemorySourceMapper sourceMapper,
             ChatMemoryEvolutionMapper evolutionMapper,
             ChatMemoryOutboxEventService outboxEventService,
+            ChatMemoryObservationPublisher observationPublisher,
             Clock clock) {
         this.itemMapper = itemMapper;
         this.sourceMapper = sourceMapper;
         this.evolutionMapper = evolutionMapper;
         this.outboxEventService = outboxEventService;
+        this.observationPublisher = observationPublisher;
         this.clock = clock;
     }
 
@@ -166,6 +169,11 @@ public class ChatMemoryManagementService implements ChatMemoryOperations {
                     target.getId(), userId, target.getVersion() + 1, "DELETE");
         }
         outboxEventService.enqueue(candidate.getId(), userId, candidateNextVersion, "UPSERT");
+        observationPublisher.lifecycleAfterCommit("CONFIRMED_REPLACEMENT", Map.of(
+                "stage", "management",
+                "resultCount", targets.size() + 1,
+                "previousStatus", ChatMemoryStatus.QUARANTINED.name(),
+                "nextStatus", ChatMemoryStatus.ACTIVE.name()));
     }
 
     @Override
@@ -182,6 +190,11 @@ public class ChatMemoryManagementService implements ChatMemoryOperations {
         requireWrite(itemMapper.activateQuarantined(
                 memoryId, userId, candidate.getVersion(), nextVersion));
         outboxEventService.enqueue(memoryId, userId, nextVersion, "UPSERT");
+        observationPublisher.lifecycleAfterCommit("CONFIRMED_COEXISTENCE", Map.of(
+                "stage", "management",
+                "resultCount", 1,
+                "previousStatus", ChatMemoryStatus.QUARANTINED.name(),
+                "nextStatus", ChatMemoryStatus.ACTIVE.name()));
     }
 
     @Override
@@ -202,6 +215,11 @@ public class ChatMemoryManagementService implements ChatMemoryOperations {
         if (ChatMemoryStatus.ACTIVE.name().equals(item.getStatus())) {
             outboxEventService.enqueue(memoryId, userId, nextVersion, "DELETE");
         }
+        observationPublisher.lifecycleAfterCommit("DELETED", Map.of(
+                "stage", "management",
+                "resultCount", 1,
+                "previousStatus", item.getStatus(),
+                "nextStatus", ChatMemoryStatus.DELETED.name()));
     }
 
     private String validateStatus(String status) {

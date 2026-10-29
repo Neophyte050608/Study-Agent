@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,8 +38,9 @@ class ChatMemoryManagementServiceTest {
     private final ChatMemorySourceMapper sourceMapper = mock(ChatMemorySourceMapper.class);
     private final ChatMemoryEvolutionMapper evolutionMapper = mock(ChatMemoryEvolutionMapper.class);
     private final ChatMemoryOutboxEventService outboxEventService = mock(ChatMemoryOutboxEventService.class);
+    private final ChatMemoryObservationPublisher observationPublisher = mock(ChatMemoryObservationPublisher.class);
     private final ChatMemoryManagementService service = new ChatMemoryManagementService(
-            itemMapper, sourceMapper, evolutionMapper, outboxEventService, CLOCK);
+            itemMapper, sourceMapper, evolutionMapper, outboxEventService, observationPublisher, CLOCK);
 
     @Test
     void listsLifecycleFieldsWithValidatedStatusAndAccessibleSources() {
@@ -187,6 +189,11 @@ class ChatMemoryManagementServiceTest {
         service.confirmCoexistence("user-a", 8L, 3L);
 
         verify(outboxEventService).enqueue(8L, "user-a", 4L, "UPSERT");
+        verify(observationPublisher).lifecycleAfterCommit("CONFIRMED_COEXISTENCE", Map.of(
+                "stage", "management",
+                "resultCount", 1,
+                "previousStatus", "QUARANTINED",
+                "nextStatus", "ACTIVE"));
 
         ChatMemoryItemDO single = item(9L, "QUARANTINED", "SINGLE", 1L,
                 NOW_UTC, 30L, 0);
@@ -207,6 +214,11 @@ class ChatMemoryManagementServiceTest {
         verify(itemMapper).markDeleted(7L, "user-a", "ACTIVE", 3L, 4L, NOW_UTC);
         verify(sourceMapper, never()).invalidateMemorySources(any(Long.class), any());
         verify(outboxEventService).enqueue(7L, "user-a", 4L, "DELETE");
+        verify(observationPublisher).lifecycleAfterCommit("DELETED", Map.of(
+                "stage", "management",
+                "resultCount", 1,
+                "previousStatus", "ACTIVE",
+                "nextStatus", "DELETED"));
     }
 
     @Test
@@ -220,6 +232,11 @@ class ChatMemoryManagementServiceTest {
         service.delete("user-a", 8L, 6L);
 
         verify(outboxEventService, never()).enqueue(any(), any(), any(), any());
+        verify(observationPublisher).lifecycleAfterCommit("DELETED", Map.of(
+                "stage", "management",
+                "resultCount", 1,
+                "previousStatus", "QUARANTINED",
+                "nextStatus", "DELETED"));
     }
 
     @Test

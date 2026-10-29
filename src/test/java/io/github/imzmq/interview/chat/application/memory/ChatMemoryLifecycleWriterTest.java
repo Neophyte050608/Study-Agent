@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,8 +40,9 @@ class ChatMemoryLifecycleWriterTest {
     private final ChatMemorySourceMapper sourceMapper = mock(ChatMemorySourceMapper.class);
     private final ChatMemoryEvolutionMapper evolutionMapper = mock(ChatMemoryEvolutionMapper.class);
     private final ChatMemoryOutboxEventService outboxEventService = mock(ChatMemoryOutboxEventService.class);
+    private final ChatMemoryObservationPublisher observationPublisher = mock(ChatMemoryObservationPublisher.class);
     private final ChatMemoryLifecycleWriter writer = new ChatMemoryLifecycleWriter(
-            itemMapper, sourceMapper, evolutionMapper, outboxEventService);
+            itemMapper, sourceMapper, evolutionMapper, outboxEventService, observationPublisher);
 
     ChatMemoryLifecycleWriterTest() {
         when(sourceMapper.insert(any(ChatMemorySourceDO.class))).thenReturn(1);
@@ -166,6 +168,11 @@ class ChatMemoryLifecycleWriterTest {
         order.verify(evolutionMapper).insert(any(ChatMemoryEvolutionDO.class));
         order.verify(outboxEventService).enqueue(20L, "user-1", 5L, "DELETE");
         order.verify(outboxEventService).enqueue(21L, "user-1", 1L, "UPSERT");
+        verify(observationPublisher).lifecycleAfterCommit("AUTO_SUPERSEDED", Map.of(
+                "stage", "write",
+                "resultCount", 2,
+                "previousStatus", "ACTIVE",
+                "nextStatus", "ACTIVE"));
 
         ArgumentCaptor<ChatMemoryEvolutionDO> relationCaptor =
                 ArgumentCaptor.forClass(ChatMemoryEvolutionDO.class);
@@ -201,6 +208,11 @@ class ChatMemoryLifecycleWriterTest {
                 relation.getFromMemoryId().equals(22L)
                         && relation.getToMemoryId().equals(20L)
                         && "CONFLICTS_WITH".equals(relation.getRelationType())));
+        verify(observationPublisher).lifecycleAfterCommit("QUARANTINED", Map.of(
+                "stage", "write",
+                "resultCount", 1,
+                "reasonCode", ChatMemoryQuarantineReason.OLDER_THAN_CURRENT.name(),
+                "nextStatus", "QUARANTINED"));
         verify(outboxEventService, never()).enqueue(any(), any(), any(), any());
     }
 

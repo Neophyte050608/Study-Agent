@@ -53,6 +53,9 @@ public class TraceAttributeSanitizer {
             "queuedCount",
             "lagMs",
             "errorCode",
+            "reasonCode",
+            "previousStatus",
+            "nextStatus",
             "confidence",
             "source"
     );
@@ -90,6 +93,9 @@ public class TraceAttributeSanitizer {
             "queuedCount",
             "lagMs",
             "errorCode",
+            "reasonCode",
+            "previousStatus",
+            "nextStatus",
             "scenario",
             "plannerType",
             "plannerVersion",

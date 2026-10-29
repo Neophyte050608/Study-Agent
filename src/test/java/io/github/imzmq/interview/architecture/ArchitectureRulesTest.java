@@ -453,6 +453,7 @@ class ArchitectureRulesTest {
                             "io.github.imzmq.interview.turn..",
                             "io.github.imzmq.interview.graph..",
                             "io.github.imzmq.interview.rag..",
+                            "io.github.imzmq.interview.memory..",
                             "io.github.imzmq.interview.knowledge.application.chatstream..",
                             "io.github.imzmq.interview.knowledge.application.coding..",
                             "io.github.imzmq.interview.knowledge.application.observability.."
@@ -724,6 +725,14 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "io.github.imzmq.interview.chat.infrastructure.persistence..",
                             "io.github.imzmq.interview.chat.infrastructure.milvus..",
+                            "io.milvus..");
+
+    @ArchTest
+    static final ArchRule chat_memory_controller_should_only_use_public_memory_contract =
+            noClasses().that().haveSimpleName("ChatMemoryController")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "io.github.imzmq.interview.chat.application.memory..",
+                            "io.github.imzmq.interview.chat.infrastructure..",
                             "io.milvus..");
 
     @ArchTest

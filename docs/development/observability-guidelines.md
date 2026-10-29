@@ -89,24 +89,26 @@ Shadow 理解使用独立的零队列 executor：只有可立即执行的请求�
 
 ### Chat 结构化记忆运行事件
 
-Chat 结构化记忆通过公开契约 `observability.application.contract.OperationalObservationPublisher` 发布四类无内容运行事件；Chat 不得直接依赖 Observability 内部 application 实现：
+Chat 结构化记忆通过公开契约 `observability.application.contract.OperationalObservationPublisher` 发布无内容运行事件；Chat 不得直接依赖 Observability 内部 application 实现：
 
 - `chat.memory.extract`：提取完成、重试或进入 DEAD。
 - `chat.memory.project`：MySQL truth 到 Milvus 投影完成、重试或进入 DEAD。
 - `chat.memory.recall`：向量命中、MySQL lexical fallback、空结果或 truth revalidation 失败。
 - `chat.memory.repair`：投影对账扫描与补偿入队汇总。
+- `chat.memory.lifecycle`：自动 supersede、quarantine、人工确认 replacement/coexistence、删除和受控状态冲突等生命周期治理结果。
 
-这些事件的 `category` 固定为 `chat.memory`，`name` 只能是 `extract`、`project`、`recall`、`repair`。当前不建立 Chat memory trace/node，因此 `traceId` 和 `nodeId` 必须留空。`status` 与 `errorCode` 只能使用大写、长度受限的受控码；不得传入原始异常消息。
+这些事件的 `category` 固定为 `chat.memory`，`name` 只能是 `extract`、`project`、`recall`、`repair`、`lifecycle`。当前不建立 Chat memory trace/node，因此 `traceId` 和 `nodeId` 必须留空。`status` 与 `errorCode` 只能使用大写、长度受限的受控码；不得传入原始异常消息。生命周期状态使用 `AUTO_SUPERSEDED`、`QUARANTINED`、`CONFIRMED_REPLACEMENT`、`CONFIRMED_COEXISTENCE`、`DELETED`、`STATE_CONFLICT` 等受控码。事务内生命周期事件必须在提交后发布；回滚不得产生生命周期事件。
 
 允许进入外部 attributes 的 Chat memory 聚合字段仅限：
 
-- 阶段与结果：`stage`、`taskCount`、`pendingCount`、`deadCount`、`resultCount`、`queuedCount`。
+- 通用阶段与结果：`stage`、`taskCount`、`pendingCount`、`deadCount`、`resultCount`、`queuedCount`。
+- 生命周期受控属性：`reasonCode`、`previousStatus`、`nextStatus`。
 - 性能与降级：`latencyMs`、`lagMs`、`fallback`。
 - 受控失败分类：`errorCode`。
 
-发布前必须统一经过 `TraceAttributeSanitizer.sanitizeForExternalObservation(...)`。禁止外传用户原文、memory content、source quote、raw JSON、prompt/completion、embedding、content hash、原始错误文本，以及 user/session/memory/task 等业务 ID。即使调用方错误地提供这些字段，也必须由白名单清洗丢弃。
+发布前必须统一经过 `TraceAttributeSanitizer.sanitizeForExternalObservation(...)`。禁止外传用户原文、memory content、source quote、`subjectKey`、raw JSON、prompt/completion、embedding、content hash、原始错误文本，以及 user/session/message/memory/task 等业务 ID。即使调用方错误地提供这些字段，也必须由白名单清洗丢弃。
 
-`DefaultOperationalObservationPublisher` 负责适配现有 `AiObservationPublisher`。外部 publisher/adapter 抛出的运行时异常只能以受控 debug 日志降级，不能改变提取、投影、召回、repair 的业务结果，也不能阻断重试与 outbox 状态推进。
+`DefaultOperationalObservationPublisher` 负责适配现有 `AiObservationPublisher`。外部 publisher/adapter 抛出的运行时异常只能以受控 debug 日志降级，不能改变提取、投影、召回、repair 或生命周期治理的业务结果，也不能阻断重试、outbox 状态推进或 management 写入。
 
 ### 动态规划运行事件
 
