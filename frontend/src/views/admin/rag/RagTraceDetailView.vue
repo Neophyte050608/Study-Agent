@@ -313,7 +313,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { loadOpsTraceDetail } from '../../../api/admin'
+import { loadOpsTraceDetail } from '../../../api/ragAdmin'
 
 
 const route = useRoute()

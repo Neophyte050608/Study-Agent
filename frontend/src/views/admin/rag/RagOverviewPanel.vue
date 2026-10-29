@@ -106,7 +106,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
-import { loadRagDashboard, loadMetricsHistory, triggerSnapshot } from '../../../api/admin'
+import { loadRagDashboard, loadMetricsHistory, triggerSnapshot } from '../../../api/ragAdmin'
 
 
 const dashboard = ref({ currentHour: {}, alertLevel: 'NONE', alertTags: [], riskTagCounts: {} })

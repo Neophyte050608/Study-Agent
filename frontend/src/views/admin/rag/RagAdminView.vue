@@ -799,7 +799,7 @@ import Chart from 'chart.js/auto'
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import RagOverviewPanel from './RagOverviewPanel.vue'
-import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns, loadRetrievalMetrics } from '../../../api/admin'
+import { clearIdempotencyCache, loadOpsAudits, loadOpsIdempotency, loadOpsOverview, loadOpsTraces, loadSkillTelemetry as loadSkillTelemetryApi, replayDlq, runRagQualityEvalWithDataset, loadRagQualityEvalRuns, loadRagQualityEvalDetail, loadRagasEngineStatus, loadRetrievalEvalDatasets, loadRagQualityEvalDatasets, runRetrievalEval, loadRetrievalEvalRuns, loadRetrievalMetrics } from '../../../api/ragAdmin'
 
 
 const router = useRouter()
