@@ -6,10 +6,12 @@ import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class FlywayMySqlMigrationIntegrationTest {
@@ -29,7 +31,7 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
@@ -39,11 +41,17 @@ class FlywayMySqlMigrationIntegrationTest {
                     .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(5);
+                    .isEqualTo(7);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM t_prompt_template WHERE deleted = 0 AND name IN ("
                             + quoted(REQUIRED_PROMPTS) + ")"))
                     .isEqualTo(REQUIRED_PROMPTS.size());
+            assertThat(singleLong(statement,
+                    "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics "
+                            + "WHERE table_schema = DATABASE() AND table_name = 't_chat_memory_item' "
+                            + "AND index_name IN ('uk_chat_memory_active_singleton', "
+                            + "'uk_chat_memory_active_content')"))
+                    .isEqualTo(2);
         }
     }
 
@@ -75,6 +83,7 @@ class FlywayMySqlMigrationIntegrationTest {
         Flyway adoptingFlyway = Flyway.configure()
                 .dataSource(jdbcUrl, username, password)
                 .locations("classpath:db/migration")
+                .target("5")
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
                 .cleanDisabled(true)
@@ -82,11 +91,48 @@ class FlywayMySqlMigrationIntegrationTest {
 
         assertThat(adoptingFlyway.migrate().migrationsExecuted).isEqualTo(4);
 
+        long memoryId;
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("INSERT INTO t_chat_session "
+                    + "(session_id, user_id, title, deleted) VALUES "
+                    + "('legacy-session', 'legacy-user', 'legacy', 0)");
+            statement.executeUpdate("INSERT INTO t_chat_message "
+                    + "(message_id, session_id, role, content, deleted, created_at) VALUES "
+                    + "('legacy-message', 'legacy-session', 'user', 'legacy quote', 0, "
+                    + "'2026-01-02 03:04:05')");
+            long messagePk = singleLong(statement,
+                    "SELECT id FROM t_chat_message WHERE message_id = 'legacy-message'");
+            statement.executeUpdate("INSERT INTO t_chat_memory_item "
+                    + "(user_id, category, content, content_hash, status, version, created_at, updated_at) "
+                    + "VALUES ('legacy-user', 'FACT', 'legacy fact', "
+                    + "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', "
+                    + "'ACTIVE', 1, '2026-01-03 04:05:06', '2026-01-03 04:05:06')");
+            memoryId = singleLong(statement, "SELECT LAST_INSERT_ID()");
+            statement.executeUpdate("INSERT INTO t_chat_memory_source "
+                    + "(memory_id, user_id, session_id, source_message_id, source_message_pk, "
+                    + "source_start, source_end) VALUES (" + memoryId
+                    + ", 'legacy-user', 'legacy-session', 'legacy-message', " + messagePk
+                    + ", 2, 8)");
+            statement.executeUpdate("UPDATE t_prompt_template "
+                    + "SET content = 'USER_CUSTOM_MEMORY_PROMPT' "
+                    + "WHERE name = 'chat-memory-extract-task'");
+        }
+
+        Flyway lifecycleUpgrade = Flyway.configure()
+                .dataSource(jdbcUrl, username, password)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .cleanDisabled(true)
+                .load();
+        assertThat(lifecycleUpgrade.migrate().migrationsExecuted).isEqualTo(2);
+
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(5);
+                    .isEqualTo(7);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history "
                             + "WHERE type = 'BASELINE' AND version = '1' AND success = 1"))
@@ -94,11 +140,59 @@ class FlywayMySqlMigrationIntegrationTest {
             assertThat(singleString(statement,
                     "SELECT content FROM t_prompt_template WHERE name = 'intent-tree-classifier'"))
                     .isEqualTo("USER_CUSTOMIZED_CONTENT");
+            assertThat(singleString(statement,
+                    "SELECT content FROM t_prompt_template WHERE name = 'chat-memory-extract-task'"))
+                    .isEqualTo("USER_CUSTOM_MEMORY_PROMPT");
+            assertThat(singleString(statement,
+                    "SELECT subject_key FROM t_chat_memory_item WHERE id = " + memoryId))
+                    .isEqualTo("fact.legacy_" + memoryId);
+            assertThat(singleString(statement,
+                    "SELECT subject_cardinality FROM t_chat_memory_item WHERE id = " + memoryId))
+                    .isEqualTo("MULTI");
+            assertThat(singleString(statement,
+                    "SELECT DATE_FORMAT(origin_message_created_at, '%Y-%m-%d %H:%i:%s') "
+                            + "FROM t_chat_memory_item WHERE id = " + memoryId))
+                    .isEqualTo("2026-01-02 03:04:05");
+            assertThat(singleLong(statement,
+                    "SELECT origin_quote_start FROM t_chat_memory_item WHERE id = " + memoryId))
+                    .isEqualTo(2);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM t_prompt_template WHERE deleted = 0 AND name IN ("
                             + quoted(REQUIRED_PROMPTS) + ")"))
                     .isEqualTo(REQUIRED_PROMPTS.size());
+
+            insertLifecycleMemory(statement, "singleton-a", "PREFERENCE",
+                    "preference.response_language", "SINGLE", repeated('b'), "first");
+            assertThatThrownBy(() -> insertLifecycleMemory(statement, "singleton-a", "PREFERENCE",
+                    "preference.response_language", "SINGLE", repeated('c'), "second"))
+                    .isInstanceOf(SQLException.class);
+
+            insertLifecycleMemory(statement, "content-a", "FACT",
+                    "fact.known_language", "MULTI", repeated('d'), "Java");
+            assertThatThrownBy(() -> insertLifecycleMemory(statement, "content-a", "FACT",
+                    "fact.known_language", "MULTI", repeated('d'), "Java duplicate"))
+                    .isInstanceOf(SQLException.class);
         }
+    }
+
+
+    private void insertLifecycleMemory(Statement statement,
+                                       String userId,
+                                       String category,
+                                       String subjectKey,
+                                       String cardinality,
+                                       String contentHash,
+                                       String content) throws SQLException {
+        statement.executeUpdate("INSERT INTO t_chat_memory_item "
+                + "(user_id, category, subject_key, subject_cardinality, content, content_hash, "
+                + "status, version, valid_from, origin_message_created_at, origin_message_pk, "
+                + "origin_quote_start) VALUES ('" + userId + "', '" + category + "', '"
+                + subjectKey + "', '" + cardinality + "', '" + content + "', '"
+                + contentHash + "', 'ACTIVE', 1, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6), 1, 0)");
+    }
+
+    private String repeated(char value) {
+        return String.valueOf(value).repeat(64);
     }
 
     private long singleLong(Statement statement, String sql) throws Exception {

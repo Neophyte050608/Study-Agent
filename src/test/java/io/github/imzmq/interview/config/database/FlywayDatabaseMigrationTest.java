@@ -90,6 +90,8 @@ class FlywayDatabaseMigrationTest {
         String executions = readResource("db/migration/V5__create_agent_execution_schema.sql");
         assertThat(executions).contains("t_agent_execution_task", "t_agent_execution_node", "t_agent_execution_attempt", "lease_epoch", "ON DELETE CASCADE");
         String chatMemoryPrompts = readResource("db/migration/V4__seed_chat_memory_prompts.sql");
+        String chatMemoryLifecycle = readResource("db/migration/V6__evolve_chat_memory_lifecycle.sql");
+        String chatMemoryPromptUpgrade = readResource("db/migration/V7__upgrade_chat_memory_extraction_prompts.sql");
 
         assertThat(schemaMigration)
                 .contains("CREATE TABLE IF NOT EXISTS `t_prompt_template`")
@@ -135,6 +137,20 @@ class FlywayDatabaseMigrationTest {
                 .contains("INSERT IGNORE")
                 .contains("sourceMessageId")
                 .contains("quote")
+                .doesNotContain("ON DUPLICATE KEY UPDATE");
+
+        assertThat(chatMemoryLifecycle)
+                .contains("subject_key", "subject_cardinality", "valid_from", "valid_until")
+                .contains("origin_message_created_at", "origin_message_pk", "origin_quote_start")
+                .contains("quarantine_reason", "active_singleton_marker", "active_content_marker")
+                .contains("t_chat_memory_evolution", "SUPERSEDES", "CONFLICTS_WITH")
+                .contains("DROP INDEX `uk_chat_memory_content`");
+
+        assertThat(chatMemoryPromptUpgrade)
+                .contains("subjectKey")
+                .contains("WHERE `name` = 'chat-memory-extract-task'")
+                .contains("AND `content` =")
+                .doesNotContain("INSERT IGNORE")
                 .doesNotContain("ON DUPLICATE KEY UPDATE");
     }
 
