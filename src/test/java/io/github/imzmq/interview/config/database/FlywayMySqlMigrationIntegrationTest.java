@@ -31,7 +31,7 @@ class FlywayMySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
@@ -41,13 +41,15 @@ class FlywayMySqlMigrationIntegrationTest {
                     .isEqualTo(1);
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(8);
+                    .isEqualTo(9);
             assertThat(singleLong(statement,
-                    "SELECT COUNT(*) FROM t_menu_config WHERE menu_code IN ('DASHBOARD', 'CODING')"))
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                            + "WHERE table_schema = DATABASE() AND table_name = 't_menu_config'"))
                     .isZero();
             assertThat(singleLong(statement,
-                    "SELECT sort_order FROM t_menu_config WHERE menu_code = 'CHAT'"))
-                    .isEqualTo(1);
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                            + "WHERE table_schema = DATABASE() AND table_name = 't_agent_config'"))
+                    .isZero();
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM t_prompt_template WHERE deleted = 0 AND name IN ("
                             + quoted(REQUIRED_PROMPTS) + ")"))
@@ -132,19 +134,21 @@ class FlywayMySqlMigrationIntegrationTest {
                 .baselineVersion("1")
                 .cleanDisabled(true)
                 .load();
-        assertThat(lifecycleUpgrade.migrate().migrationsExecuted).isEqualTo(3);
+        assertThat(lifecycleUpgrade.migrate().migrationsExecuted).isEqualTo(4);
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
              Statement statement = connection.createStatement()) {
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                    .isEqualTo(8);
+                    .isEqualTo(9);
             assertThat(singleLong(statement,
-                    "SELECT COUNT(*) FROM t_menu_config WHERE menu_code IN ('DASHBOARD', 'CODING')"))
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                            + "WHERE table_schema = DATABASE() AND table_name = 't_menu_config'"))
                     .isZero();
             assertThat(singleLong(statement,
-                    "SELECT sort_order FROM t_menu_config WHERE menu_code = 'CHAT'"))
-                    .isEqualTo(1);
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                            + "WHERE table_schema = DATABASE() AND table_name = 't_agent_config'"))
+                    .isZero();
             assertThat(singleLong(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history "
                             + "WHERE type = 'BASELINE' AND version = '1' AND success = 1"))

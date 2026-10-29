@@ -75,22 +75,6 @@ export function loadRagQualityEvalDatasets() {
   return httpGet('/api/observability/rag-quality-eval/datasets')
 }
 
-export function loadAgentSettings() {
-  return httpGet('/api/settings/agents')
-}
-
-export function saveAgentSettings(payload) {
-  return httpPostJson('/api/settings/agents', payload)
-}
-
-export function loadMenuSettings() {
-  return httpGet('/api/settings/menu')
-}
-
-export function saveMenuLayout(payload) {
-  return httpPostJson('/api/settings/menu/layout', payload)
-}
-
 export function loadMcpCapabilities() {
   const traceId = `trace-${Date.now()}`
   return httpGet(`/api/mcp/capabilities?traceId=${traceId}`)

@@ -170,6 +170,15 @@ class FlywayDatabaseMigrationTest {
                 .doesNotContain("t_interview", "t_question", "t_chat_session", "t_chat_message");
     }
 
+    @Test
+    void removesObsoleteNavigationAndAgentConfigTablesOnly() throws IOException {
+        String migration = readResource("db/migration/V9__drop_obsolete_navigation_and_agent_config.sql");
+        assertThat(migration)
+                .contains("DROP TABLE IF EXISTS `t_menu_config`")
+                .contains("DROP TABLE IF EXISTS `t_agent_config`")
+                .doesNotContain("t_chat_", "t_interview_", "t_question", "t_prompt_template");
+    }
+
     private String readResource(String path) throws IOException {
         try (InputStream input = getClass().getClassLoader().getResourceAsStream(path)) {
             assertThat(input).as("classpath resource %s", path).isNotNull();
