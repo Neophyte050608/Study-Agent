@@ -28,3 +28,11 @@ test('obsolete product and management routes are not registered', () => {
     '/intent-list', '/prompts'
   ]) assert.equal(paths.includes(path), false, `obsolete route ${path}`)
 })
+
+test('unknown paths do not advertise retired compatibility entries', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../src/views/PlaceholderView.vue', import.meta.url), 'utf8')
+
+  assert.match(source, /页面不存在/)
+  assert.doesNotMatch(source, /迁移|原页面入口|兼容/)
+})

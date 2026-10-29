@@ -10,3 +10,7 @@ export function isPrimaryNavigationActive(id, currentPath) {
   if (id === 'ADMIN') return path === '/admin' || path.startsWith('/admin/')
   return primaryNavigation.some(item => item.id === id && item.path === path)
 }
+
+export function resolveSidebarCollapsed(userCollapsed, narrowViewport) {
+  return Boolean(userCollapsed || narrowViewport)
+}

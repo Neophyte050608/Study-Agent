@@ -14,9 +14,9 @@
         </div>
         <button
           type="button"
-          class="absolute -right-3 top-8 z-50 flex h-6 w-6 items-center justify-center rounded-full border border-divider bg-surface-raised text-content-muted shadow-sm transition-all hover:border-divider-hover hover:text-brand-text"
+          class="absolute -right-3 top-8 z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-divider bg-surface-raised text-content-muted shadow-sm transition-all hover:border-divider-hover hover:text-brand-text md:flex"
           :aria-label="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
-          @click="sidebarCollapsed = !sidebarCollapsed"
+          @click="userSidebarCollapsed = !userSidebarCollapsed"
         >
           <span class="material-symbols-outlined text-[14px]">{{ sidebarCollapsed ? 'chevron_right' : 'chevron_left' }}</span>
         </button>
@@ -68,14 +68,32 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from '../composables/useTheme'
-import { isPrimaryNavigationActive, primaryNavigation } from './navigation.js'
+import { isPrimaryNavigationActive, primaryNavigation, resolveSidebarCollapsed } from './navigation.js'
 
 const route = useRoute()
 const menus = primaryNavigation
-const sidebarCollapsed = ref(false)
+const userSidebarCollapsed = ref(false)
+const narrowViewport = ref(false)
+const sidebarCollapsed = computed(() => resolveSidebarCollapsed(userSidebarCollapsed.value, narrowViewport.value))
+let narrowViewportQuery
+
+function updateNarrowViewport(event) {
+  narrowViewport.value = event.matches
+}
+
+onMounted(() => {
+  narrowViewportQuery = window.matchMedia('(max-width: 767px)')
+  updateNarrowViewport(narrowViewportQuery)
+  narrowViewportQuery.addEventListener('change', updateNarrowViewport)
+})
+
+onBeforeUnmount(() => {
+  narrowViewportQuery?.removeEventListener('change', updateNarrowViewport)
+})
+
 const activeId = computed(() => menus.find((item) => isPrimaryNavigationActive(item.id, route.path))?.id)
 const { isDark, toggleTheme } = useTheme()
 </script>
