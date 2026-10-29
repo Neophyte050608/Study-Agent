@@ -55,6 +55,46 @@ class ChatMemoryLeaseSqlTest {
     }
 
     @Test
+    void lifecycleThemeLockScopesOwnerAndSubjectInStableOrder() throws Exception {
+        Method method = ChatMemoryItemMapper.class.getMethod(
+                "lockThemeRows", String.class, String.class, String.class);
+        String sql = String.join(" ", method.getAnnotation(Select.class).value());
+
+        assertThat(sql)
+                .contains("user_id = #{userId}")
+                .contains("category = #{category}")
+                .contains("subject_key = #{subjectKey}")
+                .containsIgnoringCase("ORDER BY id")
+                .containsIgnoringCase("FOR UPDATE");
+    }
+
+    @Test
+    void lifecycleStateTransitionsAreFencedByOwnerStatusAndVersion() throws Exception {
+        Method supersede = ChatMemoryItemMapper.class.getMethod(
+                "markSuperseded", long.class, String.class, long.class, long.class,
+                LocalDateTime.class);
+        Method activate = ChatMemoryItemMapper.class.getMethod(
+                "activateQuarantined", long.class, String.class, long.class, long.class);
+
+        assertThat(String.join(" ", supersede.getAnnotation(Update.class).value()))
+                .contains("id = #{memoryId}")
+                .contains("user_id = #{userId}")
+                .contains("status = 'ACTIVE'")
+                .contains("version = #{currentVersion}")
+                .contains("status = 'SUPERSEDED'")
+                .contains("valid_until = #{validUntil}")
+                .contains("version = #{nextVersion}");
+        assertThat(String.join(" ", activate.getAnnotation(Update.class).value()))
+                .contains("id = #{memoryId}")
+                .contains("user_id = #{userId}")
+                .contains("status = 'QUARANTINED'")
+                .contains("version = #{currentVersion}")
+                .contains("status = 'ACTIVE'")
+                .contains("quarantine_reason = NULL")
+                .contains("version = #{nextVersion}");
+    }
+
+    @Test
     void outboxClaimUsesSkipLockedAndCompletionIsFenced() throws Exception {
         Method claim = ChatMemoryOutboxMapper.class.getMethod(
                 "lockClaimableEvents", LocalDateTime.class, int.class);
