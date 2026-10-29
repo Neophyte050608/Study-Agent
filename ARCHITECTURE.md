@@ -17,10 +17,22 @@ The codebase remains a modular monolith. Top-level packages are capability owner
 - Product capabilities: `chat`, `interview`, `practice`, `learning`, `knowledge`, `feedback`.
 - Understanding and decision: `routing`.
 - Execution and extension: `agent`, `skill`, `tool`, `mcp`.
-- Platform support: `modelrouting`, `observability`, `ingestion`, `media`, `search`, `im`, `identity`, `security`, `menu`.
+- Platform support: `modelrouting`, `observability`, `ingestion`, `media`, `search`, `im`, `identity`, `security`.
 - Technical support: `common`, `bootstrap`, `config`.
 
 The M0-M7 ownership migration is complete. New code must use the target owner immediately; retired top-level packages are guarded by architecture tests.
+
+## Frontend Information Architecture
+
+The frontend uses one static navigation truth source at `frontend/src/shell/navigation.js`. Its four product entries are AI assistant (`/chat`), knowledge (`/notes`), ability profile (`/profile`), and administration (`/admin`). The backend does not provide a menu tree, and Redis or database state cannot add, hide, or reorder these entries. Spring SPA forwarding is limited to current product paths and their descendants; removed product URLs are not compatibility routes.
+
+Administration is nested by capability ownership:
+
+- `/admin/models`: model candidates and runtime routing health.
+- `/admin/rag`: RAG overview, traces, evaluation, and operational audit; trace detail is `/admin/rag/traces/:traceId`.
+- `/admin/agents/prompts`, `/admin/agents/intents`, and `/admin/agents/mcp`: separate Agent administration leaves. Intent tree/list are local modes over one loaded configuration, and node editing uses `/admin/agents/intents/:index/edit`.
+
+The former database/Redis dynamic-menu system and the disconnected Agent configuration API are retired. Flyway V9 removes `t_menu_config` and `t_agent_config`; earlier migrations remain immutable historical records. Runtime model selection, candidate configuration, health, failover, and execution have one owner: `modelrouting`. Ordinary candidate reads expose only masked key metadata and cannot return a writable plaintext `apiKey` field. An omitted key preserves the stored value, a nonblank key explicitly replaces it, and `clearApiKey=true` explicitly clears it. Plaintext export is a separately gated operation and is disabled by default.
 
 Ambiguous top-level ownership is retired as follows:
 

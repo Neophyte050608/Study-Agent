@@ -52,14 +52,22 @@ frontend/src/shell/                  # 应用壳层布局
 - 生命周期、订阅、轮询、主题等逻辑。
 - 多页面共享交互状态。
 
-## 路由与菜单
+## 路由与导航
 
-新增页面时：
+一级产品导航只有一个真相源：`frontend/src/shell/navigation.js`。当前固定为四项：
 
-1. 在 `frontend/src/views` 新增页面组件。
-2. 在 `frontend/src/router/index.js` 注册路由。
-3. 如有菜单或工作区入口，同步更新后端/前端菜单配置。
-4. 确认空状态、加载状态和错误状态可见。
+- AI 助手：`/chat`
+- 知识库：`/notes`
+- 能力画像：`/profile`
+- 管理中心：`/admin`
+
+不要从后端、数据库或 Redis 加载导航，也不要恢复菜单 API 或本地兜底菜单。管理中心使用嵌套路由：`/admin/models` 归模型与路由，`/admin/rag` 归 RAG 运行与评测，`/admin/agents/{prompts,intents,mcp}` 归 Agent 管理；Agent 三个叶子页面独立加载数据，意图树/列表共享同一份页面状态。新增或调整页面时：
+
+1. 在 `frontend/src/views/<domain>` 放置页面或页面私有组件。
+2. 在 `frontend/src/router/routes.js` 注册当前路由；需要一级入口时同步修改 `shell/navigation.js`。
+3. 管理页面同步维护所属布局的二级/三级导航，不创建跨域聚合页面或兼容跳转。
+4. 后端直达 SPA 路径同步维护 `FrontendRouteController`，但已删除 URL 不保留转发或重定向。
+5. 确认加载、空数据、失败和重试状态可见。
 
 ## 样式
 
@@ -86,7 +94,7 @@ cd frontend && npm test && npm run build
 
 如果新增前端测试框架或 lint 命令，需要同步更新 `package.json`、本文档和 `docs/development/verification.md`。
 
-测试位于 `frontend/test/`，目前覆盖学习计划 API、composable 状态机/轮询以及纯展示映射。
+测试位于 `frontend/test/`，目前覆盖学习计划 API、composable 状态机/轮询、一级导航与管理路由契约，以及模型/RAG/Agent 管理的纯展示和 ownership 映射。
 可注入 API、时钟与幂等键生成器测试并发、超时和迟到响应；不要把这些单元测试描述为全站组件覆盖。
 浏览器交互检查应使用隔离 mock 身份和数据，并明确与真实模型/数据库联调的区别。
 学习计划预览使用独立路由与画像页入口，不需要新增后台菜单；轮询、幂等与重试状态归 composable，

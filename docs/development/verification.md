@@ -18,11 +18,28 @@
 | --- | --- | --- |
 | 安装依赖 | `cd frontend && npm install` | 首次启动或依赖变化时运行。 |
 | 本地开发 | `cd frontend && npm run dev` | 启动 Vite 开发服务。 |
-| 前端单元测试 | `cd frontend && npm test` | Node 内置运行器；学习计划 API/composable/纯展示映射，不是全站组件覆盖。 |
+| 前端单元测试 | `cd frontend && npm test` | Node 内置运行器；覆盖学习计划状态机及导航、管理路由和管理页纯映射，不是全站组件覆盖。 |
 | 生产构建 | `cd frontend && npm run build` | 检查 Vue/Vite 构建是否通过。 |
 | 构建到 Spring 静态目录 | `cd frontend && npm run build:spring` | 需要后端直接托管 SPA 时使用。 |
 
 `npm test` 与 `npm run build` 分别验证可测试逻辑和 Vue/Vite 构建。浏览器 mock 检查需独立说明；不等于真实后台或模型联调。
+
+导航或管理中心变更可先运行聚焦契约测试：
+
+```bash
+cd frontend && node --test \
+  test/navigation.test.js \
+  test/adminRoutes.test.js \
+  test/modelAdminPresentation.test.js \
+  test/ragAdminPresentation.test.js \
+  test/agentAdminNavigation.test.js
+```
+
+这些测试验证固定四入口、管理嵌套路由、深链归属、页面状态 owner 和纯展示映射；仍需用 `npm run build` 检查 Vue SFC 与动态导入。后端 SPA 直达路径变更补跑：
+
+```bash
+mvn -q -Dtest=FrontendRouteControllerTest test
+```
 
 ## 本地启动脚本检查
 
