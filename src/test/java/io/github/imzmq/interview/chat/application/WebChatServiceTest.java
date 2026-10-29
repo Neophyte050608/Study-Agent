@@ -95,12 +95,50 @@ class WebChatServiceTest {
     }
 
     @Test
-    void caps_message_page_size_at_two_hundred() {
+    void messagePageIsReturnedChronologicallyWithIdAsTieBreaker() {
+        LocalDateTime sameSecond = LocalDateTime.of(2026, 10, 29, 20, 0);
+        ChatMessageDO assistant = message(12L, "assistant", sameSecond);
+        ChatMessageDO user = message(11L, "user", sameSecond);
+        when(messageMapper.selectList(any(Wrapper.class))).thenReturn(List.of(assistant, user));
+
+        assertThat(service.listMessages("session-1", 50, null))
+                .extracting(ChatMessageView::id)
+                .containsExactly(11L, 12L);
+    }
+
+    @Test
+    void messagePageSortsNullTimestampsAndIdsLast() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 10, 29, 20, 0);
+        ChatMessageDO nullTimestamp = message(12L, "assistant", null);
+        ChatMessageDO nullId = message(null, "assistant", createdAt);
+        ChatMessageDO persisted = message(11L, "user", createdAt);
+        when(messageMapper.selectList(any(Wrapper.class)))
+                .thenReturn(List.of(nullTimestamp, nullId, persisted));
+
+        assertThat(service.listMessages("session-1", 50, null))
+                .extracting(ChatMessageView::id)
+                .containsExactly(11L, null, 12L);
+    }
+
+    @Test
+    void caps_message_page_size_at_two_hundred_after_ordering_by_descending_id() {
         when(messageMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
 
         service.listMessages("session-1", 500, null);
 
-        verify(messageMapper).selectList(argThat(wrapper -> wrapper.getTargetSql().contains("LIMIT 200")));
+        verify(messageMapper).selectList(argThat(wrapper -> {
+            String sql = wrapper.getTargetSql();
+            return sql.contains("ORDER BY id DESC") && sql.endsWith("LIMIT 200");
+        }));
+    }
+
+    @Test
+    void beforeIdKeepsExclusiveIdFilter() {
+        when(messageMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+
+        service.listMessages("session-1", 50, 99L);
+
+        verify(messageMapper).selectList(argThat(wrapper -> wrapper.getTargetSql().contains("id <")));
     }
 
     @Test
@@ -210,6 +248,19 @@ class WebChatServiceTest {
 
         verify(messageTransactionService).saveUserMessage("user-a", "session-a", "hello");
         verify(messageMapper, never()).insert(any());
+    }
+
+    private static ChatMessageDO message(Long id, String role, LocalDateTime createdAt) {
+        ChatMessageDO message = new ChatMessageDO();
+        message.setId(id);
+        message.setMessageId(id == null ? "message-null" : "message-" + id);
+        message.setSessionId("session-1");
+        message.setRole(role);
+        message.setContentType("text");
+        message.setContent(role + " content");
+        message.setDeleted(false);
+        message.setCreatedAt(createdAt);
+        return message;
     }
 
     private static ChatSessionDO ownedSession(String sessionId, String userId) {

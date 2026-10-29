@@ -22,6 +22,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -162,13 +164,21 @@ public class WebChatService implements ChatSessionOperations, ChatMessageOperati
     // 拉取消息列表：可按 beforeId 向前翻页，且限制最大 200 条避免一次拉取过大。
     public List<ChatMessageView> listMessages(String sessionId, int limit, Long beforeId) {
         LambdaQueryWrapper<ChatMessageDO> wrapper = new LambdaQueryWrapper<ChatMessageDO>()
-                .eq(ChatMessageDO::getSessionId, sessionId)
-                .orderByAsc(ChatMessageDO::getCreatedAt);
+                .eq(ChatMessageDO::getSessionId, sessionId);
         if (beforeId != null) {
             wrapper.lt(ChatMessageDO::getId, beforeId);
         }
-        wrapper.last("LIMIT " + Math.min(limit, 200));
-        return messageMapper.selectList(wrapper).stream().map(WebChatService::toView).toList();
+        wrapper.orderByDesc(ChatMessageDO::getId)
+                .last("LIMIT " + Math.min(limit, 200));
+
+        List<ChatMessageDO> messages = new ArrayList<>(messageMapper.selectList(wrapper));
+        messages.sort(Comparator.comparing(
+                        ChatMessageDO::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(
+                        ChatMessageDO::getId,
+                        Comparator.nullsLast(Comparator.naturalOrder())));
+        return messages.stream().map(WebChatService::toView).toList();
     }
 
     public List<ChatMessageView> listMessages(String userId, String sessionId, int limit, Long beforeId) {
