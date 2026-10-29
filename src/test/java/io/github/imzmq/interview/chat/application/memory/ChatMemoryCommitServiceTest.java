@@ -5,6 +5,7 @@ import io.github.imzmq.interview.chat.domain.memory.ChatMemoryCandidate;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemoryCategory;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemorySourceQuote;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemoryNormalizer;
+import io.github.imzmq.interview.chat.domain.memory.ChatMemorySubjectKey;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageDO;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapper;
 import io.github.imzmq.interview.chat.infrastructure.persistence.ChatSessionDO;
@@ -250,12 +251,14 @@ class ChatMemoryCommitServiceTest {
     }
 
     private ChatMemoryCandidate candidate(String messageId, String content) {
-        return new ChatMemoryCandidate(ChatMemoryCategory.FACT, content,
+        return new ChatMemoryCandidate(ChatMemoryCategory.FACT,
+                ChatMemorySubjectKey.parse(ChatMemoryCategory.FACT, "fact.test"), content,
                 new ChatMemorySourceQuote(messageId, 0, 5, "hello"));
     }
 
     private ChatMemoryCandidate candidate() {
-        return new ChatMemoryCandidate(ChatMemoryCategory.FACT, "x",
+        return new ChatMemoryCandidate(ChatMemoryCategory.FACT,
+                ChatMemorySubjectKey.parse(ChatMemoryCategory.FACT, "fact.test"), "x",
                 new ChatMemorySourceQuote("m-1", 0, 5, "hello"));
     }
 }

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemoryCandidate;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemoryCategory;
 import io.github.imzmq.interview.chat.domain.memory.ChatMemorySourceQuote;
+import io.github.imzmq.interview.chat.domain.memory.ChatMemorySubjectKey;
+import io.github.imzmq.interview.chat.domain.memory.ChatMemorySubjectPolicy;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,7 +20,7 @@ public class ChatMemoryCandidateValidator {
 
     private static final int MAX_CANDIDATES = 8;
     private static final Set<String> REQUIRED_FIELDS = Set.of(
-            "category", "content", "sourceMessageId", "quote");
+            "category", "subjectKey", "content", "sourceMessageId", "quote");
     private static final Pattern PROMPT_INJECTION = Pattern.compile(
             "(?i)(ignore|disregard|forget).{0,30}(previous|prior|system|instruction|prompt)"
                     + "|忽略.{0,20}(之前|以上|系统|指令|提示词)"
@@ -97,7 +99,11 @@ public class ChatMemoryCandidateValidator {
         try {
             ChatMemoryCategory category = ChatMemoryCategory.valueOf(
                     node.get("category").textValue());
-            return new ChatMemoryCandidate(category, content,
+            ChatMemorySubjectKey subjectKey = ChatMemorySubjectKey.parse(
+                    category, node.get("subjectKey").textValue());
+            ChatMemorySubjectKey canonicalSubjectKey = ChatMemorySubjectPolicy.canonicalize(
+                    category, subjectKey);
+            return new ChatMemoryCandidate(category, canonicalSubjectKey, content,
                     new ChatMemorySourceQuote(sourceMessageId, start, end, quote));
         } catch (IllegalArgumentException exception) {
             throw new ChatMemoryExtractionException("MEMORY_CANDIDATE_INVALID", exception);

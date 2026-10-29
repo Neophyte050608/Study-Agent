@@ -24,7 +24,12 @@ class ChatMemoryCandidateValidatorTest {
         ChatMemorySourceQuote source = new ChatMemorySourceQuote(
                 "message-1", 1, 4, "😀偏好");
         ChatMemoryCandidate candidate = new ChatMemoryCandidate(
-                ChatMemoryCategory.PREFERENCE, "我偏好 Java", source);
+                ChatMemoryCategory.PREFERENCE,
+                ChatMemorySubjectKey.parse(
+                        ChatMemoryCategory.PREFERENCE,
+                        "preference.response_language"),
+                "我偏好 Java",
+                source);
 
         assertThat(candidate.source().matches("A😀偏好Java")).isTrue();
     }
@@ -47,6 +52,9 @@ class ChatMemoryCandidateValidatorTest {
 
         assertThatThrownBy(() -> new ChatMemoryCandidate(
                 ChatMemoryCategory.FACT,
+                ChatMemorySubjectKey.parse(
+                        ChatMemoryCategory.FACT,
+                        "fact.known_language"),
                 tooLong,
                 new ChatMemorySourceQuote("message-1", 0, 1, "x")))
                 .isInstanceOf(IllegalArgumentException.class)

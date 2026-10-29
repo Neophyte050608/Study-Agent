@@ -5,6 +5,7 @@ import io.github.imzmq.interview.chat.infrastructure.persistence.ChatMessageMapp
 import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemoryExtractionTaskDO;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +31,10 @@ class ChatMemorySourceLoaderTest {
 
         assertThat(result).extracting(ChatMemorySourceMessage::messageId)
                 .containsExactly("m-9", "m-10");
+        assertThat(result).extracting(ChatMemorySourceMessage::createdAt)
+                .containsExactly(
+                        LocalDateTime.of(2026, 10, 29, 9, 0),
+                        LocalDateTime.of(2026, 10, 29, 10, 0));
         verify(mapper).selectMemoryPriorContext("user-1", "session-1", 10L, 4);
     }
 
@@ -61,6 +66,7 @@ class ChatMemorySourceLoaderTest {
         message.setRole(role);
         message.setContent("content-" + id);
         message.setDeleted(false);
+        message.setCreatedAt(LocalDateTime.of(2026, 10, 29, id == 10 ? 10 : 9, 0));
         return message;
     }
 }

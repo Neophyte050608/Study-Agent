@@ -3,6 +3,7 @@ package io.github.imzmq.interview.chat.application.memory;
 import io.github.imzmq.interview.chat.infrastructure.persistence.memory.ChatMemoryExtractionTaskDO;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -129,6 +130,6 @@ class ChatMemoryExtractionWorkerTest {
 
     private ChatMemorySourceMessage source() {
         return new ChatMemorySourceMessage(1L, "m-1", "user-1", "session-1",
-                "user", false, "hello");
+                "user", false, "hello", LocalDateTime.of(2026, 10, 29, 10, 0));
     }
 }

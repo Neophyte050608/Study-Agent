@@ -1,5 +1,7 @@
 package io.github.imzmq.interview.chat.application.memory;
 
+import java.time.LocalDateTime;
+
 public record ChatMemorySourceMessage(
         Long id,
         String messageId,
@@ -7,6 +9,7 @@ public record ChatMemorySourceMessage(
         String sessionId,
         String role,
         boolean deleted,
-        String content
+        String content,
+        LocalDateTime createdAt
 ) {
 }

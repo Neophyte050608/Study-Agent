@@ -4,6 +4,7 @@ import java.util.Objects;
 
 public record ChatMemoryCandidate(
         ChatMemoryCategory category,
+        ChatMemorySubjectKey subjectKey,
         String content,
         ChatMemorySourceQuote source
 ) {
@@ -11,6 +12,8 @@ public record ChatMemoryCandidate(
 
     public ChatMemoryCandidate {
         Objects.requireNonNull(category, "category");
+        subjectKey = ChatMemorySubjectPolicy.canonicalize(
+                category, Objects.requireNonNull(subjectKey, "subjectKey"));
         Objects.requireNonNull(source, "source");
         content = ChatMemoryNormalizer.normalize(content);
         if (content.isBlank()) {

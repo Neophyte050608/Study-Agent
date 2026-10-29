@@ -79,6 +79,7 @@ public class ChatMemorySourceLoader {
     private ChatMemorySourceMessage toSource(String userId, ChatMessageDO message) {
         return new ChatMemorySourceMessage(
                 message.getId(), message.getMessageId(), userId, message.getSessionId(),
-                message.getRole(), Boolean.TRUE.equals(message.getDeleted()), message.getContent());
+                message.getRole(), Boolean.TRUE.equals(message.getDeleted()), message.getContent(),
+                message.getCreatedAt());
     }
 }
