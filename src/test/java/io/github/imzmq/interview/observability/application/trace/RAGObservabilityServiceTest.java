@@ -47,7 +47,7 @@ class RAGObservabilityServiceTest {
         RagTraceDO archivedTrace = new RagTraceDO();
         archivedTrace.setId(1L);
         when(traceMapper.selectOne(any())).thenReturn(null, archivedTrace);
-        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper, null);
 
         service.startNode("trace-async-child", "root-async-child", null, "ROOT", "CHAT_STREAM");
         service.startNode(
@@ -375,7 +375,7 @@ class RAGObservabilityServiceTest {
         RagTraceMapper traceMapper = mock(RagTraceMapper.class);
         RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
         when(traceMapper.selectOne(any())).thenReturn(null);
-        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper, null);
 
         service.startNode("trace-db", "root-db", null, "ROOT", "Task Dispatch");
         service.startNode("trace-db", "retrieval-db", "root-db", "RETRIEVAL", "Hybrid Retrieval");
@@ -401,7 +401,7 @@ class RAGObservabilityServiceTest {
         properties.setRagTraceEnabled(true);
         RagTraceMapper traceMapper = mock(RagTraceMapper.class);
         RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
-        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper, null);
 
         RagTraceDO traceDO = new RagTraceDO();
         traceDO.setTraceId("trace-persisted");
@@ -446,7 +446,7 @@ class RAGObservabilityServiceTest {
         properties.setRagTraceEnabled(true);
         RagTraceMapper traceMapper = mock(RagTraceMapper.class);
         RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
-        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper, null);
 
         LocalDateTime now = LocalDateTime.now();
         when(traceMapper.selectList(any())).thenReturn(List.of(
@@ -475,7 +475,7 @@ class RAGObservabilityServiceTest {
         properties.setRagTraceEnabled(true);
         RagTraceMapper traceMapper = mock(RagTraceMapper.class);
         RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
-        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper, null);
 
         LocalDateTime now = LocalDateTime.now();
         when(traceMapper.selectList(any())).thenReturn(List.of(
@@ -503,7 +503,7 @@ class RAGObservabilityServiceTest {
         properties.setRagTraceEnabled(true);
         RagTraceMapper traceMapper = mock(RagTraceMapper.class);
         RagTraceNodeMapper traceNodeMapper = mock(RagTraceNodeMapper.class);
-        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper);
+        RAGObservabilityService service = new RAGObservabilityService(properties, traceMapper, traceNodeMapper, null);
 
         RagTraceDO traceDO = new RagTraceDO();
         traceDO.setTraceId("trace-details");

@@ -93,21 +93,6 @@ public class RAGObservabilityService implements RagTraceOperations {
     }
 
     /**
-     * 与历史构造器签名兼容，默认不开启实时事件发布。
-     *
-     * @param observabilitySwitchProperties 可观测开关配置
-     * @param ragTraceMapper Trace 汇总表 Mapper
-     * @param ragTraceNodeMapper Trace 节点表 Mapper
-     */
-    public RAGObservabilityService(
-            ObservabilitySwitchProperties observabilitySwitchProperties,
-            @Nullable RagTraceMapper ragTraceMapper,
-            @Nullable RagTraceNodeMapper ragTraceNodeMapper
-    ) {
-        this(observabilitySwitchProperties, ragTraceMapper, ragTraceNodeMapper, null);
-    }
-
-    /**
      * 单测和轻量场景下使用的纯内存构造器。
      *
      * @param observabilitySwitchProperties 可观测开关配置

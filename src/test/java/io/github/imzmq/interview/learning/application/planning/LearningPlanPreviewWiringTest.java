@@ -25,6 +25,7 @@ import io.github.imzmq.interview.learning.application.contract.result.LearningPl
 import io.github.imzmq.interview.learning.application.contract.result.TrainingProfileSnapshot;
 import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceService;
 import io.github.imzmq.interview.observability.application.contract.OperationalObservationPublisher;
 import io.github.imzmq.interview.routing.domain.IntentPreFilter;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
@@ -70,7 +71,8 @@ class LearningPlanPreviewWiringTest {
             context.refresh();
             TaskRouterAgent router = new TaskRouterAgent(mock(AgentTaskPromptRenderer.class),
                     mock(IntentTreeRoutingService.class), mock(IntentPreFilter.class), mock(A2ABus.class),
-                    routing, mock(RAGObservabilityService.class), context.getBean(TaskHandlerRegistry.class));
+                    routing, mock(RAGObservabilityService.class), context.getBean(TaskHandlerRegistry.class),
+                    mock(TraceService.class));
             TaskRequest request = new TaskRequest(TaskType.LEARNING_PLAN_PREVIEW,
                     Map.of("topic", "Java", "userId", "untrusted-user"), Map.of("userId", "owner"));
             TaskResponse complete = router.dispatch(request);

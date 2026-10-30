@@ -18,6 +18,7 @@ import io.github.imzmq.interview.modelrouting.core.RoutingChatService;
 import io.github.imzmq.interview.modelrouting.core.TimeoutHint;
 import io.github.imzmq.interview.routing.application.IntentTreeRoutingService;
 import io.github.imzmq.interview.observability.application.trace.RAGObservabilityService;
+import io.github.imzmq.interview.observability.application.contract.trace.TraceService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -46,7 +47,8 @@ class TaskRouterAgentTest {
         };
         TaskRouterAgent router = new TaskRouterAgent(mock(AgentTaskPromptRenderer.class),
                 mock(IntentTreeRoutingService.class), mock(IntentPreFilter.class), mock(A2ABus.class),
-                mock(RoutingChatService.class), mock(RAGObservabilityService.class), new TaskHandlerRegistry(List.of(handler)));
+                mock(RoutingChatService.class), mock(RAGObservabilityService.class), new TaskHandlerRegistry(List.of(handler)),
+                mock(TraceService.class));
         TaskResponse actual = router.dispatch(new TaskRequest(TaskType.LEARNING_PLAN_PREVIEW,
                 Map.of("topic", "Java"), Map.of("userId", "owner")));
         assertEquals(expected, actual);
@@ -79,7 +81,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of(handler))
+                new TaskHandlerRegistry(List.of(handler)),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -119,7 +122,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 ragObservabilityService,
-                new TaskHandlerRegistry(List.of(handler))
+                new TaskHandlerRegistry(List.of(handler)),
+                mock(TraceService.class)
         );
 
         taskRouterAgent.dispatch(new TaskRequest(
@@ -160,7 +164,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -191,7 +196,8 @@ class TaskRouterAgentTest {
                 a2aBus,
                 mock(RoutingChatService.class),
                 ragObservabilityService,
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -219,7 +225,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -258,7 +265,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 routingChatService,
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -302,7 +310,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 routingChatService,
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -334,7 +343,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -362,7 +372,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of(handler))
+                new TaskHandlerRegistry(List.of(handler)),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -445,7 +456,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of(handler))
+                new TaskHandlerRegistry(List.of(handler)),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -500,7 +512,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 mock(RoutingChatService.class),
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(
@@ -552,7 +565,8 @@ class TaskRouterAgentTest {
                 mock(A2ABus.class),
                 routingChatService,
                 mock(RAGObservabilityService.class),
-                new TaskHandlerRegistry(List.of())
+                new TaskHandlerRegistry(List.of()),
+                mock(TraceService.class)
         );
 
         TaskResponse response = taskRouterAgent.dispatch(new TaskRequest(

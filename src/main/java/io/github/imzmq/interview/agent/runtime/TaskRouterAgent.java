@@ -42,26 +42,6 @@ import java.util.UUID;
 @Component
 public class TaskRouterAgent implements AgentTaskOperations {
 
-    private static final TraceService NOOP_TRACE_SERVICE = new TraceService() {
-        @Override
-        public TraceNodeHandle startRoot(String traceId, io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
-            return new TraceNodeHandle(traceId, "", "", definition);
-        }
-
-        @Override
-        public TraceNodeHandle startChild(String traceId, String parentNodeId, io.github.imzmq.interview.observability.application.contract.trace.TraceNodeDefinition definition, Map<String, Object> attributes) {
-            return new TraceNodeHandle(traceId, "", parentNodeId, definition);
-        }
-
-        @Override
-        public void success(TraceNodeHandle handle, Map<String, Object> result) {
-        }
-
-        @Override
-        public void fail(TraceNodeHandle handle, String errorMessage, Map<String, Object> result) {
-        }
-    };
-
     private final AgentTaskPromptRenderer promptRenderer;
     private final IntentRoutingOperations intentRoutingOperations;
     private final IntentPreFilterOperations intentPreFilter;
@@ -90,27 +70,6 @@ public class TaskRouterAgent implements AgentTaskOperations {
         this.ragTraceOperations = ragTraceOperations;
         this.taskHandlerRegistry = taskHandlerRegistry;
         this.traceService = traceService;
-    }
-
-    public TaskRouterAgent(
-            AgentTaskPromptRenderer promptRenderer,
-            IntentRoutingOperations intentRoutingOperations,
-            IntentPreFilterOperations intentPreFilter,
-            A2ABus a2aBus,
-            RoutingChatService routingChatService,
-            RagTraceOperations ragTraceOperations,
-            TaskHandlerRegistry taskHandlerRegistry
-    ) {
-        this(
-                promptRenderer,
-                intentRoutingOperations,
-                intentPreFilter,
-                a2aBus,
-                routingChatService,
-                ragTraceOperations,
-                taskHandlerRegistry,
-                NOOP_TRACE_SERVICE
-        );
     }
 
     @Override

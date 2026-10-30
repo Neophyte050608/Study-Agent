@@ -1,6 +1,5 @@
 package io.github.imzmq.interview.learning.application.agent;
 
-import io.github.imzmq.interview.agent.core.Agent;
 import io.github.imzmq.interview.mcp.application.contract.McpCapabilityOperations;
 import io.github.imzmq.interview.learning.application.contract.extension.LearningPlanGenerator;
 import org.springframework.stereotype.Component;
@@ -17,7 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
-public class NoteMakingAgent implements Agent<Map<String, Object>, Map<String, Object>> {
+public class NoteMakingAgent {
     private final LearningPlanGenerator learningPlanGenerator;
     private final McpCapabilityOperations mcpGatewayService;
     private final Path notesDir;
@@ -32,7 +31,6 @@ public class NoteMakingAgent implements Agent<Map<String, Object>, Map<String, O
         this.notesDir = Paths.get(notesDir).toAbsolutePath().normalize();
     }
 
-    @Override
     public Map<String, Object> execute(Map<String, Object> input) {
         String action = text(input, "action").toLowerCase();
         if (action.isBlank() || "plan".equals(action)) {

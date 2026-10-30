@@ -1,6 +1,5 @@
 package io.github.imzmq.interview.practice.application.agent;
 
-import io.github.imzmq.interview.agent.core.Agent;
 import io.github.imzmq.interview.chat.application.contract.PromptRenderer;
 import io.github.imzmq.interview.chat.application.contract.result.RenderedPrompt;
 import io.github.imzmq.interview.learning.application.contract.LearningEvent;
@@ -35,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 集成了 RAG 服务用于题目生成和评估，并与学习画像系统联动。
  */
 @Component
-public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<String, Object>> {
+public class CodingPracticeAgent {
     private static final Logger logger = LoggerFactory.getLogger(CodingPracticeAgent.class);
     /** RAG 服务，用于生成题目和评估回答 */
     private final CodingPracticeService codingPracticeService;
@@ -60,7 +59,6 @@ public class CodingPracticeAgent implements Agent<Map<String, Object>, Map<Strin
         this.routingChatService = routingChatService;
     }
 
-    @Override
     public Map<String, Object> execute(Map<String, Object> input) {
         String action = text(input, "action").toLowerCase();
         if ("chat".equals(action)) {

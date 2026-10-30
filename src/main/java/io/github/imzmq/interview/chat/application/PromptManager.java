@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -96,24 +95,6 @@ public class PromptManager implements PromptRenderer, AgentTaskPromptRenderer, I
     public RenderedRoutingPrompt renderRoutingPrompt(String taskTemplateName, Map<String, Object> variables) {
         RenderedPrompt prompt = renderSplit("router", taskTemplateName, variables);
         return new RenderedRoutingPrompt(prompt.systemPrompt(), prompt.userPrompt());
-    }
-
-    /**
-     * 渲染系统模板 + 任务模板的组合。
-     * 先渲染系统模板，将结果注入到任务模板的 {{ systemBlock }} 变量中，再渲染任务模板。
-     * @deprecated 使用 {@link #renderSplit(String, String, Map)} 代替，配合 RoutingChatService 双消息重载实现 API 级缓存。
-     */
-    @Deprecated
-    public String renderWithSystem(String systemTemplateName, String taskTemplateName, Map<String, Object> variables) {
-        ensureLoaded();
-        String systemTemplate = systemTemplateCache.get(systemTemplateName);
-        String systemContent = "";
-        if (systemTemplate != null) {
-            systemContent = jinjava.render(systemTemplate, variables);
-        }
-        Map<String, Object> mergedVars = new HashMap<>(variables);
-        mergedVars.put("systemBlock", systemContent);
-        return render(taskTemplateName, mergedVars);
     }
 
     /**
